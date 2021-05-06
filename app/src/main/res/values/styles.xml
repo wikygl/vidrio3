@@ -1,0 +1,13 @@
+<resources>
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/color</item>
+        <item name="colorPrimaryDark">@color/color</item>
+        <item name="colorAccent">#0099FF</item>
+    </style>
+    <style name="nuevosplash" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/nuevo</item>
+    </style>
+
+</resources>

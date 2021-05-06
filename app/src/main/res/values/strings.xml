@@ -1,0 +1,42 @@
+<resources>
+    <string name="app_name">Calculadora Vidriero</string>
+    <string name="todo">TODO</string>
+    <string name="cent_metros">Centímetros</string>
+    <string name="medida">Medida:</string>
+    <string name="cantidad">Cantidad:</string>
+    <string name="agregar">agregar</string>
+    <string name="limpiar">limpiar</string>
+    <string name="costear">costear</string>
+    <string name="pies_cuadrados">Pies cuadrados:</string>
+    <string name="_0_0">0.0</string>
+    <string name="metros_cuadrados">Metros cuadrados:</string>
+    <string name="medidas_y_cantidades">Medidas y Cantidades</string>
+    <string name="medidas_en_cent_metros">Medidas en Centímetros</string>
+    <string name="referencias">Referencias</string>
+    <string name="precio">Precio:</string>
+    <string name="producto">Producto:</string>
+    <string name="corte_especial">Corte Especial:</string>
+    <string name="_1_8_cm_de_retaso">* 1.8 cm de retaso</string>
+    <string name="pies_metros_precio">Pies *_ Metros *_ Precio</string>
+    <string name="sumatorias">Sumatorias</string>
+    <string name="metros">Metros *</string>
+    <string name="pies">Pies *</string>
+    <string name="listado_de_medidas">listado de Medidas</string>
+    <string name="calcular">Calcular</string>
+    <string name="decimales">#.00</string>
+    <string name="p_cuadrados">P.cuadrados</string>
+    <string name="m_cuadrados">M.cuadrados</string>
+    <string name="en_cent_metros">En Centímetros</string>
+    <string name="entonces"><![CDATA[->]]></string>
+    <string name="igual">=</string>
+    <string name="por">x</string>
+    <string name="presupuesto">Presupuesto</string>
+    <string name="costo_unitario">Costo Unitario:</string>
+    <string name="costo_cantidad">Costo Cantidad:</string>
+    <string name="costo_total">Costo Total:</string>
+    <string name="ojito_ojito">¡Ojito,ojito!</string>
+    <string name="qu_desea_hacer">¿Qué desea hacer?</string>
+    <string name="editar">editar</string>
+    <string name="eliminar">eliminar</string>
+    <string name="aceptar">aceptar</string>
+</resources>
