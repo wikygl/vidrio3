@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Estilo para el primer elemento -->
+    <item android:state_enabled="true" android:state_pressed="true" android:drawable="@color/rojo" />
+    <item android:state_enabled="true" android:state_focused="true" android:drawable="@color/azul" />
+    <item android:state_enabled="true" android:drawable="@color/color" />
+
+    <!-- Estilo para el segundo elemento -->
+    <item android:state_enabled="true" android:state_pressed="true" android:drawable="@color/amarillo" />
+    <item android:state_enabled="true" android:state_focused="true" android:drawable="@color/naranja" />
+    <item android:state_enabled="true" android:drawable="@color/gris" />
+
+    <!-- Estilo para el tercer elemento -->
+    <item android:state_enabled="true" android:state_pressed="true" android:drawable="@color/indigo" />
+    <item android:state_enabled="true" android:state_focused="true" android:drawable="@color/fucsia" />
+    <item android:state_enabled="true" android:drawable="@color/verde" />
+
+    <!-- Estilo para el cuarto elemento -->
+    <item android:state_enabled="true" android:state_pressed="true" android:drawable="@color/celeste" />
+    <item android:state_enabled="true" android:state_focused="true" android:drawable="@color/azul" />
+    <item android:state_enabled="true" android:drawable="@color/violeta" />
+
+    <!-- Estilo para el quinto elemento -->
+    <item android:state_enabled="true" android:state_pressed="true" android:drawable="@color/c.vedeama" />
+    <item android:state_enabled="true" android:state_focused="true" android:drawable="@color/rosa" />
+    <item android:state_enabled="true" android:drawable="@color/negro" />
+</selector>

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DesignSurface">
+    <option name="filePathToZoomLevelMap">
+      <map>
+        <entry key="..\:/misapps/crystal/app/src/main/res/drawable/ic_fichad1.xml" value="0.1" />
+        <entry key="..\:/misapps/crystal/app/src/main/res/drawable/ic_fichad1a.xml" value="0.1" />
+        <entry key="..\:/misapps/crystal/app/src/main/res/drawable/ic_fichad2.xml" value="0.1" />
+        <entry key="..\:/misapps/crystal/app/src/main/res/drawable/ic_fichad2a.xml" value="0.1" />
+        <entry key="..\:/misapps/crystal/app/src/main/res/layout/activity_main.xml" value="0.25" />
+        <entry key="..\:/misapps/crystal/app/src/main/res/layout/activity_muro.xml" value="0.33" />
+        <entry key="..\:/misapps/crystal/app/src/main/res/layout/dialog_cambiar_nombre.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/crystal/app/src/main/res/layout/dialogo.xml" value="0.25" />
+        <entry key="..\:/misapps/crystal/app/src/main/res/layout/dialogo_cortes.xml" value="0.25" />
+        <entry key="..\:/misapps/crystal/app/src/main/res/layout/lista_cal.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3 - copia/app/src/main/res/layout/activity_ficha.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3 - copia/app/src/main/res/layout/activity_main.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3 - copia/app/src/main/res/layout/activity_subir.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable-v24/ic_clcv.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable-v24/ic_mensajes.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable-v24/ic_taller2.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/agregar.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/corne.xml" value="0.18" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/cornere.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/corneref.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/e_mail.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/eliminar.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/google.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_catalogo.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_cfcs_a.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_chck.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_fichad1.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_fichad15.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_hogar.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_mamparafc.xml" value="0.1" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_mamparafccfss.xml" value="0.12760416666666666" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_muropla.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_peru.xml" value="0.12760416666666666" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_pp1.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_pp10.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_pp2.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_puertapa_os.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_usuario4.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_vitrobasic.xml" value="0.10520833333333333" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/ic_vne.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/micro.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/peligro.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/scan.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/tres_puntos.xml" value="0.20885416666666667" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/drawable/usr.xml" value="0.12760416666666666" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_acliente.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_baul.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_corte.xml" value="0.22" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_inicio_acttivity.xml" value="0.2" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_main.xml" value="0.33" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_main2.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_mampara_fc.xml" value="0.25" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_mampara_paflon.xml" value="0.11145833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_muro.xml" value="0.25" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_optimizados.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_puerta_pano.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_registro.xml" value="0.25" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_subir.xml" value="0.25" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/activity_taller.xml" value="0.21" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/dialogo.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/dialogo_cortes.xml" value="0.11145833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/editar.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/ficha_tecnica.xml" value="0.19270833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/item_message.xml" value="0.11145833333333334" />
+        <entry key="..\:/misapps/vidrio3/app/src/main/res/layout/mo_fotos.xml" value="0.19270833333333334" />
+      </map>
+    </option>
+  </component>
+  <component name="ExternalStorageConfigurationManager" enabled="true" />
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_11" default="true" project-jdk-name="11" project-jdk-type="JavaSDK">
+    <output url="file://$PROJECT_DIR$/build/classes" />
+  </component>
+</project>

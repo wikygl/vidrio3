@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string-array name="window_types" tools:ignore="InconsistentArrays">
+        <item tools:ignore="InconsistentArrays">
+            Ventana tipo 1</item>
+        <item>Ventana tipo 2</item>
+        <item>Ventana tipo 3</item>
+        <!-- Agrega más tipos de ventana aquí si es necesario -->
+    </string-array>
+    <string-array name="window_materials">tipo</string-array>
+</resources>

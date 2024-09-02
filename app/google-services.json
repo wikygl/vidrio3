@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "529436008604",
+    "project_id": "crystal-4f306",
+    "storage_bucket": "crystal-4f306.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:529436008604:android:0d37cfd408374e760b4d59",
+        "android_client_info": {
+          "package_name": "crystal.crystal"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "529436008604-6lrq8gi817mihij95q9hbj0ih35i7rpk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBe_HvZcfanHn4LvKky87FUQ0hlojtVXmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "529436008604-6lrq8gi817mihij95q9hbj0ih35i7rpk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

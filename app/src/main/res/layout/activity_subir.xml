@@ -1,0 +1,119 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp"
+    tools:context=".catalogo.SubirActivity">
+
+    <TextView
+        android:id="@+id/textViewTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Subir Imagen"
+        android:textSize="24sp"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true" />
+
+    <RelativeLayout
+        android:id="@+id/lyImagen"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/textViewTitle">
+
+        <ImageView
+            android:id="@+id/imageViewPreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+
+            android:layout_marginTop="12dp"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_vitrovenvf"
+            tools:ignore="ContentDescription"/>
+
+        <FrameLayout
+            android:id="@+id/frameLayoutEdit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignBottom="@id/imageViewPreview"
+            android:background="#80000000"
+            android:visibility="invisible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+                <ImageView
+                    android:id="@+id/imageView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ic_dormido"
+                    app:srcCompat="@android:drawable/ic_menu_edit"
+                    tools:ignore="ContentDescription" />
+
+                <ImageView
+                    android:id="@+id/imageView2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    app:srcCompat="?attr/actionModeCutDrawable"
+                    tools:ignore="ContentDescription" />
+            </LinearLayout>
+
+
+
+        </FrameLayout>
+
+</RelativeLayout>
+
+    <Button
+        android:id="@+id/buttonChooseImage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/lyImagen"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"
+        android:text="Elegir Imagen" />
+
+    <Spinner
+        android:id="@+id/spinnerWindowType"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/buttonChooseImage"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"
+        android:entries="@array/window_types"
+        android:prompt="@string/choose_window_type"
+        tools:ignore="TouchTargetSizeCheck" />
+
+    <Spinner
+        android:id="@+id/spinnerMaterial"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/spinnerWindowType"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"
+        android:entries="@array/window_materials"
+        android:prompt="@string/choose_window_material"
+        tools:ignore="SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+
+    <EditText
+        android:id="@+id/editTextSize"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/spinnerMaterial"
+        android:layout_marginTop="16dp"
+        android:hint="Tamaño de la ventana (en metros)"
+        android:importantForAutofill="no"
+        tools:ignore="TextFields,TouchTargetSizeCheck" />
+
+    <Button
+        android:id="@+id/buttonUpload"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/editTextSize"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"
+        android:text="Subir Imagen" />
+
+</RelativeLayout>

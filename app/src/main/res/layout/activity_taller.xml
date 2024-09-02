@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".taller.Taller">
+
+    <LinearLayout
+        android:id="@+id/layout2"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/verde"
+            android:orientation="horizontal"
+            android:paddingStart="4.5dp"
+            android:paddingTop="4.5dp"
+            android:paddingEnd="4.5dp"
+            android:paddingBottom="4.5dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="0.9"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/textView2"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:text="@string/crystal"
+                    android:textAlignment="viewStart"
+                    android:textColor="@color/blanco"
+                    android:textSize="24sp"
+                    tools:ignore="RtlCompat,TextContrastCheck" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                tools:ignore="UselessLeaf" />
+
+            <ImageButton
+                android:id="@+id/imageButton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_margin="1.8dp"
+                android:layout_weight="1"
+                android:background="@color/verde"
+                android:contentDescription="@string/todo"
+                app:srcCompat="@drawable/ic_mensajes"
+                tools:ignore="TouchTargetSizeCheck,ImageContrastCheck,DuplicateSpeakableTextCheck" />
+
+            <ImageButton
+                android:id="@+id/taller_tall"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@color/verde"
+                android:contentDescription="@string/todo"
+                app:srcCompat="@drawable/ic_taller2"
+                tools:ignore="TouchTargetSizeCheck,ImageContrastCheck" />
+
+            <ImageButton
+                android:id="@+id/micro"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_margin="1.8dp"
+                android:layout_weight="1"
+                android:background="@color/verde"
+                android:contentDescription="@string/todo"
+                app:srcCompat="@drawable/ic_clcv"
+                tools:ignore="TouchTargetSizeCheck,ImageContrastCheck" />
+
+            <ImageButton
+                android:id="@+id/imageButton9"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_margin="1.8dp"
+                android:layout_weight="1"
+                android:background="@color/verde"
+                android:contentDescription="@string/todo"
+                app:srcCompat="@drawable/ic_usuario4"
+                tools:ignore="TouchTargetSizeCheck,ImageContrastCheck" />
+
+            <ImageButton
+                android:id="@+id/btScan"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_margin="1.8dp"
+                android:layout_weight="1"
+                android:background="@color/verde"
+                android:contentDescription="@string/todo"
+                app:srcCompat="@drawable/ic_hogar"
+                tools:ignore="TouchTargetSizeCheck,ImageContrastCheck" />
+
+            <ImageButton
+                android:id="@+id/btn_catalogo"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_margin="1.8dp"
+                android:layout_weight="1"
+                android:background="@color/verde"
+                android:contentDescription="@string/todo"
+                app:srcCompat="@drawable/ic_catalogo"
+                tools:ignore="TouchTargetSizeCheck,ImageContrastCheck" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:baselineAligned="false"
+            android:orientation="vertical"
+            tools:ignore="UselessParent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="0.72"
+                android:background="@drawable/cornere"
+                android:orientation="vertical"
+                tools:ignore="NestedWeights">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical">
+
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fadingEdge="vertical"
+                        tools:ignore="UselessParent">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <ImageButton
+                                android:id="@+id/btn_novaina"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/c.vedeama"
+                                android:contentDescription="@string/todo"
+                                app:srcCompat="@drawable/ic_fcfs_i" />
+
+                            <ImageButton
+                                android:id="@+id/btn_novaapa"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/amarillo"
+                                android:contentDescription="@string/todo"
+                                app:srcCompat="@drawable/ic_cfcs_a" />
+
+                            <ImageButton
+                                android:id="@+id/btn_mpaflon"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/rosa"
+                                android:contentDescription="@string/todo"
+                                app:srcCompat="@drawable/ic_mamparafccfss" />
+
+                            <ImageButton
+                                android:id="@+id/btn_v"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/verde"
+                                android:contentDescription="@string/todo"
+                                android:src="@drawable/ic_vitrovenvf" />
+
+                            <ImageButton
+                                android:id="@+id/btn_mfc"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/celeste"
+                                android:contentDescription="@string/todo"
+                                app:srcCompat="@drawable/ic_mamparafc" />
+
+                            <ImageButton
+                                android:id="@+id/btnMc"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/naranja"
+                                android:contentDescription="@string/todo"
+                                android:src="@drawable/ic_muropla" />
+
+                            <ImageButton
+                                android:id="@+id/puerta"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/verde"
+                                android:contentDescription="@string/todo"
+                                app:srcCompat="@drawable/ic_puertapa_os"  />
+
+                            <ImageButton
+                                android:id="@+id/imageButton4"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/violeta"
+                                android:contentDescription="@string/todo"
+                                app:srcCompat="@drawable/ic_mamparavfccf" />
+
+                            <ImageButton
+                                android:id="@+id/imageButton5"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:contentDescription="@string/todo"
+                                app:srcCompat="@drawable/ic_mamparatfbbfss" />
+
+                            <ImageButton
+                                android:id="@+id/btn_Estructura"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/azul"
+                                android:contentDescription="@string/todo"
+                                app:srcCompat="@drawable/ic_vne" />
+
+                            <ImageButton
+                                android:id="@+id/btn_PivotE"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:backgroundTint="@color/negro"
+                                android:contentDescription="@string/todo"
+                                app:srcCompat="@drawable/ic_vitrovenvf" />
+
+
+                        </LinearLayout>
+                    </HorizontalScrollView>
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_gravity="bottom|end"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    tools:ignore="NestedWeights">
+
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/mamparas_btn"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/rosa"
+                                android:text="@string/Mamparas"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/puertas_btn"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/naranja"
+                                android:text="puertas"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,HardcodedText,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/nova_btn"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/verde"
+                                android:text="@string/nova"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/vitroven_btn"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/celeste"
+                                android:text="@string/Vitrov_n"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/proyectante_btn"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/amarillo"
+                                android:text="Proyectante"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,HardcodedText,TextContrastCheck" />
+                        </LinearLayout>
+                    </HorizontalScrollView>
+
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btCurvo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/azul"
+                                android:text="@string/curvo"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/btUnidades"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/gris"
+                                android:text="@string/escalas"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/btOptiLineal"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/rojo"
+                                android:text="@string/varillas"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/btOpti"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/naranja"
+                                android:text="@string/planchas"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/tbX"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/rosa"
+                                android:text="rocio"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,HardcodedText,TextContrastCheck" />
+                        </LinearLayout>
+                    </HorizontalScrollView>
+
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:layout_weight="1"
+                tools:ignore="UselessLeaf">
+
+                <TextView
+                    android:id="@+id/cliente"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ems="10"
+                    android:visibility="gone"
+                    tools:ignore="Autofill,LabelFor,
+                    NestedWeights"
+                    />
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>

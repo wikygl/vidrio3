@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".registro.Acliente">
+
+    <LinearLayout
+        android:id="@+id/lyCuello"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="18dp"
+
+        android:layout_marginEnd="18dp"
+        android:background="@drawable/corner"
+        android:orientation="vertical"
+        android:paddingStart="3dp"
+        android:paddingTop="18dp"
+        android:paddingEnd="3dp"
+        android:paddingBottom="3dp"
+        android:visibility="visible"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            tools:ignore="TooDeepLayout">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="3dp"
+                android:layout_weight="3.6"
+                android:background="@drawable/botoncircular"
+                android:paddingStart="6dp"
+                android:text="@string/cliente"
+                tools:ignore="RtlSymmetry" />
+
+            <EditText
+                android:id="@+id/etCliente"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:autofillHints="@string/todo"
+                android:backgroundTint="@color/color"
+                android:ems="10"
+                android:inputType="textAutoCorrect"
+                tools:ignore="LabelFor,
+                                        TouchTargetSizeCheck,
+                                        SpeakableTextPresentCheck,
+                                        SpeakableTextPresentCheck" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="9dp"
+            tools:ignore="TooDeepLayout">
+
+            <ImageView
+                android:id="@+id/btBuscar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:background="@drawable/tres_puntos"
+                tools:ignore="ContentDescription" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:orientation="vertical">
+
+
+                <Button
+                    android:id="@+id/btGo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_gravity="end"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/verde"
+                    android:paddingStart="9dp"
+                    android:paddingEnd="9dp"
+                    android:text="@string/adelante"
+                    android:textColor="@color/blanco"
+                    tools:ignore="ButtonStyle,TextContrastCheck,
+                                TooManyViews,TouchTargetSizeCheck" />
+            </LinearLayout>
+
+
+        </LinearLayout>
+
+
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
