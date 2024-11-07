@@ -35,7 +35,7 @@
                 tools:ignore="NestedWeights">
 
                 <TextView
-                    android:id="@+id/textView3"
+                    android:id="@+id/txVentana"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@drawable/corner2"
@@ -233,7 +233,32 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/junk_mfccfss"
+                                android:id="@+id/etJunki"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:text="@string/_0"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Mochetas"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etMocheta"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -332,6 +357,7 @@
                             android:orientation="vertical">
 
                             <LinearLayout
+                                android:id="@+id/lyMarco"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4.5dp"
@@ -340,14 +366,14 @@
                                 android:orientation="horizontal">
 
                                 <TextView
-                                    android:id="@+id/tvMarcoE"
+                                    android:id="@+id/txMarco"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:text="@string/marco" />
 
                                 <TextView
-                                    android:id="@+id/tvMarcoResult"
+                                    android:id="@+id/tvMarco"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -355,6 +381,7 @@
                             </LinearLayout>
 
                             <LinearLayout
+                                android:id="@+id/lyParante"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4.5dp"
@@ -362,7 +389,7 @@
                                 android:orientation="horizontal">
 
                                 <TextView
-                                    android:id="@+id/textView34"
+                                    android:id="@+id/txParante"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
@@ -377,6 +404,7 @@
                             </LinearLayout>
 
                             <LinearLayout
+                                android:id="@+id/lyZocalo"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4.5dp"
@@ -384,13 +412,14 @@
                                 android:orientation="horizontal">
 
                                 <TextView
+                                    android:id="@+id/txZocalo"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:text="@string/z_calo" />
 
                                 <TextView
-                                    android:id="@+id/tvZocaloE"
+                                    android:id="@+id/tvZocalo"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -398,6 +427,7 @@
                             </LinearLayout>
 
                             <LinearLayout
+                                android:id="@+id/lyRiel"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4.5dp"
@@ -406,13 +436,14 @@
                                 android:orientation="horizontal">
 
                                 <TextView
+                                    android:id="@+id/txRiel"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:text="@string/riel" />
 
                                 <TextView
-                                    android:id="@+id/tvRielE"
+                                    android:id="@+id/tvRiel"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -420,6 +451,7 @@
                             </LinearLayout>
 
                             <LinearLayout
+                                android:id="@+id/lyJunki"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4.5dp"
@@ -427,13 +459,14 @@
                                 android:orientation="horizontal">
 
                                 <TextView
+                                    android:id="@+id/txJunki"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:text="@string/junkillo" />
 
                                 <TextView
-                                    android:id="@+id/tvJunkiE"
+                                    android:id="@+id/tvJunki"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -441,6 +474,7 @@
                             </LinearLayout>
 
                             <LinearLayout
+                                android:id="@+id/lyTope"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4.5dp"
@@ -449,13 +483,14 @@
                                 android:orientation="horizontal">
 
                                 <TextView
+                                    android:id="@+id/txTope"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:text="@string/ang_tope" />
 
                                 <TextView
-                                    android:id="@+id/tvAngE"
+                                    android:id="@+id/tvTope"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -463,6 +498,183 @@
                             </LinearLayout>
 
                             <LinearLayout
+                                android:id="@+id/lyTubo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:id="@+id/txTubo"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/tubo"
+                                    tools:ignore="TooDeepLayout" />
+
+                                <TextView
+                                    android:id="@+id/tvTubo"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyJamba"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:orientation="horizontal"
+                                tools:visibility="visible">
+
+                                <TextView
+                                    android:id="@+id/txJamba"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/jamba"
+                                    tools:ignore="TooDeepLayout"
+                                    tools:visibility="visible" />
+
+                                <TextView
+                                    android:id="@+id/tvJamba"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0"
+                                    tools:visibility="visible" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyRielI"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/blanco"
+                                android:orientation="horizontal"
+                                tools:ignore="TooManyViews">
+
+                                <TextView
+                                    android:id="@+id/txRielI"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/riel_inf"
+                                    tools:ignore="TooManyViews" />
+
+                                <TextView
+                                    android:id="@+id/tvRielI"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0"
+                                    tools:ignore="TooManyViews" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyRielS"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/blanco"
+                                android:orientation="horizontal"
+                                tools:ignore="TooManyViews">
+
+                                <TextView
+                                    android:id="@+id/txRielS"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/riel_sup"
+                                    tools:ignore="TooManyViews" />
+
+                                <TextView
+                                    android:id="@+id/tvRielS"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyTraslapo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:id="@+id/txTraslape"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/traslapo" />
+
+                                <TextView
+                                    android:id="@+id/tvTraslapo"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyCabezal"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/blanco"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:id="@+id/txCabezal"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/cabezal" />
+
+                                <TextView
+                                    android:id="@+id/tvCabezal"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyAdaptador"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:id="@+id/txAdaptador"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/adaptador"
+                                    tools:ignore="TooManyViews" />
+
+                                <TextView
+                                    android:id="@+id/tvAdaptador"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0"
+                                    tools:ignore="TooManyViews" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyVidrios"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4.5dp"
@@ -483,6 +695,31 @@
                                     android:layout_weight="0.72"
                                     android:text="@string/_0_0" />
                             </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyPruebas"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/sombra"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:id="@+id/txPruebas"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/vidrios" />
+
+                                <TextView
+                                    android:id="@+id/tvPruebas"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
 
                         </LinearLayout>
                     </ScrollView>

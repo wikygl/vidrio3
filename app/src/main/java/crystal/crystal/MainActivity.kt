@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -31,13 +32,15 @@ import com.bumptech.glide.Glide
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.itextpdf.text.*
-import com.itextpdf.text.pdf.PdfWriter
+import com.itextpdf.text.pdf.*
+import com.itextpdf.text.pdf.draw.LineSeparator
 import crystal.crystal.catalogo.Catalogo
 import crystal.crystal.databinding.ActivityMainBinding
 import crystal.crystal.red.ListChatActivity
 import crystal.crystal.registro.Registro
 import crystal.crystal.taller.Taller
 import kotlinx.android.synthetic.main.activity_subir.*
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.ObjectOutputStream
@@ -56,6 +59,7 @@ class MainActivity : AppCompatActivity() {
     }
     private var lista: MutableList<Listado> = mutableListOf()
     val elementosFiltrados: MutableList<Listado> = mutableListOf()
+    private var cliente: String = ""
 
     private lateinit var usados: Spinner
     private lateinit var unidades: Spinner
@@ -63,13 +67,12 @@ class MainActivity : AppCompatActivity() {
     private val RECORD_REQUEST_CODE = 101
     private val REQUEST_IMAGE_CAPTURE = 1
     private val REQUEST_IMAGE_GALLERY = 2
-    private val PICK_IMAGE_REQUEST = 1
-    //private val retaso = 1.8f
+    private var selectedPosition: Int = -1
+    private val retaso = 1.8f
 
     private lateinit var sharedPreferences: SharedPreferences
-
-
     private lateinit var binding: ActivityMainBinding
+
     @SuppressLint("NewApi", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,6 +90,8 @@ class MainActivity : AppCompatActivity() {
 
         // Inicializar SharedPreferences
         sharedPreferences = this.getSharedPreferences("MyPrefs", Context.MODE_PRIVATE)
+
+        binding.clienteEditxt.setText(cargarDatosGuardados())
 
         // Cargar los datos guardados
         cargarDatosGuardados()
@@ -219,6 +224,7 @@ class MainActivity : AppCompatActivity() {
         binding.btMicro.setOnClickListener {
             startSpeechToText()
         }
+
         binding.btScan.setOnClickListener {
             val options = arrayOf<CharSequence>("Tomar foto", "Elegir de la galería")
             val builder = android.app.AlertDialog.Builder(this)
@@ -232,12 +238,17 @@ class MainActivity : AppCompatActivity() {
             builder.show()
             binding.lyScan.visibility=View.VISIBLE
         }
+
         binding.btConver.setOnClickListener {
             binding.lyScan.visibility=View.GONE
         }
 
+        binding.txtRetaso.setOnClickListener {
+            binding.prueTxt.text= cargarDatosGuardados()
+        }
 
     }
+
     override fun onPause() {
         super.onPause()
         // Guardar los datos antes de que la aplicación pase a segundo plano
@@ -255,7 +266,8 @@ class MainActivity : AppCompatActivity() {
         val medida3 = med3()
         val cantidad = binding.cantEditxt.text.toString().toFloat()
         val precio = binding.precioEditxt.text.toString().toFloat()
-        val producto = binding.proEditxt.text.toString()
+        val producto = if (binding.proEditxt.text.toString().isBlank()){"..."}
+        else{binding.proEditxt.text.toString()}
         // resultados de calculos
         val piescua = pies(medida1,medida2)
         val metroscua = metroCua(medida1,medida2)
@@ -268,7 +280,7 @@ class MainActivity : AppCompatActivity() {
         val cubcant  = cub * cantidad
         val peri = perim()
         // vinculacion de fotos
-        val uri = producto
+        val uri = ""
         // calculo de precios
 
         val costounitario = when (escala){
@@ -308,6 +320,7 @@ class MainActivity : AppCompatActivity() {
 
         lista.add(medidas)
     }
+
     @SuppressLint("SetTextI18n")
     private fun actualizar() {
         // Creamos un nuevo adapter con los datos de la lista
@@ -337,37 +350,50 @@ class MainActivity : AppCompatActivity() {
         // Notificamos al adapter que se actualizaron los datos
         adapter.notifyDataSetChanged()
     }
+
     private fun adaptadores(): ArrayAdapter<SpannableString> {
+        val clipCodigo = 0x1F4CE
+        val clip = String(Character.toChars(clipCodigo))
+
         val adapter = ArrayAdapter(
             this, R.layout.lista_cal,
             lista.map { datos ->
+                // Acortar el URI solo para mostrarlo en la interfaz
+                val uriAcortado = if (datos.uri.length > 20) "...${datos.uri.takeLast(20)}" else datos.uri
+
                 val text = when (datos.escala) {
                     "p2" -> {
                         "(${df1(datos.medi1)} x ${df1(datos.medi2)} x ${df1(datos.canti)} = " +
                                 "${df1(datos.piescua)}(${datos.escala}) " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"
+                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto} " +
+                                ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     "m2" -> {
                         "(${df1(datos.medi1)} x ${df1(datos.medi2)} x ${df1(datos.canti)} = " +
                                 "${df1(datos.metcua)}(${datos.escala}) " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"
+                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     "m3" -> {
                         "(${df1(datos.medi1)} x ${df1(datos.medi2)} x ${df1(datos.medi3)} x ${df1(datos.canti)} = " +
                                 "${df1(datos.metcub)}(${datos.escala}) " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"
+                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     "ml" -> {
                         "(${df1(datos.medi1)} x ${df1(datos.canti)} = ${df1(datos.metli)}(${datos.escala}) " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"
+                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     "uni" -> {
                         "${df1(datos.canti)}(${datos.escala}) = " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"
+                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     else -> {
                         "(${df1(datos.medi1)} x ${df1(datos.medi2)} x ${df1(datos.canti)} = ${df1(datos.piescua)} " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"
+                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                 }
 
@@ -386,32 +412,70 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("SetTextI18n")
-    private fun cliente(){
-        val clienteRecup=cargarDatosGuardados()
-        val paqueteR=intent.extras
-        val cliente= paqueteR?.getString("rcliente")
-        if (cliente!=null&&clienteRecup==""){binding.tvpCliente.text="Presupuesto de $cliente"}
-        else{binding.tvpCliente.text="Presupuesto de $clienteRecup"}
+    private fun cliente() {
 
-        if(binding.tvpCliente.text=="Presupuesto"){binding.lyCuello.visibility=View.VISIBLE
-            binding.lyCuerpo.visibility=View.GONE}
-        else{binding.lyCuello.visibility=View.GONE
-            binding.lyCuerpo.visibility=View.VISIBLE}
+        val paqueteR = intent.extras
+        val clienteIntent = paqueteR?.getString("rcliente")
+        val clienteRecup = cargarDatosGuardados()
+
+        if (clienteIntent != null) {
+            // Si hay un cliente en los extras del intent, priorizarlo
+            sharedPreferences.edit().putString("cliente", clienteIntent).apply()
+            binding.tvpCliente.text = "Presupuesto de $clienteIntent"
+            binding.clienteEditxt.setText(clienteIntent)
+
+            // Ajustar la visibilidad: ocultar lyCuello y mostrar lyCuerpo
+            binding.lyCuello.visibility = View.GONE
+            binding.lyCuerpo.visibility = View.VISIBLE
+        } else {
+            // Si no hay cliente en los extras, usar el valor de SharedPreferences
+            if (clienteRecup.isNotEmpty()) {
+                binding.tvpCliente.text = "Presupuesto de $clienteRecup"
+                binding.clienteEditxt.setText(clienteRecup)
+
+                // Ajustar la visibilidad: ocultar lyCuello y mostrar lyCuerpo
+                binding.lyCuello.visibility = View.GONE
+                binding.lyCuerpo.visibility = View.VISIBLE
+            } else {
+                binding.tvpCliente.text = "Presupuesto"
+                binding.clienteEditxt.setText("")
+
+                // Ajustar la visibilidad: mostrar lyCuello y ocultar lyCuerpo
+                binding.lyCuello.visibility = View.VISIBLE
+                binding.lyCuerpo.visibility = View.GONE
+            }
+        }
 
         binding.tvpCliente.setOnClickListener {
-            binding.lyCuello.visibility=View.VISIBLE
-            binding.lyCuerpo.visibility=View.GONE}
-        binding.clienteEditxt.setText(cliente)
+            binding.lyCuello.visibility = View.VISIBLE
+            binding.lyCuerpo.visibility = View.GONE
+        }
 
         binding.btGo.setOnClickListener {
-            val clientet = binding.clienteEditxt.text.toString()
-            binding.tvpCliente.text = if(binding.clienteEditxt.text.isNotEmpty()){"Presupuesto de $clientet"}
-            else{"Presupuesto"}
+            val clientet = binding.clienteEditxt.text.toString().trim()
+            binding.tvpCliente.text = if (clientet.isNotEmpty()) {
+                "Presupuesto de $clientet"
+            } else {
+                "Presupuesto"
+            }
 
-            if(binding.tvpCliente.text==null){binding.lyCuello.visibility=View.VISIBLE
-                binding.lyCuerpo.visibility=View.GONE}else{binding.lyCuello.visibility=View.GONE
-                binding.lyCuerpo.visibility=View.VISIBLE}
+            if (clientet.isNotEmpty()) {
+                // Si hay un cliente, ocultar lyCuello y mostrar lyCuerpo
+                binding.lyCuello.visibility = View.GONE
+                binding.lyCuerpo.visibility = View.VISIBLE
 
+                // Guardar el cliente en SharedPreferences
+                sharedPreferences.edit().putString("cliente", clientet).apply()
+                Toast.makeText(this, "Cliente guardado correctamente", Toast.LENGTH_SHORT).show()
+            } else {
+                // Si no hay cliente, mostrar lyCuello y ocultar lyCuerpo
+                binding.lyCuello.visibility = View.GONE
+                binding.lyCuerpo.visibility = View.VISIBLE
+
+                // Eliminar el cliente de SharedPreferences
+                sharedPreferences.edit().remove("cliente").apply()
+                // No mostrar toast al eliminar
+            }
         }
     }
 
@@ -550,6 +614,11 @@ class MainActivity : AppCompatActivity() {
                             Toast.makeText(this, "Error: Ingresa valores numéricos válidos", Toast.LENGTH_SHORT).show()
                         }
                     }
+
+                    // Cuando ya se tiene un URI seleccionado:
+                    val uriCompleto = lista[position].uri
+                    val uriAcortado = if (uriCompleto.length > 20) "...${uriCompleto.takeLast(20)}" else uriCompleto
+                    usoImagenUri(uriAcortado)
                 }
 
                 irlista.setOnClickListener {
@@ -557,13 +626,16 @@ class MainActivity : AppCompatActivity() {
                     dialogoPer.dismiss()
                 }
                 abrir.setOnClickListener {
+                    selectedPosition = position // Guardar la posición seleccionada
                     openGallery()
+                    dialogoPer.dismiss()
                 }
             } catch (e: Exception) {
                 Toast.makeText(this, "Error al mostrar el diálogo", Toast.LENGTH_SHORT).show()
             }
         }
     }
+
     private fun filtrarLista(criterio: String) {
         val listaFiltrada = lista.filter { item ->
             item.producto.contains(criterio, ignoreCase = true)
@@ -572,6 +644,7 @@ class MainActivity : AppCompatActivity() {
         val adaptador = ArrayAdapter(this, R.layout.lista_cal, listaFiltrada.map { it.toString() })
         binding.list.adapter = adaptador
     }
+
     //shared
     private fun guardarDatos() {
         // Obtener los datos que deseas guardar
@@ -600,7 +673,8 @@ class MainActivity : AppCompatActivity() {
 
         editor.apply()
     }
-    private fun cargarDatosGuardados():String {
+
+    private fun cargarDatosGuardados(): String {
         // Obtener los datos guardados desde SharedPreferences
         val dato1 = sharedPreferences.getString("dato1", "")
         val dato2 = sharedPreferences.getString("dato2", "")
@@ -610,14 +684,15 @@ class MainActivity : AppCompatActivity() {
         val producto = sharedPreferences.getString("producto", "")
         val cliente = sharedPreferences.getString("cliente", "")
 
-        // Actualizar los campos de la interfaz con los datos cargados<
+        // Actualizar los campos de la interfaz con los datos cargados (excepto clienteEditxt)
         binding.med1Editxt.setText(dato1)
         binding.med2Editxt.setText(dato2)
         binding.med3Editxt.setText(dato3)
         binding.cantEditxt.setText(cantidad)
         binding.precioEditxt.setText(precio)
         binding.proEditxt.setText(producto)
-        binding.clienteEditxt.setText(cliente)
+        // **Eliminar o comentar la siguiente línea para evitar sobrescribir clienteEditxt**
+        // binding.clienteEditxt.setText(cliente)
 
         // Cargar la lista desde SharedPreferences
         val listaString = sharedPreferences.getString("lista", null)
@@ -628,6 +703,7 @@ class MainActivity : AppCompatActivity() {
         }
         return cliente.toString()
     }
+
     // guardar completo
     @RequiresApi(Build.VERSION_CODES.O)
     private fun guardar() {
@@ -648,11 +724,11 @@ class MainActivity : AppCompatActivity() {
             e.printStackTrace()
         }
     }
+
     private fun abrir() {
         val paquete = intent.extras
-        val li = paquete?.getSerializable("lista") as? List<Listado>
-        val listaRecibida = mutableListOf<Listado>()
-        li?.let { listaRecibida.addAll(it) }
+        val li = paquete?.getSerializable("lista") as? List<*>
+        val listaRecibida = li?.filterIsInstance<Listado>()?.toMutableList() ?: mutableListOf()
 
         if (lista.isNotEmpty()) {
             val builder = AlertDialog.Builder(this)
@@ -708,7 +784,6 @@ class MainActivity : AppCompatActivity() {
                 REQUEST_IMAGE_CAPTURE -> {
                     if (resultCode == RESULT_OK) {
                         val imageBitmap = data?.extras?.get("data") as Bitmap
-                        // Cargar la imagen directamente en el ImageView
                         binding.ivScan.setImageBitmap(imageBitmap)
                     } else {
                         Toast.makeText(this, "Error al capturar la imagen", Toast.LENGTH_SHORT).show()
@@ -719,16 +794,22 @@ class MainActivity : AppCompatActivity() {
                         val selectedImageUri: Uri? = data.data
 
                         if (selectedImageUri != null) {
-                            // Extraer el URI como una cadena de texto
                             val imageUriString = selectedImageUri.toString()
+
+                            // Guardar el URI completo
+                            val uriCompleto = imageUriString
+                            val uriAcortado = if (uriCompleto.length > 20) "...${uriCompleto.takeLast(20)}" else uriCompleto
+
+                            // Guardar el URI completo en el objeto Listado
+                            lista[selectedPosition].uri = uriCompleto
+
+                            // Mostrar la versión acortada en la interfaz
+                            usoImagenUri(uriAcortado)
 
                             // Cargar la imagen utilizando Glide en ivScan
                             Glide.with(this)
                                 .load(selectedImageUri)
                                 .into(binding.ivScan)
-
-                            // Puedes manejar el URI de la imagen para guardarlo, mostrarlo, etc.
-                            usoImageUri(imageUriString)
                         } else {
                             Toast.makeText(this, "Error: URI de imagen es nulo", Toast.LENGTH_SHORT).show()
                         }
@@ -736,6 +817,7 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this, "Error al seleccionar la imagen", Toast.LENGTH_SHORT).show()
                     }
                 }
+
                 RECORD_REQUEST_CODE -> {
                     if (resultCode == RESULT_OK && data != null) {
                         val result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
@@ -744,7 +826,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (e: Exception) {
-            // Manejo de errores: muestra un mensaje de error o realiza alguna acción adecuada
             Toast.makeText(this, "Error al procesar la solicitud: ${e.message}", Toast.LENGTH_SHORT).show()
             e.printStackTrace()
         }
@@ -766,22 +847,16 @@ class MainActivity : AppCompatActivity() {
         intent.type = "image/*"
         startActivityForResult(intent, REQUEST_IMAGE_GALLERY)
     }
-
-    // Esta función se llama cuando el usuario hace clic en un botón para seleccionar una imagen
-    private fun selectGaleria() {
-        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
-        intent.type = "image/*"
-        startActivityForResult(intent, PICK_IMAGE_REQUEST)
-    }
     //para manejar el URI
-    private fun usoImageUri(imageUriString: String) {
-        selectGaleria()
-        // Por ejemplo, guardarlo en una variable, en la base de datos, etc.
+    private fun usoImagenUri(imageUriString: String) {
+        if (selectedPosition != -1) {
+            // Solo actualizar la interfaz con el URI acortado
+            // No modifiques lista[selectedPosition].uriCompleto
+            // Simplemente actualiza el texto o la representación acortada en la interfaz
+            actualizar()
+        }
         Log.d("Image URI", imageUriString)
-        // Otras acciones que desees realizar con el URI
     }
-
-
     //FUNCIONES PDF
     /*private fun openPdf() {
    generarPdf()
@@ -811,100 +886,147 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
         }
     }
+
+    // Clase para gestionar el evento de numeración de páginas
+    class PageNumeration : PdfPageEventHelper() {
+        override fun onEndPage(writer: PdfWriter, document: Document) {
+            val cb = writer.directContent
+            val pageSize = document.pageSize
+
+            // Fuente para la numeración
+            val pageNumberFont = Font(Font.FontFamily.HELVETICA, 10f, Font.NORMAL)
+            val phrase = Phrase("Página ${writer.pageNumber}", pageNumberFont)
+
+            // Posición de la numeración (pie de página)
+            ColumnText.showTextAligned(
+                cb,
+                Element.ALIGN_RIGHT,
+                phrase,
+                pageSize.right - document.rightMargin(),
+                pageSize.bottom + 18f, // Ajustar la altura si es necesario
+                0f
+            )
+        }
+    }
+
     @SuppressLint("ResourceType")
     private fun generarPdf() {
         val cliente = binding.clienteEditxt.text.toString()
-
-        val pdfFileName = "Presupuesto_${cliente}.pdf" // Genera el nombre del archivo PDF
-
+        val pdfFileName = "Presupuesto_${cliente}.pdf"
         val pdfFile = File(getExternalFilesDir(null), pdfFileName)
-        val document = Document()
+
+        val document = Document(PageSize.A4, 36f, 36f, 36f, 36f)
         val writer = PdfWriter.getInstance(document, FileOutputStream(pdfFile))
+
+        // Añadir el evento para la numeración de páginas
+        val event = PageNumeration()
+        writer.pageEvent = event
+
         document.open()
 
-        val tituloFont = Font(Font.FontFamily.HELVETICA, 20f, Font.BOLD) // Tamaño de fuente 20
+        val tituloFont = Font(Font.FontFamily.HELVETICA, 27f, Font.BOLD)
         document.add(Paragraph("Proforma $cliente", tituloFont))
-
-        var itemNum = 0 // variable para llevar la cuenta del número de ítems
 
         if (lista.isEmpty()) {
             Toast.makeText(this, "La lista está vacía", Toast.LENGTH_SHORT).show()
-            return // Terminar la función si la lista está vacía
+            return
         }
+
+        var itemNum = 0 // Para numerar los ítems
 
         for (item in lista) {
             itemNum++
-            // Agregar recuadro para el ítem
-            val itemBox = Rectangle(10f, 50f, 550f, 150f)
-            itemBox.borderWidth = 1f
-            itemBox.borderColor = BaseColor.BLACK
-            document.add(itemBox)
 
-            // Agregar título del ítem
-            val producto = item.producto
-            val titulo = "Ítem $itemNum: $producto"
-            val tituloItem = Paragraph(titulo, Font(Font.FontFamily.HELVETICA, 14f, Font.BOLD))
-            document.add(tituloItem)
+            // Crear un bloque de contenido que se mantiene junto (KeepTogether)
+            val block = PdfPTable(1)
+            block.setKeepTogether(true) // Esto evita que el ítem se corte entre páginas
 
-            // Agregar recuadro interno para las medidas, cantidad y costo
-            val medidasBox = Rectangle(20f, 100f, 250f, 80f)
-            medidasBox.borderWidth = 1f
-            medidasBox.borderColor = BaseColor.LIGHT_GRAY
-            document.add(medidasBox)
+            val itemTitleFont = Font(Font.FontFamily.HELVETICA, 16f, Font.BOLD)
+            val tituloItem = "Ítem $itemNum: ${item.producto}"
+            val tituloItemParagraph = Paragraph(tituloItem, itemTitleFont)
 
-            // Agregar texto de las medidas, cantidad y costo
+            val cellTitulo = PdfPCell(tituloItemParagraph)
+            cellTitulo.border = Rectangle.NO_BORDER
+            block.addCell(cellTitulo)
+
+            val table = PdfPTable(2)
+            table.widthPercentage = 100f
+
             val ancho = item.medi1
             val alto = item.medi2
             val fondo = item.medi3
             val cantidad = item.canti
             val costo = item.costo
+            val anexo = item.uri
+
             val textoMedidas = when (item.escala) {
-                "p2", "m2" -> "Ancho:   ${df1(ancho)}\nAlto:   ${df1(alto)}\nCantidad:   ${df1(cantidad)}\nCosto:   ${df.format(costo)}"
-                "ml" -> "Metros:${df1(ancho)}\nCantidad:   ${df1(cantidad)}\nCosto:   ${df.format(costo)}"
-                "m3" -> "Ancho:   ${df1(ancho)}\nAlto:   ${df1(alto)}\nFondo:   ${df1(fondo)}\nCantidad:   ${df1(cantidad)}\nCosto:   ${df.format(costo)}"
-                "uni" -> "Cantidad:   ${df1(cantidad)}\nCosto:   ${df.format(costo)}"
-                else -> "" // Manejar caso por defecto si es necesario
+                "p2", "m2" -> "Ancho: ${df1(ancho)}\nAlto: ${df1(alto)}\nCantidad: ${df1(cantidad)}"
+                "ml" -> "Metros: ${df1(ancho)}\nCantidad: ${df1(cantidad)}"
+                "m3" -> "Ancho: ${df1(ancho)}\nAlto: ${df1(alto)}\nFondo: ${df1(fondo)}\nCantidad: ${df1(cantidad)}"
+                "uni" -> "Cantidad: ${df1(cantidad)}"
+                else -> ""
             }
 
-            val medidas = Paragraph(textoMedidas)
-            document.add(medidas)
+            val costoFont = Font(Font.FontFamily.HELVETICA, 12f, Font.BOLD)
+            val textoCosto = Chunk("Costo: ${df.format(costo)}", costoFont)
 
+            val textoCompleto = Paragraph(textoMedidas)
+            textoCompleto.add(Chunk("\n"))
+            textoCompleto.add(textoCosto)
 
-            // Agregar recuadro interno para la imagen
-            val imageBox = Rectangle(280f, 55f, 270f, 120f)
-            imageBox.borderWidth = 1f
-            imageBox.borderColor = BaseColor.LIGHT_GRAY
-            document.add(imageBox)
+            val textCell = PdfPCell(textoCompleto)
+            textCell.border = Rectangle.NO_BORDER
+            textCell.setPadding(9f)
+            table.addCell(textCell)
 
-            // Agregar imagen (puedes reemplazar "R.drawable.imagen" por la ruta de la imagen que desees mostrar)
-            /* Glide.with(this)
-                .load(R.mipmap.i_tu2)
-                .into(object : SimpleTarget<Drawable>() {
-                    override fun onResourceReady(
-                        resource: Drawable,
-                        transition: Transition<in Drawable>?
-                    ) {
-                        val bitmap = resource.toBitmap()
+            var imageCell: PdfPCell
+
+            if (anexo.isEmpty()) {
+                // Si el anexo es nulo o vacío, dejamos la celda en blanco
+                imageCell = PdfPCell(Paragraph(""))
+            } else {
+                try {
+                    val imageUri = Uri.parse(anexo)
+                    val bitmap = BitmapFactory.decodeStream(contentResolver.openInputStream(imageUri))
+
+                    if (bitmap != null) {
                         val stream = ByteArrayOutputStream()
                         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-                        val byteArray = stream.toByteArray()
-                        val image = Image.getInstance(byteArray)
-                        image.scaleToFit(imageBox.width - 10, imageBox.height - 10)
-                        image.setAbsolutePosition(imageBox.left + 5, imageBox.bottom + 5)
-                        document.add(image)
-                        document.close() // Cerrar el documento antes de mostrar la imagen
+                        val image = Image.getInstance(stream.toByteArray())
+                        image.scaleToFit(270f, 270f)
+                        imageCell = PdfPCell(image)
+                    } else {
+                        imageCell = PdfPCell(Paragraph("Imagen no disponible"))
                     }
-                })*/
-            // Agregar salto de línea al final de cada ítem
-            document.add(Paragraph("\n"))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    imageCell = PdfPCell(Paragraph("Imagen no disponible"))
+                }
+            }
+
+            imageCell.border = Rectangle.NO_BORDER
+            imageCell.setPadding(9f)
+            table.addCell(imageCell)
+
+            block.addCell(PdfPCell(table).apply { border = Rectangle.NO_BORDER })
+
+            document.add(block) // Añadir el bloque completo al documento
+
+            // Añadir una línea separadora entre los elementos
+            val separator = LineSeparator()
+            separator.lineColor = BaseColor.GRAY // Color de la línea
+            separator.lineWidth = 1f // Grosor de la línea
+            document.add(Chunk(separator))
+
+            document.add(Paragraph("\n")) // Salto de línea entre ítems
         }
-        // Agregar recuadro para el precio total
-        val totalBox = Rectangle(10f, 50f, 550f, 50f)
+
+        // Agregar el cuadro del precio total
+        val totalBox = Rectangle(10f, 50f, 550f, 100f)
         totalBox.borderWidth = 1f
         totalBox.borderColor = BaseColor.BLACK
         document.add(totalBox)
 
-// Agregar título del precio total
         val precioTotal = binding.precioTotal.text.toString()
         val tituloTotal = "Precio total: S/.$precioTotal"
         val tituloTotalItem = Paragraph(tituloTotal, Font(Font.FontFamily.HELVETICA, 16f, Font.BOLD))
@@ -915,6 +1037,7 @@ class MainActivity : AppCompatActivity() {
 
         Toast.makeText(this, "PDF generado: ${pdfFile.absolutePath}", Toast.LENGTH_LONG).show()
     }
+
     private fun df1(defo: Float): String {
         val resultado =if ("$defo".endsWith(".0")) {"$defo".replace(".0", "")}
         else { "%.1f".format(defo)

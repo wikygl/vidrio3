@@ -13,6 +13,7 @@
     <color name="amarillo">#FFCC00</color>
     <color name="naranja">#F47D2E</color>
     <color name="gris">#4D4D4D</color>
+    <color name="grisT">#CE4D4D4D</color>
     <color name="violeta">#CC33FF</color>
     <color name="indigo">#01315C</color>
     <color name="celeste">#159EC2</color>
@@ -21,4 +22,6 @@
     <color name="azul">#01315C</color>
     <color name="azul2">#0037FF</color>
     <color name="negro">#000</color>
+    <color name="negroT">#CF000000</color>
+    <color name="marron">#CF493434</color>
 </resources>

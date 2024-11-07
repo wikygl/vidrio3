@@ -919,7 +919,7 @@
                                     tools:visibility="visible">
 
                                     <TextView
-                                        android:id="@+id/marcot"
+                                        android:id="@+id/tvU"
                                         android:layout_width="match_parent"
                                         android:layout_height="wrap_content"
                                         android:layout_weight="1"
@@ -1138,7 +1138,7 @@
                     android:orientation="horizontal">
 
                     <Button
-                        android:id="@+id/btn_archivar_nfcfs"
+                        android:id="@+id/btArchivar"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"

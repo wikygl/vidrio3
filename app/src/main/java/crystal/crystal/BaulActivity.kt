@@ -112,6 +112,7 @@ class BaulActivity : AppCompatActivity() {
                 val datosIntent = Intent(this, MainActivity::class.java)
                 datosIntent.putExtras(paquete)
                 startActivity(datosIntent)
+                finish()
             } catch (e: Exception) {
                 Toast.makeText(this, "Error al abrir el archivo", Toast.LENGTH_SHORT).show()
             }
@@ -144,6 +145,7 @@ class BaulActivity : AppCompatActivity() {
         estaEnModoSeleccion = false
         binding.lyCom.visibility = View.GONE
     }
+
     private fun compartirArchivos() {
         val indicesSeleccionados = mutableListOf<Int>()
         // Obtener los índices de los elementos que tienen el checkmarkr visible

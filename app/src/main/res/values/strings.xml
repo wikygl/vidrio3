@@ -40,7 +40,7 @@
     <string name="aceptar">aceptar</string>
     <string name="x5">5%</string>
     <string name="reset">«</string>
-    <string name="borrar">ĉ</string>
+    <string name="borrar">Borrar</string>
     <string name="dividir">÷</string>
     <string name="restar">-</string>
     <string name="sumar">+</string>
@@ -128,7 +128,6 @@
     <string name="V">V</string>
     <string name="platina">Platina</string>
     <string name="opciones">Opciones</string>
-    <string name="divisiones">Divisiones</string>
     <string name="_0">0</string>
     <string name="costos">Costos</string>
     <string name="costos_y_sumas">Costos y Sumas</string>
@@ -186,5 +185,18 @@
     <string name="recibo">recibo</string>
     <string name="pais">Pais</string>
     <string name="anexar">anexar</string>
-    <string name="convertir">convertir</string>/>
+    <string name="convertir">convertir</string>
+    <string name="fijos">Fijos</string>
+    <string name="corredizas">Corredizas</string>
+    <string name="dise_o">Diseño</string>
+    <string name="divisiones">Divisiones</string>
+    <string name="serie_20">Serie 20</string>
+    <string name="traslapo">Traslapo</string>
+    <string name="cabezal">Cabezal</string>
+    <string name="adaptador">Adaptador</string>
+    <string name="pruebas">Pruebas</string>
+    <string name="riel_sup">Riel Sup.</string>
+    <string name="riel_inf">Riel Inf.</string>
+    <string name="grados">Grados</string>
+    <string name="tipo">Tipo</string>
 </resources>

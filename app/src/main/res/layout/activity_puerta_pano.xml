@@ -5,7 +5,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".taller.PuertaPano">
+    tools:context=".taller.Puertas">
+
     <LinearLayout
         android:id="@+id/layout2"
         android:layout_width="0dp"
@@ -159,7 +160,7 @@
                         android:layout_height="match_parent">
 
                         <ImageView
-                            android:id="@+id/p1"
+                            android:id="@+id/ivModelo"
                             android:layout_width="0dp"
                             android:layout_height="0dp"
                             android:layout_margin="3.6dp"
@@ -167,339 +168,26 @@
                             android:focusable="true"
                             android:visibility="visible"
                             app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintEnd_toStartOf="@+id/spVariantes"
                             app:layout_constraintStart_toStartOf="parent"
                             app:layout_constraintTop_toTopOf="parent"
                             app:srcCompat="@drawable/ic_pp1"
                             tools:ignore="ContentDescription,SpeakableTextPresentCheck" />
-                        <ImageView
-                            android:id="@+id/p2"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
+
+                        <Spinner
+                            android:id="@+id/spVariantes"
+                            android:layout_width="30dp"
+                            android:layout_height="wrap_content"
                             app:layout_constraintBottom_toBottomOf="parent"
                             app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
                             app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp2"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p3"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp3"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p4"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp4"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p5"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp5"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p6"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp6"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p7"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp7"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p8"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp8"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p9"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp9"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p10"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp10"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p11"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp11"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p12"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pp12"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p1s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps1"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p2s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps2"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p3s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps3"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p4s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps4"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p5s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps5"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p6s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps6"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p7s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps7"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p8s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps8"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p9s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps9"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p10s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps10"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p11s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps11"
-                            tools:ignore="ContentDescription" />
-                        <ImageView
-                            android:id="@+id/p12s"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_margin="3.6dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:visibility="gone"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_pps12"
-                            tools:ignore="ContentDescription" />
+                            tools:ignore="TouchTargetSizeCheck,SpeakableTextPresentCheck" />
 
                     </androidx.constraintlayout.widget.ConstraintLayout>
                 </LinearLayout>
 
                 <TextView
-                    android:id="@+id/textView4"
+                    android:id="@+id/txMedCant"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
@@ -516,13 +204,13 @@
                         android:orientation="vertical">
 
                         <LinearLayout
-                            android:id="@+id/ancho"
+                            android:id="@+id/lyMed1"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
 
                             <TextView
-                                android:id="@+id/textView13"
+                                android:id="@+id/txMed1"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -532,7 +220,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/med1_p"
+                                android:id="@+id/etMed1"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -542,13 +230,13 @@
                         </LinearLayout>
 
                         <LinearLayout
-                            android:id="@+id/alto"
+                            android:id="@+id/lyAlto"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
 
                             <TextView
-                                android:id="@+id/textView12"
+                                android:id="@+id/txMed2"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -558,7 +246,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/med2_p"
+                                android:id="@+id/etMed2"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -569,12 +257,13 @@
                         </LinearLayout>
 
                         <LinearLayout
-                            android:id="@+id/altoH"
+                            android:id="@+id/lyHoja"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
 
                             <TextView
+                                android:id="@+id/txHoja"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -584,7 +273,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/hoja_editxt"
+                                android:id="@+id/etHoja"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -596,11 +285,13 @@
                         </LinearLayout>
 
                         <LinearLayout
+                            android:id="@+id/lyDivi"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
 
                             <TextView
+                                android:id="@+id/txDivi"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -610,7 +301,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/divi_editext"
+                                android:id="@+id/etDivi"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -621,11 +312,13 @@
                         </LinearLayout>
 
                         <LinearLayout
+                            android:id="@+id/lyJunki"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
 
                             <TextView
+                                android:id="@+id/txJunki"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -635,7 +328,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/junk_p"
+                                android:id="@+id/etJunki"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -655,11 +348,13 @@
                             android:textColor="@color/color" />
 
                         <LinearLayout
+                            android:id="@+id/lyPiso"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
 
                             <TextView
+                                android:id="@+id/txPiso"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -669,7 +364,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/piso_editext"
+                                android:id="@+id/etPiso"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -680,11 +375,13 @@
                         </LinearLayout>
 
                         <LinearLayout
+                            android:id="@+id/lyZocalo"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
 
                             <TextView
+                                android:id="@+id/txZocalo"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -694,7 +391,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/zoca_editext"
+                                android:id="@+id/etZocalo"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -759,7 +456,7 @@
                         android:orientation="horizontal">
 
                         <TextView
-                            android:id="@+id/referencias_p"
+                            android:id="@+id/txRefe"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
@@ -794,14 +491,14 @@
                                 android:orientation="horizontal">
 
                                 <TextView
-                                    android:id="@+id/marcot"
+                                    android:id="@+id/txMarco"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:text="@string/marco" />
 
                                 <TextView
-                                    android:id="@+id/marcotxt_p"
+                                    android:id="@+id/tvMarco"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -809,7 +506,7 @@
                             </LinearLayout>
 
                             <LinearLayout
-                                android:id="@+id/tubolayout"
+                                android:id="@+id/lyTubo"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4.5dp"
@@ -818,14 +515,14 @@
                                 android:orientation="horizontal">
 
                                 <TextView
-                                    android:id="@+id/tubot"
+                                    android:id="@+id/txTubo"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:text="@string/tubo" />
 
                                 <TextView
-                                    android:id="@+id/pruebas"
+                                    android:id="@+id/tvTubo"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -847,7 +544,7 @@
                                     android:text="@string/pafl_n" />
 
                                 <TextView
-                                    android:id="@+id/bastitxt_p"
+                                    android:id="@+id/tvPaflon"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -869,7 +566,7 @@
                                     android:text="@string/junkillo" />
 
                                 <TextView
-                                    android:id="@+id/junkitxt_p"
+                                    android:id="@+id/tvJunkillo"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -891,7 +588,7 @@
                                     tools:ignore="TooManyViews" />
 
                                 <TextView
-                                    android:id="@+id/angtxt_p"
+                                    android:id="@+id/tvTope"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -914,7 +611,30 @@
                                     tools:ignore="TooManyViews" />
 
                                 <TextView
-                                    android:id="@+id/vidriostxt_p"
+                                    android:id="@+id/tvVidrios"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/sombra"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="Melamina"
+                                    tools:ignore="TooManyViews" />
+
+                                <TextView
+                                    android:id="@+id/tvMela"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"
@@ -983,7 +703,7 @@
                     android:orientation="horizontal">
 
                     <Button
-                        android:id="@+id/btn_archivarp"
+                        android:id="@+id/btArchivar"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
@@ -993,7 +713,7 @@
                         tools:ignore="ButtonStyle" />
 
                     <Button
-                        android:id="@+id/btn_calcularp"
+                        android:id="@+id/btCalcular"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"

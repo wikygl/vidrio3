@@ -73,7 +73,7 @@ class MamparaFC : AppCompatActivity() {
 
                 porttxt.text = "${df1(paranteFijo()-1.5f)} = 1"
 
-                angcortotxt.text = "${angTapa()} = 1"
+                txTe.text = "${angTapa()} = 1"
 
             }catch (e: Exception) {
                 Toast.makeText(this, "Ingrese dato válido", Toast.LENGTH_SHORT).show()}

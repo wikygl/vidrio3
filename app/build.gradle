@@ -5,13 +5,13 @@ apply plugin: 'kotlin-android-extensions'
 
 
 android {
-    compileSdkVersion 32
-    buildToolsVersion '30.0.3'
+    compileSdkVersion 34
+    buildToolsVersion '34.0.0'
 
     defaultConfig {
         applicationId "crystal.crystal"
         minSdkVersion 21
-        targetSdkVersion 32
+        targetSdkVersion 34
         versionCode 3
         versionName "3.0"
 
@@ -33,8 +33,15 @@ android {
         all*.exclude group: 'com.google.guava', module: 'listenablefuture'
     }
     compileOptions {
-        sourceCompatibility "1.6"
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    namespace 'crystal.crystal'
+
 }
 
 dependencies {
@@ -65,7 +72,9 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.8.8'
     implementation 'androidx.recyclerview:recyclerview:1.2.1'
 
+
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+
 }

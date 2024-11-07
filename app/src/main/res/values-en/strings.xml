@@ -2,4 +2,19 @@
 <resources>
     <string name="anexar">anexar</string>
     <string name="convertir">convertir</string>
+    <string name="fijos">Fijos</string>
+    <string name="corredizas">Corredizas</string>
+    <string name="dise_o">Diseño</string>
+    <string name="divisiones">Divisiones</string>
+    <string name="h_puente">h.Puente</string>
+    <string name="serie_20">Serie 20</string>
+    <string name="traslapo">Traslapo</string>
+    <string name="cabezal">Cabezal</string>
+    <string name="z_calo">Zócalo</string>
+    <string name="adaptador">Adaptador</string>
+    <string name="pruebas">Pruebas</string>
+    <string name="riel_sup">Riel Sup.</string>
+    <string name="riel_inf">Riel Inf.</string>
+    <string name="grados">Grados</string>
+    <string name="tipo">Tipo</string>
 </resources>

@@ -25,7 +25,7 @@ class Taller : AppCompatActivity() {
         puerta.setOnClickListener {
             val paquete = Bundle().apply { putString("rcliente", binding.cliente.text.toString())}
 
-            val intent = Intent(this, PuertaPano::class.java)
+            val intent = Intent(this, Puertas::class.java)
             intent.putExtras(paquete)
             startActivity(intent)}
 
