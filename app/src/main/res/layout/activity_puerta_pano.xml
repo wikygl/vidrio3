@@ -117,6 +117,7 @@
             android:orientation="horizontal">
 
             <LinearLayout
+                android:id="@+id/lyDatos"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="9dp"
@@ -134,7 +135,7 @@
                     android:background="@drawable/corner2"
                     android:backgroundTint="@color/color"
                     android:gravity="center"
-                    android:text="@string/puerta_de_pa_os"
+                    android:text="@string/puertas"
                     android:textColor="@color/blanco" />
 
                 <LinearLayout

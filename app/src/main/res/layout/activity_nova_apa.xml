@@ -825,7 +825,6 @@
                                         android:text="@string/_0_0"
                                         tools:ignore="TouchTargetSizeCheck" />
                                 </LinearLayout>
-
                                 <LinearLayout
                                     android:id="@+id/lyAncho"
                                     android:layout_width="match_parent"
@@ -850,7 +849,6 @@
                                         android:layout_weight="0.72"
                                         android:text="@string/_0_0" />
                                 </LinearLayout>
-
                                 <LinearLayout
                                     android:id="@+id/lyAlto"
                                     android:layout_width="match_parent"

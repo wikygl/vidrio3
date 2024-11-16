@@ -22,7 +22,13 @@ import android.text.style.ForegroundColorSpan
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
+import android.widget.Spinner
+import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -31,21 +37,34 @@ import androidx.core.content.FileProvider
 import com.bumptech.glide.Glide
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.itextpdf.text.*
-import com.itextpdf.text.pdf.*
+import com.itextpdf.text.BaseColor
+import com.itextpdf.text.Chunk
+import com.itextpdf.text.Document
+import com.itextpdf.text.Element
+import com.itextpdf.text.Font
+import com.itextpdf.text.Image
+import com.itextpdf.text.PageSize
+import com.itextpdf.text.Paragraph
+import com.itextpdf.text.Phrase
+import com.itextpdf.text.Rectangle
+import com.itextpdf.text.pdf.ColumnText
+import com.itextpdf.text.pdf.PdfPCell
+import com.itextpdf.text.pdf.PdfPTable
+import com.itextpdf.text.pdf.PdfPageEventHelper
+import com.itextpdf.text.pdf.PdfWriter
 import com.itextpdf.text.pdf.draw.LineSeparator
 import crystal.crystal.catalogo.Catalogo
 import crystal.crystal.databinding.ActivityMainBinding
 import crystal.crystal.red.ListChatActivity
 import crystal.crystal.registro.Registro
 import crystal.crystal.taller.Taller
-import kotlinx.android.synthetic.main.activity_subir.*
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.ObjectOutputStream
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 @Suppress("NAME_SHADOWING", "UNUSED_ANONYMOUS_PARAMETER")
 class MainActivity : AppCompatActivity() {
@@ -68,6 +87,7 @@ class MainActivity : AppCompatActivity() {
     private val REQUEST_IMAGE_CAPTURE = 1
     private val REQUEST_IMAGE_GALLERY = 2
     private var selectedPosition: Int = -1
+    private var materialRecibido = listOf("")
     private val retaso = 1.8f
 
     private lateinit var sharedPreferences: SharedPreferences
@@ -255,6 +275,7 @@ class MainActivity : AppCompatActivity() {
         guardarDatos()
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
     private fun agregarListado() {
         // escalas, unidades y colores
         val escala = binding.usTxt.text.toString()
@@ -321,6 +342,7 @@ class MainActivity : AppCompatActivity() {
         lista.add(medidas)
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
     @SuppressLint("SetTextI18n")
     private fun actualizar() {
         // Creamos un nuevo adapter con los datos de la lista
@@ -351,6 +373,7 @@ class MainActivity : AppCompatActivity() {
         adapter.notifyDataSetChanged()
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
     private fun adaptadores(): ArrayAdapter<SpannableString> {
         val clipCodigo = 0x1F4CE
         val clip = String(Character.toChars(clipCodigo))
@@ -725,6 +748,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
     private fun abrir() {
         val paquete = intent.extras
         val li = paquete?.getSerializable("lista") as? List<*>
@@ -776,6 +800,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
@@ -848,6 +873,7 @@ class MainActivity : AppCompatActivity() {
         startActivityForResult(intent, REQUEST_IMAGE_GALLERY)
     }
     //para manejar el URI
+    @RequiresApi(Build.VERSION_CODES.N)
     private fun usoImagenUri(imageUriString: String) {
         if (selectedPosition != -1) {
             // Solo actualizar la interfaz con el URI acortado
@@ -871,6 +897,7 @@ class MainActivity : AppCompatActivity() {
        Toast.makeText(this, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
    }
 }*/
+    @RequiresApi(Build.VERSION_CODES.N)
     private fun openPdf() {
         generarPdf()
         val pdfFile = File(getExternalFilesDir(null), "Presupuesto_${binding.clienteEditxt.text}.pdf")
@@ -909,6 +936,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
     @SuppressLint("ResourceType")
     private fun generarPdf() {
         val cliente = binding.clienteEditxt.text.toString()
@@ -1152,7 +1180,6 @@ class MainActivity : AppCompatActivity() {
     private fun pies(medida1: Float, medida2: Float): Float {
         return (conver(medida1)) * (conver(medida2)) * 11.1f
     }
-
     private fun metroCua(medida1: Float, medida2: Float): Float {
         val medida1 = conver(medida1).toString().toFloat()
         val medida2 = conver(medida2).toString().toFloat()
@@ -1177,6 +1204,7 @@ class MainActivity : AppCompatActivity() {
             else -> {(((medida1) * 2 + (medida2) * 2)) / 100 }
         }
     }
+
     private fun med1(x: View? = null): Float {
         val editText = if (x!= null) {
             x.findViewById<EditText>(R.id.etdMed1)
@@ -1186,7 +1214,6 @@ class MainActivity : AppCompatActivity() {
         val med = editText.text.toString()
         return med.toFloatOrNull() ?: 1f
     }
-
     private fun med2(modelo: View? = null): Float {
         val editText = if (modelo != null) {
             modelo.findViewById<EditText>(R.id.etdMed2)
@@ -1196,7 +1223,6 @@ class MainActivity : AppCompatActivity() {
         val med = editText.text.toString()
         return med.toFloatOrNull() ?: 1f
     }
-
     private fun med3(modelo: View? = null): Float {
         val editText = if (modelo != null) {
             modelo.findViewById<EditText>(R.id.etdMed3)

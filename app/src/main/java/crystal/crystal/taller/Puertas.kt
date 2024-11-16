@@ -285,6 +285,7 @@ class Puertas : AppCompatActivity() {
     private val bastidor = 8.25f
     private val unoMedio = 3.8f
 
+    private var client =""
     private var indice = 0
     private val tipos = listOf("Mari","Dora","Adel","Mili","jeny","Taly","Viky","Lina","Tere")
 
@@ -307,7 +308,7 @@ class Puertas : AppCompatActivity() {
 
                 //OPCIONES DE VISIBILIDAD
 
-                dVisible()
+                dVariantes()
                 panos()
                 array()
 
@@ -371,9 +372,10 @@ class Puertas : AppCompatActivity() {
 
         var cliente= paqueteR?.getString("rcliente")
 
-            if (cliente!=null) {binding.tvTitulo.text= "puerta de paños $cliente"}
+            if (cliente!=null) {binding.tvTitulo.text= "Puerta ${tipos()} de ($cliente)"}
 
-            else  {binding.tvTitulo.text= "puerta de paños"}
+            else  {binding.tvTitulo.text= "Puerta ${tipos()}"
+            }
 
         binding.tvTitulo.setOnClickListener {
             binding.lyCliente.visibility=View.VISIBLE
@@ -381,14 +383,41 @@ class Puertas : AppCompatActivity() {
 
         binding.btGo.setOnClickListener {
             cliente = binding.clienteEditxt.text.toString()
-            binding.tvTitulo.text="puerta de paños $cliente"
+            binding.tvTitulo.text="Puerta ${tipos()} de ($cliente)"
 
-            binding.lyCliente.visibility=View.GONE }
+            binding.lyCliente.visibility=View.GONE
+            client= cliente as String
+
         }
+        }
+
     }
 
     //FUNCIONES DE VISIBILIDAD
-    private fun dVisible(): String {
+    @SuppressLint("SetTextI18n")
+    private fun tipos():String{
+        binding.ivModelo.setOnClickListener {
+            indice = (indice + 1) % tipos.size
+            val tipo = tipos[indice]
+            binding.tvTitulo.text = "Puerta ${tipos[indice]} de ($client)"
+
+            val img = when(tipo){
+                "Mari"->R.drawable.ic_pp2
+                "Dora"->R.drawable.pdora
+                "Adel"->R.drawable.padelina
+                "Mili"->R.drawable.pmili
+                "jeny"->R.drawable.pjenny
+                "Taly"->R.drawable.pthalia
+                "Viky"->R.drawable.pvicky
+                "Lina"-> R.drawable.pjalina
+                "Tere"->R.drawable.ptere
+                else -> R.drawable.pjenny
+            }
+            binding.ivModelo.setImageResource(img)
+        }
+        return tipos[indice]
+    }
+    private fun dVariantes(): String {
         val alto = binding.etDivi.text.toString().toInt()
         val hoja = if (mocheta() > 1) { "" } else { "c" }.toString()
         val div = "$alto$hoja"
@@ -465,26 +494,7 @@ class Puertas : AppCompatActivity() {
             else -> "ic_fichad5"
         }
     }
-    private fun tipos(){
-        binding.ivModelo.setOnClickListener {
-            indice = (indice + 1) % tipos.size
-            binding.tvTitulo.text = tipos[indice]
 
-            val img = when(binding.tvTitulo.text){
-                "Mari"->R.drawable.ic_pp2
-                "Dora"->R.drawable.pdora
-                "Adel"->R.drawable.padelina
-                "Mili"->R.drawable.pmili
-                "jeny"->R.drawable.pjenny
-                "Taly"->R.drawable.pthalia
-                "Viky"->R.drawable.pvicky
-                "Lina"-> R.drawable.ic_pps12
-                "Tere"->R.drawable.ptere
-                else -> R.drawable.pjenny
-            }
-            binding.ivModelo.setImageResource(img)
-        }
-    }
     // FUNCIONES REDONDEOS
     private fun df1(defo: Float): String {
         val resultado =if ("$defo".endsWith(".0")) {"$defo".replace(".0", "")}
@@ -492,6 +502,7 @@ class Puertas : AppCompatActivity() {
         }
         return resultado.replace(",", ".")
     }
+
     //FUNCIONES DE ALUMINIOS
     private fun junkillos(){
         val jun=binding.etJunki.text.toString().toFloat()
@@ -523,7 +534,7 @@ class Puertas : AppCompatActivity() {
         val piso=binding.etPiso.text.toString().toFloat()
         return if(piso==0f){hPuente()-holgura}else{(hPuente()-(holgura/2))-piso}
     }
-
+    //FUNCIONES VIDRIOS
     private fun vidrioH(): String {
         val jun=binding.etJunki.text.toString().toFloat()
         val holgura = if(jun==0f){0.2f}else{0.4f}
@@ -551,6 +562,7 @@ class Puertas : AppCompatActivity() {
         val tubo =2.5f
         return alto - (hPuente()+marco+tubo)
     }
+    //FUNCIONES GENERALES
     private fun hPuente():Float{
         val alto=binding.etMed2.text.toString().toFloat()
         val hHoja=binding.etHoja.text.toString().toFloat()
@@ -594,7 +606,6 @@ class Puertas : AppCompatActivity() {
         val mzoca = df1((nZocalo() + holgura) * bastidor).toFloatOrNull() ?: 0f
         return df1(mzoca).toFloatOrNull() ?: 0f
     }
-
     @SuppressLint("SetTextI18n")
     private fun panos():String{
         val z = zocalo()
@@ -617,7 +628,6 @@ class Puertas : AppCompatActivity() {
         binding.tvEnsayo.text =binding.tvEnsayo.text.substring(0, binding.tvEnsayo.text.length-1)
         return binding.tvEnsayo.text as String
     }
-
     private fun array() {
         val marcopInput = binding.etMed2.text.toString()
         val marcop = marcopInput.toFloatOrNull() ?: 0f
