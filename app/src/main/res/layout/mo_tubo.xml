@@ -9,7 +9,7 @@
     <ImageView
         android:id="@+id/imgTubo"
         android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_height="match_parent"
         android:src="@drawable/ma_multi"
         android:contentDescription="multiple 1.7" />
 

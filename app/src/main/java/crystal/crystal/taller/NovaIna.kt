@@ -4,15 +4,18 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.FichaActivity
 import crystal.crystal.R
+import crystal.crystal.casilla.ListaCasilla
+import crystal.crystal.casilla.MapStorage
 import crystal.crystal.databinding.ActivityNovaInaBinding
 
-@Suppress("IMPLICIT_CAST_TO_ANY")
 class NovaIna : AppCompatActivity() {
 
+    private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
     private lateinit var binding: ActivityNovaInaBinding
     @SuppressLint("SetTextI18n", "ResourceAsColor")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,7 +25,7 @@ class NovaIna : AppCompatActivity() {
 
         cliente()
 
-        binding.u13layout.visibility = View.GONE
+        binding.lyU.visibility = View.GONE
         binding.u38layout.visibility = View.GONE
         binding.ulayout.visibility = View.VISIBLE
         calcular()
@@ -31,16 +34,16 @@ class NovaIna : AppCompatActivity() {
             if (binding.med1Nfcfi.text.isNotEmpty()) {
                 val paquete = Bundle().apply {
                     putString("u38", binding.u38txtNfcfi.text.toString())
-                    putString("u13", binding.u13txtNfcfi.text.toString())
+                    putString("u13", binding.txU.text.toString())
                     putString("uMarco", binding.uxxtxtNfcfi.text.toString())
-                    putString("tubo", binding.multitxtNfcfi.text.toString())
-                    putString("riel", binding.rieltxtNfcfi.text.toString())
-                    putString("uFel", binding.uftxtNfcfi.text.toString())
-                    putString("fCo", binding.fctxtNfcfi.text.toString())
-                    putString("porta", binding.portxtNfcfi.text.toString())
-                    putString("angT", binding.angtxtNfcfi.text.toString())
-                    putString("hache", binding.hachetxtNfcfi.text.toString())
-                    putString("vidrios", binding.vidriotxtNfcfi.text.toString())
+                    putString("tubo", binding.txT.text.toString())
+                    putString("riel", binding.txR.text.toString())
+                    putString("uFel", binding.txUf.text.toString())
+                    putString("fCo", binding.txFc.text.toString())
+                    putString("porta", binding.txPf.text.toString())
+                    putString("angT", binding.txTo.text.toString())
+                    putString("hache", binding.txH.text.toString())
+                    putString("vidrios", binding.txV.text.toString())
                     putString("u", binding.ueditxtNfcfi.text.toString())
                     putString("div", divisiones().toString())
                     putString("ref", binding.referenciasNfcfi.text.toString())
@@ -53,6 +56,22 @@ class NovaIna : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "Olvidaste ingresar datos", Toast.LENGTH_LONG).show()
             }
+        }
+        binding.btArchivar.setOnClickListener {
+            archivarMapas()
+        }
+        binding.btArchivar.setOnLongClickListener {
+            // Llamar a la función para guardar el Map
+            MapStorage.guardarMap(this, mapListas)
+
+            // Mostrar un mensaje de confirmación
+            Toast.makeText(this, "Map guardado correctamente", Toast.LENGTH_SHORT).show()
+
+            true // Retorna true para indicar que el evento fue manejado
+        }
+        binding.f3.setOnClickListener {
+
+            startActivity(Intent(this, FichaActivity::class.java))
         }
     }
 
@@ -95,7 +114,7 @@ class NovaIna : AppCompatActivity() {
                 vidrios()
                 referencias()
 
-                binding.votxtNfcfi.text = f15()
+                //binding.txPr.text = f15()
 
             } catch (e: Exception) {
                 Toast.makeText(this, "Ingrese dato válido", Toast.LENGTH_SHORT).show()
@@ -149,7 +168,7 @@ class NovaIna : AppCompatActivity() {
         val uSuperior = df1(uSuperior()).toFloat()
 
         if (alto > hoja) {
-            binding.u13txtNfcfi.text = when {
+            binding.txU.text = when {
                 divisiones() == 2 -> {
                     "${df1(uFijos)} = ${nFijos()}\n" +
                             "${df1(uParante)} = ${fijoUParante()}\n" +
@@ -167,7 +186,7 @@ class NovaIna : AppCompatActivity() {
                 }
             }
         } else {
-            binding.u13txtNfcfi.text = when {
+            binding.txU.text = when {
                 divisiones() == 2 -> {
                     "${df1(uFijos)} = ${nFijos()}\n" +
                             "${df1(uParante)} = ${fijoUParante()}"
@@ -299,43 +318,43 @@ class NovaIna : AppCompatActivity() {
     @SuppressLint("SetTextI18n")
     private fun otrosAluminios() {
         // PUENTE
-        binding.multitxtNfcfi.text = puentes()
+        binding.txT.text = puentes()
 
         // RIEL
-        binding.rieltxtNfcfi.text = if (divisiones() == 1) {
+        binding.txR.text = if (divisiones() == 1) {
             ""
         } else {
             rieles()
         }
 
         // U FELPERO, FIJO COREDIZO
-        binding.uftxtNfcfi.text = if (divisiones() == 1) {
+        binding.txUf.text = if (divisiones() == 1) {
             ""
         } else {
             rieles()
         }
 
-        binding.fctxtNfcfi.text = if (divisiones() == 1) {
+        binding.txR.text = if (divisiones() == 1) {
             ""
         } else {
             rieles()
         }
 
         // HACHE
-        binding.hachetxtNfcfi.text = "${df1(hache())} = ${nCorredizas()}"
+        binding.txH.text = "${df1(hache())} = ${nCorredizas()}"
 
         //ÁNGULO TOPE
         if (divisiones() == 2) {
-            binding.angtxtNfcfi.text = "${df1(altoHoja() - 0.9f)} = 1"
+            binding.txTo.text = "${df1(altoHoja() - 0.9f)} = 1"
         } else {
-            binding.angLayout.visibility = View.GONE
+            binding.lyTo.visibility = View.GONE
         }
 
         // PORTAFELPA
-        binding.portxtNfcfi.text = "${df1(portafelpa())} = ${divDePortas()}"
+        binding.txPf.text = "${df1(portafelpa())} = ${divDePortas()}"
     }
     private fun vidrios() {
-        binding.vidriotxtNfcfi.text = if (divisiones() > 1) {
+        binding.txV.text = if (divisiones() > 1) {
             "${vidrioFijo()}\n${vidrioCorre()}\n${vidrioMocheta()}"
         } else {
             vidrioFijo()
@@ -346,17 +365,17 @@ class NovaIna : AppCompatActivity() {
     private fun uVisible() {
         when (binding.ueditxtNfcfi.text.toString().toFloat()) {
             1f -> {
-                binding.u13layout.visibility = View.GONE
+                binding.lyU.visibility = View.GONE
                 binding.u38layout.visibility = View.VISIBLE
                 binding.ulayout.visibility = View.GONE
             }
             1.5f -> {
-                binding.u13layout.visibility = View.VISIBLE
+                binding.lyU.visibility = View.VISIBLE
                 binding.u38layout.visibility = View.GONE
                 binding.ulayout.visibility = View.GONE
             }
             else -> {
-                binding.u13layout.visibility = View.GONE
+                binding.lyU.visibility = View.GONE
                 binding.u38layout.visibility = View.GONE
                 binding.ulayout.visibility = View.VISIBLE
             }
@@ -369,39 +388,39 @@ class NovaIna : AppCompatActivity() {
         //OPCIONES DE VISIBILIDAD
 
         if (divisiones() == 1) {
-            binding.hLayout.visibility = View.GONE
+            binding.lyH.visibility = View.GONE
         } else {
-            binding.hLayout.visibility = View.VISIBLE
+            binding.lyH.visibility = View.VISIBLE
         }
 
         if (divisiones() != 2) {
-            binding.angLayout.visibility = View.GONE
+            binding.lyTo.visibility = View.GONE
         } else {
-            binding.angLayout.visibility = View.VISIBLE
+            binding.lyTo.visibility = View.VISIBLE
         }
 
         if (divisiones() == 1) {
-            binding.portaLayout.visibility = View.GONE
+            binding.lyPf.visibility = View.GONE
         } else {
-            binding.portaLayout.visibility = View.VISIBLE
+            binding.lyPf.visibility = View.VISIBLE
         }
 
         if (divisiones() == 1 || alto <= hoja) {
-            binding.ufelLayout.visibility = View.GONE
+            binding.lyUf.visibility = View.GONE
         } else {
-            binding.ufelLayout.visibility = View.VISIBLE
+            binding.lyUf.visibility = View.VISIBLE
         }
 
         if (alto <= hoja && divisiones() > 1) {
-            binding.fcLayout.visibility = View.VISIBLE
+            binding.lyFijoCorre.visibility = View.VISIBLE
         } else {
-            binding.fcLayout.visibility = View.GONE
+            binding.lyFijoCorre.visibility = View.GONE
         }
 
         if (alto <= hoja) {
-            binding.tuboLayout.visibility = View.GONE
+            binding.lyTubo.visibility = View.GONE
         } else {
-            binding.tuboLayout.visibility = View.VISIBLE
+            binding.lyTubo.visibility = View.VISIBLE
         }
     }
     private fun dVisible() {
@@ -596,6 +615,83 @@ class NovaIna : AppCompatActivity() {
                 "${df1(mas1)} x ${df1(axnfxufn)} = ${(nCorredizas())}"
             }
         }
+    }
+
+    //FUNCIONES DE ARCHIVO
+    private fun archivarMapas() {
+        ListaCasilla.incrementarContadorVentanas()
+
+        // Caso especial para txReferencias
+       /* if (esValido(binding.lyReferencias)) {
+            ListaCasilla.procesarReferencias(binding.tvReferencias, binding.txReferencias, mapListas) // referencias
+        }*/
+        // Usar la clase ListaCasilla para procesar y archivar solo los TextView válidos
+        if (esValido(binding.lyU)) {
+            ListaCasilla.procesarArchivar(binding.tvU, binding.txU, mapListas) // u
+        }
+       if (esValido(binding.lyUf)){
+           ListaCasilla.procesarArchivar(binding.tvUf,binding.txUf,mapListas) // u felpero
+       }
+        if (esValido(binding.lyFijoCorre)) {
+            ListaCasilla.procesarArchivar(binding.tvFc, binding.txFc, mapListas) // fijo corredizo
+        }
+        if (esValido(binding.lyRiel)) {
+            ListaCasilla.procesarArchivar(binding.tvR, binding.txR, mapListas) // riel
+        }
+        if (esValido(binding.lyTubo)) {
+            ListaCasilla.procesarArchivar(binding.tvT, binding.txT, mapListas) // tubo
+        }
+        if (esValido(binding.lyPf)) {
+            ListaCasilla.procesarArchivar(binding.tvPf, binding.txPf, mapListas) // portafelpa
+        }
+        
+        if (esValido(binding.lyTo)) {
+            ListaCasilla.procesarArchivar(binding.tvTo, binding.txTo, mapListas) // tope
+        }
+        if (esValido(binding.lyH)) {
+            ListaCasilla.procesarArchivar(binding.tvH, binding.txH, mapListas) // h
+        }
+        if (esValido(binding.lyVidrios)) {
+            ListaCasilla.procesarArchivar(binding.tvV, binding.txV, mapListas) // vidrios
+        }
+        if (esValido(binding.lyClient)) {
+            ListaCasilla.procesarArchivar(binding.tvC, binding.txC, mapListas) // cliente
+        }
+        if (esValido(binding.lyAncho)) {
+            ListaCasilla.procesarArchivar(binding.tvAncho, binding.txAncho, mapListas) // ancho
+        }
+        if (esValido(binding.lyAlto)) {
+            ListaCasilla.procesarArchivar(binding.tvAlto, binding.txAlto, mapListas) // alto
+        }
+        if (esValido(binding.lyPuente)) {
+            ListaCasilla.procesarArchivar(binding.tvPuente, binding.txPuente, mapListas) // altura Puente
+        }
+        if (esValido(binding.lyDivisiones)) {
+            ListaCasilla.procesarArchivar(binding.tvDivisiones, binding.txDivisiones, mapListas) // divisiones
+        }
+        if (esValido(binding.lyFijos)) {
+            ListaCasilla.procesarArchivar(binding.tvFijos, binding.txFijos, mapListas) // nFijos
+        }
+        if (esValido(binding.lyCorredizas)) {
+            ListaCasilla.procesarArchivar(binding.tvCorredizas, binding.txCorredizas, mapListas) // nCorredizas
+        }
+        if (esValido(binding.lyDiseno)) {
+            ListaCasilla.procesarArchivar(binding.tvDiseno, binding.txDiseno, mapListas) // diseño
+        }
+        if (esValido(binding.lyGrados)) {
+            ListaCasilla.procesarArchivar(binding.tvGrados, binding.txGrados, mapListas) // grados
+        }
+        if(esValido(binding.lyTipo)){
+            ListaCasilla.procesarArchivar(binding.tvTipo,binding.txTipo,mapListas) // tipo de ventana
+        }
+
+        // Aquí puedes hacer algo con `mapListas`, como mostrarlo o guardarlo
+        binding.txPr.text = mapListas.toString()
+        println(mapListas)
+    }
+    // Función para verificar si un Layout es visible o tiene estado GONE
+    private fun esValido(ly: LinearLayout): Boolean {
+        return ly.visibility == View.VISIBLE || ly.visibility == View.INVISIBLE
     }
 
     //FUNCIONES GENERALES
