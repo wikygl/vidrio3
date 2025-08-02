@@ -2,7 +2,7 @@
   "project_info": {
     "project_number": "529436008604",
     "project_id": "crystal-4f306",
-    "storage_bucket": "crystal-4f306.appspot.com"
+    "storage_bucket": "crystal-4f306.firebasestorage.app"
   },
   "client": [
     {
@@ -14,7 +14,15 @@
       },
       "oauth_client": [
         {
-          "client_id": "529436008604-6lrq8gi817mihij95q9hbj0ih35i7rpk.apps.googleusercontent.com",
+          "client_id": "529436008604-db2e65ta2uf7subirrpfkthr98nsl854.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "crystal.crystal",
+            "certificate_hash": "b7b07c4021d3a133680a0cfd33f4f6dde1c0928e"
+          }
+        },
+        {
+          "client_id": "529436008604-hajctsrpuh5skhj3vaab1jg0sj1ift6h.apps.googleusercontent.com",
           "client_type": 3
         }
       ],

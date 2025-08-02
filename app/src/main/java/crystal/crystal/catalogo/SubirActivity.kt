@@ -1,5 +1,6 @@
 package crystal.crystal.catalogo
 
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Bitmap
@@ -11,7 +12,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.bumptech.glide.Glide
 import crystal.crystal.databinding.ActivitySubirBinding
-import kotlinx.android.synthetic.main.activity_subir.*
 
 class SubirActivity : AppCompatActivity() {
     private val REQUEST_IMAGE_CAPTURE = 1
@@ -25,7 +25,7 @@ class SubirActivity : AppCompatActivity() {
 
         // ...
 
-        buttonChooseImage.setOnClickListener {
+        binding.buttonChooseImage.setOnClickListener {
             val options = arrayOf<CharSequence>("Tomar foto", "Elegir de la galería")
             val builder = AlertDialog.Builder(this)
             builder.setTitle("Elige una opción")
@@ -38,10 +38,10 @@ class SubirActivity : AppCompatActivity() {
             builder.show()
         }
         binding.imageViewPreview.setOnClickListener {
-            if (frameLayoutEdit.visibility == View.VISIBLE) {
-                frameLayoutEdit.visibility = View.INVISIBLE
+            if ( binding.frameLayoutEdit.visibility == View.VISIBLE) {
+                binding.frameLayoutEdit.visibility = View.INVISIBLE
             } else {
-                frameLayoutEdit.visibility = View.VISIBLE
+                binding.frameLayoutEdit.visibility = View.VISIBLE
             }
         }
 
@@ -57,6 +57,7 @@ class SubirActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("IntentReset")
     private fun openGallery() {
         val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         intent.type = "image/*"
@@ -82,7 +83,7 @@ class SubirActivity : AppCompatActivity() {
                             // Carga la imagen utilizando Glide en imageViewPreview
                             Glide.with(this)
                                 .load(selectedImageUri)
-                                .into(imageViewPreview)
+                                .into( binding.imageViewPreview)
                         }
                     }
                 }

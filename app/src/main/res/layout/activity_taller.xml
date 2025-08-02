@@ -85,7 +85,6 @@
                 tools:ignore="TouchTargetSizeCheck,ImageContrastCheck" />
 
             <ImageButton
-                android:id="@+id/imageButton9"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:layout_margin="1.8dp"
@@ -206,7 +205,7 @@
                                 app:srcCompat="@drawable/ic_puertapa_os"  />
 
                             <ImageButton
-                                android:id="@+id/imageButton4"
+                                android:id="@+id/btMvidrio"
                                 android:layout_width="match_parent"
                                 android:layout_height="match_parent"
                                 android:backgroundTint="@color/violeta"
@@ -235,6 +234,13 @@
                                 android:backgroundTint="@color/negro"
                                 android:contentDescription="@string/todo"
                                 app:srcCompat="@drawable/ic_vitrovenvf" />
+
+                            <ImageButton
+                                android:id="@+id/btnA001"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:background="@mipmap/a001"/>
 
 
                         </LinearLayout>
@@ -373,7 +379,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:backgroundTint="@color/rosa"
-                                android:text="rocio"
+                                android:text="@string/dise_o"
                                 android:textColor="@color/blanco"
                                 tools:ignore="ButtonStyle,HardcodedText,TextContrastCheck" />
                         </LinearLayout>

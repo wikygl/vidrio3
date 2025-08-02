@@ -1,43 +1,229 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".ListaActivity">
 
+    <!--
+        SECCIÓN SUPERIOR: CAMPOS Y BOTONES PARA
+        CRUD (Agregar, Actualizar, Eliminar, Listar) + BÚSQUEDA
+    -->
     <LinearLayout
-        android:id="@+id/linearLayout3"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:id="@+id/lyOperations"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:padding="8dp"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <ImageView
-            android:id="@+id/imgPdf"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            tools:srcCompat="@tools:sample/avatars"
-            tools:ignore="ContentDescription" />
-
+        <!-- TITULO -->
         <TextView
-            android:id="@+id/titulotxt"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="9dp" />
-
-        <EditText
-            android:id="@+id/etml"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:ems="10"
-            android:gravity="start|top"
-            android:inputType="textMultiLine"
-            tools:ignore="Autofill,LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+            android:text="Operaciones CRUD"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- ID (para actualizar o eliminar) -->
+        <EditText
+            android:id="@+id/editTextId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="ID (para actualizar o eliminar)"
+            android:inputType="number"
+            android:layout_marginBottom="4dp"
+            tools:ignore="Autofill" />
+
+        <!-- Descripción -->
+        <EditText
+            android:id="@+id/editTextDescription"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Descripción"
+            android:inputType="textPersonName"
+            android:layout_marginBottom="4dp"
+            tools:ignore="Autofill" />
+
+        <!-- Precio -->
+        <EditText
+            android:id="@+id/editTextPrice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/precio"
+            android:inputType="numberDecimal"
+            android:layout_marginBottom="4dp"
+            tools:ignore="Autofill" />
+
+        <!-- Stock -->
+        <EditText
+            android:id="@+id/editTextStock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Stock"
+            android:inputType="number"
+            android:layout_marginBottom="8dp"
+            tools:ignore="Autofill" />
+
+        <!-- Botones CRUD en horizontal -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <Button
+                android:id="@+id/btnAdd"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/agregar"
+                tools:ignore="ButtonStyle" />
+
+            <Button
+                android:id="@+id/btnUpdate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Actualizar"
+                tools:ignore="ButtonStyle" />
+
+            <Button
+                android:id="@+id/btnDelete"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/eliminar"
+                tools:ignore="ButtonStyle" />
+
+            <Button
+                android:id="@+id/btnListAll"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Listar Todo"
+                tools:ignore="ButtonStyle" />
+        </LinearLayout>
+
+        <!-- Sección de búsqueda -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Buscar por descripción"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/editTextSearch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Ej. Ventana o Vidrio"
+            android:inputType="text"
+            android:layout_marginBottom="4dp"
+            tools:ignore="Autofill" />
+
+        <Button
+            android:id="@+id/btnSearch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/buscar" />
 
     </LinearLayout>
+
+    <!--
+        SECCIÓN PARA MOSTRAR EL PRODUCTO SELECCIONADO
+        (tal como lo tenías en tu layout original).
+    -->
+    <LinearLayout
+        android:id="@+id/lyProducto"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="9dp"
+        android:orientation="horizontal"
+        app:layout_constraintTop_toBottomOf="@+id/lyOperations"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageView
+            android:id="@+id/img"
+            android:layout_width="90dp"
+            android:layout_height="90dp"
+            tools:ignore="ContentDescription"
+            tools:srcCompat="@tools:sample/avatars" />
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvNombre"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="9dp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:text="Nombre del producto" />
+
+            <TextView
+                android:id="@+id/tvPrecio"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="9dp"
+                app:layout_constraintStart_toEndOf="@+id/tvNombre"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:text="$0.0" />
+
+            <TextView
+                android:id="@+id/tvUnidad"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="9dp"
+                app:layout_constraintStart_toEndOf="@+id/tvPrecio"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:text="UD" />
+
+            <TextView
+                android:id="@+id/tvStock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="9dp"
+                app:layout_constraintHorizontal_bias="1.0"
+                app:layout_constraintStart_toEndOf="@+id/tvUnidad"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:text="9" />
+
+            <TextView
+                android:id="@+id/tvDescripción"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="9dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                tools:text="Ejemplo de descripción" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </LinearLayout>
+
+    <!--
+        RECYCLER PARA MOSTRAR LA LISTA DE PRODUCTOS
+        (filtrados, o todos al presionar "Listar Todo").
+    -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerViewProducts"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="9dp"
+        android:layout_marginTop="9dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/lyProducto"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

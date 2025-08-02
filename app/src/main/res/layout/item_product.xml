@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/tvItemDescription"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Descripción" />
+
+    <TextView
+        android:id="@+id/tvItemPrice"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Precio: $0.0" />
+
+    <TextView
+        android:id="@+id/tvItemStock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Stock: 0" />
+
+    <TextView
+        android:id="@+id/tvItemCode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Código:0" />
+
+</LinearLayout>

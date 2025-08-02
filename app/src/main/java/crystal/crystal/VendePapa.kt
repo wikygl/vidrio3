@@ -4,63 +4,65 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import kotlinx.android.synthetic.main.activity_vende_papa.*
+import crystal.crystal.databinding.ActivityVendePapaBinding
 
-@Suppress("IMPLICIT_CAST_TO_ANY")
 class VendePapa : AppCompatActivity() {
     private var num1=0F
     private var num2=0F
     private var num3="0.0"
     private var ope=0
+    
+    lateinit var binding: ActivityVendePapaBinding
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_vende_papa)
+        binding = ActivityVendePapaBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        cero.setOnClickListener { numPresionado("0") }
-        uno.setOnClickListener { numPresionado("1") }
-        dos.setOnClickListener { numPresionado("2") }
-        tres.setOnClickListener { numPresionado("3") }
-        cuatro.setOnClickListener { numPresionado("4") }
-        cinco.setOnClickListener { numPresionado("5") }
-        seis.setOnClickListener { numPresionado("6") }
-        siete.setOnClickListener { numPresionado("7") }
-        ocho.setOnClickListener { numPresionado("8") }
-        nueve.setOnClickListener { numPresionado("9") }
-        punto.setOnClickListener { try { numPresionado(".") } catch (e: Exception){} }
-        borrar.setOnClickListener { if(resultado.text.isNotEmpty()){
-            resultado.text = resultado.text.substring(0, resultado.text.length-1)}}
+        binding.cero.setOnClickListener { numPresionado("0") }
+        binding.uno.setOnClickListener { numPresionado("1") }
+        binding.dos.setOnClickListener { numPresionado("2") }
+        binding.tres.setOnClickListener { numPresionado("3") }
+        binding.cuatro.setOnClickListener { numPresionado("4") }
+        binding.cinco.setOnClickListener { numPresionado("5") }
+        binding.seis.setOnClickListener { numPresionado("6") }
+        binding.siete.setOnClickListener { numPresionado("7") }
+        binding.ocho.setOnClickListener { numPresionado("8") }
+        binding.nueve.setOnClickListener { numPresionado("9") }
+        binding.punto.setOnClickListener { try { numPresionado(".") } catch (e: Exception){} }
+        binding.borrar.setOnClickListener { if(binding.resultado.text.isNotEmpty()){
+            binding.resultado.text = binding.resultado.text.substring(0, binding.resultado.text.length-1)}}
 
-        sumar.setOnClickListener {
+        binding.sumar.setOnClickListener {
             opPresionado(suma)
-            memo.text = "$num1 +"  }
+            binding.memo.text = "$num1 +"  }
 
-        restar.setOnClickListener {
+        binding.restar.setOnClickListener {
             opPresionado(resta)
-            memo.text = "$num1 -" }
+            binding.memo.text = "$num1 -" }
 
-        multiplicar.setOnClickListener {
+        binding.multiplicar.setOnClickListener {
             opPresionado(multiplicacion)
-            memo.text = "$num1 ×" }
+            binding.memo.text = "$num1 ×" }
 
-        dividir.setOnClickListener {
+        binding.dividir.setOnClickListener {
             opPresionado(division)
-            memo.text = "$num1 ÷"   }
+            binding.memo.text = "$num1 ÷"   }
 
-        desc5.setOnClickListener {opPresionado(porcinco) }
-        desc10.setOnClickListener {opPresionado(pordiez) }
+        binding.desc5.setOnClickListener {opPresionado(porcinco) }
+        binding.desc10.setOnClickListener {opPresionado(pordiez) }
 
-        reset.setOnClickListener {
+        binding.reset.setOnClickListener {
             num1 = 0F
             num2 = 0F
-            resultado.text = ""
+            binding.resultado.text = ""
             ope = nada
-            memo.text = ""
-            resultado.hint = ""
+            binding.memo.text = ""
+            binding.resultado.hint = ""
         }
-        igual.setOnClickListener {
-            num2 = if (resultado.text.isNotEmpty()) {
-                resultado.text.toString().toFloat()
+        binding.igual.setOnClickListener {
+            num2 = if (binding.resultado.text.isNotEmpty()) {
+                binding.resultado.text.toString().toFloat()
             } else {
                 0F
             }
@@ -73,48 +75,52 @@ class VendePapa : AppCompatActivity() {
                 pordiez -> num1 - (num1 * 10 / 100)
                 else -> 0
             }
-            resultado.text = resultadoO.toString()
+            binding.resultado.text = resultadoO.toString()
             when (ope) {
-                suma -> memo.text = "$num1 + $num2 ="
-                resta -> memo.text = "$num1 - $num2 ="
-                multiplicacion -> memo.text = "$num1 × $num2 ="
-                division -> memo.text = "$num1 ÷ $num2 ="
-                porcinco -> memo.text = "$num1 - (5)% ="
-                pordiez -> memo.text = "$num1 - (10)% ="
+                suma -> binding.memo.text = "$num1 + $num2 ="
+                resta -> binding.memo.text = "$num1 - $num2 ="
+                multiplicacion -> binding.memo.text = "$num1 × $num2 ="
+                division -> binding.memo.text = "$num1 ÷ $num2 ="
+                porcinco -> binding.memo.text = "$num1 - (5)% ="
+                pordiez -> binding.memo.text = "$num1 - (10)% ="
             }
         }
-        masMenos.setOnClickListener{
-            val resultadom = resultado.text.toString().toFloat()
-            resultado.text = (resultadom * -1).toString()
+        binding.masMenos.setOnClickListener{
+            val resultadom = binding.resultado.text.toString().toFloat()
+            binding.resultado.text = (resultadom * -1).toString()
         }
-        total.setOnClickListener {
-            val resul = resultado.text.toString().toFloat()
+        binding.total.setOnClickListener {
+            val resul = binding.resultado.text.toString().toFloat()
             val sub =(resul / 1.18).toFloat()
-            hist.text = "sub.Total = ${df1(sub)}\nIGV = ${df1(resul-sub)}\nTotal = ${df1(resul)}"
+            binding.hist.text = "sub.Total = ${df1(sub)}\nIGV = ${df1(resul-sub)}\nTotal = ${df1(resul)}"
         }
 
         traido()
     }
     @SuppressLint("SetTextI18n")
     private fun numPresionado(digito: String) {
-        resultado.text = "${resultado.text}$digito"
+        binding.resultado.text = "${binding.resultado.text}$digito"
         if (ope == nada) {
-            num1 = if (resultado.text.isNullOrEmpty()) 0F else resultado.text.toString().toFloat()
+            num1 = if (binding.resultado.text.isNullOrEmpty()) 0F else binding.resultado.text.toString().toFloat()
         } else {
-            num2 = resultado.text.toString().toFloat()
+            num2 = binding.resultado.text.toString().toFloat()
         }
     }
     private fun df1(defo: Float): String {
-        val resultado =if ("$defo".endsWith(".0")) {"$defo".replace(".0", ".00")}
-        else { "%.2f".format(defo)
+        return if (defo % 1 == 0f) {
+            // Si es un número entero, muestra sin decimales
+            defo.toInt().toString()
+        } else {
+            // Si tiene decimales, formatea con un decimal
+            "%.1f".format(defo).replace(",", ".")
         }
-        return resultado.replace(",", ".")
     }
+    
     private fun opPresionado(operacion: Int) {
         ope = operacion
-        num1 = if (resultado.text.isNullOrEmpty()) 0F else resultado.text.toString().toFloat()
-        resultado.text = ""
-        resultado.hint = "$num1"
+        num1 = if (binding.resultado.text.isNullOrEmpty()) 0F else binding.resultado.text.toString().toFloat()
+        binding.resultado.text = ""
+        binding.resultado.hint = "$num1"
     }
 
     companion object {
@@ -138,11 +144,11 @@ class VendePapa : AppCompatActivity() {
             0F
         }
 
-        resultado.text = cantidadSinEspacios
+        binding.resultado.text = cantidadSinEspacios
     }
 
 
-    /*resultadoText.text = if("$result".endsWith(".0"))
+    /*binding.resultadoText.text = if("$result".endsWith(".0"))
      { "$result".replace(".0","") } else { "%.2f".format(result) }*/
 
 }

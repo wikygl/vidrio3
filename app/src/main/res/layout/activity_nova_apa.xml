@@ -224,9 +224,7 @@
                             app:layout_constraintBottom_toBottomOf="parent"
                             app:layout_constraintEnd_toEndOf="parent"
                             app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-
-                            tools:srcCompat="@tools:sample/avatars" />
+                            app:layout_constraintTop_toTopOf="parent"/>
 
                         <HorizontalScrollView
                             android:id="@+id/svModelos"
@@ -254,6 +252,14 @@
                                     android:layout_margin="3dp"
                                     android:contentDescription="@string/todo"
                                     app:srcCompat="@drawable/nn" />
+
+                                <ImageView
+                                    android:id="@+id/btNovaP2"
+                                    android:layout_width="81dp"
+                                    android:layout_height="81dp"
+                                    android:layout_margin="3dp"
+                                    android:contentDescription="@string/todo"
+                                    app:srcCompat="@drawable/n2p" />
 
                                 <ImageView
                                     android:id="@+id/btNovacc"
@@ -327,7 +333,7 @@
                 </LinearLayout>
 
                 <TextView
-                    android:id="@+id/textView4"
+                    android:id="@+id/tvMedidas"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
@@ -363,7 +369,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/med1_nfcfs"
+                                android:id="@+id/etAncho"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -389,7 +395,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/med2_nfcfs"
+                                android:id="@+id/etAlto"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -414,7 +420,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/hojatxt_nfcfsa"
+                                android:id="@+id/etHoja"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -439,7 +445,7 @@
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
-                                android:id="@+id/partes_nfcfs"
+                                android:id="@+id/etPartes"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -477,6 +483,7 @@
                         </LinearLayout>
 
                         <LinearLayout
+                            android:id="@+id/lyCruce"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
@@ -555,7 +562,118 @@
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
                                 android:inputType="number|numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,
+                                TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyDivi2"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="@string/divisiones"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etDivi2"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number|number"
+                                android:text="@string/_0"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,
+                                TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyPuente2"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="h.Puente 2"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etPuente2"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number|numberDecimal"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyFlecha"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Flecha"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etFlecha"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number|number"
+                                android:text="@string/_0"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,
+                                TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyMochetas"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="n.Mochetas"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etNmochetas"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number|number"
+                                android:text="@string/_0"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,
+                                TouchTargetSizeCheck,TextContrastCheck" />
                         </LinearLayout>
 
                     </LinearLayout>
@@ -1200,28 +1318,46 @@
                     android:layout_height="match_parent"
                     android:layout_gravity="bottom|end"
                     android:layout_marginEnd="4.5dp"
-                    android:layout_weight="1.08"
-                    android:orientation="horizontal">
+                    android:layout_weight="0.8"
+                    android:orientation="vertical">
 
                     <Button
-                        android:id="@+id/btArchivar"
+                        android:id="@+id/btAgregar"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
                         android:layout_weight="1"
-                        android:backgroundTint="@color/naranja"
-                        android:text="@string/archivar"
+                        android:text="@string/agregar"
+                        android:backgroundTint="@color/verde"
                         android:textColor="@color/blanco"
-                        tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                        android:visibility="invisible"/>
 
-                    <Button
-                        android:id="@+id/btn_calcular_nfcfs"
+                    <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
                         android:layout_weight="1"
-                        android:backgroundTint="@color/rosa"
-                        android:text="@string/calcular"
-                        android:textColor="@color/blanco"
-                        tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                        android:orientation="horizontal">
+
+                        <Button
+                            android:id="@+id/btArchivar"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/naranja"
+                            android:text="@string/archivar"
+                            android:textColor="@color/blanco"
+                            tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+
+                        <Button
+                            android:id="@+id/btCalcular"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/rosa"
+                            android:text="@string/calcular"
+                            android:textColor="@color/blanco"
+                            tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                    </LinearLayout>
+
                 </LinearLayout>
 
             </LinearLayout>

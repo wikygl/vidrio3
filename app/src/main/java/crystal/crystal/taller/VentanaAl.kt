@@ -3,15 +3,17 @@ package crystal.crystal.taller
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
+import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
+import crystal.crystal.casilla.ListaCasilla
 import crystal.crystal.databinding.ActivityVentanaAlBinding
-import kotlinx.android.synthetic.main.activity_ventana_al.*
 
 
 class VentanaAl : AppCompatActivity() {
 
-    private val series = listOf("Clásica", "Serie 20", "Serie 3825", "Serie 35","Serie Española")
+    private var serieActual: Serie? = null
     private var indices = 0
+    private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
 
     private lateinit var binding : ActivityVentanaAlBinding
     @SuppressLint("SetTextI18n")
@@ -40,13 +42,13 @@ class VentanaAl : AppCompatActivity() {
             actualizarVentana()
             //visibleVentana()
         }
-        // Opcional: Inicializar txVentana con el primer valor de la lista
-        if (series.isNotEmpty()) {
-            binding.txVentana.text = "Ventana de aluminio ${series[indices]}"
-            indices = (indices + 1) % series.size
+
+        binding.btArchivar.setOnClickListener {
+            archivarMapas()
         }
 
     }
+
     // FUNCIONES PARA RECUPERAR ESTADO DE MODELO
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
@@ -72,7 +74,7 @@ class VentanaAl : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun parante() {
-        val pe = paran() + 1.2f
+        val pe = paran() + 1.4f
         binding.tvParante.text = if (divisiones() == 0) {
             "${df1(paran())} = ${nCorredizas() * 2}"
         } else {
@@ -82,18 +84,27 @@ class VentanaAl : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun marco(){
-        val alto = etAlto.text.toString().toFloat()
-        tvMarco.text= "${df1(alto)} = 2\n${df1(anchUtil())} = 2"
+        val alto = binding.etAlto.text.toString().toFloat()
+        binding.tvMarco.text= "${df1(alto)} = 2\n${df1(anchUtil())} = 2"
 
     }
     @SuppressLint("SetTextI18n")
     private fun zocalo() {
-        val z = zoc()
-        val adjustedZ = z - (2 * 3.0f)
-        binding.tvZocalo.text = "${df1(adjustedZ)} = ${divisiones() * 2}"
+        // Verificar queserieActual no sea nula
+       serieActual?.let { serieActual ->
+            val z = zoc()  // Se asume que zoc() retorna un Float
+            // Utiliza la medida de la serie actual para el cálculo
+            val adjustedZ = z - (2 * serieActual.medida.toFloat())
+
+            binding.tvZocalo.text = "${df1(adjustedZ)} = ${divisiones() * 2}"
+        } ?: run {
+            // Manejar el caso en queserieActual sea nula
+            binding.tvZocalo.text = "Error: No se ha seleccionado una serie"
+        }
     }
 
     @SuppressLint("SetTextI18n")
+
     private fun riel(){
         val riel= anchUtil()
         binding.tvRiel.text = "${df1(riel)} = 2"
@@ -119,6 +130,7 @@ class VentanaAl : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("SetTextI18n")
     private fun puente() {
         val tuboMocheta = altoUtil() - (altoHoja() + 2.5f)
         binding.tvTubo.text = when {
@@ -164,31 +176,31 @@ class VentanaAl : AppCompatActivity() {
     //  CAMBIOS DE SERIE
     @SuppressLint("SetTextI18n")
     private fun actualizarVentana() {
-        // Verificar que la lista no esté vacía
-        if (series.isNotEmpty()) {
-            // Actualizar el texto de txVentana con el elemento actual
-            binding.txVentana.text = "Ventana de aluminio ${series[indices]}"
-            binding.txRiel.text = when (series[indices]){
-                "Clásica" -> {
-                    "Riel"}
-                "Serie 20" -> {
-                    "Riel Sup."}
-                "Serie 3825" -> {
-                    "D. Riel Sup."}
-                else -> {""}
+        if (listaSeries.isNotEmpty()) {
+            // Asigna la serie actual
+           serieActual = listaSeries[indices]
+            binding.txVentana.text = "Ventana de aluminio ${serieActual?.nombre}"
+            binding.txRiel.text = when (serieActual?.nombre) {
+                "Clásica" -> "Riel"
+                "ClásicaG" -> "Riel"
+                "Serie 20" -> "Riel Sup."
+                "Serie 3825" -> "D. Riel Sup."
+                "Serie 35" -> "D. Riel Sup."
+                "Serie Española" -> "D. Riel Sup."
+                else -> ""
             }
 
-            // Incrementar el índice para la próxima vez
-            indices = (indices + 1) % series.size
+            // Incrementar el índice para la próxima selección (si es necesario)
+            indices = (indices + 1) % listaSeries.size
         } else {
-            // Manejar el caso en que la lista esté vacía (opcional)
             binding.txVentana.text = "Sin ventanas disponibles"
         }
     }
 
     private fun visibleVentana(){
-        val series = series[indices]
-        when (series){
+        val series = listaSeries[indices]
+        val nombre = series.nombre
+        when (nombre){
             "Clásica" -> {
                 binding.lyMarco.visibility = View.GONE
                 binding.lyJamba.visibility = View.GONE
@@ -218,10 +230,89 @@ class VentanaAl : AppCompatActivity() {
 
     //   FUNCIONES SERIE 2O
 
+    //FUNCIONES DE ARCHIVO
+    private fun archivarMapas() {
+        ListaCasilla.incrementarContadorVentanas()
+
+        // Caso especial para txReferencias
+        /*if (esValido(binding.lyReferencias)) {
+            ListaCasilla.procesarReferencias(binding.tvReferencias, binding.txReferencias, mapListas) // referencias
+        }*/
+        // Usar la clase ListaCasilla para procesar y archivar solo los TextView válidos
+        if (esValido(binding.lyMarco)) {
+            ListaCasilla.procesarArchivar(binding.tvMarco, binding.txMarco, mapListas) // u
+        }
+        if (esValido(binding.lyParante)) {
+            ListaCasilla.procesarArchivar(binding.tvParante, binding.txParante, mapListas) // puente
+        }
+        if (esValido(binding.lyZocalo)) {
+            ListaCasilla.procesarArchivar(binding.tvZocalo, binding.txZocalo, mapListas) // fijo corredizo
+        }
+        if (esValido(binding.lyRiel)) {
+            ListaCasilla.procesarArchivar(binding.tvRiel, binding.txRiel, mapListas) // riel
+        }
+        if (esValido(binding.lyTubo)) {
+            ListaCasilla.procesarArchivar(binding.tvTubo, binding.txTubo, mapListas) // tubo
+        }
+        if (esValido(binding.lyJunki)) {
+            ListaCasilla.procesarArchivar(binding.tvJunki, binding.txJunki, mapListas) // portafelpa
+        }
+        /*if (esValido(binding.tLayout)) {
+            ListaCasilla.procesarArchivar(binding.tvTe, binding.txTe, mapListas) // tee
+        }
+        if (esValido(binding.angLayout)) {
+            ListaCasilla.procesarArchivar(binding.tvTo, binding.txTo, mapListas) // tope
+        }
+        if (esValido(binding.hLayout)) {
+            ListaCasilla.procesarArchivar(binding.tvH, binding.txH, mapListas) // h
+        }
+        if (esValido(binding.vidriosLayout)) {
+            ListaCasilla.procesarArchivar(binding.tvV, binding.txV, mapListas) // vidrios
+        }
+        if (esValido(binding.lyClient)) {
+            ListaCasilla.procesarArchivar(binding.tvC, binding.txC, mapListas) // cliente
+        }
+        if (esValido(binding.lyAncho)) {
+            ListaCasilla.procesarArchivar(binding.tvAncho, binding.txAncho, mapListas) // ancho
+        }
+        if (esValido(binding.lyAlto)) {
+            ListaCasilla.procesarArchivar(binding.tvAlto, binding.txAlto, mapListas) // alto
+        }
+        if (esValido(binding.lyPuente)) {
+            ListaCasilla.procesarArchivar(binding.tvPuente, binding.txPuente, mapListas) // altura Puente
+        }
+        if (esValido(binding.lyDivisiones)) {
+            ListaCasilla.procesarArchivar(binding.tvDivisiones, binding.txDivisiones, mapListas) // divisiones
+        }
+        if (esValido(binding.lyFijos)) {
+            ListaCasilla.procesarArchivar(binding.tvFijos, binding.txFijos, mapListas) // nFijos
+        }
+        if (esValido(binding.lyCorredizas)) {
+            ListaCasilla.procesarArchivar(binding.tvCorredizas, binding.txCorredizas, mapListas) // nCorredizas
+        }
+        if (esValido(binding.lyDiseno)) {
+            ListaCasilla.procesarArchivar(binding.tvDiseno, binding.txDiseno, mapListas) // diseño
+        }
+        if (esValido(binding.lyGrados)) {
+            ListaCasilla.procesarArchivar(binding.tvGrados, binding.txGrados, mapListas) // grados
+        }
+        if(esValido(binding.lyTipo)){
+            ListaCasilla.procesarArchivar(binding.tvTipo,binding.txTipo,mapListas) // tipo de ventana
+        }*/
+
+        // Aquí puedes hacer algo con `mapListas`, como mostrarlo o guardarlo
+        //binding.txPr.text = mapListas.toString()
+        println(mapListas)
+    }
+    // Función para verificar si un Layout es visible o tiene estado GONE
+    private fun esValido(ly: LinearLayout): Boolean {
+        return ly.visibility == View.VISIBLE || ly.visibility == View.INVISIBLE
+    }
+
     //   FUNCIONES GENERALES
     private fun anchUtil(): Float {
-        val ancho = etAncho.text.toString().toFloat()
-        val marco = etMarco.text.toString().toFloat()
+        val ancho = binding.etAncho.text.toString().toFloat()
+        val marco = binding.etMarco.text.toString().toFloat()
         return ancho - (2 * marco)
 
     }
@@ -246,7 +337,7 @@ class VentanaAl : AppCompatActivity() {
     }
 
     private fun paran(): Float {
-        return altoHoja() - 1.2f
+        return altoHoja() - 1.4f
     }
     private fun nTuboMocheta(p1: Float): Int {
         return (p1 / 120.4f).toInt()
@@ -343,6 +434,19 @@ class VentanaAl : AppCompatActivity() {
     }
 
 }
+
+data class Serie(val nombre: String, val medida: String, val zocalo: String)
+
+val listaSeries = listOf(
+    Serie("Clásica", "3", "8"),
+    Serie("ClásicaG", "3.6", "8"),
+    Serie("Serie 20", "7", "8."),
+    Serie("Serie 3825", "3.9", "8."),
+    Serie("Serie 35", "4.4", "8"),
+    Serie("Serie Española", "8", "8")
+)
+
+
 //serie 20 2 hojas
 // vidrio = anccho/2 -5 x alto - 10
 //zócalo y cabezal = ancho/2 - 6.4

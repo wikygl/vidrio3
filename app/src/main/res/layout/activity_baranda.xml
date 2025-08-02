@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".Diseno.BarandaActivity">
+
+    <ScrollView
+        android:id="@+id/scrollView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/titleTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Generador de Barandas"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"/>
+
+            <!-- Ancho Total -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/anchoTotalLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:hint="Ancho Total (cm)"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/titleTextView">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/anchoTotalEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Alto Total -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/altoTotalLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:hint="Alto Total (cm)"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/anchoTotalLayout"
+                android:layout_marginTop="8dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/altoTotalEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Cantidad de Vidrios -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/cantidadVidriosLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:hint="Cantidad de Vidrios"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/altoTotalLayout"
+                android:layout_marginTop="8dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/cantidadVidriosEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Espesor Tubo Parante -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/espesorTuboParanteLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:hint="Espesor Tubo Parante (cm)"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/cantidadVidriosLayout"
+                android:layout_marginTop="8dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/espesorTuboParanteEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Espesor Tubo Cabezal -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/espesorTuboCabezalLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:hint="Espesor Tubo Cabezal (cm)"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/espesorTuboParanteLayout"
+                android:layout_marginTop="8dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/espesorTuboCabezalEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Espesor Tubo Cuello -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/lyCuello"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:hint="Espesor Tubo Cuello (cm)"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/espesorTuboCabezalLayout"
+                android:layout_marginTop="8dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etCuello"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Botón Generar -->
+            <Button
+                android:id="@+id/generarButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Generar Baranda"
+                android:layout_marginTop="16dp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/lyCuello"/>
+
+            <!-- Vista Previa -->
+            <TextView
+                android:id="@+id/previewLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Vista Previa:"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginTop="24dp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/generarButton"/>
+
+            <FrameLayout
+                android:id="@+id/barandaPreviewContainer"
+                android:layout_width="0dp"
+                android:layout_height="400dp"
+                android:layout_marginTop="8dp"
+                android:background="@color/sombra"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/previewLabel"/>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </ScrollView>
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -40,6 +40,21 @@
             android:orientation="vertical">
 
             <Button
+                android:id="@+id/btnEnviarJson"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:layout_marginTop="9dp"
+                android:layout_marginEnd="9dp"
+                android:layout_marginBottom="4.5dp"
+                android:layout_weight="1"
+                android:background="@drawable/botoncircular"
+                android:backgroundTint="@color/marron"
+                android:text="enviar"
+                android:textColor="@color/blanco"
+                tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
+
+            <Button
                 android:id="@+id/btnGuardar"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

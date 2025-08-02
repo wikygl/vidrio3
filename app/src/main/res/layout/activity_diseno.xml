@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/layout_principal"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".Diseno.DisenoActivity">
+
+
+    <FrameLayout
+        android:id="@+id/lyTitulo"
+        android:layout_width="144dp"
+        android:layout_height="270dp"
+        android:elevation="3dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:background="@color/blanco"
+        android:visibility="gone">
+
+        <ScrollView
+            android:id="@+id/svTitulo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/txTodo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="9dp"
+                    android:text="Todos" />
+
+                <TextView
+                    android:id="@+id/txVidTemplado"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="9dp"
+                    android:text="Vidrio Templado" />
+
+                <TextView
+                    android:id="@+id/txVidCurvo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="9dp"
+                    android:text="Vidrio Curvo" />
+
+                <TextView
+                    android:id="@+id/txBarandaInox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="9dp"
+                    android:text="Baranda inox" />
+
+                <TextView
+                    android:id="@+id/txBarA"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="9dp"
+                    android:text="Baranda Aluminio" />
+
+                <TextView
+                    android:id="@+id/textView24"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="9dp"
+                    android:text="Puerta de Ducha de Vidrio" />
+
+                <TextView
+                    android:id="@+id/textView22"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="9dp"
+                    android:text="Puerta de Ducha Acrílicó" />
+
+                <TextView
+                    android:id="@+id/textView21"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="9dp"
+                    android:text="TextView" />
+
+                <TextView
+                    android:id="@+id/textView19"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="9dp"
+                    android:text="TextView" />
+
+            </LinearLayout>
+        </ScrollView>
+
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/lyVista"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="9dp"
+        android:layout_marginEnd="9dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:elevation="2dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/imageView7"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:srcCompat="@drawable/ojos"
+                android:layout_marginEnd="9dp"/>
+
+            <TextView
+                android:id="@+id/textView18"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="F"
+                android:textStyle="bold"
+                android:layout_marginEnd="9dp"/>
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/linearLayout11"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- Zona de diseño (con RecyclerView para más flexibilidad) -->
+
+        <!-- Zona de selección de materiales -->
+        <crystal.crystal.taller.GridDrawingView
+            android:id="@+id/gridDibujo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_margin="9dp"
+            android:layout_weight="4"
+            android:background="@color/sombra2" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_weight="6"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/txTitulo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:text="Templado Diseñado con: " />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="9dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btEdit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/medida"
+                    android:textSize="12sp">
+
+                </Button>
+
+                <Button
+                    android:id="@+id/btMaterial"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="material"
+                    android:textSize="12sp">
+
+                </Button>
+
+                <Button
+                    android:id="@+id/btProducto"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Producto"
+                    android:textSize="12sp">
+
+                </Button>
+
+                <Button
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/color"
+                    android:text="@string/accesorios"
+                    android:textSize="11sp">
+
+                </Button>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="0.5"
+                    android:orientation="vertical">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rvDiseno"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_margin="9dp"
+                        android:layout_weight="4"
+                        android:background="@color/sombra2"
+                        android:orientation="horizontal"
+                        android:padding="16dp"
+                        android:visibility="gone" />
+
+                    <HorizontalScrollView
+                        android:id="@+id/scMateriales"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_margin="9dp"
+                        android:layout_weight="6"
+                        android:background="@drawable/cornere"
+                        android:visibility="gone"
+                        tools:ignore="NestedWeights,UselessParent">
+
+                        <LinearLayout
+                            android:id="@+id/lyMateriales"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal" />
+
+                    </HorizontalScrollView>
+
+                    <ScrollView
+                        android:id="@+id/scMedidas"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="6"
+                        android:visibility="visible">
+
+                        <include
+                            android:id="@+id/contenedorMedidas"
+                            layout="@layout/vista_medidas"
+                            android:visibility="visible" />
+
+                    </ScrollView>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1.5"
+                    android:orientation="vertical">
+
+                </LinearLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btDibujar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginEnd="9dp"
+            android:layout_marginBottom="9dp"
+            android:text="Dibujar" />
+
+
+    </LinearLayout>
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+

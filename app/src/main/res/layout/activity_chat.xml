@@ -7,14 +7,36 @@
     tools:context=".red.ChatActivity">
 
     <LinearLayout
+        android:id="@+id/linearLayout6"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:background="@color/color">
+
+        <include
+            android:id="@+id/headerChat"
+            layout="@layout/item_chat"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/linearLayout10"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:layout_marginTop="9dp"
         android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toBottomOf="@+id/linearLayout6">
 
         <androidx.recyclerview.widget.RecyclerView
 
@@ -46,12 +68,28 @@
                 tools:ignore="NestedWeights,TextContrastCheck,TouchTargetSizeCheck,TouchTargetSizeCheck,TouchTargetSizeCheck" />
 
             <Button
+                android:id="@+id/btArchivo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.8"
+                android:text="archivo" />
+
+            <Button
                 android:id="@+id/btEnviar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_weight="1.8"
                 android:text="Enviar"
                 tools:ignore="TouchTargetSizeCheck" />
+
+            <ImageButton
+                android:id="@+id/btPresupuesto"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/presupuesto"
+                android:contentDescription="Enviar presupuesto"
+                android:layout_marginEnd="8dp" />
 
         </LinearLayout>
 

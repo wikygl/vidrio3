@@ -1,0 +1,39 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:autoMirrored="true"
+    android:height="204dp"
+    android:viewportHeight="1198"
+    android:viewportWidth="579.7"
+    android:width="99dp">
+      
+    <path android:fillColor="#ffffff" android:fillType="evenOdd" android:pathData="M16.9,24.6h512v1122.7h-512z"/>
+      
+    <path android:fillColor="#000000" android:fillType="evenOdd" android:pathData="M276.6,637.7l78.6,-98.1z"/>
+      
+    <path android:fillColor="#000000" android:fillType="evenOdd" android:pathData="M284.2,578l31,-38z"/>
+      
+    <path android:fillColor="#000000" android:fillType="evenOdd" android:pathData="M239.3,745l194.9,-247.6z"/>
+      
+    <path android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M275.9,637.5L354.5,539.4"
+        android:strokeColor="#000000" android:strokeWidth="4.5"/>
+      
+    <path android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M283.6,577.8L314.6,539.8"
+        android:strokeColor="#000000" android:strokeWidth="4.5"/>
+      
+    <path android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M239.3,745L434.2,497.5"
+        android:strokeColor="#000000" android:strokeWidth="4.5"/>
+      
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd" android:pathData="M16.9,1195.8l512,0l0,-48.6l-512,0z" android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="4.45"/>
+      
+    <path android:fillColor="#999999" android:fillType="evenOdd" android:pathData="M577.4,24.6l0,-22.4l-575.2,0l0,22.4z" android:strokeColor="#000000" android:strokeWidth="4.45"/>
+      
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd" android:pathData="M528.9,1195.8l48.6,0l0,-1171.2l-48.6,0z" android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="4.45"/>
+      
+    <path android:fillColor="#999999" android:fillType="evenOdd" android:pathData="M16.9,1195.8l-14.7,0l0,-1171.2l14.7,0z" android:strokeColor="#000000" android:strokeWidth="4.45"/>
+    
+</vector>

@@ -2,15 +2,17 @@ package crystal.crystal.optimizadores
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import crystal.crystal.R
-import kotlinx.android.synthetic.main.activity_ncurvos.*
+import crystal.crystal.databinding.ActivityNcurvosBinding
 
 class Ncurvos : AppCompatActivity() {
+
+    lateinit var binding: ActivityNcurvosBinding
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_ncurvos)
+        binding = ActivityNcurvosBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        btCalcular.setOnClickListener {
+        binding.btCalcular.setOnClickListener {
 
         }
 

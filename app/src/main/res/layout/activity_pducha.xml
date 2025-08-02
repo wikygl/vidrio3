@@ -1,0 +1,555 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".taller.PDuchaActivity">
+
+    <LinearLayout
+    android:id="@+id/layout2"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:orientation="vertical"
+    app:layout_constraintBottom_toBottomOf="parent"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="450dp"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:layout_marginTop="9dp"
+                android:layout_marginEnd="4.5dp"
+                android:layout_weight="1"
+                android:background="@drawable/corner"
+                android:orientation="vertical"
+                tools:ignore="NestedWeights">
+
+                <TextView
+                    android:id="@+id/tvDucha"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/corner2"
+                    android:backgroundTint="@color/color"
+                    android:gravity="center"
+                    android:text="Puerta Ducha A001"
+                    android:textColor="@color/blanco"
+                    tools:ignore="TextContrastCheck" />
+
+                <LinearLayout
+                    android:id="@+id/lyFichaT"
+                    android:layout_width="match_parent"
+                    android:layout_height="90dp"
+                    android:background="@drawable/cornere">
+
+                    <ImageView
+                        android:id="@+id/ivModelo"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_margin="3.6dp"
+                        android:layout_weight="1"
+                        app:srcCompat="@mipmap/a001"
+                        tools:ignore="ContentDescription,ImageContrastCheck" />
+
+                    <Button
+                        android:id="@+id/btFicha"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/sombra"
+                        android:text="@string/ficha_t_cnica"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/textView4"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="@string/medidas_y_cantidad"
+                    android:textColor="@color/color"
+                    tools:ignore="TextContrastCheck" />
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:id="@+id/lyAncho"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/textView13"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Ancho1"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAncho1"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyAncho2"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Ancho2"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAncho2"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:text="@string/_0"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyAlto"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/textView12"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="@string/alto"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAlto"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="@string/marco"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etMarcoP"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:text="2.2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/textView5"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Tirador"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etPartes"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number"
+                                android:text="@string/_0"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="@string/junkillo"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/junk_mfccfss"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:text="@string/_0"
+                                tools:ignore="LabelFor" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+                </ScrollView>
+
+                <TextView
+                    android:id="@+id/textView20"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/color" />
+
+                <TextView
+                    android:id="@+id/textView23"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:backgroundTint="@color/color"
+                    android:gravity="end"
+                    android:paddingEnd="3dp"
+                    android:textColor="@color/blanco"
+                    android:textSize="12sp"
+                    tools:ignore="RtlSymmetry" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="0.81"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="4.5dp"
+                    android:layout_marginTop="9dp"
+                    android:layout_marginEnd="9dp"
+                    android:layout_weight="0.18"
+                    android:background="@drawable/corner"
+                    android:orientation="vertical"
+                    android:paddingBottom="4.5dp"
+                    tools:ignore="NestedWeights">
+
+                    <TextView
+                        android:id="@+id/textView28"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/corner2"
+                        android:backgroundTint="@color/color"
+                        android:gravity="center"
+                        android:text="@string/referencias_y_c_lculos"
+                        android:textColor="@color/blanco"
+                        tools:ignore="TextContrastCheck" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4.5dp"
+                        android:layout_marginTop="4.5dp"
+                        android:layout_marginEnd="4.5dp"
+                        android:background="@color/sombra"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvReferencias"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="center" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/textView33"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:text="@string/c_lculos"
+                        android:textColor="@color/color"
+                        tools:ignore="TextContrastCheck" />
+
+                    <ScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/sombra"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:id="@+id/tvMarcoE"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/marco" />
+
+                                <TextView
+                                    android:id="@+id/tvMarcoResult"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:id="@+id/textView34"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/parante" />
+
+                                <TextView
+                                    android:id="@+id/tvParante"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/z_calo" />
+
+                                <TextView
+                                    android:id="@+id/tvZocaloE"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/sombra"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/portafelpa" />
+
+                                <TextView
+                                    android:id="@+id/tvPortaP"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/junkillo" />
+
+                                <TextView
+                                    android:id="@+id/tvJunkiP"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/sombra"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/ang_tope" />
+
+                                <TextView
+                                    android:id="@+id/tvAngP"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/sombra"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/vidrios" />
+
+                                <TextView
+                                    android:id="@+id/tvVidrios"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyDisenos"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/sombra"
+                                android:orientation="vertical">
+
+                                <ImageView
+                                    android:id="@+id/ivVidrios"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/ic_dormido" />
+
+                            </LinearLayout>
+
+                        </LinearLayout>
+                    </ScrollView>
+
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="bottom|end"
+                    android:layout_marginEnd="4.5dp"
+                    android:layout_weight="1.08"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btArchivar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/rosa"
+                        android:text="@string/archivar"
+                        android:textColor="@color/blanco"
+                        tools:ignore="ButtonStyle,TextContrastCheck" />
+
+                    <Button
+                        android:id="@+id/btCalcular"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/negro"
+                        android:text="@string/calcular"
+                        android:textColor="@color/blanco"
+                        tools:ignore="ButtonStyle,TextContrastCheck" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/linearLayout2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"/>
+
+</LinearLayout>
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>

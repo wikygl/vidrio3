@@ -7,7 +7,6 @@ import androidx.appcompat.app.AppCompatActivity
 import com.bumptech.glide.Glide
 import crystal.crystal.MainActivity
 import crystal.crystal.databinding.ActivityCatalogoBinding
-import kotlinx.android.synthetic.main.activity_taller.*
 
 
 class Catalogo : AppCompatActivity() {
@@ -15,23 +14,23 @@ class Catalogo : AppCompatActivity() {
     private var productoSeleccionado: String? = null
 
 
-    private lateinit var bindin : ActivityCatalogoBinding
+    private lateinit var binding : ActivityCatalogoBinding
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        bindin=ActivityCatalogoBinding.inflate(layoutInflater)
-        setContentView(bindin.root)
+        binding=ActivityCatalogoBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
         configureAdapter()
 
-        micro.setOnClickListener {
+        binding.micro.setOnClickListener {
             startActivity(Intent(this, MainActivity::class.java))}
-        bindin.btnCatalogo.setOnClickListener {
+        binding.btnCatalogo.setOnClickListener {
             startActivity(Intent(this, SubirActivity::class.java))  }
     }
 
     private fun configureAdapter() {
-        bindin.recyclerView.adapter = Adapter(ListadoCat.productos) { data ->
+        binding.recyclerView.adapter = Adapter(ListadoCat.productos) { data ->
             productoSeleccionado = data.nombre
             cambiarImagenes()
         }
@@ -45,8 +44,8 @@ class Catalogo : AppCompatActivity() {
         val imagenID = obtenerImagenID(producto)
 
         // Cambiar las imágenes del RecyclerView
-        for (i in 0 until bindin.recyclerView.childCount) {
-            val viewHolder = bindin.recyclerView.getChildViewHolder(bindin.recyclerView.getChildAt(i))
+        for (i in 0 until binding.recyclerView.childCount) {
+            val viewHolder = binding.recyclerView.getChildViewHolder(binding.recyclerView.getChildAt(i))
             if (viewHolder is Holder) {
                 val item = viewHolder.itemView.tag as Data
                 // Cargar la nueva imagen utilizando Glide

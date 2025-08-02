@@ -60,8 +60,7 @@ object ListaCasilla {
             mapListas[nombreLista]?.addAll(listaProcesada)
         } else {
             // Si no existe, crear una nueva entrada en el Map
-            mapListas[nombreLista] = listaProcesada
-        }
+            mapListas[nombreLista] = listaProcesada        }
     }
 
     // Función especial para procesar txReferencias sin el signo "="

@@ -112,7 +112,7 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="360dp"
+            android:layout_height="450dp"
             android:baselineAligned="false"
             android:orientation="horizontal">
 
@@ -140,49 +140,30 @@
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="90dp"
+                    android:layout_height="180dp"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/textView"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="1dp"
-                        android:layout_marginEnd="1dp"
-                        android:background="@color/sombra"
-                        android:text="@string/ficha_t_cnica"
-                        android:textAlignment="center"
-                        android:textSize="10sp"
-                        tools:ignore="SmallSp" />
-
                     <androidx.constraintlayout.widget.ConstraintLayout
-                        android:id="@+id/linearLayout4"
+                        android:id="@+id/lyDiseno"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent">
 
                         <ImageView
                             android:id="@+id/ivModelo"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
                             android:layout_margin="3.6dp"
                             android:clickable="true"
                             android:focusable="true"
                             android:visibility="visible"
                             app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toStartOf="@+id/spVariantes"
+                            app:layout_constraintEnd_toStartOf="parent"
                             app:layout_constraintStart_toStartOf="parent"
                             app:layout_constraintTop_toTopOf="parent"
+                            app:layout_constraintVertical_bias="0.0"
                             app:srcCompat="@drawable/ic_pp1"
                             tools:ignore="ContentDescription,SpeakableTextPresentCheck" />
 
-                        <Spinner
-                            android:id="@+id/spVariantes"
-                            android:layout_width="30dp"
-                            android:layout_height="wrap_content"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            tools:ignore="TouchTargetSizeCheck,SpeakableTextPresentCheck" />
 
                     </androidx.constraintlayout.widget.ConstraintLayout>
                 </LinearLayout>
@@ -402,6 +383,62 @@
                                 android:text="@string/_1" />
                         </LinearLayout>
 
+                        <LinearLayout
+                            android:id="@+id/lyAD"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:id="@+id/txAD"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Ancho divisiones"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAD"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:hint="@string/_0"
+                                android:inputType="numberDecimal"
+                                android:text="@string/_1" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyAngulo"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="visible">
+
+                            <TextView
+                                android:id="@+id/txAngulo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Ángulo"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAngulo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:hint="45"
+                                android:inputType="numberDecimal"
+                                android:text="45" />
+                        </LinearLayout>
+
 
                     </LinearLayout>
                 </ScrollView>
@@ -436,6 +473,19 @@
                     android:orientation="vertical"
                     android:paddingBottom="4.5dp"
                     tools:ignore="NestedWeights">
+
+                    <LinearLayout
+                        android:id="@+id/lyVariantes"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <androidx.recyclerview.widget.RecyclerView
+                            android:id="@+id/rvVariantes"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/textView28"
@@ -636,6 +686,29 @@
 
                                 <TextView
                                     android:id="@+id/tvMela"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="0.72"
+                                    android:text="@string/_0_0" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4.5dp"
+                                android:layout_marginEnd="4.5dp"
+                                android:background="@color/sombra"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="Grados"
+                                    tools:ignore="TooManyViews" />
+
+                                <TextView
+                                    android:id="@+id/tvMel"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.72"

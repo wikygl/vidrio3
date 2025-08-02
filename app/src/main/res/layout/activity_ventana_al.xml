@@ -321,6 +321,7 @@
                         tools:ignore="TextContrastCheck" />
 
                     <LinearLayout
+                        android:id="@+id/lyReferencias"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="4.5dp"
@@ -736,7 +737,7 @@
                     android:orientation="horizontal">
 
                     <Button
-                        android:id="@+id/btn_archivar_fccfss"
+                        android:id="@+id/btArchivar"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"

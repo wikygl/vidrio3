@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package crystal.crystal
 
 import android.Manifest
@@ -12,6 +13,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.speech.RecognizerIntent
 import android.text.Editable
@@ -35,6 +37,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.bumptech.glide.Glide
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.itextpdf.text.BaseColor
@@ -56,8 +61,13 @@ import com.itextpdf.text.pdf.draw.LineSeparator
 import crystal.crystal.catalogo.Catalogo
 import crystal.crystal.databinding.ActivityMainBinding
 import crystal.crystal.red.ListChatActivity
+import crystal.crystal.registro.InicioActivity
 import crystal.crystal.registro.Registro
 import crystal.crystal.taller.Taller
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -77,8 +87,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private var lista: MutableList<Listado> = mutableListOf()
-    val elementosFiltrados: MutableList<Listado> = mutableListOf()
-    private var cliente: String = ""
+    companion object {private const val RECEIVE_PRESUPUESTO_REQUEST = 3}
+    private val auth = FirebaseAuth.getInstance()
+    private lateinit var currentUserId: String
+    private var db = Firebase.firestore
+
 
     private lateinit var usados: Spinner
     private lateinit var unidades: Spinner
@@ -87,11 +100,12 @@ class MainActivity : AppCompatActivity() {
     private val REQUEST_IMAGE_CAPTURE = 1
     private val REQUEST_IMAGE_GALLERY = 2
     private var selectedPosition: Int = -1
-    private var materialRecibido = listOf("")
     private val retaso = 1.8f
 
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var binding: ActivityMainBinding
+    // Mapa para almacenar el contador de mensajes no leídos por chat
+    private val unreadCountByChat = mutableMapOf<String, Int>()
 
     @SuppressLint("NewApi", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,6 +130,8 @@ class MainActivity : AppCompatActivity() {
         // Cargar los datos guardados
         cargarDatosGuardados()
 
+        fotoUsuario()
+
         cliente()
 
         uni1()
@@ -125,6 +141,8 @@ class MainActivity : AppCompatActivity() {
         eliminar()
 
         abrir()
+
+        manejarPresupuestoRecibido()
 
         binding.btnLimpiar.setOnClickListener {
             try {
@@ -156,7 +174,7 @@ class MainActivity : AppCompatActivity() {
                 lista.clear()
                 binding.list.onRemoteAdapterConnected()
                 actualizar()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
             }
         }
 
@@ -194,8 +212,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Supongamos que el usuario ya está autenticado
+        currentUserId = obtenerUsuarioActual()
+
+        setupUnreadMessagesListener()
+
+        // Al presionar btnChat, se redirige a la ListChatActivity
         binding.btnChat.setOnClickListener {
-            startActivity(Intent(this, ListChatActivity::class.java))
+            val intent = Intent(this, ListChatActivity::class.java)
+            intent.putExtra("usuario", currentUserId)
+            startActivity(intent)
         }
 
         binding.btnCatalogo.setOnClickListener {
@@ -267,6 +293,16 @@ class MainActivity : AppCompatActivity() {
             binding.prueTxt.text= cargarDatosGuardados()
         }
 
+        binding.tvpCliente.setOnLongClickListener {
+            mostrarMenuPresupuesto()
+            true
+        }
+
+        binding.listadoTxt.setOnLongClickListener {
+            abrirSelectorPresupuesto()
+            true
+        }
+
     }
 
     override fun onPause() {
@@ -275,6 +311,52 @@ class MainActivity : AppCompatActivity() {
         guardarDatos()
     }
 
+    override fun onStart() {
+        super.onStart()
+        val auth = FirebaseAuth.getInstance()
+        val currentUser = auth.currentUser
+        if (currentUser != null) {
+            currentUser.reload().addOnCompleteListener { task ->
+                if (!task.isSuccessful) {
+                    // Si la recarga falla, es probable que el usuario haya sido eliminado
+                    auth.signOut()
+                    startActivity(Intent(this, InicioActivity::class.java))
+                    finish()
+                }
+            }
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun fotoUsuario(){
+        val currentUser = auth.currentUser
+
+        if (currentUser?.photoUrl != null) {
+            Glide.with(this)
+                .load(currentUser.photoUrl)
+                .circleCrop()
+                .placeholder(R.drawable.ic_usuario4)  // Imagen mientras se carga
+                .error(R.drawable.ic_usuario4)       // En caso de error
+                .into(binding.btUser)
+        } else {
+            // Si no hay foto de perfil, cargamos la imagen predeterminada
+            Glide.with(this)
+                .load(R.drawable.ic_usuario4)
+                .circleCrop()
+                .into(binding.btUser)
+        }
+
+        if (currentUser?.displayName != null && currentUser.displayName!!.isNotEmpty()) {
+            // Separa el nombre completo por espacios y toma el primer elemento
+            val firstName = currentUser.displayName!!.split(" ").firstOrNull() ?: "Usuario"
+            binding.txUser.text = firstName
+        } else {
+            // Si no hay displayName, asigna un valor predeterminado
+            binding.txUser.text = "Usuario"
+        }
+
+    }
+    @SuppressLint("SetTextI18n")
     @RequiresApi(Build.VERSION_CODES.N)
     private fun agregarListado() {
         // escalas, unidades y colores
@@ -503,7 +585,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
-    @SuppressLint("SetTextI18n", "WrongViewCast")
+    @SuppressLint("SetTextI18n", "WrongViewCast", "MissingInflatedId")
     private fun eliminar() {
         binding.list.setOnItemClickListener { parent, view, position, id ->
             try {
@@ -513,10 +595,14 @@ class MainActivity : AppCompatActivity() {
                 val editar = modelo.findViewById<Button>(R.id.btn_dialogo_editar)
                 val irlista = modelo.findViewById<Button>(R.id.btnGuardar)
                 val abrir = modelo.findViewById<Button>(R.id.btAbrir)
+                val enviar = modelo.findViewById<Button>(R.id.btnEnviarJson)
                 val datos = modelo.findViewById<TextView>(R.id.tvEscala)
                 val pro = modelo.findViewById<TextView>(R.id.etdProducto)
                 datos.text = "${lista[position].producto} ${lista[position].escala} en ${lista[position].uni}"
 
+                enviar.setOnClickListener {
+                    enviarPresupuestoPorChat()
+                }
                 abrir.visibility = View.VISIBLE
                 dialogo.setView(modelo)
                 val dialogoPer = dialogo.create()
@@ -849,11 +935,19 @@ class MainActivity : AppCompatActivity() {
                         binding.txMetroTot.text = result?.get(0)
                     }
                 }
+                RECEIVE_PRESUPUESTO_REQUEST -> {
+                    if (resultCode == RESULT_OK && data != null) {
+                        data.data?.let { uri ->
+                            manejarArchivoPresupuesto(uri)
+                        }
+                    }
+                }
             }
         } catch (e: Exception) {
             Toast.makeText(this, "Error al procesar la solicitud: ${e.message}", Toast.LENGTH_SHORT).show()
             e.printStackTrace()
         }
+
     }
 
     //FUNCIONES SCAN
@@ -867,6 +961,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("IntentReset")
     private fun openGallery() {
         val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         intent.type = "image/*"
@@ -883,6 +978,7 @@ class MainActivity : AppCompatActivity() {
         }
         Log.d("Image URI", imageUriString)
     }
+
     //FUNCIONES PDF
     /*private fun openPdf() {
    generarPdf()
@@ -1066,6 +1162,619 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "PDF generado: ${pdfFile.absolutePath}", Toast.LENGTH_LONG).show()
     }
 
+    // FUNCIONES PARA ENVIAR Y ABRIR PERUSPUESTOS
+
+    // Función para manejar presupuestos recibidos:
+    @SuppressLint("NewApi")
+    private fun manejarPresupuestoRecibido() {
+        manejarMensajeMedidas()
+        // Manejar contenido JSON directo (nuevo método)
+        val jsonContent = intent.getStringExtra("cargar_presupuesto_json")
+        val nombreArchivo = intent.getStringExtra("cargar_presupuesto_nombre")
+
+        if (jsonContent != null) {
+            val builder = AlertDialog.Builder(this)
+            builder.setTitle("Presupuesto Recibido")
+            builder.setMessage("Has recibido el presupuesto: $nombreArchivo\n¿Deseas cargarlo?")
+            builder.setPositiveButton("Cargar") { _, _ ->
+                cargarPresupuestoDesdeJson(jsonContent)
+            }
+            builder.setNegativeButton("Cancelar", null)
+            builder.show()
+            return
+        }
+
+        // Método anterior para URIs locales (mantener por compatibilidad)
+        val presupuestoUri = intent.getStringExtra("cargar_presupuesto_uri")
+        val nombreArchivoUri = intent.getStringExtra("cargar_presupuesto_nombre")
+
+        if (presupuestoUri != null) {
+            val builder = AlertDialog.Builder(this)
+            builder.setTitle("Presupuesto Recibido")
+            builder.setMessage("Has recibido el presupuesto: $nombreArchivoUri\n¿Deseas cargarlo?")
+            builder.setPositiveButton("Cargar") { _, _ ->
+                val uri = Uri.parse(presupuestoUri)
+                manejarArchivoPresupuesto(uri)
+            }
+            builder.setNegativeButton("Cancelar", null)
+            builder.show()
+        }
+    }
+
+    // Agregar onNewIntent para manejar intents cuando la app ya está abierta:
+    override fun onNewIntent(intent: Intent) {
+        intent.let { super.onNewIntent(it) }
+        setIntent(intent)
+        manejarPresupuestoRecibido()
+    }
+
+    // Función para mostrar menú de opciones del presupuesto:
+    private fun mostrarMenuPresupuesto() {
+        val opciones = if (lista.isEmpty()) {
+            arrayOf("Cargar presupuesto desde archivo")
+        } else {
+            arrayOf(
+                "Enviar por chat",
+                "Cargar presupuesto desde archivo",
+                "Guardar como archivo JSON",
+                "Compartir como archivo"
+            )
+        }
+
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Opciones de Presupuesto")
+        builder.setItems(opciones) { _, which ->
+            when (which) {
+                0 -> if (lista.isEmpty()) {
+                    abrirSelectorPresupuesto()
+                } else {
+                    enviarPresupuestoPorChat()
+                }
+                1 -> abrirSelectorPresupuesto()
+                2 -> if (lista.isNotEmpty()) guardarComoJSON()
+                3 -> if (lista.isNotEmpty()) compartirPresupuesto()
+            }
+        }
+        builder.show()
+    }
+
+    // Función para guardar como JSON:
+    private fun guardarComoJSON() {
+        val cliente = binding.clienteEditxt.text.toString().takeIf { it.isNotEmpty() } ?: "Sin nombre"
+        val presupuesto = PresupuestoCompleto(
+            cliente = cliente,
+            fechaCreacion = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
+            elementos = lista.toList(),
+            precioTotal = binding.precioTotal.text.toString(),
+            metrosTotal = binding.metrosTotal.text.toString(),
+            piesTotal = binding.piesTotal.text.toString(),
+            perimetroTotal = binding.per.text.toString()
+        )
+
+        val gson = Gson()
+        val jsonString = gson.toJson(presupuesto)
+
+        val fileName = "presupuesto_${cliente}_${System.currentTimeMillis()}.json"
+        val file = File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), fileName)
+
+        try {
+            file.writeText(jsonString)
+            Toast.makeText(this, "Presupuesto guardado en: ${file.absolutePath}", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error al guardar: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Función para compartir presupuesto:
+    private fun compartirPresupuesto() {
+        val cliente = binding.clienteEditxt.text.toString().takeIf { it.isNotEmpty() } ?: "Sin nombre"
+        val presupuesto = PresupuestoCompleto(
+            cliente = cliente,
+            fechaCreacion = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
+            elementos = lista.toList(),
+            precioTotal = binding.precioTotal.text.toString(),
+            metrosTotal = binding.metrosTotal.text.toString(),
+            piesTotal = binding.piesTotal.text.toString(),
+            perimetroTotal = binding.per.text.toString()
+        )
+
+        val gson = Gson()
+        val jsonString = gson.toJson(presupuesto)
+
+        val fileName = "presupuesto_${cliente}_${System.currentTimeMillis()}.json"
+        val file = File(cacheDir, fileName)
+
+        try {
+            file.writeText(jsonString)
+            val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "Presupuesto - $cliente")
+                putExtra(Intent.EXTRA_TEXT, "Presupuesto generado desde Crystal App")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            startActivity(Intent.createChooser(shareIntent, "Compartir presupuesto"))
+
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error al compartir: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Modificar la función cargarPresupuestoDesdeJson para mejor UX:
+    private fun cargarPresupuestoDesdeJson(jsonString: String): Boolean {
+        return try {
+            val gson = Gson()
+            val presupuesto = gson.fromJson(jsonString, PresupuestoCompleto::class.java)
+
+            // Validar que el presupuesto sea válido
+            if (presupuesto.elementos.isEmpty()) {
+                Toast.makeText(this, "El presupuesto no contiene elementos válidos", Toast.LENGTH_SHORT).show()
+                return false
+            }
+
+            val builder = AlertDialog.Builder(this)
+            builder.setTitle("📋 Cargar Presupuesto")
+            builder.setMessage(
+                "👤 Cliente: ${presupuesto.cliente}\n" +
+                        "📅 Fecha: ${presupuesto.fechaCreacion}\n" +
+                        "📦 Elementos: ${presupuesto.elementos.size}\n" +
+                        "💰 Total: S/${presupuesto.precioTotal}\n" +
+                        "📐 Metros²: ${presupuesto.metrosTotal}\n" +
+                        "📏 Pies²: ${presupuesto.piesTotal}\n\n" +
+                        "¿Deseas cargar este presupuesto?"
+            )
+
+            builder.setPositiveButton("✅ Cargar") { _, _ ->
+                if (lista.isNotEmpty()) {
+                    mostrarOpcionesCargar(presupuesto)
+                } else {
+                    cargarPresupuestoDirecto(presupuesto)
+                }
+            }
+
+            builder.setNegativeButton("❌ Cancelar", null)
+            builder.show()
+
+            true
+        } catch (e: Exception) {
+            Toast.makeText(this, "❌ Error al leer presupuesto: ${e.message}", Toast.LENGTH_LONG).show()
+            false
+        }
+    }
+
+    // Funciones auxiliares para cargar presupuesto:
+    @SuppressLint("NewApi", "SetTextI18n")
+    private fun mostrarOpcionesCargar(presupuesto: PresupuestoCompleto) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("⚙️ ¿Cómo cargar?")
+        builder.setMessage("Ya tienes elementos en tu presupuesto actual.")
+
+        builder.setPositiveButton("➕ Sumar") { _, _ ->
+            lista.addAll(presupuesto.elementos)
+            val clienteActual = binding.clienteEditxt.text.toString()
+            val nuevoCliente = if (clienteActual.isNotEmpty()) {
+                "$clienteActual + ${presupuesto.cliente}"
+            } else {
+                presupuesto.cliente
+            }
+            binding.clienteEditxt.setText(nuevoCliente)
+            binding.tvpCliente.text = "Presupuesto de $nuevoCliente"
+            actualizar()
+            Toast.makeText(this, "✅ Presupuesto sumado correctamente", Toast.LENGTH_SHORT).show()
+        }
+
+        builder.setNegativeButton("🔄 Reemplazar") { _, _ ->
+            cargarPresupuestoDirecto(presupuesto)
+        }
+
+        builder.setNeutralButton("❌ Cancelar", null)
+        builder.show()
+    }
+
+    @SuppressLint("NewApi", "SetTextI18n")
+    private fun cargarPresupuestoDirecto(presupuesto: PresupuestoCompleto) {
+        lista.clear()
+        lista.addAll(presupuesto.elementos)
+        binding.clienteEditxt.setText(presupuesto.cliente)
+        binding.tvpCliente.text = "Presupuesto de ${presupuesto.cliente}"
+
+        // Ajustar visibilidad
+        binding.lyCuello.visibility = View.GONE
+        binding.lyCuerpo.visibility = View.VISIBLE
+
+        actualizar()
+        Toast.makeText(this, "✅ Presupuesto cargado correctamente", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun enviarPresupuestoPorChat() {
+        if (lista.isEmpty()) {
+            Toast.makeText(this, "No hay elementos en el presupuesto para enviar", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val cliente = binding.clienteEditxt.text.toString().takeIf { it.isNotEmpty() } ?: "Sin nombre"
+
+        // Crear objeto completo del presupuesto
+        val presupuesto = PresupuestoCompleto(
+            cliente = cliente,
+            fechaCreacion = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
+            elementos = lista.toList(),
+            precioTotal = binding.precioTotal.text.toString(),
+            metrosTotal = binding.metrosTotal.text.toString(),
+            piesTotal = binding.piesTotal.text.toString(),
+            perimetroTotal = binding.per.text.toString()
+        )
+
+        // Serializar a JSON
+        val gson = Gson()
+        val jsonPresupuesto = gson.toJson(presupuesto)
+
+        // Crear archivo temporal
+        val fileName = "presupuesto_${cliente}_${System.currentTimeMillis()}.json"
+        val file = File(cacheDir, fileName)
+
+        try {
+            file.writeText(jsonPresupuesto)
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                file
+            )
+
+            // Abrir ListChatActivity con el archivo
+            val intent = Intent(this, ListChatActivity::class.java)
+            intent.putExtra("usuario", currentUserId)
+            intent.putExtra("enviar_presupuesto", uri.toString())
+            intent.putExtra("nombre_presupuesto", fileName)
+            startActivity(intent)
+
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error al preparar presupuesto: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Función para manejar archivos de presupuesto recibidos
+    private fun manejarArchivoPresupuesto(uri: Uri) {
+        try {
+            val inputStream = contentResolver.openInputStream(uri)
+            val jsonString = inputStream?.bufferedReader().use { it?.readText() }
+
+            if (jsonString != null) {
+                cargarPresupuestoDesdeJson(jsonString)
+            } else {
+                Toast.makeText(this, "No se pudo leer el archivo", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error al abrir archivo: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun abrirSelectorPresupuesto() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+        }
+        startActivityForResult(intent, RECEIVE_PRESUPUESTO_REQUEST)
+    }
+
+    //Funciones para abrir e enviar presupuestos por mensaje texto
+
+    // Función para detectar si un mensaje tiene formato de medidas
+    private fun esFormatoMedidas(mensaje: String): Boolean {
+        val lineas = mensaje.trim().split("\n").filter { it.isNotBlank() }
+
+        if (lineas.size < 2) return false
+
+        // Regex para detectar medidas: número x número = número (con decimales)
+        val regexMedida = Regex("""^\s*\d+(\.\d+)?\s*[xX]\s*\d+(\.\d+)?\s*=\s*\d+(\.\d+)?\s*$""")
+
+        // Buscar la primera línea que sea una medida
+        var primeraMedida = -1
+        for (i in lineas.indices) {
+            if (regexMedida.matches(lineas[i].trim())) {
+                primeraMedida = i
+                break
+            }
+        }
+
+        // Debe haber al menos una línea antes (producto) y debe encontrar medidas
+        if (primeraMedida <= 0) return false
+
+        // Desde la primera medida en adelante, TODAS deben ser medidas
+        for (i in primeraMedida until lineas.size) {
+            if (!regexMedida.matches(lineas[i].trim())) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    // Función para parsear mensaje con medidas
+    private fun parsearMensajeMedidas(mensaje: String): Pair<String, List<Triple<Float, Float, Float>>>? {
+        try {
+            val lineas = mensaje.trim().split("\n").filter { it.isNotBlank() }
+
+            if (!esFormatoMedidas(mensaje)) return null
+
+            val regexMedida = Regex("""^\s*\d+(\.\d+)?\s*[xX]\s*\d+(\.\d+)?\s*=\s*\d+(\.\d+)?\s*$""")
+
+            // Encontrar donde empiezan las medidas
+            var inicieMedidas = -1
+            for (i in lineas.indices) {
+                if (regexMedida.matches(lineas[i].trim())) {
+                    inicieMedidas = i
+                    break
+                }
+            }
+
+            // ✅ TODO ANTES DE LA PRIMERA MEDIDA = PRODUCTO
+            val producto = lineas.take(inicieMedidas).joinToString(" ").trim()
+            val medidas = mutableListOf<Triple<Float, Float, Float>>()
+
+            // Procesar todas las medidas
+            for (i in inicieMedidas until lineas.size) {
+                val linea = lineas[i].trim()
+
+                val partes = linea.split("=")
+                if (partes.size == 2) {
+                    val cantidad = partes[1].trim().toFloatOrNull()
+                    val medidaParte = partes[0].trim()
+                    val medidasSplit = medidaParte.split(Regex("[xX]"))
+
+                    if (medidasSplit.size == 2 && cantidad != null) {
+                        val med1 = medidasSplit[0].trim().toFloatOrNull()
+                        val med2 = medidasSplit[1].trim().toFloatOrNull()
+
+                        if (med1 != null && med2 != null) {
+                            medidas.add(Triple(med1, med2, cantidad))
+                        }
+                    }
+                }
+            }
+
+            return if (medidas.isNotEmpty()) Pair(producto, medidas) else null
+
+        } catch (e: Exception) {
+            return null
+        }
+    }
+
+    // Función para importar medidas parseadas
+    @SuppressLint("NewApi")
+    private fun importarMedidasParseadas(producto: String, medidas: List<Triple<Float, Float, Float>>) {
+        if (medidas.isEmpty()) {
+            Toast.makeText(this, "No se encontraron medidas válidas", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("📐 Importar Medidas")
+        builder.setMessage(
+            "Producto: $producto\n" +
+                    "Elementos encontrados: ${medidas.size}\n" +
+                    "Unidad: Pies cuadrados (p2)\n\n" +
+                    "Ejemplos:\n" +
+                    medidas.take(3).joinToString("\n") { "${it.first} x ${it.second} = ${it.third}" } +
+                    if (medidas.size > 3) "\n..." else "" +
+                            "\n\n¿Deseas buscar el precio en la base de datos?"
+        )
+
+        builder.setPositiveButton("💰 Buscar precio") { _, _ ->
+            // Buscar precio en base de datos
+            buscarPrecioEnBaseDatos(producto, medidas)
+        }
+
+        builder.setNegativeButton("📋 Sin precio") { _, _ ->
+            // Importar directamente con precio 0
+            importarMedidasConPrecio(producto, medidas, 0.0)
+        }
+
+        builder.setNeutralButton("❌ Cancelar", null)
+        builder.show()
+    }
+
+    // 4. Función para manejar mensaje de medidas recibido (llamada desde ChatActivity)
+    @RequiresApi(Build.VERSION_CODES.N)
+    private fun manejarMensajeMedidas() {
+        val mensajeTexto = intent.getStringExtra("importar_medidas_texto")
+
+        if (mensajeTexto != null) {
+            val resultado = parsearMensajeMedidas(mensajeTexto)
+
+            if (resultado != null) {
+                val (producto, medidas) = resultado
+                importarMedidasParseadas(producto, medidas)
+            } else {
+                Toast.makeText(this, "❌ No se pudo parsear el mensaje de medidas", Toast.LENGTH_SHORT).show()
+            }
+
+            // Limpiar el extra para evitar procesarlo de nuevo
+            intent.removeExtra("importar_medidas_texto")
+        }
+    }
+
+    // 1. Función para buscar precios en la base de datos
+    @SuppressLint("NewApi")
+    private fun buscarPrecioEnBaseDatos(producto: String, medidas: List<Triple<Float, Float, Float>>) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = DatabaseProvider.getInstance(this@MainActivity)
+
+                // Buscar productos similares
+                val productosEncontrados = db.productDao().searchProductsByDescription("%$producto%")
+
+                withContext(Dispatchers.Main) {
+                    if (productosEncontrados.isNotEmpty()) {
+                        // Mostrar opciones de productos encontrados
+                        mostrarOpcionesProductos(productosEncontrados, producto, medidas)
+                    } else {
+                        // No se encontraron productos, continuar con precio 0
+                        Toast.makeText(this@MainActivity, "❌ No se encontraron productos similares en la base de datos", Toast.LENGTH_SHORT).show()
+                        importarMedidasConPrecio(producto, medidas, 0.0)
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Error al buscar en BD: ${e.message}", Toast.LENGTH_SHORT).show()
+                    importarMedidasConPrecio(producto, medidas, 0.0)
+                }
+            }
+        }
+    }
+
+    // 2. Función para mostrar opciones de productos encontrados
+    @SuppressLint("DefaultLocale")
+    @RequiresApi(Build.VERSION_CODES.N)
+    private fun mostrarOpcionesProductos(productos: List<Product>, productoOriginal: String, medidas: List<Triple<Float, Float, Float>>) {
+        val opcionesLista = mutableListOf<String>()
+
+        productos.forEach { producto ->
+            opcionesLista.add("💰 ${producto.description}\n   Precio: S/ ${String.format("%.2f", producto.price)}")
+        }
+
+        opcionesLista.add("📋 Sin precio (S/ 0.00)")
+        opcionesLista.add("❌ Cancelar")
+
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("💰 Seleccionar Producto (${productos.size} encontrados)")
+
+        builder.setItems(opcionesLista.toTypedArray()) { _, which ->
+            when {
+                which < productos.size -> {
+                    val productoSeleccionado = productos[which]
+                    Toast.makeText(this, "🔄 Seleccionado: ${productoSeleccionado.description}", Toast.LENGTH_SHORT).show()
+                    importarMedidasConPrecio(productoOriginal, medidas, productoSeleccionado.price)
+                }
+                which == productos.size -> {
+                    Toast.makeText(this, "📋 Sin precio", Toast.LENGTH_SHORT).show()
+                    importarMedidasConPrecio(productoOriginal, medidas, 0.0)
+                }
+                else -> {
+                    Toast.makeText(this, "❌ Cancelado", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        builder.show()
+    }
+    @SuppressLint("SetTextI18n", "DefaultLocale")
+    @RequiresApi(Build.VERSION_CODES.N)
+    private fun importarMedidasConPrecio(producto: String, medidas: List<Triple<Float, Float, Float>>, precio: Double) {
+        var elementosAgregados = 0
+
+        for ((med1, med2, cantidad) in medidas) {
+            try {
+                // Configurar temporalmente la unidad para que conver() funcione
+                val unidadOriginal = binding.prTxt.text.toString()
+                binding.prTxt.text = "Centímetros"
+
+                // Calcular correctamente con conver()
+                val piescua = pies(med1, med2)
+                val metroscua = metroCua(med1, med2)
+                val ml = mLineales(med1, med2)
+                val cub = mCubicos(med1, med2, 1f)
+                val peri = ((conver(med1) * 2) + (conver(med2) * 2))
+
+                // Restaurar unidad original
+                binding.prTxt.text = unidadOriginal
+
+                // Calcular costo total
+                val costoTotal = (piescua * cantidad) * precio.toFloat()
+
+                val elemento = Listado(
+                    escala = "p2",
+                    uni = "Centímetros",
+                    medi1 = med1,
+                    medi2 = med2,
+                    medi3 = 1f,
+                    canti = cantidad,
+                    piescua = piescua * cantidad,
+                    precio = precio.toFloat(),
+                    costo = costoTotal,
+                    producto = producto,
+                    peri = peri,
+                    metcua = metroscua,
+                    metli = ml * cantidad,
+                    metcub = cub,
+                    color = ContextCompat.getColor(this, R.color.color),
+                    uri = ""
+                )
+
+                lista.add(elemento)
+                elementosAgregados++
+
+            } catch (e: Exception) {
+                continue
+            }
+        }
+
+        if (elementosAgregados > 0) {
+            actualizar()
+            val mensajePrecio = if (precio > 0) {
+                "con precio S/ ${String.format("%.2f", precio)}"
+            } else {
+                "sin precio (completar manualmente)"
+            }
+            Toast.makeText(this, "✅ $elementosAgregados elementos importados $mensajePrecio", Toast.LENGTH_LONG).show()
+
+            if (precio == 0.0) {
+                binding.precioEditxt.requestFocus()
+            }
+        } else {
+            Toast.makeText(this, "❌ No se pudo importar ningún elemento", Toast.LENGTH_SHORT).show()
+        }
+    }
+    //FUNCIONES DE CHAT
+
+    private fun setupUnreadMessagesListener() {
+        // Escuchar los chats de la colección personal del usuario
+        val userChatsRef = db.collection("usuarios").document(currentUserId).collection("chats")
+        userChatsRef.addSnapshotListener { snapshot, error ->
+            if (error == null && snapshot != null) {
+                // Para cada chat, establecer listener a la subcolección de mensajes para contar los no leídos
+                for (chatDoc in snapshot.documents) {
+                    val chatId = chatDoc.id
+                    val chatRef = db.collection("chats").document(chatId)
+                    chatRef.collection("messages")
+                        .whereEqualTo("leido", false)
+                        .whereNotEqualTo("from", currentUserId)
+                        .addSnapshotListener { msgsSnap, _ ->
+                            if (msgsSnap != null) {
+                                val count = msgsSnap.size()
+                                unreadCountByChat[chatId] = count
+                                actualizarBadgeChat()
+                            }
+                        }
+                }
+            }
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun actualizarBadgeChat() {
+        val totalUnread = unreadCountByChat.values.sum()
+        if (totalUnread > 0) {
+            // Cambiar el ícono a la versión roja y mostrar el badge
+            binding.btnChat.setImageResource(R.drawable.ic_mensajesno) // Reemplaza por tu recurso de ícono rojo
+            binding.tvBadge.text = totalUnread.toString()
+            binding.tvBadge.visibility = View.VISIBLE
+        } else {
+            binding.btnChat.setImageResource(R.drawable.ic_mensajes) // Versión blanca por defecto
+            binding.tvBadge.visibility = View.GONE
+        }
+    }
+
+    private fun obtenerUsuarioActual(): String {
+        // Implementa la lógica para obtener el id del usuario autenticado (por ejemplo, usando FirebaseAuth)
+        return "usuarioActualEjemplo"
+    }
+
+    //FUNCIONES GENERALES
+
     private fun df1(defo: Float): String {
         val resultado =if ("$defo".endsWith(".0")) {"$defo".replace(".0", "")}
         else { "%.1f".format(defo)
@@ -1192,7 +1901,6 @@ class MainActivity : AppCompatActivity() {
     private fun mLineales(medida1: Float, medida2: Float): Float {
         return conver(medida1) * medida2
     }
-
     private fun perim(): Float {
         val medida1 = binding.med1Editxt.text.toString().toFloat()
         val medida2 = binding.med2Editxt.text.toString().toFloat()
@@ -1204,7 +1912,6 @@ class MainActivity : AppCompatActivity() {
             else -> {(((medida1) * 2 + (medida2) * 2)) / 100 }
         }
     }
-
     private fun med1(x: View? = null): Float {
         val editText = if (x!= null) {
             x.findViewById<EditText>(R.id.etdMed1)

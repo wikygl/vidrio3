@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Crystal</string>
+    <string name="default_web_client_id">529436008604-hajctsrpuh5skhj3vaab1jg0sj1ift6h.apps.googleusercontent.com</string>
     <string name="cent_metros">Centímetros</string>
     <string name="medida">Medida:</string>
     <string name="cantidad">Cantidad:</string>
@@ -203,4 +204,14 @@
     <string name="otros_dise_os">Otros diseños</string>
     <string name="otros_datos">Otros datos</string>
     <string name="ancho_2">Ancho 2</string>
+    <string name="buscar">Buscar</string>
+    <string name="tirador">tirador</string>
+
+    <!-- Nuevos strings para presupuestos -->
+    <string name="enviar_presupuesto">Enviar presupuesto</string>
+    <string name="cargar_presupuesto">Cargar presupuesto</string>
+    <string name="presupuesto_recibido">Presupuesto recibido</string>
+    <string name="guardar_como_json">Guardar como JSON</string>
+    <string name="compartir_presupuesto">Compartir presupuesto</string>
+    <string name="opciones_presupuesto">Opciones de presupuesto</string>
 </resources>

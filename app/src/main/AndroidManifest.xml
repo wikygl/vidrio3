@@ -7,7 +7,14 @@
     <uses-sdk
         android:minSdkVersion="21"
         android:targetSdkVersion="32"
-        tools:ignore="GradleOverrides,OldTargetApi" />
+        tools:ignore="ExpiredTargetSdkVersion,GradleOverrides,OldTargetApi" />
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.BROADCAST_STICKY" />
@@ -22,27 +29,49 @@
 
     <application
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:debuggable="false"
         android:fullBackupContent="@xml/backup_descriptor"
         android:icon="@mipmap/i_tu2_round"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/i_tu2"
         android:supportsRtl="true"
-        android:testOnly="true"
         android:theme="@style/AppTheme"
         tools:ignore="AllowBackup,HardcodedDebugMode"
         tools:targetApi="p">
         <activity
-            android:name=".taller.Serie20"
+            android:name=".Diseno.BarandaActivity"
             android:exported="false" />
         <activity
-            android:name=".casilla.CasillaActivity"
+            android:name=".red.VisorArchivoActivity"
+            android:exported="false" />
+        <activity
+            android:name=".taller.PDuchaActivity"
+            android:exported="false" />
+        <activity
+            android:name=".registro.PlanSelectionActivity"
+            android:exported="false" />
+        <activity
+            android:name=".registro.PhoneLoginActivity"
+            android:exported="false" />
+        <activity
+            android:name=".taller.MamparaVidrioActivity"
+            android:exported="false" />
+        <activity
+            android:name=".taller.RejasActivity"
+            android:exported="false" />
+        <activity
+            android:name=".Diseno.DisenoActivity"
+            android:exported="false"
+            tools:ignore="MissingClass" />
+        <activity
+            android:name=".taller.Serie20"
             android:exported="false" />
         <activity
             android:name=".recargar.RecargaA"
             android:exported="false" />
         <activity
-            android:name=".registro.InicioActtivity"
+            android:name=".registro.InicioActivity"
             android:exported="false" />
         <activity
             android:name=".catalogo.SubirActivity"
@@ -83,7 +112,7 @@
         <activity
             android:name=".taller.MamparaFC"
             android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity" />
+            tools:ignore="DiscouragedApi,LockedOrientationActivity" />
         <activity
             android:name=".catalogo.Catalogo"
             android:screenOrientation="portrait"
@@ -120,10 +149,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <activity
             android:name=".MainActivity"
             android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity" />
+            android:exported="true"
+            android:launchMode="singleTop"
+            tools:ignore="LockedOrientationActivity,AppLinkUrlError">
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
+
+        </activity>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -134,6 +174,7 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
     </application>
 
 </manifest>

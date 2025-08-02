@@ -1,19 +1,19 @@
+// Aplicar plugins
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-kapt'
 apply plugin: 'com.google.gms.google-services'
-apply plugin: 'kotlin-android-extensions'
-
 
 android {
-    compileSdkVersion 34
-    buildToolsVersion '34.0.0'
+    compileSdk 34
 
     defaultConfig {
         applicationId "crystal.crystal"
-        minSdkVersion 21
-        targetSdkVersion 34
+        minSdk 21
+        targetSdk 34
         versionCode 3
         versionName "3.0"
+
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -32,6 +32,7 @@ android {
     configurations {
         all*.exclude group: 'com.google.guava', module: 'listenablefuture'
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -40,41 +41,85 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-    namespace 'crystal.crystal'
 
+    namespace 'crystal.crystal'
 }
 
 dependencies {
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation fileTree(dir: "libs", include: ["*.jar"])
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation 'androidx.core:core-ktx:1.8.0'
-    implementation 'androidx.appcompat:appcompat:1.5.0'
+    //implementation fileTree(dir: "libs", include: ["*.jar"])
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.20"
+
+    // AndroidX y Material Design
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'com.google.android.material:material:1.6.1'
-    implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
-    implementation 'com.google.android.gms:play-services-auth:20.2.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.1'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'androidx.activity:activity:1.9.3'
+    implementation 'androidx.compose.runtime:runtime-android:1.7.8'
+    implementation 'com.google.android.material:material:1.10.0'
 
-    implementation 'com.github.bumptech.glide:glide:4.13.0'
-    annotationProcessor 'com.github.bumptech.glide:compiler:4.13.0'
+    // Glide
+    implementation 'com.github.bumptech.glide:glide:4.15.1'
+    //implementation 'org.testng:testng:6.9.6'
+    kapt 'com.github.bumptech.glide:compiler:4.15.1'
 
-    implementation 'com.airbnb.android:lottie:3.4.2'
+    // Lottie Animaciones
+    implementation 'com.airbnb.android:lottie:6.0.1'
 
-    implementation platform('com.google.firebase:firebase-bom:30.2.0')
-    implementation 'com.google.firebase:firebase-storage:20.0.0'
+    // FFmpegKit para compresión de videos (CORRECTO)
+    implementation group: 'com.iceteck.silicompressorr', name: 'silicompressor', version: '2.2.4'
+    // MP4Parser, necesario para comprimir vídeo
+    implementation 'com.googlecode.mp4parser:isoparser:1.1.22'
+
+    // SiliCompressor
+    implementation group: 'com.iceteck.silicompressorr',
+            name: 'silicompressor',
+            version: '2.2.4'
+    // Para PDF
+
+
+// Para vídeo/audio con ExoPlayer
+    implementation 'com.google.android.exoplayer:exoplayer:2.18.5'
+
+
+    // Firebase
+    implementation platform('com.google.firebase:firebase-bom:32.8.0')
+    implementation 'com.google.firebase:firebase-storage-ktx'
     implementation 'com.google.firebase:firebase-auth-ktx'
     implementation 'com.google.firebase:firebase-firestore-ktx'
-    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-analytics-ktx'
+    implementation "com.google.android.gms:play-services-auth:21.0.0"
 
-    implementation 'com.googlecode.libphonenumber:libphonenumber:8.12.32'
+    // Utilidades extra
+    implementation 'com.googlecode.libphonenumber:libphonenumber:8.13.19'
+    implementation 'com.itextpdf:itextpdf:5.5.13.3'
+    implementation 'com.google.code.gson:gson:2.10.1'
 
-    implementation 'com.itextpdf:itextpdf:5.5.13.2'
-    implementation 'com.google.code.gson:gson:2.8.8'
-    implementation 'androidx.recyclerview:recyclerview:1.2.1'
+    // Room Database
+    def room_version = "2.5.2"
+    implementation "androidx.room:room-runtime:$room_version"
+    kapt "androidx.room:room-compiler:$room_version"
+    implementation "androidx.room:room-ktx:$room_version"
 
+    // Corrutinas
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
 
-    testImplementation 'junit:junit:4.12'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    // Test
+    // Tests de unidad (sin JUnit/Hamcrest en el APK)
+    testImplementation('junit:junit:4.13.2') {
+        exclude group: 'org.hamcrest', module: 'hamcrest-core'
+    }
+
+    // Tests instrumentados
+    androidTestImplementation('androidx.test.ext:junit:1.1.5') {
+        exclude group: 'org.hamcrest', module: 'hamcrest-core'
+    }
+    androidTestImplementation('androidx.test.espresso:espresso-core:3.5.1') {
+        exclude group: 'org.hamcrest', module: 'hamcrest-core'
+    }
 
 }
+
+

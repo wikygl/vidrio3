@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.databinding.ActivityPivotAlBinding
-import kotlinx.android.synthetic.main.activity_pivot_al.*
 
 class PivotAl : AppCompatActivity() {
 
@@ -35,8 +34,8 @@ class PivotAl : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun marco(){
-        val alto = etAltoP.text.toString().toFloat()
-        tvMarcoResult.text= "${df1(alto)} = 2\n${df1(anchUtil())} = 2"
+        val alto = binding.etAltoP.text.toString().toFloat()
+        binding.tvMarcoResult.text= "${df1(alto)} = 2\n${df1(anchUtil())} = 2"
 
     }
     @SuppressLint("SetTextI18n")
@@ -67,14 +66,14 @@ class PivotAl : AppCompatActivity() {
     //   FUNCIONES GENERALES
 
     private fun anchUtil(): Float {
-        val ancho = etAnchoP.text.toString().toFloat()
-        val marco = etMarcoP.text.toString().toFloat()
+        val ancho = binding.etAnchoP.text.toString().toFloat()
+        val marco = binding.etMarcoP.text.toString().toFloat()
         return ancho - (2 * marco)
 
     }
     private fun altoUtil():Float{
-        val alto = etAltoP.text.toString().toFloat()
-        val marco=etMarcoP.text.toString().toFloat()
+        val alto = binding.etAltoP.text.toString().toFloat()
+        val marco=binding.etMarcoP.text.toString().toFloat()
         return alto - (2 * marco)
     }
 

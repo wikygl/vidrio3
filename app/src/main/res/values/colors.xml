@@ -5,9 +5,11 @@
     <color name="colorAccent">#03DAC5</color>
     <color name="blanco">#ffffff</color>
     <color name="color">#0099FF</color>
+    <color name="colort">#430099FF</color>
     <color name="sombra">#F4F4F4</color>
     <color name="sombra2">#E8E8E8</color>
     <color name="rojo">#FF0000</color>
+    <color name="rojot">#2EFF0000</color>
     <color name="verde">#68B547</color>
     <color name="fucsia">#FF0066</color>
     <color name="amarillo">#FFCC00</color>
@@ -24,4 +26,5 @@
     <color name="negro">#000</color>
     <color name="negroT">#CF000000</color>
     <color name="marron">#CF493434</color>
+    <color name="aluminio">#CCCCCC</color>
 </resources>

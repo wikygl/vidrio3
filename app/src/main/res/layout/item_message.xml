@@ -2,69 +2,172 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
+    <!-- Mensaje propio -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/myMessageLayout"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginStart="63dp"
+        android:layout_marginTop="9dp"
+        android:layout_marginEnd="9dp"
+        android:layout_marginBottom="9dp"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
+        <!-- Texto propio -->
         <TextView
             android:id="@+id/myMessageTextView"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="64dp"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="8dp"
-            android:background="@drawable/corner"
             android:gravity="end"
             android:padding="8dp"
-            android:text="TextView"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
+            android:textColor="@color/negro"
+            android:background="@drawable/corner"
+            android:backgroundTint="@color/colort"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            tools:ignore="TextContrastCheck" />
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Imagen o Video propio -->
+        <FrameLayout
+            android:id="@+id/myFrameLayout"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/myMessageTextView"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <ImageView
+                android:id="@+id/myImageView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop" />
+
+            <ImageView
+                android:id="@+id/myPlayIcon"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center"
+                android:src="@drawable/play"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <!-- Archivo PDF o audio propio -->
+        <TextView
+            android:id="@+id/myFileButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:padding="8dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/myFrameLayout"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Hora y check propio -->
+        <TextView
+            android:id="@+id/tvHorar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="hora"
+            app:layout_constraintTop_toBottomOf="@id/myFileButton"
+            app:layout_constraintEnd_toStartOf="@id/tvCheck" />
+
+        <TextView
+            android:id="@+id/tvCheck"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✔"
+            android:layout_marginTop="4dp"
+            app:layout_constraintTop_toBottomOf="@id/myFileButton"
+            app:layout_constraintEnd_toEndOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
+    <!-- Mensaje del destinatario -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/otherMessageLayout"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="1dp"
-        android:layout_marginLeft="1dp"
-        android:layout_marginTop="1dp"
-        android:layout_marginEnd="1dp"
-        android:layout_marginRight="1dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="1.0"
+        android:layout_marginStart="9dp"
+        android:layout_marginTop="9dp"
+        android:layout_marginEnd="63dp"
+        android:layout_marginBottom="9dp"
+        app:layout_constraintTop_toBottomOf="@id/myMessageLayout"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/myMessageLayout"
-        app:layout_constraintVertical_bias="1.0">
+        app:layout_constraintEnd_toEndOf="parent">
 
+        <!-- Texto del destinatario -->
         <TextView
             android:id="@+id/othersMessageTextView"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="64dp"
-            android:layout_marginBottom="8dp"
-            android:background="@drawable/corne"
             android:padding="8dp"
-            android:text="TextView"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
+            android:background="@drawable/corne"
+            android:backgroundTint="@color/rojot"
+            android:textColor="@color/negro"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            tools:ignore="TextContrastCheck" />
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
+        <!-- Imagen o Video del destinatario -->
+        <FrameLayout
+            android:id="@+id/otherFrameLayout"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/othersMessageTextView"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <ImageView
+                android:id="@+id/otherImageView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop" />
+
+            <ImageView
+                android:id="@+id/otherPlayIcon"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center"
+                android:src="@drawable/play"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <!-- Archivo PDF o audio del destinatario -->
+        <TextView
+            android:id="@+id/otherFileButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:padding="8dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/otherFrameLayout"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Hora del destinatario -->
+        <TextView
+            android:id="@+id/tvHorad"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="hora"
+            app:layout_constraintTop_toBottomOf="@id/otherFileButton"
+            app:layout_constraintStart_toStartOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>
+
