@@ -23,13 +23,21 @@ class GridDrawingView @JvmOverloads constructor(
     private var agujeroX: Float = 5f
 
     // ----- Pinturas -----
-    private val paint = Paint().apply { color = Color.BLACK; strokeWidth = 2f }
-    private val textPaint = Paint().apply {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.BLACK
-        textSize = 30f
+        strokeWidth = 1f
+        style = Paint.Style.STROKE
+    }
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK
+        textSize = 24f
         textAlign = Paint.Align.CENTER
     }
-    private val cotaPaint = Paint().apply { color = Color.RED; strokeWidth = 2f }
+    private val cotaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.RED
+        strokeWidth = 1f
+        style = Paint.Style.STROKE
+    }
 
     // ----- Getters públicos -----
     fun getAnchoTotal()             = anchoTotal
@@ -41,13 +49,12 @@ class GridDrawingView @JvmOverloads constructor(
         if (value % 1.0 == 0.0) "%.0f".format(value) else "%.1f".format(value)
 
     /**
-     * Configura todos los parámetros de dibujo.
+     * Configura todos los parámetros de dibujo (sin límites de cantidad).
      */
     fun configurarParametros(
         anchoTotal: Float,
         altoTotal: Float,
         anchosColumnas: List<Float>,
-
         alturasFilasPorColumna: List<List<Float>>,
         bastidorH: Float = 0f,
         bastidorM: Float = 0f,
@@ -65,15 +72,20 @@ class GridDrawingView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // 1) Calculamos métricas generales
+        // 1) Métricas generales
         val m = calcularMetrics()
-        // 2) Dibujamos cuadrícula y obtenemos posiciones
+
+        // Grosor dinámico según escala
+        val grosor = (m.scale * 1.0f).coerceIn(0.5f, 2f)
+        paint.strokeWidth = grosor
+        cotaPaint.strokeWidth = max(0.75f, grosor * 0.9f)
+
+        // 2) Cuadrícula + posiciones
         val (posX, posYCols) = dibujarCuadricula(canvas, m)
-        // 3) Dibujamos agujeros y cotas dinámicas
+        // 3) Agujeros y cotas del bastidor
         dibujarAgujerosYCotas(canvas, m)
-        // 4) Dibujamos cotas generales de la cuadrícula
+        // 4) Cotas generales
         dibujarCotasGenerales(canvas, m, posX, posYCols)
-        // 5) En el futuro: dibujarEntalles(canvas, m), dibujarChapas(canvas, m), etc.
     }
 
     // ----- Estructura de datos internas -----
@@ -86,43 +98,74 @@ class GridDrawingView @JvmOverloads constructor(
         val gridHeight: Float,
         val scale: Float,
         val baseY: Float,
-        val alturaTxt: Float
+        val alturaTxt: Float,
+        // Bandas reservadas para cotas (evitan recortes)
+        val bandaIzq: Float,
+        val bandaDer: Float,
+        val bandaArr: Float,
+        val bandaAbj: Float
     )
+
 
     /**
      * Calcula márgenes, escala y posiciones base.
      */
     private fun calcularMetrics(): Metrics {
-        val vw = width.toFloat()
-        val vh = height.toFloat()
-        // Ajuste de texto
-        textPaint.textSize = (vw * 0.04f).coerceIn(12f, 30f)
+        val vw = width.toFloat().coerceAtLeast(1f)
+        val vh = height.toFloat().coerceAtLeast(1f)
+
+        // Tamaño de texto: mínimo 8f; el resto proporcional
+        val tsPropuesto = min(vw, vh) * 0.035f
+        textPaint.textSize = max(8f, tsPropuesto)
         val fm = textPaint.fontMetrics
         val hTxt = fm.descent - fm.ascent
-        // Márgenes dinámicos
-        val pctW = 0.1f; val pctH = 0.1f
-        var mL = (vw * pctW).coerceIn(20f, 100f)
-        var mR = (vw * pctW).coerceIn(20f, 100f)
-        var mT = (vh * pctH).coerceIn(20f, 100f)
-        var mB = (vh * pctH).coerceIn(20f, 100f)
-        mL = max(mL, hTxt + 20f); mR = max(mR, hTxt + 20f)
-        mT = max(mT, hTxt + 50f); mB = max(mB, hTxt + 50f)
-        // Área utilizable
-        val availW = vw - mL - mR
-        val availH = vh - mT - mB
-        // Escala
-        val totalCols = anchosColumnas.sum()
+
+        // Márgenes exteriores mínimos (del borde de la vista a cualquier cosa)
+        val mLext = max(hTxt * 0.25f + 4f, vw * 0.02f)
+        val mRext = max(hTxt * 0.25f + 4f, vw * 0.02f)
+        val mText = max(hTxt * 0.25f + 8f, vh * 0.02f)
+        val mBext = max(hTxt * 0.25f + 8f, vh * 0.02f)
+
+        // Offset “agradable” entre la rejilla y las cotas (ni pegado ni lejos)
+        val cOff = max(10f, hTxt * 0.35f)
+
+        // Bandas reservadas para las cotas (garantizan que no se recorten)
+        // - Izquierda: texto rotado (ancho ~ hTxt) + marcas (~10) + separación (cOff)
+        val bandaIzq = hTxt + 10f + cOff
+        // - Derecha: cotas de filas con texto rotado a la derecha
+        val bandaDer = hTxt + 10f + cOff
+        // - Arriba: cotas de columnas con texto normal
+        val bandaArr = hTxt + 10f + cOff
+        // - Abajo: cota de ancho total con texto
+        val bandaAbj = hTxt + 10f + cOff
+
+        // Área disponible **para la rejilla** descontando bandas + márgenes exteriores
+        val availW = (vw - mLext - mRext - bandaIzq - bandaDer).coerceAtLeast(1f)
+        val availH = (vh - mText - mBext - bandaArr - bandaAbj).coerceAtLeast(1f)
+
+        // Escala para la rejilla (con un pequeño factor de seguridad para evitar roces)
+        val totalCols = anchosColumnas.sum().coerceAtLeast(1e-3f)
         val scaleX = availW / totalCols
-        val scaleY = availH / altoTotal
-        val scale  = min(scaleX, scaleY)
-        // Posición centraday dimensiones
+        val scaleY = availH / max(altoTotal, 1e-3f)
+        val scaleRaw = min(scaleX, scaleY)
+        val factorSeguridad = 0.96f // encoge un poco la rejilla para que siempre “respire”
+        val scale = scaleRaw * factorSeguridad
+
+        // Dimensiones finales de la rejilla
         val gW = totalCols * scale
         val gH = altoTotal * scale
-        val left = mL + (availW - gW) / 2f
-        val top  = mT + (availH - gH) / 2f
+
+        // Posición de la rejilla: centrada dentro del “cajón” útil
+        val left = mLext + bandaIzq + (availW - gW) / 2f
+        val top  = mText + bandaArr + (availH - gH) / 2f
         val baseY = top + gH
-        return Metrics(vw, vh, left, top, gW, gH, scale, baseY, hTxt)
+
+        return Metrics(
+            vw, vh, left, top, gW, gH, scale, baseY, hTxt,
+            bandaIzq, bandaDer, bandaArr, bandaAbj
+        )
     }
+
 
     /**
      * Dibuja las líneas de la cuadrícula y retorna las listas de posiciones X y Y.
@@ -133,14 +176,17 @@ class GridDrawingView @JvmOverloads constructor(
     ): Pair<List<Float>, List<List<Float>>> {
         val posX = mutableListOf<Float>()
         val posYcols = mutableListOf<MutableList<Float>>()
+
         var x = m.left
         posX.add(x)
+
         anchosColumnas.forEachIndexed { i, anchoCm ->
             val wPx = anchoCm * m.scale
-            val filasCm = alturasFilasPorColumna[i]
+            val filasCm = alturasFilasPorColumna.getOrNull(i) ?: emptyList<Float>()
             var y = m.top
             val posY = mutableListOf(y)
-            // horizontales
+
+            // horizontales internas
             filasCm.forEach { hCm ->
                 canvas.drawLine(x, y, x + wPx, y, paint)
                 y += hCm * m.scale
@@ -149,6 +195,7 @@ class GridDrawingView @JvmOverloads constructor(
             // última horizontal
             canvas.drawLine(x, y, x + wPx, y, paint)
             posYcols.add(posY)
+
             // línea vertical
             canvas.drawLine(x, m.top, x, m.top + m.gridHeight, paint)
             x += wPx
@@ -156,6 +203,7 @@ class GridDrawingView @JvmOverloads constructor(
         }
         // última vertical
         canvas.drawLine(x, m.top, x, m.top + m.gridHeight, paint)
+
         return posX to posYcols
     }
 
@@ -166,14 +214,15 @@ class GridDrawingView @JvmOverloads constructor(
         canvas: Canvas,
         m: Metrics
     ) {
-        val radioPx = 3.6f * m.scale / 2f
+        val radioPx = max(1f, 3.6f * m.scale / 2f)
         val cx = m.left + agujeroX * m.scale
-        // Distancias en cm
+
         val izq    = agujeroX
         val der    = anchoTotal - agujeroX
         val menor  = min(izq, der)
         val xLado  = if (izq <= der) m.left else m.left + m.gridWidth
         val sepPx  = radioPx + 10f
+
         if (bastidorH > 0f) {
             if (bastidorM > 0f) {
                 val h1 = bastidorH - bastidorM/2f
@@ -200,7 +249,7 @@ class GridDrawingView @JvmOverloads constructor(
     }
 
     /**
-     * Dibuja una cota vertical con marcas y texto.
+     * Cota vertical con marcas y texto.
      */
     private fun dibujarCotaVertical(
         canvas: Canvas,
@@ -219,7 +268,7 @@ class GridDrawingView @JvmOverloads constructor(
     }
 
     /**
-     * Dibuja una cota horizontal con marcas y texto.
+     * Cota horizontal con marcas y texto.
      */
     private fun dibujarCotaHorizontal(
         canvas: Canvas,
@@ -235,7 +284,8 @@ class GridDrawingView @JvmOverloads constructor(
     }
 
     /**
-     * Dibuja las cotas generales (ancho y alto total, columnas, filas).
+     * Dibuja las cotas generales (ancho y alto total, columnas, filas),
+     * pegadas al diseño y con guardas para no salir de la vista.
      */
     private fun dibujarCotasGenerales(
         canvas: Canvas,
@@ -243,42 +293,41 @@ class GridDrawingView @JvmOverloads constructor(
         posicionesX: List<Float>,
         posicionesY: List<List<Float>>
     ) {
-        val cOff = 20f
-        // Cota ancho total (abajo)
-        var yCotaA = m.top + m.gridHeight + cOff + m.alturaTxt
-        if (yCotaA + m.alturaTxt > m.viewHeight)
-            yCotaA = m.viewHeight - m.alturaTxt - 10f
+        // Offset moderado (más que antes), pero con bandas ya reservadas no habrá recortes
+        val cOff = max(10f, m.alturaTxt * 0.35f)
+
+        // ---------- Cota de ANCHO total (abajo), dentro de la banda inferior ----------
+        val yCotaA = m.top + m.gridHeight + cOff
         canvas.drawLine(m.left, yCotaA, m.left + m.gridWidth, yCotaA, cotaPaint)
         canvas.drawLine(m.left, yCotaA - 10f, m.left, yCotaA + 10f, cotaPaint)
         canvas.drawLine(m.left + m.gridWidth, yCotaA - 10f, m.left + m.gridWidth, yCotaA + 10f, cotaPaint)
-        canvas.drawText(df(anchoTotal), m.left + m.gridWidth/2, yCotaA + m.alturaTxt, textPaint)
-        // Cota alto total (izquierda)
-        var xCotaB = m.left - cOff - m.alturaTxt
-        if (xCotaB - m.alturaTxt < 0f)
-            xCotaB = m.alturaTxt + 10f
+        canvas.drawText(df(anchoTotal), m.left + m.gridWidth / 2f, yCotaA + m.alturaTxt, textPaint)
+
+        // ---------- Cota de ALTO total (izquierda), dentro de la banda izquierda ----------
+        val xCotaB = m.left - cOff
         canvas.drawLine(xCotaB, m.top, xCotaB, m.top + m.gridHeight, cotaPaint)
         canvas.drawLine(xCotaB - 10f, m.top, xCotaB + 10f, m.top, cotaPaint)
         canvas.drawLine(xCotaB - 10f, m.top + m.gridHeight, xCotaB + 10f, m.top + m.gridHeight, cotaPaint)
         canvas.save()
-        canvas.rotate(-90f, xCotaB - m.alturaTxt, m.top + m.gridHeight/2)
-        canvas.drawText(df(altoTotal), xCotaB - m.alturaTxt, m.top + m.gridHeight/2 + m.alturaTxt/2, textPaint)
+        canvas.rotate(-90f, xCotaB - m.alturaTxt, m.top + m.gridHeight / 2f)
+        canvas.drawText(df(altoTotal), xCotaB - m.alturaTxt, m.top + m.gridHeight / 2f + m.alturaTxt / 2f, textPaint)
         canvas.restore()
-        // Cotas de columnas arriba
+
+        // ---------- Cotas de columnas (arriba), dentro de la banda superior ----------
+        val yC = m.top - cOff
         for (i in anchosColumnas.indices) {
             val xi = posicionesX[i]
             val xf = posicionesX[i + 1]
-            var yC = m.top - cOff
-            if (yC - m.alturaTxt < 0f) yC = m.alturaTxt + 10f
             canvas.drawLine(xi, yC, xf, yC, cotaPaint)
             canvas.drawLine(xi, yC - 10f, xi, yC + 10f, cotaPaint)
             canvas.drawLine(xf, yC - 10f, xf, yC + 10f, cotaPaint)
-            canvas.drawText(df(anchosColumnas[i]), (xi + xf)/2, yC - 5f, textPaint)
+            canvas.drawText(df(anchosColumnas[i]), (xi + xf) / 2f, yC - 5f, textPaint)
         }
-        // Cotas de filas a la derecha
+
+        // ---------- Cotas de filas (derecha), dentro de la banda derecha ----------
         for (i in anchosColumnas.indices) {
             val ys = posicionesY[i]
-            var xC = posicionesX[i + 1] + cOff
-            if (xC + m.alturaTxt > m.viewWidth) xC = m.viewWidth - m.alturaTxt - 10f
+            val xC = posicionesX[i + 1] + cOff
             for (j in 0 until ys.size - 1) {
                 val y0 = ys[j]
                 val y1 = ys[j + 1]
@@ -286,19 +335,12 @@ class GridDrawingView @JvmOverloads constructor(
                 canvas.drawLine(xC - 10f, y0, xC + 10f, y0, cotaPaint)
                 canvas.drawLine(xC - 10f, y1, xC + 10f, y1, cotaPaint)
                 canvas.save()
-                canvas.rotate(-90f, xC + m.alturaTxt, (y0 + y1) / 2)
-                canvas.drawText(df(alturasFilasPorColumna[i][j]), xC + m.alturaTxt, (y0 + y1)/2 + m.alturaTxt/2, textPaint)
+                canvas.rotate(-90f, xC + m.alturaTxt, (y0 + y1) / 2f)
+                canvas.drawText(df(alturasFilasPorColumna[i][j]), xC + m.alturaTxt, (y0 + y1) / 2f + m.alturaTxt / 2f, textPaint)
                 canvas.restore()
             }
         }
     }
+
+
 }
-
-
-
-
-
-
-
-
-

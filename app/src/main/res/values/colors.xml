@@ -14,6 +14,7 @@
     <color name="fucsia">#FF0066</color>
     <color name="amarillo">#FFCC00</color>
     <color name="naranja">#F47D2E</color>
+    <color name="naranjat">#45F47D2E</color>
     <color name="gris">#4D4D4D</color>
     <color name="grisT">#CE4D4D4D</color>
     <color name="violeta">#CC33FF</color>
@@ -25,6 +26,7 @@
     <color name="azul2">#0037FF</color>
     <color name="negro">#000</color>
     <color name="negroT">#CF000000</color>
+    <color name="verdet">#3768B547</color>
     <color name="marron">#CF493434</color>
     <color name="aluminio">#CCCCCC</color>
 </resources>

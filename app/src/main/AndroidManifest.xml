@@ -40,19 +40,77 @@
         tools:ignore="AllowBackup,HardcodedDebugMode"
         tools:targetApi="p">
         <activity
+            android:name=".clientes.GestionClientesActivity"
+            android:label="Gestión de Clientes"
+            android:parentActivityName=".MainActivity"
+            android:exported="false" />
+        <activity
+            android:name="crystal.crystal.productos.GestionProductosActivity"
+            android:label="Gestión de Productos"
+            android:screenOrientation="portrait"/>
+
+        <activity
+            android:name=".comprobantes.DisenoTicketActivity"
+            android:label="Diseño de Ticket"
+            android:parentActivityName=".MainActivity"
+            android:exported="true" />
+        <activity
+            android:name=".registro.TerminalLoginActivity"
+            android:exported="false" />
+        <activity
+            android:name=".registro.GestionDispositivosActivity"
+            android:exported="false" />
+        <activity
+            android:name=".wallet.ReclamoRecargaActivity"
+            android:label="Reclamar Recarga"
+            android:parentActivityName=".registro.WalletActivity" />
+        <activity
+            android:name=".registro.AyudaActivity"
+            android:exported="false" />
+        <activity
+            android:name=".registro.PinAuthActivity"
+            android:exported="false" /> <!-- 🔹 WalletActivity: ahora puede recibir imágenes compartidas -->
+        <activity
+            android:name=".registro.WalletActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+
+            <!-- Para recibir comprobantes desde Yape / galería con "Compartir" -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".taller.puerta.PuertasActivity"
+            android:exported="false" />
+        <activity
+            android:name=".dictado.DictadoActivity"
+            android:exported="false"
+            android:label="Dictado de Medidas"
+            android:screenOrientation="portrait"
+            android:theme="@style/AppTheme" />
+        <activity
             android:name=".Diseno.BarandaActivity"
             android:exported="false" />
         <activity
+            android:name=".Diseno.nova.DisenoNovaActivity"
+            android:exported="false"
+            android:label="Diseño Nova" />
+        <activity
             android:name=".red.VisorArchivoActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ocr.OcrActivity"
             android:exported="false" />
         <activity
             android:name=".taller.PDuchaActivity"
             android:exported="false" />
         <activity
             android:name=".registro.PlanSelectionActivity"
-            android:exported="false" />
-        <activity
-            android:name=".registro.PhoneLoginActivity"
             android:exported="false" />
         <activity
             android:name=".taller.MamparaVidrioActivity"
@@ -68,8 +126,9 @@
             android:name=".taller.Serie20"
             android:exported="false" />
         <activity
-            android:name=".recargar.RecargaA"
-            android:exported="false" />
+            android:name=".registro.RecargaAdapter"
+            android:exported="false"
+            tools:ignore="Instantiatable" />
         <activity
             android:name=".registro.InicioActivity"
             android:exported="false" />
@@ -78,6 +137,9 @@
             android:exported="false" />
         <activity
             android:name=".optimizadores.OptimizadosActivity"
+            android:exported="false" />
+        <activity
+            android:name=".optimizadores.corte.ResultadoOptimizacionActivity"
             android:exported="false" />
         <activity
             android:name=".BaulActivity"
@@ -92,7 +154,7 @@
             android:name=".red.ListChatActivity"
             android:exported="false" />
         <activity
-            android:name=".optimizadores.Corte"
+            android:name=".optimizadores.corte.CorteActivity"
             android:exported="false" />
         <activity
             android:name=".taller.PivotAl"
@@ -106,7 +168,7 @@
         <activity
             android:name=".optimizadores.Ncurvos"
             android:exported="false" />
-        <activity android:name=".FichaActivity" />
+        <activity android:name=".taller.FichaActivity" />
         <activity android:name=".registro.Registro" />
         <activity android:name=".taller.Vitroven" />
         <activity
@@ -114,27 +176,26 @@
             android:screenOrientation="portrait"
             tools:ignore="DiscouragedApi,LockedOrientationActivity" />
         <activity
-            android:name=".catalogo.Catalogo"
+            android:name=".catalogo.CatalogoActivity"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
+        <activity
+            android:name=".catalogo.Fotos"
+            android:exported="false" />
         <activity
             android:name=".taller.MamparaPaflon"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
         <activity
-            android:name=".taller.NovaApa"
+            android:name=".taller.nova.NovaApa"
             android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity" />
+            tools:ignore="DiscouragedApi,LockedOrientationActivity" />
         <activity
-            android:name=".taller.NovaIna"
+            android:name=".taller.nova.NovaIna"
             android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity" />
-        <activity
-            android:name=".taller.Puertas"
-            android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity" />
+            tools:ignore="DiscouragedApi,LockedOrientationActivity" />
         <activity android:name=".taller.Taller" />
-        <activity android:name=".ListaActivity" />
+        <activity android:name=".datos.ListaActivity" />
         <activity
             android:name=".VendePapa"
             android:screenOrientation="portrait"
@@ -149,20 +210,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
         <activity
             android:name=".MainActivity"
-            android:screenOrientation="portrait"
             android:exported="true"
             android:launchMode="singleTop"
+            android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity,AppLinkUrlError">
-
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
+
                 <category android:name="android.intent.category.DEFAULT" />
+
                 <data android:mimeType="application/json" />
             </intent-filter>
-
         </activity>
 
         <provider
@@ -174,7 +234,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-
     </application>
 
 </manifest>

@@ -6,114 +6,141 @@
     android:padding="16dp"
     tools:context=".catalogo.SubirActivity">
 
-    <TextView
-        android:id="@+id/textViewTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Subir Imagen"
-        android:textSize="24sp"
-        android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true" />
-
-    <RelativeLayout
-        android:id="@+id/lyImagen"
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/textViewTitle">
+        android:layout_height="match_parent">
 
-        <ImageView
-            android:id="@+id/imageViewPreview"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:orientation="vertical" >
 
-            android:layout_marginTop="12dp"
-            android:adjustViewBounds="true"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_vitrovenvf"
-            tools:ignore="ContentDescription"/>
-
-        <FrameLayout
-            android:id="@+id/frameLayoutEdit"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_alignBottom="@id/imageViewPreview"
-            android:background="#80000000"
-            android:visibility="invisible">
-
-            <LinearLayout
+            <RelativeLayout
+                android:id="@+id/lyImagen"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent">
+                android:layout_height="wrap_content">
+
                 <ImageView
-                    android:id="@+id/imageView"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/imgVistaPrevia"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:background="@drawable/ic_dormido"
-                    app:srcCompat="@android:drawable/ic_menu_edit"
+
+                    android:adjustViewBounds="true"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_vitrovenvf"
                     tools:ignore="ContentDescription" />
 
-                <ImageView
-                    android:id="@+id/imageView2"
-                    android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    app:srcCompat="?attr/actionModeCutDrawable"
-                    tools:ignore="ContentDescription" />
-            </LinearLayout>
+                <FrameLayout
+                    android:id="@+id/frameLayoutEdit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_alignBottom="@id/imgVistaPrevia"
+                    android:background="#80000000"
+                    android:visibility="invisible">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+
+                        <ImageView
+                            android:id="@+id/imageView"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:background="@drawable/ic_dormido"
+                            app:srcCompat="@android:drawable/ic_menu_edit"
+                            tools:ignore="ContentDescription" />
+
+                        <ImageView
+                            android:id="@+id/imageView2"
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            app:srcCompat="?attr/actionModeCutDrawable"
+                            tools:ignore="ContentDescription" />
+                    </LinearLayout>
 
 
+                </FrameLayout>
 
-        </FrameLayout>
+            </RelativeLayout>
 
-</RelativeLayout>
+            <Button
+                android:id="@+id/btElegir"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Elegir Imagen"
+                android:layout_gravity="center"/>
 
-    <Button
-        android:id="@+id/buttonChooseImage"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/lyImagen"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="16dp"
-        android:text="Elegir Imagen" />
+            <Spinner
+                android:id="@+id/spinnerWindowType"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:entries="@array/window_types"
+                android:prompt="@string/choose_window_type"
+                android:visibility="gone"
+                tools:ignore="TouchTargetSizeCheck" />
 
-    <Spinner
-        android:id="@+id/spinnerWindowType"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/buttonChooseImage"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="16dp"
-        android:entries="@array/window_types"
-        android:prompt="@string/choose_window_type"
-        tools:ignore="TouchTargetSizeCheck" />
+            <Spinner
+                android:id="@+id/spinnerMaterial"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:entries="@array/window_materials"
+                android:prompt="@string/choose_window_material"
+                android:visibility="gone"
+                tools:ignore="SpeakableTextPresentCheck,TouchTargetSizeCheck" />
 
-    <Spinner
-        android:id="@+id/spinnerMaterial"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/spinnerWindowType"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="16dp"
-        android:entries="@array/window_materials"
-        android:prompt="@string/choose_window_material"
-        tools:ignore="SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+            <EditText
+                android:id="@+id/editTextSize"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Tamaño de la ventana (en metros)"
+                android:importantForAutofill="no"
+                android:visibility="gone"
+                tools:ignore="TextFields,TouchTargetSizeCheck" />
 
-    <EditText
-        android:id="@+id/editTextSize"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/spinnerMaterial"
-        android:layout_marginTop="16dp"
-        android:hint="Tamaño de la ventana (en metros)"
-        android:importantForAutofill="no"
-        tools:ignore="TextFields,TouchTargetSizeCheck" />
+            <TextView
+                android:id="@+id/tvCategoriaSeleccionada"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="8dp"
+                android:layout_marginTop="-468dp"
+                android:background="#E3F2FD"
+                android:padding="12dp"
+                android:text="Categoría: Ninguna"
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/buttonUpload"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/editTextSize"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="16dp"
-        android:text="Subir Imagen" />
+            <Button
+                android:id="@+id/btnSubirImagen"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="8dp"
+                android:layout_marginTop="-46dp"
+                android:backgroundTint="#4CAF50"
+                android:text="Subir Imagen" />
+
+            <ProgressBar
+                android:id="@+id/progressBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_margin="8dp"
+                android:layout_marginEnd="395dp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnVolver"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="16dp"
+                android:layout_marginTop="-247dp"
+                android:layout_marginBottom="360dp"
+                android:text="Volver al Catálogo" />
+        </LinearLayout>
+    </ScrollView>
 
 </RelativeLayout>

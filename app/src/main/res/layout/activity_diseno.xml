@@ -13,13 +13,13 @@
         android:id="@+id/lyTitulo"
         android:layout_width="144dp"
         android:layout_height="270dp"
+        android:background="@color/blanco"
         android:elevation="3dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        android:background="@color/blanco"
-        android:visibility="gone">
+        app:layout_constraintTop_toTopOf="parent">
 
         <ScrollView
             android:id="@+id/svTitulo"

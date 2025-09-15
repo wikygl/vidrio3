@@ -241,70 +241,70 @@ class Vitroven : AppCompatActivity() {
 
     //FUNCIONES DE ARCHIVO
     private fun archivarMapas() {
-        ListaCasilla.incrementarContadorVentanas()
+        ListaCasilla.incrementarContadorVentanas(this)
 
         // Caso especial para txReferencias
         if (esValido(binding.lyReferencias)) {
-            ListaCasilla.procesarReferencias(binding.txReferencias, binding.tvReferencias, mapListas) // referencias
+            ListaCasilla.procesarReferencias(this,binding.txReferencias, binding.tvReferencias, mapListas) // referencias
         }
         // Usar la clase ListaCasilla para procesar y archivar solo los TextView válidos
 
         if (esValido(binding.lyJamba)){
-            ListaCasilla.procesarArchivar(binding.txJamba, binding.tvJamba, mapListas) // jamba
+            ListaCasilla.procesarArchivar(this,binding.txJamba, binding.tvJamba, mapListas) // jamba
         }
 
         if (esValido(binding.lyPlatina)){
-            ListaCasilla.procesarArchivar(binding.txPlatina, binding.tvPlatina, mapListas) // platina
+            ListaCasilla.procesarArchivar(this,binding.txPlatina, binding.tvPlatina, mapListas) // platina
         }
 
         if (esValido(binding.lyUmarco)) {
-            ListaCasilla.procesarArchivar(binding.txU, binding.tvU, mapListas) // u
+            ListaCasilla.procesarArchivar(this,binding.txU, binding.tvU, mapListas) // u
         }
 
         if (esValido(binding.lyTubo)) {
-            ListaCasilla.procesarArchivar(binding.txTubo, binding.txTubo, mapListas) // tubo
+            ListaCasilla.procesarArchivar(this,binding.txTubo, binding.txTubo, mapListas) // tubo
         }
 
         if (esValido(binding.lyTope)) {
-            ListaCasilla.procesarArchivar(binding.txTope, binding.tvTope, mapListas) // tope
+            ListaCasilla.procesarArchivar(this,binding.txTope, binding.tvTope, mapListas) // tope
         }
 
         if (esValido(binding.lyVidrio)) {
-            ListaCasilla.procesarArchivar(binding.txVidrio, binding.tvVidrio, mapListas) // vidrios
+            ListaCasilla.procesarArchivar(this,binding.txVidrio, binding.tvVidrio, mapListas) // vidrios
         }
         if (esValido(binding.lyClip)){
-            ListaCasilla.procesarArchivar(binding.txClip,binding.tvClip,mapListas) // clips
+            ListaCasilla.procesarArchivar(this,binding.txClip,binding.tvClip,mapListas) // clips
         }
         //DATOS DE REFERENCIA
         if (esValido(binding.lyClient)) {
-            ListaCasilla.procesarArchivar(binding.tvC, binding.txC, mapListas) // cliente
+            ListaCasilla.procesarArchivar(this,binding.tvC, binding.txC, mapListas) // cliente
         }
         if (esValido(binding.lyAncho)) {
-            ListaCasilla.procesarArchivar(binding.tvAncho, binding.txAncho, mapListas) // ancho
+            ListaCasilla.procesarArchivar(this,binding.tvAncho, binding.txAncho, mapListas) // ancho
         }
         if (esValido(binding.lyAlto)) {
-            ListaCasilla.procesarArchivar(binding.tvAlto, binding.txAlto, mapListas) // alto
+            ListaCasilla.procesarArchivar(this,binding.tvAlto, binding.txAlto, mapListas) // alto
         }
         if (esValido(binding.lyPuente)) {
-            ListaCasilla.procesarArchivar(binding.tvPuente, binding.txPuente, mapListas) // altura Puente
+            ListaCasilla.procesarArchivar(this,binding.tvPuente, binding.txPuente, mapListas) // altura Puente
         }
         if (esValido(binding.lyDivisiones)) {
-            ListaCasilla.procesarArchivar(binding.tvDivisiones, binding.txDivisiones, mapListas) // divisiones
+            ListaCasilla.procesarArchivar(this,binding.tvDivisiones, binding.txDivisiones, mapListas) // divisiones
         }
         if (esValido(binding.lyFijos)) {
-            ListaCasilla.procesarArchivar(binding.tvFijos, binding.txFijos, mapListas) // nFijos
+            ListaCasilla.procesarArchivar(this,binding.tvFijos, binding.txFijos, mapListas) // nFijos
         }
         if (esValido(binding.lyCorredizas)) {
-            ListaCasilla.procesarArchivar(binding.tvCorredizas, binding.txCorredizas, mapListas) // nCorredizas
+            ListaCasilla.procesarArchivar(this,binding.tvCorredizas, binding.txCorredizas, mapListas) // nCorredizas
         }
         if (esValido(binding.lyDiseno)) {
-            ListaCasilla.procesarArchivar(binding.txDiseno, binding.tvDiseno, mapListas) // diseño
+            ListaCasilla.procesarArchivar(this,binding.txDiseno, binding.tvDiseno, mapListas) // diseño
         }
         if (esValido(binding.lyGrados)) {
-            ListaCasilla.procesarArchivar(binding.tvGrados, binding.txGrados, mapListas) // grados
+            ListaCasilla.procesarArchivar(this,binding.tvGrados, binding.txGrados, mapListas) // grados
         }
         if(esValido(binding.lyTipo)){
-            ListaCasilla.procesarArchivar(binding.tvTipo,binding.txTipo,mapListas) // tipo de ventana
+            ListaCasilla.procesarArchivar(this,binding.tvTipo,binding.txTipo,mapListas) // tipo de ventana
         }
 
         // Aquí puedes hacer algo con `mapListas`, como mostrarlo o guardarlo

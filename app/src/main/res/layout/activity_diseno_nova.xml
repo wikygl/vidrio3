@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/contenedorPrincipal"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/sombra">
+
+    <crystal.crystal.Diseno.nova.VistaDiseno
+        android:id="@+id/vistaDiseno"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:contentDescription="Lienzo de diseño"
+        app:layout_constraintBottom_toTopOf="@+id/botonEditar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Overlay de controles flotantes (5 botones) -->
+    <FrameLayout
+        android:id="@+id/overlayControles"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toBottomOf="@+id/vistaDiseno"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/columnaBotones"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <Button
+                android:id="@+id/btnAgregarFranja"
+                android:layout_width="63dp"
+                android:layout_height="63dp"
+                android:backgroundTint="@color/verde"
+                android:text="＋↑"
+                android:textColor="@color/blanco"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:layout_conversion_absoluteHeight="56dp"
+                tools:layout_conversion_absoluteWidth="56dp" />
+
+            <Button
+                android:id="@+id/btnQuitarFranja"
+                android:layout_width="63dp"
+                android:layout_height="63dp"
+                android:backgroundTint="@color/rojo"
+                android:text="−↑"
+                android:textColor="@color/blanco"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/btnAgregarFranja"
+                tools:layout_conversion_absoluteHeight="56dp"
+                tools:layout_conversion_absoluteWidth="56dp" />
+
+            <Button
+                android:id="@+id/btnMostrarOcultar"
+                android:layout_width="63dp"
+                android:layout_height="63dp"
+                android:layout_gravity="end|bottom"
+                android:alpha="0.95"
+                android:backgroundTint="@color/azul"
+                android:elevation="8dp"
+                android:text="■"
+                android:textColor="@color/blanco"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/btnQuitarFranja" />
+
+            <Button
+                android:id="@+id/btnQuitarModulo"
+                android:layout_width="63dp"
+                android:layout_height="63dp"
+                android:backgroundTint="@color/rojo"
+                android:text="−→"
+                android:textColor="@color/blanco"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toEndOf="@+id/btnMostrarOcultar"
+                tools:layout_conversion_absoluteHeight="56dp"
+                tools:layout_conversion_absoluteWidth="56dp" />
+
+            <Button
+                android:id="@+id/btnAgregarModulo"
+                android:layout_width="63dp"
+                android:layout_height="63dp"
+                android:backgroundTint="@color/verde"
+                android:text="＋→"
+                android:textColor="@color/blanco"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toEndOf="@+id/btnQuitarModulo"
+                tools:layout_conversion_absoluteHeight="56dp"
+                tools:layout_conversion_absoluteWidth="56dp" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </FrameLayout>
+
+
+    <Button
+        android:id="@+id/botonEditar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:backgroundTint="@color/azul"
+        android:text="Editar"
+        android:textColor="@color/blanco"
+        app:layout_constraintBottom_toBottomOf="parent"
+        tools:layout_editor_absoluteX="16dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -416,19 +416,36 @@
                             android:orientation="vertical">
 
                             <LinearLayout
+                                android:id="@+id/lyReferencias"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
+                                android:background="@drawable/cornere"
                                 android:orientation="vertical">
 
                                 <TextView
-                                    android:id="@+id/referencias_nfcfi"
+                                    android:id="@+id/tvReferencias"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_marginStart="4.5dp"
                                     android:layout_marginEnd="4.5dp"
                                     android:layout_weight="1"
                                     android:gravity="start"
+                                    android:text="@string/referencias"
+                                    android:visibility="gone"
                                     tools:ignore="InefficientWeight" />
+
+                                <TextView
+                                    android:id="@+id/txReferencias"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:layout_weight="1"
+                                    android:gravity="start"
+                                    android:paddingBottom="1dp"
+                                    android:paddingTop="1dp"
+                                    tools:ignore="InefficientWeight" />
+
 
                             </LinearLayout>
 

@@ -11,9 +11,12 @@ import android.graphics.RectF
 import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
@@ -22,8 +25,12 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import crystal.crystal.Diseno.DisenoActivity
-import crystal.crystal.ListaActivity
 import crystal.crystal.R
+import crystal.crystal.casilla.DialogosProyecto
+import crystal.crystal.casilla.ListaCasilla
+import crystal.crystal.casilla.MapStorage
+import crystal.crystal.casilla.ProyectoManager
+import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityPuertaPanoBinding
 import java.io.File
 import java.io.FileOutputStream
@@ -40,12 +47,16 @@ class Puertas : AppCompatActivity() {
     private val marco = 2.2f
     private val bastidor = 8.25f
     private val unoMedio = 3.8f
+    private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
 
     private var client = ""
     private var indice = 0
     private var puertaActual: Puerta? = null
     private var varianteSeleccionada: String = "Mari h"
     private lateinit var binding: ActivityPuertaPanoBinding
+
+    // ==================== NUEVAS VARIABLES PARA SISTEMA DE PROYECTOS ====================
+    private lateinit var proyectoCallback: DialogosProyecto.ProyectoCallback
 
     @RequiresApi(Build.VERSION_CODES.O)
     @SuppressLint("SetTextI18n")
@@ -54,10 +65,31 @@ class Puertas : AppCompatActivity() {
         binding = ActivityPuertaPanoBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // ==================== CONFIGURACIÓN DEL SISTEMA DE PROYECTOS ====================
+
+        // Inicializar el manager de proyectos
+        ProyectoManager.inicializarDesdeStorage(this)
+
+        // Configurar callback para cambios de proyecto
+        proyectoCallback = ProyectoUIHelper.crearCallbackConActualizacionUI(
+            context = this,
+            textViewProyecto = binding.tvProyectoActivo, // Necesitas agregar este TextView al layout
+            activity = this
+        )
+
+        // Verificar si hay proyecto activo al inicio
+        if (!ProyectoManager.hayProyectoActivo()) {
+            DialogosProyecto.mostrarDialogoGestionProyectos(this, proyectoCallback)
+        }
+
+        // Procesar proyecto enviado desde MainActivity si existe
+        procesarIntentProyecto(intent)
+
+        // ==================== CONFIGURACIÓN ORIGINAL ====================
+
         // Inicializa la vista con el primer elemento de listaPuertas y el cliente (si existe)
         indice = 0
         cliente()
-        // O también puedes llamar a tipos() y luego a cliente(), según el orden deseado
 
         // Configura otros listeners, por ejemplo, para cambiar de puerta al hacer clic en ivModelo
         binding.ivModelo.setOnClickListener {
@@ -67,26 +99,28 @@ class Puertas : AppCompatActivity() {
             }
         }
 
-        // Llama a la función que configura el Spinner (u otras funciones)
-
         mostrarVariantes()
 
+        // ==================== LISTENERS MODIFICADOS CON VERIFICACIÓN DE PROYECTO ====================
+
         binding.btCalcular.setOnClickListener {
+            // Verificar proyecto activo antes de calcular
+            if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) {
+                return@setOnClickListener
+            }
+
             try {
                 val marcop = binding.etMed2.text.toString().toFloat()
 
                 //OPCIONES DE VISIBILIDAD
-
                 modelos()
                 panos()
                 array()
 
                 // MATERIALES
-
                 binding.tvMarco.text = "${df1(marcop)} = 2\n${df1(marcoSuperior())} = 1"
 
                 paflonRes()
-
                 junkillos()
 
                 binding.tvTope.text = "${df1(marcoSuperior())} = 1\n${df1(hPuente())} = 2"
@@ -124,58 +158,140 @@ class Puertas : AppCompatActivity() {
                 Toast.makeText(this, "Ingrese dato válido", Toast.LENGTH_SHORT).show()
             }
         }
-        binding.btArchivar.setOnClickListener {
 
-            if (binding.etMed1.text.isNotEmpty()) {
-                val paquete = Bundle().apply {
-                    putString("mat", binding.tvMarco.toString())
-                    putString("res", binding.tvMarco.text.toString())
-                }
-                val intent = Intent(this, ListaActivity::class.java)
-                intent.putExtras(paquete)
-                startActivity(intent)
+        binding.btArchivar.setOnClickListener{
+            if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) {
+                return@setOnClickListener
             }
-            startActivity(
-                Intent(this, ListaActivity::class.java).putExtra(
-                    "monto",
-                    binding.tvMarco.text.toString()
-                )
-            )
-
-            startActivity(
-                Intent(this, ListaActivity::class.java).putExtra(
-                    "monto",
-                    binding.tvPaflon.text.toString()
-                )
-            )
-
-            startActivity(
-                Intent(this, ListaActivity::class.java).putExtra(
-                    "monto",
-                    binding.tvJunkillo.text.toString()
-                )
-            )
-
-            startActivity(
-                Intent(this, ListaActivity::class.java).putExtra(
-                    "monto",
-                    binding.tvTope.text.toString()
-                )
-            )
-
-            startActivity(
-                Intent(this, ListaActivity::class.java).putExtra(
-                    "monto",
-                    binding.tvVidrios.text.toString()
-                )
-            )
+            if (binding.etMed1.text.toString()!=""){archivarMapas()
+                Toast.makeText(this, "Archivado", Toast.LENGTH_SHORT).show()}
+            else{
+                Toast.makeText(this, "Haz nuevo cálculo", Toast.LENGTH_SHORT).show()
+            }
+            binding.etMed1.setText("")
+            binding.etMed2.setText("")
         }
+
+        binding.btArchivar.setOnLongClickListener {
+            if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) {
+                return@setOnLongClickListener true
+            }
+
+            // El guardado ahora usa automáticamente el proyecto activo
+            MapStorage.guardarMap(this, mapListas)
+            Toast.makeText(this, "Map guardado en proyecto: ${ProyectoManager.getProyectoActivo()}", Toast.LENGTH_SHORT).show()
+
+            // Actualizar el visor del proyecto
+            ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+            true
+        }
+
         binding.ivModelo.setOnLongClickListener {
             startActivity(Intent(this, DisenoActivity::class.java))
             true
         }
-
     }
+
+    // ==================== NUEVO MENÚ DE OPCIONES ====================
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menu?.let { ProyectoUIHelper.agregarOpcionesMenuProyecto(it) }
+        return super.onCreateOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        val manejado = ProyectoUIHelper.manejarSeleccionMenu(
+            context = this,
+            itemId = item.itemId,
+            callback = proyectoCallback,
+            onProyectoCambiado = {
+                ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+            }
+        )
+
+        return if (manejado) true else super.onOptionsItemSelected(item)
+    }
+
+    // ==================== FUNCIONES PARA RECIBIR PROYECTO DESDE MAINACTIVITY ====================
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        procesarIntentProyecto(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+    }
+
+    private fun procesarIntentProyecto(intent: Intent) {
+        val nombreProyecto = intent.getStringExtra("proyecto_nombre")
+        val crearNuevo = intent.getBooleanExtra("crear_proyecto", false)
+        val descripcionProyecto = intent.getStringExtra("proyecto_descripcion") ?: ""
+
+        if (crearNuevo && !nombreProyecto.isNullOrEmpty()) {
+            if (MapStorage.crearProyecto(this, nombreProyecto, descripcionProyecto)) {
+                ProyectoManager.setProyectoActivo(this, nombreProyecto)
+                ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+                Toast.makeText(this, "Proyecto '$nombreProyecto' creado y activado", Toast.LENGTH_SHORT).show()
+            }
+        } else if (!nombreProyecto.isNullOrEmpty()) {
+            if (MapStorage.existeProyecto(this, nombreProyecto)) {
+                ProyectoManager.setProyectoActivo(this, nombreProyecto)
+                ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+                Toast.makeText(this, "Proyecto '$nombreProyecto' activado", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // ==================== NUEVA FUNCIÓN ARCHIVAR PARA SISTEMA DE PROYECTOS ====================
+
+
+    private fun archivarMapas() {
+        // Usar el nuevo método que incluye context y proyecto activo
+        ListaCasilla.incrementarContadorVentanas(this)
+
+        // Caso especial para txReferencias
+        /* if (esValido(binding.lyReferencias)) {
+           ListaCasilla.procesarReferencias(this, binding.tvReferencias, binding.txReferencias, mapListas)
+         }*/
+
+        // Usar la clase ListaCasilla para procesar y archivar solo los TextView válidos
+        if (esValido(binding.lyMarco)) {
+            ListaCasilla.procesarArchivar(this, binding.txMarco, binding.tvMarco, mapListas) // marco
+        }
+        if (esValido(binding.lyPaflon)) {
+            ListaCasilla.procesarArchivar(this, binding.txPaflon, binding.tvPaflon, mapListas) // paflon
+        }
+        if (esValido(binding.lyTubo)) {
+            ListaCasilla.procesarArchivar(this, binding.txTubo, binding.tvTubo, mapListas) // ensayo
+        }
+
+        if (esValido(binding.lyJunki)) {
+            ListaCasilla.procesarArchivar(this, binding.txJunki, binding.tvJunki, mapListas) // porta
+        }
+        if (esValido(binding.lyTope)) {
+            ListaCasilla.procesarArchivar(this, binding.txTope, binding.tvTope, mapListas) // tope
+        }
+        if (esValido(binding.lyVidrios)) {
+            ListaCasilla.procesarArchivar(this, binding.tvVidrios, binding.txVidrios, mapListas) // vidrios
+        }
+
+
+        // Actualizar el visor del proyecto después de archivar
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+
+        // Aquí puedes hacer algo con `mapListas`, como mostrarlo o guardarlo
+        println("Datos agregados al proyecto: ${ProyectoManager.getProyectoActivo()}")
+        println(mapListas)
+    }
+
+    // Función para verificar si un Layout es visible o tiene estado GONE
+    private fun esValido(ly: LinearLayout): Boolean {
+        return ly.visibility == View.VISIBLE || ly.visibility == View.INVISIBLE
+    }
+
+    // ==================== FUNCIONES ORIGINALES SIN CAMBIOS ====================
 
     @SuppressLint("SetTextI18n", "SuspiciousIndentation")
     private fun cliente() {
@@ -227,6 +343,7 @@ class Puertas : AppCompatActivity() {
         }
         visibles()
     }
+
     private fun visibles() {
         // Se obtiene el nombre de la puerta actual (si existe)
         val nombre = puertaActual?.nombre ?: ""
@@ -238,6 +355,7 @@ class Puertas : AppCompatActivity() {
             View.GONE
         }
     }
+
     private fun mariModeos() {
         val anchoPuertaCm = binding.etMed1.text.toString().toFloatOrNull() ?: 0f
         val altoPuertaCm = binding.etMed2.text.toString().toFloatOrNull() ?: 0f
@@ -274,12 +392,15 @@ class Puertas : AppCompatActivity() {
         binding.ivModelo.setImageBitmap(bitmapPuerta)
         guardarBitmapEnCache(this, bitmapPuerta)
     }
+
     private fun tereModeos() {
         TODO("Not yet implemented")
     }
+
     private fun linaModeos() {
         TODO("Not yet implemented")
     }
+
     private fun vikyModeos(): String {
         val alto = binding.etDivi.text.toString().toInt()
         val hoja = if (mocheta() > 1) {
@@ -290,7 +411,6 @@ class Puertas : AppCompatActivity() {
         val div = "$alto$hoja"
         val drawableResource = when (div) {
             "1" -> R.drawable.pvicky
-
             else -> R.drawable.pvicky
         }
 
@@ -300,25 +420,30 @@ class Puertas : AppCompatActivity() {
         // Retornar el nombre del drawable
         return when (div) {
             "1" -> "ic_fichad1a"
-
             else -> "ic_fichad5"
         }
     }
+
     private fun talyModeos() {
         TODO("Not yet implemented")
     }
+
     private fun miliModeos() {
         TODO("Not yet implemented")
     }
+
     private fun adelModeos() {
         TODO("Not yet implemented")
     }
+
     private fun jenyModeos() {
         TODO("Not yet implemented")
     }
+
     private fun doraModeos() {
         TODO("Not yet implemented")
     }
+
     // FUNCIONES REDONDEOS
     private fun df1(defo: Float): String {
         val resultado = if ("$defo".endsWith(".0")) {
@@ -328,23 +453,24 @@ class Puertas : AppCompatActivity() {
         }
         return resultado.replace(",", ".")
     }
+
     //FUNCIONES DE ALUMINIOS
     private fun junkillos() {
         val jun = binding.etJunki.text.toString().toFloat()
         val mJunki = df1(divisiones() - (2 * jun)).toFloat()
         val nombre = obtenerVarianteSeleccionada()
 
-        binding.tvJunkillo.text = when(nombre){
+        binding.tvJunki.text = when(nombre){
             "Mari h" ->if (mocheta() < 0f) {
-            "${df1(mJunki)} = ${(nPfvcal() - 1) * 2}\n${
-                df1(paflon())
-            } = ${(nPfvcal() - 1) * 2}"
-        } else {
-            "${df1(mJunki)} = ${(nPfvcal() - 1) * 2}" +
-                    "\n${df1(paflon())} = ${(nPfvcal() - 1) * 2}\n" +
-                    "${df1(marcoSuperior())} = 2\n" +
-                    "${df1(mocheta() - (2 * jun))} = 2"
-        }
+                "${df1(mJunki)} = ${(nPfvcal() - 1) * 2}\n${
+                    df1(paflon())
+                } = ${(nPfvcal() - 1) * 2}"
+            } else {
+                "${df1(mJunki)} = ${(nPfvcal() - 1) * 2}" +
+                        "\n${df1(paflon())} = ${(nPfvcal() - 1) * 2}\n" +
+                        "${df1(marcoSuperior())} = 2\n" +
+                        "${df1(mocheta() - (2 * jun))} = 2"
+            }
             "Mari v" -> if (mocheta() < 0f){
                 "${df1((paflon()-(bastidor*(divi()-1)))/divi())} = ${divi()*2}" +
                         "\n${df1(paranteInterno()-(2*jun))} = ${divi()*2}"
@@ -356,10 +482,12 @@ class Puertas : AppCompatActivity() {
             else -> {""}
         }
     }
+
     private fun marcoSuperior(): Float {
         val ancho = binding.etMed1.text.toString().toFloat()
         return ancho - (2 * marco)
     }
+
     private fun tubo(): String {
         val ancho = binding.etMed1.text.toString().toFloat()
         return if (mocheta() > 0f) {
@@ -368,11 +496,13 @@ class Puertas : AppCompatActivity() {
             ""
         }
     }
+
     private fun paflon(): Float {
         val ancho = binding.etMed1.text.toString().toFloat()
         val holgura = 1f
         return ((ancho - (2 * marco)) - holgura) - (2 * bastidor)
     }
+
     private fun parante(): Float {
         val holgura = 1f
         val piso = binding.etPiso.text.toString().toFloat()
@@ -382,22 +512,24 @@ class Puertas : AppCompatActivity() {
             (hPuente() - (holgura / 2)) - piso
         }
     }
+
     private fun paranteInterno(): Float {
         val p = parante()
         val parante = p- ((nZocalo()+1)*bastidor)
         return parante
     }
+
     //FUNCIONES VIDRIOS
     private fun vidrio() {
         val nombre = obtenerVarianteSeleccionada()
 
         binding.tvVidrios.text = when(nombre){
             "Mari h" ->if (mocheta() < 0f) {
-            "${vidrioH()} = ${nPfvcal() - 1}"
-        } else {
-            "${vidrioH()} =${nPfvcal() - 1}\n" +
-                    "${vidrioM()} = 1"
-        }
+                "${vidrioH()} = ${nPfvcal() - 1}"
+            } else {
+                "${vidrioH()} =${nPfvcal() - 1}\n" +
+                        "${vidrioM()} = 1"
+            }
             "Mari v" -> if (mocheta() < 0f){
                 "${vidrioV()} = ${divi()}"
             } else {
@@ -408,6 +540,7 @@ class Puertas : AppCompatActivity() {
             else -> {""}
         }
     }
+
     private fun vidrioH(): String {
         val jun = binding.etJunki.text.toString().toFloat()
         val holgura = if (jun == 0f) {
@@ -419,6 +552,7 @@ class Puertas : AppCompatActivity() {
         val altv = df1(divisiones() - holgura).toFloat()
         return "${df1(anchv)} x ${df1(altv)}"
     }
+
     private fun vidrioV(): String {
         val jun = binding.etJunki.text.toString().toFloat()
         val holgura = if (jun == 0f) {
@@ -430,6 +564,7 @@ class Puertas : AppCompatActivity() {
         val altv = paranteInterno()-holgura
         return "${df1(anchv)} x ${df1(altv)}"
     }
+
     private fun vidrioM(): String {
         val jun = binding.etJunki.text.toString().toFloat()
         val holgura = if (jun == 0f) {
@@ -441,6 +576,7 @@ class Puertas : AppCompatActivity() {
         val dos = df1(mocheta() - holgura).toFloat()
         return "${df1(uno)} x ${df1(dos)}"
     }
+
     private fun referen(): String {
         val ancho = binding.etMed1.text.toString().toFloat()
         val alto = binding.etMed2.text.toString().toFloat()
@@ -451,11 +587,13 @@ class Puertas : AppCompatActivity() {
             "anch ${df1(ancho)} x alt ${df1(alto)}"
         }
     }
+
     private fun mocheta(): Float {
         val alto = binding.etMed2.text.toString().toFloat()
         val tubo = 2.5f
         return alto - (hPuente() + marco + tubo)
     }
+
     //FUNCIONES GENERALES
     private fun hPuente(): Float {
         val alto = binding.etMed2.text.toString().toFloat()
@@ -498,6 +636,7 @@ class Puertas : AppCompatActivity() {
             }
         }
     }
+
     private fun divisiones(): Float {
         val divi2 = binding.etDivi.text.toString().toFloat()
         val nZoca = binding.etZocalo.text.toString().toInt()
@@ -514,14 +653,17 @@ class Puertas : AppCompatActivity() {
         }
         return (divis - nbas) / divi2
     }
+
     private fun divi():Int{
         val divi2 = binding.etDivi.text.toString().toInt()
         return divi2
     }
+
     private fun nPfvcal(): Int {
         val divi2 = binding.etDivi.text.toString().toInt()
         return (divi2 + 1)
     }
+
     private fun nPaflones(): Int {
         val divi2 = binding.etDivi.text.toString().toInt()
         val nBast = binding.etZocalo.text.toString().toInt()
@@ -531,6 +673,7 @@ class Puertas : AppCompatActivity() {
             divi2 + 1
         }
     }
+
     private fun nZocalo(): Int {
         val nBast = binding.etZocalo.text.toString().toInt()
         return if (nBast == 0) {
@@ -539,11 +682,13 @@ class Puertas : AppCompatActivity() {
             nBast
         }
     }
+
     private fun zocalo(): Float {
         val holgura = if (nZocalo() < 3) 0.009f else 0.009f // Ajusta según tus necesidades
         val mzoca = df1((nZocalo() + holgura) * bastidor).toFloatOrNull() ?: 0f
         return df1(mzoca).toFloatOrNull() ?: 0f
     }
+
     @SuppressLint("SetTextI18n")
     private fun panos(): String {
         val z = zocalo()
@@ -567,6 +712,7 @@ class Puertas : AppCompatActivity() {
         binding.tvEnsayo.text = binding.tvEnsayo.text.substring(0, binding.tvEnsayo.text.length - 1)
         return binding.tvEnsayo.text as String
     }
+
     private fun array() {
         val marcopInput = binding.etMed2.text.toString()
         val marcop = marcopInput.toFloatOrNull() ?: 0f
@@ -589,9 +735,11 @@ class Puertas : AppCompatActivity() {
 
         binding.tvEnsayo2.text = resultado
     }
+
     private fun partesV(): Float {
         return (paflon() - (unoMedio * 2)) / 3
     }
+
     private fun parteH(): Float {
         return (divisiones() - (unoMedio * 5)) / 6
     }
@@ -825,6 +973,7 @@ class Puertas : AppCompatActivity() {
             }
         }
     }
+
     private fun modelos() {
         when (puertaActual?.nombre) {
             "Mari" -> mariModeos()
@@ -904,6 +1053,7 @@ class Puertas : AppCompatActivity() {
     private fun obtenerVarianteSeleccionada(): String {
         return varianteSeleccionada
     }
+
     private fun actualizarVarianteSeleccionada(nuevaVariante: String) {
         varianteSeleccionada = nuevaVariante
     }
@@ -1008,74 +1158,74 @@ class Puertas : AppCompatActivity() {
                     }
                 }
             }
-                "D" -> {
-                    // Divisiones diagonales “rotadas”:
-                    val angulo = binding.etAngulo.text.toString().toFloat()
-                    val numDivBars = numeroDivisiones - 1
-                    if (numDivBars > 0) {
-                        // 1) Definir el rectángulo interno
-                        val widthInterior = rightInterior - paflonPx
-                        val heightInterior = bottomInterior - topInterior
+            "D" -> {
+                // Divisiones diagonales "rotadas":
+                val angulo = binding.etAngulo.text.toString().toFloat()
+                val numDivBars = numeroDivisiones - 1
+                if (numDivBars > 0) {
+                    // 1) Definir el rectángulo interno
+                    val widthInterior = rightInterior - paflonPx
+                    val heightInterior = bottomInterior - topInterior
 
-                        // 2) Hacemos un clip al rectInterior para recortar todo lo que se salga.
-                        canvas.save()
-                        canvas.clipRect(rectInterior)
+                    // 2) Hacemos un clip al rectInterior para recortar todo lo que se salga.
+                    canvas.save()
+                    canvas.clipRect(rectInterior)
 
-                        // 3) Trasladar y rotar el canvas de modo que al dibujar barras horizontales,
-                        //    queden diagonales al final.
-                        //    a) Trasladamos el origen al centro del rectángulo interior
-                        val cx = rectInterior.centerX()
-                        val cy = rectInterior.centerY()
-                        canvas.translate(cx, cy)
-                        //    b) Rotamos el canvas 45° (o el ángulo que quieras)
-                        canvas.rotate(angulo)
-                        //    c) Movemos el origen de nuevo para que (0,0) quede en la esquina sup izq del "nuevo" rect
-                        //
-                        //
-                        //
-                        //
-                        //
-                        //
-                        //
-                        //
-                        //
-                        //
-                        //
-                        //
-                        //
-                        //       (en el sistema rotado). En este caso, podemos dejarlo centrado y dibujar desde -someValue.
+                    // 3) Trasladar y rotar el canvas de modo que al dibujar barras horizontales,
+                    //    queden diagonales al final.
+                    //    a) Trasladamos el origen al centro del rectángulo interior
+                    val cx = rectInterior.centerX()
+                    val cy = rectInterior.centerY()
+                    canvas.translate(cx, cy)
+                    //    b) Rotamos el canvas 45° (o el ángulo que quieras)
+                    canvas.rotate(angulo)
+                    //    c) Movemos el origen de nuevo para que (0,0) quede en la esquina sup izq del "nuevo" rect
+                    //
+                    //
+                    //
+                    //
+                    //
+                    //
+                    //
+                    //
+                    //
+                    //
+                    //
+                    //
+                    //
+                    //       (en el sistema rotado). En este caso, podemos dejarlo centrado y dibujar desde -someValue.
 
-                        canvas.translate(-cx, -cy)
+                    canvas.translate(-cx, -cy)
 
-                        // 4) Ahora, en este sistema rotado, el rectInterior no es un rect normal,
-                        //    sino un “rombo”. Para simplificar, dibujamos barras horizontales
-                        //    en un área mayor (p.ej. un rect grande que cubra el bounding box).
-                        //    El grosor de cada barra es paflonPx.
-                        val thickness = paflonPx
-                        // Calculemos la altura total que “simularemos” para las barras en horizontal.
-                        // Por ejemplo, usaremos la altura del rectángulo interior (sin rotar) como referencia.
-                        // Dividimos esa altura en (numDivs+1) “huecos” y numDivs barras.
-                        val totalHeight = heightInterior // Podés usar algo mayor si querés
-                        val gap = (totalHeight - (numDivBars * thickness)) / (numDivBars + 1)
+                    // 4) Ahora, en este sistema rotado, el rectInterior no es un rect normal,
+                    //    sino un "rombo". Para simplificar, dibujamos barras horizontales
+                    //    en un área mayor (p.ej. un rect grande que cubra el bounding box).
+                    //    El grosor de cada barra es paflonPx.
+                    val thickness = paflonPx
+                    // Calculemos la altura total que "simularemos" para las barras en horizontal.
+                    // Por ejemplo, usaremos la altura del rectángulo interior (sin rotar) como referencia.
+                    // Dividimos esa altura en (numDivs+1) "huecos" y numDivs barras.
+                    val totalHeight = heightInterior // Podés usar algo mayor si querés
+                    val gap = (totalHeight - (numDivBars * thickness)) / (numDivBars + 1)
 
-                        // 5) Dibujar las barras horizontales en este sistema rotado
-                        var currentY = topInterior + gap
-                        for (i in 1..numDivBars) {
-                            // Vamos a dibujar un rect horizontal grande que cubra de izq a der “sobrado”
-                            // para que, al recortar con clipRect, solo se vea lo que cae dentro.
-                            val leftBar = paflonPx - widthInterior // algo que sobre
-                            val rightBar = rightInterior + widthInterior
-                            val rectBar = RectF(leftBar, currentY, rightBar, currentY + thickness)
-                            canvas.drawRect(rectBar, pinturaPaflon)
-                            canvas.drawRect(rectBar, pinturaLinea)
+                    // 5) Dibujar las barras horizontales en este sistema rotado
+                    var currentY = topInterior + gap
+                    for (i in 1..numDivBars) {
+                        // Vamos a dibujar un rect horizontal grande que cubra de izq a der "sobrado"
+                        // para que, al recortar con clipRect, solo se vea lo que cae dentro.
+                        val leftBar = paflonPx - widthInterior // algo que sobre
+                        val rightBar = rightInterior + widthInterior
+                        val rectBar = RectF(leftBar, currentY, rightBar, currentY + thickness)
+                        canvas.drawRect(rectBar, pinturaPaflon)
+                        canvas.drawRect(rectBar, pinturaLinea)
 
-                            currentY += thickness + gap
-                        }
-
-                        // 6) Restaurar para salir del clip y la rotación
-                        canvas.restore()
+                        currentY += thickness + gap
                     }
+
+                    // 6) Restaurar para salir del clip y la rotación
+                    canvas.restore()
                 }
+            }
 
             else -> {
                 // Divisiones horizontales (por defecto)
@@ -1097,7 +1247,6 @@ class Puertas : AppCompatActivity() {
             }
         }
     }
-
 
     // Función que dibuja el bastidor de la hoja (laterales, paflón superior y zócalos)
     private fun dibujarBastidorHoja(
@@ -1174,7 +1323,6 @@ class Puertas : AppCompatActivity() {
         )
         canvas.restore()
     }
-
 
     // Función principal para generar el Bitmap de la puerta.
 // Se añade el parámetro dividirVerticalmente, el cual se activará para la variante "Mari v".
@@ -1275,7 +1423,6 @@ class Puertas : AppCompatActivity() {
             e.printStackTrace()
         }
     }
-
 }
 
 data class Puerta(val nombre: String, val medida: String, val zocalo: String)
@@ -1330,5 +1477,3 @@ data class Punto(val x: Float, val y: Float)
 data class Linea(val inicio: Punto, val fin: Punto)
 data class ParLineas(val linea1: Linea, val linea2: Linea)
 data class DatosPlano(val eje: Punto, val paresLineas: List<ParLineas>)
-
-

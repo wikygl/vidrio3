@@ -294,13 +294,11 @@
                         </LinearLayout>
 
                         <LinearLayout
-                            android:id="@+id/lyJunki"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
 
                             <TextView
-                                android:id="@+id/txJunki"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -462,340 +460,374 @@
                 android:layout_weight="0.81"
                 android:orientation="vertical">
 
-                <LinearLayout
+                <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="4.5dp"
                     android:layout_marginTop="9dp"
-                    android:layout_marginEnd="9dp"
-                    android:layout_weight="0.18"
-                    android:background="@drawable/corner"
-                    android:orientation="vertical"
-                    android:paddingBottom="4.5dp"
-                    tools:ignore="NestedWeights">
+                    android:layout_marginEnd="9dp">
 
                     <LinearLayout
-                        android:id="@+id/lyVariantes"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:orientation="horizontal"
-                        android:visibility="gone">
+                        android:layout_height="0dp"
+                        android:layout_weight="0.18"
+                        android:background="@drawable/corner"
+                        android:orientation="vertical"
+                        android:paddingBottom="4.5dp"
+                        app:layout_constraintBottom_toTopOf="@+id/tvProyectoActivo"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent"
+                        tools:ignore="NestedWeights">
 
-                        <androidx.recyclerview.widget.RecyclerView
-                            android:id="@+id/rvVariantes"
+                        <LinearLayout
+                            android:id="@+id/lyVariantes"
                             android:layout_width="match_parent"
-                            android:layout_height="wrap_content" />
-                    </LinearLayout>
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
 
-                    <TextView
-                        android:id="@+id/textView28"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/corner2"
-                        android:backgroundTint="@color/color"
-                        android:gravity="center"
-                        android:text="@string/referencias_y_c_lculos"
-                        android:textColor="@color/blanco" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4.5dp"
-                        android:layout_marginTop="4.5dp"
-                        android:layout_marginEnd="4.5dp"
-                        android:background="@color/sombra"
-                        android:orientation="horizontal">
+                            <androidx.recyclerview.widget.RecyclerView
+                                android:id="@+id/rvVariantes"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content" />
+                        </LinearLayout>
 
                         <TextView
-                            android:id="@+id/txRefe"
-                            android:layout_width="0dp"
+                            android:id="@+id/textView28"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center" />
-
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/textView33"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:text="@string/c_lculos"
-                        android:textColor="@color/color" />
-
-                    <ScrollView
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent">
+                            android:background="@drawable/corner2"
+                            android:backgroundTint="@color/color"
+                            android:gravity="center"
+                            android:text="@string/referencias_y_c_lculos"
+                            android:textColor="@color/blanco" />
 
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:orientation="vertical">
+                            android:layout_marginStart="4.5dp"
+                            android:layout_marginTop="4.5dp"
+                            android:layout_marginEnd="4.5dp"
+                            android:background="@color/sombra"
+                            android:orientation="horizontal">
 
-                            <LinearLayout
-                                android:id="@+id/marcolayout"
-                                android:layout_width="match_parent"
+                            <TextView
+                                android:id="@+id/txRefe"
+                                android:layout_width="0dp"
                                 android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:background="@color/sombra"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/txMarco"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/marco" />
-
-                                <TextView
-                                    android:id="@+id/tvMarco"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:id="@+id/lyTubo"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:background="@color/sombra2"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/txTubo"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/tubo" />
-
-                                <TextView
-                                    android:id="@+id/tvTubo"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:id="@+id/textView34"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/pafl_n" />
-
-                                <TextView
-                                    android:id="@+id/tvPaflon"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:background="@color/sombra"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/junkillo" />
-
-                                <TextView
-                                    android:id="@+id/tvJunkillo"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/ang_tope"
-                                    tools:ignore="TooManyViews" />
-
-                                <TextView
-                                    android:id="@+id/tvTope"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:background="@color/sombra"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/vidrios"
-                                    tools:ignore="TooManyViews" />
-
-                                <TextView
-                                    android:id="@+id/tvVidrios"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:background="@color/sombra"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="Melamina"
-                                    tools:ignore="TooManyViews" />
-
-                                <TextView
-                                    android:id="@+id/tvMela"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:background="@color/sombra"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="Grados"
-                                    tools:ignore="TooManyViews" />
-
-                                <TextView
-                                    android:id="@+id/tvMel"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:background="@color/sombra"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/ensayos"
-                                    tools:ignore="TooManyViews" />
-
-                                <TextView
-                                    android:id="@+id/tvEnsayo"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4.5dp"
-                                android:layout_marginEnd="4.5dp"
-                                android:background="@color/sombra"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="@string/ensayos"
-                                    tools:ignore="TooManyViews" />
-
-                                <TextView
-                                    android:id="@+id/tvEnsayo2"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="0.72"
-                                    android:text="@string/_0_0" />
-                            </LinearLayout>
-
+                                android:layout_weight="1"
+                                android:gravity="center" />
 
                         </LinearLayout>
-                    </ScrollView>
+
+                        <TextView
+                            android:id="@+id/textView33"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:text="@string/c_lculos"
+                            android:textColor="@color/color" />
+
+                        <ScrollView
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical">
+
+                                <LinearLayout
+                                    android:id="@+id/lyMarco"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:id="@+id/txMarco"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/marco" />
+
+                                    <TextView
+                                        android:id="@+id/tvMarco"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/lyTubo"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra2"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:id="@+id/txTubo"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/tubo" />
+
+                                    <TextView
+                                        android:id="@+id/tvTubo"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/lyPaflon"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:id="@+id/txPaflon"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/pafl_n" />
+
+                                    <TextView
+                                        android:id="@+id/tvPaflon"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/lyJunki"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:id="@+id/txJunki"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/junkillo" />
+
+                                    <TextView
+                                        android:id="@+id/tvJunki"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/lyTope"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:id="@+id/txTope"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/ang_tope"
+                                        tools:ignore="TooManyViews" />
+
+                                    <TextView
+                                        android:id="@+id/tvTope"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/lyVidrios"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:id="@+id/txVidrios"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/vidrios"
+                                        tools:ignore="TooManyViews" />
+
+                                    <TextView
+                                        android:id="@+id/tvVidrios"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="Melamina"
+                                        tools:ignore="TooManyViews" />
+
+                                    <TextView
+                                        android:id="@+id/tvMela"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="Grados"
+                                        tools:ignore="TooManyViews" />
+
+                                    <TextView
+                                        android:id="@+id/tvMel"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/ensayos"
+                                        tools:ignore="TooManyViews" />
+
+                                    <TextView
+                                        android:id="@+id/tvEnsayo"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/ensayos"
+                                        tools:ignore="TooManyViews" />
+
+                                    <TextView
+                                        android:id="@+id/tvEnsayo2"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
 
 
-                </LinearLayout>
+                            </LinearLayout>
+                        </ScrollView>
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="bottom|end"
-                    android:layout_marginEnd="4.5dp"
-                    android:layout_weight="1.08"
-                    android:orientation="horizontal">
 
-                    <Button
-                        android:id="@+id/btArchivar"
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvProyectoActivo"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:backgroundTint="@color/azul"
-                        android:text="@string/archivar"
-                        android:textColor="@color/blanco"
-                        tools:ignore="ButtonStyle" />
+                        android:background="#F5F5F5"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:padding="12dp"
+                        android:text="⚠️ Sin proyecto activo"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        app:layout_constraintBottom_toTopOf="@+id/linearLayout16"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent" />
 
-                    <Button
-                        android:id="@+id/btCalcular"
+                    <LinearLayout
+                        android:id="@+id/linearLayout16"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:backgroundTint="@color/verde"
-                        android:text="@string/calcular"
-                        android:textColor="@color/blanco"
-                        tools:ignore="ButtonStyle,TextContrastCheck" />
-                </LinearLayout>
+                        android:layout_gravity="bottom|end"
+                        android:layout_weight="1.08"
+                        android:orientation="horizontal"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent">
+
+                        <Button
+                            android:id="@+id/btArchivar"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/azul"
+                            android:text="@string/archivar"
+                            android:textColor="@color/blanco"
+                            tools:ignore="ButtonStyle" />
+
+                        <Button
+                            android:id="@+id/btCalcular"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/verde"
+                            android:text="@string/calcular"
+                            android:textColor="@color/blanco"
+                            tools:ignore="ButtonStyle,TextContrastCheck" />
+                    </LinearLayout>
+                </androidx.constraintlayout.widget.ConstraintLayout>
 
             </LinearLayout>
 

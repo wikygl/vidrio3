@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -13,8 +15,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import crystal.crystal.FichaActivity
 import crystal.crystal.R
+import crystal.crystal.casilla.DialogosProyecto
 import crystal.crystal.casilla.ListaCasilla
 import crystal.crystal.casilla.MapStorage
+import crystal.crystal.casilla.ProyectoManager
+import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityMamparaPaflonBinding
 import kotlin.math.ceil
 
@@ -34,13 +39,44 @@ class MamparaPaflon : AppCompatActivity() {
 
   private lateinit var binding: ActivityMamparaPaflonBinding
 
+  // ==================== NUEVAS VARIABLES PARA SISTEMA DE PROYECTOS ====================
+  private lateinit var proyectoCallback: DialogosProyecto.ProyectoCallback
+
   @SuppressLint("SetTextI18n")
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     binding= ActivityMamparaPaflonBinding.inflate(layoutInflater)
     setContentView(binding.root)
 
+    // ==================== CONFIGURACIÓN DEL SISTEMA DE PROYECTOS ====================
+
+    // Inicializar el manager de proyectos
+    ProyectoManager.inicializarDesdeStorage(this)
+
+    // Configurar callback para cambios de proyecto
+    proyectoCallback = ProyectoUIHelper.crearCallbackConActualizacionUI(
+      context = this,
+      textViewProyecto = binding.tvProyectoActivo,
+      activity = this
+    )
+
+
+    // Verificar si hay proyecto activo al inicio
+    if (!ProyectoManager.hayProyectoActivo()) {
+      DialogosProyecto.mostrarDialogoGestionProyectos(this, proyectoCallback)
+    }
+
+    // Procesar proyecto enviado desde MainActivity si existe
+    procesarIntentProyecto(intent)
+
+    // ==================== LISTENERS ORIGINALES CON VERIFICACIONES DE PROYECTO ====================
+
     binding.btCalcular.setOnClickListener {
+      // Verificar proyecto activo antes de calcular
+      if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) {
+        return@setOnClickListener
+      }
+
       try {
         val alto = binding.med2.text.toString().toFloat()
         val jun = binding.etJunki.text.toString().toFloat()
@@ -81,17 +117,32 @@ class MamparaPaflon : AppCompatActivity() {
     }
 
     binding.btArchivar.setOnClickListener{
-      archivarMapas()
+      if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) {
+        return@setOnClickListener
+      }
+      if (binding.med1.text.toString()!=""){archivarMapas()
+        Toast.makeText(this, "Archivado", Toast.LENGTH_SHORT).show()}
+      else{
+        Toast.makeText(this, "Haz nuevo cálculo", Toast.LENGTH_SHORT).show()
+      }
+      binding.med1.setText("")
+        binding.med2.setText("")
     }
+
     binding.btArchivar.setOnLongClickListener {
-      // Llamar a la función para guardar el Map
+      if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) {
+        return@setOnLongClickListener true
+      }
+
+      // El guardado ahora usa automáticamente el proyecto activo
       MapStorage.guardarMap(this, mapListas)
+      Toast.makeText(this, "Map guardado en proyecto: ${ProyectoManager.getProyectoActivo()}", Toast.LENGTH_SHORT).show()
 
-      // Mostrar un mensaje de confirmación
-      Toast.makeText(this, "Map guardado correctamente", Toast.LENGTH_SHORT).show()
-
-      true // Retorna true para indicar que el evento fue manejado
+      // Actualizar el visor del proyecto
+      ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+      true
     }
+
     binding.tvDiseno.setOnClickListener {
       binding.lyNMocheta.visibility = View.VISIBLE
       binding.lyAnHoja.visibility = View.VISIBLE
@@ -102,7 +153,63 @@ class MamparaPaflon : AppCompatActivity() {
     }
   }
 
-  // FUNCIONES REDONDEOS
+  // ==================== NUEVO MENÚ DE OPCIONES ====================
+
+  override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+    menu?.let { ProyectoUIHelper.agregarOpcionesMenuProyecto(it) }
+    return super.onCreateOptionsMenu(menu)
+  }
+
+  override fun onOptionsItemSelected(item: MenuItem): Boolean {
+    val manejado = ProyectoUIHelper.manejarSeleccionMenu(
+      context = this,
+      itemId = item.itemId,
+      callback = proyectoCallback,
+      onProyectoCambiado = {
+        // Actualizar UI cuando cambie el proyecto
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+      }
+    )
+
+    return if (manejado) true else super.onOptionsItemSelected(item)
+  }
+
+  // ==================== FUNCIONES PARA RECIBIR PROYECTO DESDE MAINACTIVITY ====================
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    procesarIntentProyecto(intent)
+  }
+
+  override fun onResume() {
+    super.onResume()
+    // Actualizar visor del proyecto al volver a la actividad
+    ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+  }
+
+  private fun procesarIntentProyecto(intent: Intent) {
+    val nombreProyecto = intent.getStringExtra("proyecto_nombre")
+    val crearNuevo = intent.getBooleanExtra("crear_proyecto", false)
+    val descripcionProyecto = intent.getStringExtra("proyecto_descripcion") ?: ""
+
+    if (crearNuevo && !nombreProyecto.isNullOrEmpty()) {
+      // Crear proyecto nuevo desde MainActivity
+      if (MapStorage.crearProyecto(this, nombreProyecto, descripcionProyecto)) {
+        ProyectoManager.setProyectoActivo(this, nombreProyecto)
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+        Toast.makeText(this, "Proyecto '$nombreProyecto' creado y activado", Toast.LENGTH_SHORT).show()
+      }
+    } else if (!nombreProyecto.isNullOrEmpty()) {
+      // Activar proyecto existente desde MainActivity
+      if (MapStorage.existeProyecto(this, nombreProyecto)) {
+        ProyectoManager.setProyectoActivo(this, nombreProyecto)
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+        Toast.makeText(this, "Proyecto '$nombreProyecto' activado", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+
+  // ==================== FUNCIONES REDONDEOS (SIN CAMBIOS) ====================
   private fun df1(defo: Float): String {
     return if (defo % 1 == 0f) {
       // Si es un número entero, muestra sin decimales
@@ -112,12 +219,12 @@ class MamparaPaflon : AppCompatActivity() {
       "%.1f".format(defo).replace(",", ".")
     }
   }
- // FUNCIONES REFERENCIAS
-  
+  // FUNCIONES REFERENCIAS
+
   @SuppressLint("SetTextI18n")
   private fun referencias(){
-   val ancho = binding.med1.text.toString().toFloat()
-   val alto = binding.med2.text.toString().toFloat()
+    val ancho = binding.med1.text.toString().toFloat()
+    val alto = binding.med2.text.toString().toFloat()
     binding.tvReferencias.text= "Ancho ${df1(ancho)}; Alto ${df1(alto)}\n Altura de puente ${df1(altoHoja())}" +
             "\nPartes ${divisiones()}"
   }
@@ -244,29 +351,29 @@ class MamparaPaflon : AppCompatActivity() {
     val control = "${divisiones()}$z"
     binding.txVidrio.text = when (control){
       "1c"->
-      "${df1(zocaloFijo() - 0.4f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
-              "${df1(paranteMocheta() - 0.4f)} x " +
-              "${df1(anchoMocheta()-0.4f)} = ${diviMocheta(ancho())}"
+        "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
+                "${df1(paranteMocheta() - 0.6f)} x " +
+                "${df1(anchoMocheta()-0.6f)} = ${diviMocheta(ancho())}"
       "1s"->
-        "${df1(zocaloFijo() - 0.4f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n"
+        "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n"
       "2c"->
-        "${df1(zocaloFijo() - 0.4f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
-                "${df1(zocaloCorrediza() - 0.4f)} x" +
+        "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
+                "${df1(zocaloCorrediza() - 0.6f)} x" +
                 " ${df1(altoVidrioCorredizo())} = ${nCorredizas()}\n" +
-                "${df1(paranteMocheta() - 0.4f)} x " +
-                "${df1(anchoMocheta()-0.4f)} = ${diviMocheta(ancho())}"
+                "${df1(paranteMocheta() - 0.6f)} x " +
+                "${df1(anchoMocheta()-0.6f)} = ${diviMocheta(ancho())}"
       "2s"->
-        "${df1(zocaloFijo() - 0.4f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
-                "${df1(zocaloCorrediza() - 0.4f)} x" +
+        "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
+                "${df1(zocaloCorrediza() - 0.6f)} x" +
                 " ${df1(altoVidrioCorredizo())} = ${nCorredizas()}\n"
 
       else -> {
-        val base = "${df1(zocaloFijo() - 0.4f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
-                "${df1(zocaloCorrediza() - 0.4f)} x ${df1(altoVidrioCorredizo())} = ${nCorredizas()}\n"
+        val base = "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
+                "${df1(zocaloCorrediza() - 0.6f)} x ${df1(altoVidrioCorredizo())} = ${nCorredizas()}\n"
 
         if (paranteMocheta() > 0) {
-          base + "${df1(paranteMocheta() - 0.4f)} x " +
-                  "${df1(anchoMocheta()-0.4f)} = ${diviMocheta(ancho())}"
+          base + "${df1(paranteMocheta() - 0.6f)} x " +
+                  "${df1(anchoMocheta()-0.6f)} = ${diviMocheta(ancho())}"
         } else {
           base
         }
@@ -284,73 +391,83 @@ class MamparaPaflon : AppCompatActivity() {
     return paranteCorredizo()-((2*bastidor)+holgura)
   }
 
-  //FUNCIONES DE ARCHIVO
+  // ==================== FUNCIÓN ARCHIVAR MODIFICADA PARA SISTEMA DE PROYECTOS ====================
+
+
   private fun archivarMapas() {
-    ListaCasilla.incrementarContadorVentanas()
+    // Usar el nuevo método que incluye context y proyecto activo
+    ListaCasilla.incrementarContadorVentanas(this)
 
     // Caso especial para txReferencias
-   /* if (esValido(binding.lyReferencias)) {
-      ListaCasilla.procesarReferencias(binding.tvReferencias, binding.txReferencias, mapListas) // referencias
-    }*/
+    /* if (esValido(binding.lyReferencias)) {
+       ListaCasilla.procesarReferencias(this, binding.tvReferencias, binding.txReferencias, mapListas)
+     }*/
+
     // Usar la clase ListaCasilla para procesar y archivar solo los TextView válidos
     if (esValido(binding.lyMarco)) {
-        ListaCasilla.procesarArchivar(binding.tvMarco, binding.txMarco, mapListas) // marco
+      ListaCasilla.procesarArchivar(this, binding.tvMarco, binding.txMarco, mapListas) // marco
     }
     if (esValido(binding.lyPaflon)) {
-      ListaCasilla.procesarArchivar(binding.tvPaflon, binding.txPaflon, mapListas) // paflon
+      ListaCasilla.procesarArchivar(this, binding.tvPaflon, binding.txPaflon, mapListas) // paflon
     }
 
     if (esValido(binding.lyRiel)) {
-      ListaCasilla.procesarArchivar(binding.tvRiel, binding.txRiel, mapListas) // riel
+      ListaCasilla.procesarArchivar(this, binding.tvRiel, binding.txRiel, mapListas) // riel
     }
-
+    if (esValido(binding.lyJunki)) {
+      ListaCasilla.procesarArchivar(this, binding.tvJunki, binding.txJunki, mapListas) // porta
+    }
     if (esValido(binding.lyTope)) {
-      ListaCasilla.procesarArchivar(binding.tvTope, binding.txTope, mapListas) // tope
+      ListaCasilla.procesarArchivar(this, binding.tvTope, binding.txTope, mapListas) // tope
     }
     if (esValido(binding.lyVidrio)) {
-      ListaCasilla.procesarArchivar(binding.tvVidrio, binding.txVidrio, mapListas) // vidrios
+      ListaCasilla.procesarArchivar(this, binding.tvVidrio, binding.txVidrio, mapListas) // vidrios
     }
     if (esValido(binding.lyClient)) {
-      ListaCasilla.procesarArchivar(binding.tvC, binding.txC, mapListas) // cliente
+      ListaCasilla.procesarArchivar(this, binding.tvC, binding.txC, mapListas) // cliente
     }
     if (esValido(binding.lyAncho)) {
-      ListaCasilla.procesarArchivar(binding.tvAncho, binding.txAncho, mapListas) // ancho
+      ListaCasilla.procesarArchivar(this, binding.tvAncho, binding.txAncho, mapListas) // ancho
     }
     if (esValido(binding.lyAlto)) {
-      ListaCasilla.procesarArchivar(binding.tvAlto, binding.txAlto, mapListas) // alto
+      ListaCasilla.procesarArchivar(this, binding.tvAlto, binding.txAlto, mapListas) // alto
     }
     if (esValido(binding.lyPuente)) {
-      ListaCasilla.procesarArchivar(binding.tvPuente, binding.txPuente, mapListas) // altura Puente
+      ListaCasilla.procesarArchivar(this, binding.tvPuente, binding.txPuente, mapListas) // altura Puente
     }
     if (esValido(binding.lyDivisiones)) {
-      ListaCasilla.procesarArchivar(binding.tvDivisiones, binding.txDivisiones, mapListas) // divisiones
+      ListaCasilla.procesarArchivar(this, binding.tvDivisiones, binding.txDivisiones, mapListas) // divisiones
     }
     if (esValido(binding.lyFijos)) {
-      ListaCasilla.procesarArchivar(binding.tvFijos, binding.txFijos, mapListas) // nFijos
+      ListaCasilla.procesarArchivar(this, binding.tvFijos, binding.txFijos, mapListas) // nFijos
     }
     if (esValido(binding.lyCorredizas)) {
-      ListaCasilla.procesarArchivar(binding.tvCorredizas, binding.txCorredizas, mapListas) // nCorredizas
+      ListaCasilla.procesarArchivar(this, binding.tvCorredizas, binding.txCorredizas, mapListas) // nCorredizas
     }
     if (esValido(binding.lyDiseno)) {
-      ListaCasilla.procesarArchivar(binding.tvDiseno, binding.txDiseno, mapListas) // diseño
+      ListaCasilla.procesarArchivar(this, binding.tvDiseno, binding.txDiseno, mapListas) // diseño
     }
     if (esValido(binding.lyGrados)) {
-      ListaCasilla.procesarArchivar(binding.tvGrados, binding.txGrados, mapListas) // grados
+      ListaCasilla.procesarArchivar(this, binding.tvGrados, binding.txGrados, mapListas) // grados
     }
     if(esValido(binding.lyTipo)){
-      ListaCasilla.procesarArchivar(binding.tvTipo,binding.txTipo,mapListas) // tipo de ventana
+      ListaCasilla.procesarArchivar(this, binding.tvTipo,binding.txTipo,mapListas) // tipo de ventana
     }
 
+    // Actualizar el visor del proyecto después de archivar
+    ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+
     // Aquí puedes hacer algo con `mapListas`, como mostrarlo o guardarlo
-    //binding.txPr.text = mapListas.toString()
+    println("Datos agregados al proyecto: ${ProyectoManager.getProyectoActivo()}")
     println(mapListas)
   }
+
   // Función para verificar si un Layout es visible o tiene estado GONE
   private fun esValido(ly: LinearLayout): Boolean {
     return ly.visibility == View.VISIBLE || ly.visibility == View.INVISIBLE
   }
 
-  //FUNCIONES DE DISEÑO
+  //FUNCIONES DE DISEÑO (SIN CAMBIOS)
   private fun diseno() {
     val count = divisiones()
 
@@ -384,15 +501,15 @@ class MamparaPaflon : AppCompatActivity() {
             null
           }
           else -> corredizo}
-      6 -> when (index) {
-        0 -> fijo
-        1 -> corredizo
-        2 -> {reflejo(correFinal)
-          null
-        }
+        6 -> when (index) {
+          0 -> fijo
+          1 -> corredizo
+          2 -> {reflejo(correFinal)
+            null
+          }
 
-        else -> {fijo}
-      }
+          else -> {fijo}
+        }
 
 
         else -> {
@@ -456,7 +573,7 @@ class MamparaPaflon : AppCompatActivity() {
     canvas.restore()
   }
 
-  //FUNCIONES GENERALES
+  //FUNCIONES GENERALES (SIN CAMBIOS)
   private fun altoHoja():Float {
     val hHoja=binding.etHoja.text.toString().toFloat()
     val pisog=0f
@@ -475,10 +592,21 @@ class MamparaPaflon : AppCompatActivity() {
   }
   private fun nParantes():Float{
     val parantes= when (divisiones()){
-      1 -> 0   2 -> 2   3 -> 2   4 -> 4
-      5 -> 4   6 -> 5   7 -> 6
-      8 -> 9   9 -> 8   10 -> 9  11 -> 10
-      12 -> 14 13 -> 12 14 -> 14 15 -> 14
+      1 -> 0
+      2 -> 2
+      3 -> 2
+      4 -> 4
+      5 -> 4
+      6 -> 5
+      7 -> 6
+      8 -> 9
+      9 -> 8
+      10 -> 9
+      11 -> 10
+      12 -> 14
+      13 -> 12
+      14 -> 14
+      15 -> 14
       else -> 0
     }
     return parantes*pAnch
@@ -501,29 +629,43 @@ class MamparaPaflon : AppCompatActivity() {
 
   private fun nFijos():Int {
     return when (divisiones()){
-        1 -> 1  2 -> 1
-        3 -> 2  4 -> 2
-        5 -> 3
-        6 -> 4  7 -> 4
-        8 -> 4
-        9 -> 5
-        10 ->6  11 -> 6  12 -> 6
-        13 ->7  14 ->8   15 -> 8
-        else -> 0
+      1 -> 1
+      2 -> 1
+      3 -> 2
+      4 -> 2
+      5 -> 3
+      6 -> 4
+      7 -> 4
+      8 -> 4
+      9 -> 5
+      10 ->6
+      11 -> 6
+      12 -> 6
+      13 ->7
+      14 ->8
+      15 -> 8
+      else -> 0
     }
   }
   private fun nCorredizas():Int {
     return when (divisiones()){
-        1 -> 0
-        2 -> 1   3 -> 1
-        4 -> 2   5 -> 2   6 -> 2
-        7 -> 3
-        8 -> 4   9 -> 4   10 -> 4
-        11-> 5
-        12-> 6   13-> 6   14 -> 6
-        15-> 7
-        else -> 0
-      }
+      1 -> 0
+      2 -> 1
+      3 -> 1
+      4 -> 2
+      5 -> 2
+      6 -> 2
+      7 -> 3
+      8 -> 4
+      9 -> 4
+      10 -> 4
+      11-> 5
+      12-> 6
+      13-> 6
+      14 -> 6
+      15-> 7
+      else -> 0
+    }
   }
 
   private fun diviMocheta(x: Float): Int {

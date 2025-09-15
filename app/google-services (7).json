@@ -1,0 +1,69 @@
+{
+  "project_info": {
+    "project_number": "439390493145",
+    "firebase_url": "https://calculadora-de-vidriero.firebaseio.com",
+    "project_id": "calculadora-de-vidriero",
+    "storage_bucket": "calculadora-de-vidriero.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:439390493145:android:91365b3ab0a1c99f84e1c8",
+        "android_client_info": {
+          "package_name": "calculaora.e.vidrio3"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "439390493145-ec6t9h1u5lb05phfrevidu77gj762fh8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGiO_pdVtUBHWtQdwIJZ0eXRru3Y1Z4tE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "439390493145-ec6t9h1u5lb05phfrevidu77gj762fh8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:439390493145:android:049ecc00b6609b4584e1c8",
+        "android_client_info": {
+          "package_name": "tunas.nova"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "439390493145-ec6t9h1u5lb05phfrevidu77gj762fh8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGiO_pdVtUBHWtQdwIJZ0eXRru3Y1Z4tE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "439390493145-ec6t9h1u5lb05phfrevidu77gj762fh8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

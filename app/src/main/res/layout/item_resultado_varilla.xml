@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="8dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="3dp"
+    app:cardBackgroundColor="@android:color/white">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Título: x varillas de x cm -->
+        <TextView
+            android:id="@+id/tvTituloVarilla"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="1 varilla de 600 cm"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#2196F3"
+            android:layout_marginBottom="12dp"
+            tools:text="2 varillas de 600 cm" />
+
+        <!-- Medidas de corte con separadores visuales -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cortes:"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="6dp" />
+
+        <LinearLayout
+            android:id="@+id/layoutCortes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+            <!-- Los cortes se agregarán dinámicamente aquí -->
+        </LinearLayout>
+
+        <!-- Gráfico simple con ProgressBar personalizado -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Aprovechamiento:"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="6dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            android:orientation="horizontal"
+            android:background="#E0E0E0"
+            android:layout_marginBottom="8dp">
+
+            <!-- Parte utilizada (verde) -->
+            <View
+                android:id="@+id/viewUtilizado"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="70"
+                android:background="#4CAF50" />
+
+            <!-- Retazo (rojo) -->
+            <View
+                android:id="@+id/viewRetazo"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="30"
+                android:background="#F44336" />
+
+        </LinearLayout>
+
+        <!-- Información del retazo -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvRetazo"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Retazo: 50 cm (8.3%)"
+                android:textSize="14sp"
+                android:textColor="#666666"
+                tools:text="Retazo: 50 cm (8.3%)" />
+
+            <!-- Indicador de eficiencia -->
+            <TextView
+                android:id="@+id/tvEficiencia"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="91.7%"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#4CAF50"
+                android:background="#E8F5E8"
+                android:padding="6dp"
+                android:layout_marginStart="8dp"
+                tools:text="91.7%" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

@@ -1,9 +1,6 @@
-@file:Suppress("DEPRECATION")
 package crystal.crystal
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -58,7 +55,7 @@ import com.itextpdf.text.pdf.PdfPTable
 import com.itextpdf.text.pdf.PdfPageEventHelper
 import com.itextpdf.text.pdf.PdfWriter
 import com.itextpdf.text.pdf.draw.LineSeparator
-import crystal.crystal.catalogo.Catalogo
+import crystal.crystal.catalogo.CatalogoActivity
 import crystal.crystal.databinding.ActivityMainBinding
 import crystal.crystal.red.ListChatActivity
 import crystal.crystal.registro.InicioActivity
@@ -76,22 +73,17 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@Suppress("NAME_SHADOWING", "UNUSED_ANONYMOUS_PARAMETER")
+@Suppress("NAME_SHADOWING", "UNUSED_ANONYMOUS_PARAMETER", "DEPRECATION")
 class MainActivity : AppCompatActivity() {
-    @RequiresApi(Build.VERSION_CODES.N)
 
-    val df = android.icu.text.DecimalFormat("#,###.00").apply {
-        isGroupingUsed = true
-        decimalFormatSymbols = decimalFormatSymbols.apply {
-            groupingSeparator = ' '
-        }
-    }
+
     private var lista: MutableList<Listado> = mutableListOf()
-    companion object {private const val RECEIVE_PRESUPUESTO_REQUEST = 3}
+    companion object {private const val RECEIVE_PRESUPUESTO_REQUEST = 3
+        private const val DICTADO_REQUEST_CODE = 200
+        private const val CODIGO_SOLICITUD_OCR = 300 }
     private val auth = FirebaseAuth.getInstance()
     private lateinit var currentUserId: String
     private var db = Firebase.firestore
-
 
     private lateinit var usados: Spinner
     private lateinit var unidades: Spinner
@@ -112,15 +104,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding= ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        binding.lyScan.visibility=View.GONE
-
-        //ESTE CÓDIGO ES PARA HACER DICTADO
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), RECORD_REQUEST_CODE)
-            }
-        }
 
         // Inicializar SharedPreferences
         sharedPreferences = this.getSharedPreferences("MyPrefs", Context.MODE_PRIVATE)
@@ -225,7 +208,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnCatalogo.setOnClickListener {
-            startActivity(Intent(this, Catalogo::class.java))}
+            startActivity(Intent(this, CatalogoActivity::class.java))}
 
         // Agregar OnLongClickListener al textView prodtxt
         binding.prodtxt.setOnLongClickListener {
@@ -268,25 +251,29 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btMicro.setOnClickListener {
-            startSpeechToText()
+            val intent = Intent(this, crystal.crystal.dictado.DictadoActivity::class.java)
+            startActivityForResult(intent, DICTADO_REQUEST_CODE)
         }
 
         binding.btScan.setOnClickListener {
-            val options = arrayOf<CharSequence>("Tomar foto", "Elegir de la galería")
+            val opciones = arrayOf<CharSequence>(
+                "📷 Tomar foto",
+                "🖼️ Elegir de la galería",
+                "🔍 OCR - Extraer medidas"  // ← NUEVA OPCIÓN
+            )
             val builder = android.app.AlertDialog.Builder(this)
             builder.setTitle("Elige una opción")
-            builder.setItems(options) { dialog, item ->
+            builder.setItems(opciones) { dialog, item ->
                 when (item) {
-                    0 -> openCamera()
-                    1 -> openGallery()
+                    0 -> openCamera()                    // ← MANTENER tu función existente
+                    1 -> openGallery()                   // ← MANTENER tu función existente
+                    2 -> {                               // ← NUEVA FUNCIONALIDAD OCR
+                        val intent = Intent(this, crystal.crystal.ocr.OcrActivity::class.java)
+                        startActivityForResult(intent, CODIGO_SOLICITUD_OCR)
+                    }
                 }
             }
             builder.show()
-            binding.lyScan.visibility=View.VISIBLE
-        }
-
-        binding.btConver.setOnClickListener {
-            binding.lyScan.visibility=View.GONE
         }
 
         binding.txtRetaso.setOnClickListener {
@@ -295,11 +282,18 @@ class MainActivity : AppCompatActivity() {
 
         binding.tvpCliente.setOnLongClickListener {
             mostrarMenuPresupuesto()
+
             true
         }
 
         binding.listadoTxt.setOnLongClickListener {
             abrirSelectorPresupuesto()
+            true
+        }
+
+        // En tu onCreate() o donde inicialices la interfaz
+        binding.txCostoTotal.setOnLongClickListener {
+            mostrarDialogoPrecioPactado()
             true
         }
 
@@ -315,14 +309,12 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
-        if (currentUser != null) {
-            currentUser.reload().addOnCompleteListener { task ->
-                if (!task.isSuccessful) {
-                    // Si la recarga falla, es probable que el usuario haya sido eliminado
-                    auth.signOut()
-                    startActivity(Intent(this, InicioActivity::class.java))
-                    finish()
-                }
+        currentUser?.reload()?.addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                // Si la recarga falla, es probable que el usuario haya sido eliminado
+                auth.signOut()
+                startActivity(Intent(this, InicioActivity::class.java))
+                finish()
             }
         }
     }
@@ -357,7 +349,7 @@ class MainActivity : AppCompatActivity() {
 
     }
     @SuppressLint("SetTextI18n")
-    @RequiresApi(Build.VERSION_CODES.N)
+
     private fun agregarListado() {
         // escalas, unidades y colores
         val escala = binding.usTxt.text.toString()
@@ -369,8 +361,7 @@ class MainActivity : AppCompatActivity() {
         val medida3 = med3()
         val cantidad = binding.cantEditxt.text.toString().toFloat()
         val precio = binding.precioEditxt.text.toString().toFloat()
-        val producto = if (binding.proEditxt.text.toString().isBlank()){"..."}
-        else{binding.proEditxt.text.toString()}
+        val producto = binding.proEditxt.text.toString().ifBlank { "..." }
         // resultados de calculos
         val piescua = pies(medida1,medida2)
         val metroscua = metroCua(medida1,medida2)
@@ -403,8 +394,8 @@ class MainActivity : AppCompatActivity() {
 
         binding.pcTxt.text = df1(piescant)
         binding.mcTxt.text = df1(metroscua)
-        binding.precioUnitario.text = df.format(costounitario)
-        binding.precioCantidad.text = df.format(costocantidad)
+        binding.precioUnitario.text = df2(costounitario)
+        binding.precioCantidad.text = df2(costocantidad)
         binding.prueTxt.text= med3().toString()
 
         binding.med1Editxt.hint = df1(medida1)
@@ -424,7 +415,7 @@ class MainActivity : AppCompatActivity() {
         lista.add(medidas)
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
+
     @SuppressLint("SetTextI18n")
     private fun actualizar() {
         // Creamos un nuevo adapter con los datos de la lista
@@ -446,7 +437,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Actualizamos los TextView con los totales
-        binding.precioTotal.text = df.format(costoTotal)
+        binding.precioTotal.text = df2(costoTotal)
         binding.metrosTotal.text = df1(metroscuaTotal)
         binding.piesTotal.text = df1(piescuaTotal)
         binding.per.text = "${df1(periTotal)} m.."
@@ -455,7 +446,6 @@ class MainActivity : AppCompatActivity() {
         adapter.notifyDataSetChanged()
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
     private fun adaptadores(): ArrayAdapter<SpannableString> {
         val clipCodigo = 0x1F4CE
         val clip = String(Character.toChars(clipCodigo))
@@ -470,34 +460,34 @@ class MainActivity : AppCompatActivity() {
                     "p2" -> {
                         "(${df1(datos.medi1)} x ${df1(datos.medi2)} x ${df1(datos.canti)} = " +
                                 "${df1(datos.piescua)}(${datos.escala}) " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto} " +
+                                "x S/${df2(datos.precio)} == S/${df2(datos.costo)} -> ${datos.producto} " +
                                 ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     "m2" -> {
                         "(${df1(datos.medi1)} x ${df1(datos.medi2)} x ${df1(datos.canti)} = " +
                                 "${df1(datos.metcua)}(${datos.escala}) " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                "x S/${df2(datos.precio)} == S/${df2(datos.costo)} -> ${datos.producto}"+
                                 ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     "m3" -> {
                         "(${df1(datos.medi1)} x ${df1(datos.medi2)} x ${df1(datos.medi3)} x ${df1(datos.canti)} = " +
                                 "${df1(datos.metcub)}(${datos.escala}) " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                "x S/${df2(datos.precio)} == S/${df2(datos.costo)} -> ${datos.producto}"+
                                 ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     "ml" -> {
                         "(${df1(datos.medi1)} x ${df1(datos.canti)} = ${df1(datos.metli)}(${datos.escala}) " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                "x S/${df2(datos.precio)} == S/${df2(datos.costo)} -> ${datos.producto}"+
                                 ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     "uni" -> {
                         "${df1(datos.canti)}(${datos.escala}) = " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                "x S/${df2(datos.precio)} == S/${df2(datos.costo)} -> ${datos.producto}"+
                                 ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                     else -> {
                         "(${df1(datos.medi1)} x ${df1(datos.medi2)} x ${df1(datos.canti)} = ${df1(datos.piescua)} " +
-                                "x S/${df.format(datos.precio)} == S/${df.format(datos.costo)} -> ${datos.producto}"+
+                                "x S/${df2(datos.precio)} == S/${df2(datos.costo)} -> ${datos.producto}"+
                                 ",$clip $uriAcortado" // Mostrar el URI acortado
                     }
                 }
@@ -834,7 +824,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
+
     private fun abrir() {
         val paquete = intent.extras
         val li = paquete?.getSerializable("lista") as? List<*>
@@ -862,18 +852,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     //FUNCIONES DE DICTADO
-    private fun startSpeechToText() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla ahora...")
-
-        try {
-            startActivityForResult(intent, RECORD_REQUEST_CODE)
-        } catch (e: ActivityNotFoundException) {
-            Toast.makeText(this, "Lo siento, tu dispositivo no es compatible con la entrada de voz.", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -886,20 +864,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
         try {
             when (requestCode) {
+                // ✅ MANTENER: Captura de imagen (tu código existente)
                 REQUEST_IMAGE_CAPTURE -> {
                     if (resultCode == RESULT_OK) {
-                        val imageBitmap = data?.extras?.get("data") as Bitmap
-                        binding.ivScan.setImageBitmap(imageBitmap)
+                        data?.extras?.get("data") as Bitmap
                     } else {
                         Toast.makeText(this, "Error al capturar la imagen", Toast.LENGTH_SHORT).show()
                     }
                 }
+
+                // ✅ MANTENER: Selección de galería (tu código existente)
                 REQUEST_IMAGE_GALLERY -> {
                     if (resultCode == RESULT_OK && data != null) {
                         val selectedImageUri: Uri? = data.data
@@ -920,7 +899,7 @@ class MainActivity : AppCompatActivity() {
                             // Cargar la imagen utilizando Glide en ivScan
                             Glide.with(this)
                                 .load(selectedImageUri)
-                                .into(binding.ivScan)
+
                         } else {
                             Toast.makeText(this, "Error: URI de imagen es nulo", Toast.LENGTH_SHORT).show()
                         }
@@ -929,12 +908,80 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+                // ✅ NUEVO: OCR - Solo agregar este caso
+                CODIGO_SOLICITUD_OCR -> {
+                    if (resultCode == RESULT_OK && data != null) {
+                        @Suppress("UNCHECKED_CAST")
+                        val elementosOcr = data.getSerializableExtra("elementos_ocr") as? ArrayList<Listado>
+
+                        elementosOcr?.let { elementos ->
+                            if (elementos.isNotEmpty()) {
+                                // Agregar elementos a la lista principal
+                                lista.addAll(elementos)
+
+                                // Actualizar interfaz
+                                actualizar()
+
+                                // Mostrar confirmación
+                                val mensaje = if (elementos.size == 1) {
+                                    "✅ 1 elemento agregado desde imagen"
+                                } else {
+                                    "✅ ${elementos.size} elementos agregados desde imagen"
+                                }
+
+                                Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show()
+
+                                // Log para depuración
+                                Log.d("OCR", "Elementos recibidos: ${elementos.size}")
+                                elementos.forEachIndexed { indice, elemento ->
+                                    Log.d("OCR", "Elemento $indice: ${elemento.medi1} x ${elemento.medi2} = ${elemento.canti}, ${elemento.producto}")
+                                }
+                            } else {
+                                Toast.makeText(this, "No se encontraron elementos en la imagen", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } else if (resultCode == RESULT_CANCELED) {
+                        Toast.makeText(this, "OCR cancelado", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                // ✅ MANTENER: Dictado (tu código existente)
+                DICTADO_REQUEST_CODE -> {
+                    if (resultCode == RESULT_OK && data != null) {
+                        @Suppress("UNCHECKED_CAST")
+                        val elementosDictados = data.getSerializableExtra("elementos_dictados") as? ArrayList<Listado>
+
+                        elementosDictados?.let { elementos ->
+                            lista.addAll(elementos)
+                            actualizar()
+
+                            val mensaje = if (elementos.size == 1) {
+                                "✅ 1 elemento agregado por dictado"
+                            } else {
+                                "✅ ${elementos.size} elementos agregados por dictado"
+                            }
+
+                            Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show()
+
+                            Log.d("DICTADO", "Elementos recibidos: ${elementos.size}")
+                            elementos.forEachIndexed { index, elemento ->
+                                Log.d("DICTADO", "Elemento $index: ${elemento.medi1} x ${elemento.medi2} = ${elemento.canti}, ${elemento.producto}")
+                            }
+                        }
+                    } else if (resultCode == RESULT_CANCELED) {
+                        Toast.makeText(this, "Dictado cancelado", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                // ✅ MANTENER: Reconocimiento de voz anterior (tu código existente)
                 RECORD_REQUEST_CODE -> {
                     if (resultCode == RESULT_OK && data != null) {
                         val result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                         binding.txMetroTot.text = result?.get(0)
                     }
                 }
+
+                // ✅ MANTENER: Presupuestos (tu código existente)
                 RECEIVE_PRESUPUESTO_REQUEST -> {
                     if (resultCode == RESULT_OK && data != null) {
                         data.data?.let { uri ->
@@ -947,10 +994,10 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error al procesar la solicitud: ${e.message}", Toast.LENGTH_SHORT).show()
             e.printStackTrace()
         }
-
     }
 
     //FUNCIONES SCAN
+// ✅ MANTENER ESTAS FUNCIONES (las necesitas para agregar imágenes a elementos)
     @SuppressLint("QueryPermissionsNeeded")
     private fun openCamera() {
         val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
@@ -967,8 +1014,7 @@ class MainActivity : AppCompatActivity() {
         intent.type = "image/*"
         startActivityForResult(intent, REQUEST_IMAGE_GALLERY)
     }
-    //para manejar el URI
-    @RequiresApi(Build.VERSION_CODES.N)
+
     private fun usoImagenUri(imageUriString: String) {
         if (selectedPosition != -1) {
             // Solo actualizar la interfaz con el URI acortado
@@ -993,7 +1039,7 @@ class MainActivity : AppCompatActivity() {
        Toast.makeText(this, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
    }
 }*/
-    @RequiresApi(Build.VERSION_CODES.N)
+
     private fun openPdf() {
         generarPdf()
         val pdfFile = File(getExternalFilesDir(null), "Presupuesto_${binding.clienteEditxt.text}.pdf")
@@ -1032,7 +1078,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
+
     @SuppressLint("ResourceType")
     private fun generarPdf() {
         val cliente = binding.clienteEditxt.text.toString()
@@ -1063,7 +1109,7 @@ class MainActivity : AppCompatActivity() {
 
             // Crear un bloque de contenido que se mantiene junto (KeepTogether)
             val block = PdfPTable(1)
-            block.setKeepTogether(true) // Esto evita que el ítem se corte entre páginas
+            block.keepTogether = true // Esto evita que el ítem se corte entre páginas
 
             val itemTitleFont = Font(Font.FontFamily.HELVETICA, 16f, Font.BOLD)
             val tituloItem = "Ítem $itemNum: ${item.producto}"
@@ -1092,7 +1138,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             val costoFont = Font(Font.FontFamily.HELVETICA, 12f, Font.BOLD)
-            val textoCosto = Chunk("Costo: ${df.format(costo)}", costoFont)
+            val textoCosto = Chunk("Costo: ${df2(costo)}", costoFont)
 
             val textoCompleto = Paragraph(textoMedidas)
             textoCompleto.add(Chunk("\n"))
@@ -1200,21 +1246,21 @@ class MainActivity : AppCompatActivity() {
             builder.show()
         }
     }
-
     // Agregar onNewIntent para manejar intents cuando la app ya está abierta:
     override fun onNewIntent(intent: Intent) {
         intent.let { super.onNewIntent(it) }
         setIntent(intent)
         manejarPresupuestoRecibido()
     }
-
     // Función para mostrar menú de opciones del presupuesto:
+
     private fun mostrarMenuPresupuesto() {
         val opciones = if (lista.isEmpty()) {
             arrayOf("Cargar presupuesto desde archivo")
         } else {
             arrayOf(
                 "Enviar por chat",
+                "🔧 Edición masiva",  // ✅ AGREGAR ESTA LÍNEA
                 "Cargar presupuesto desde archivo",
                 "Guardar como archivo JSON",
                 "Compartir como archivo"
@@ -1224,20 +1270,25 @@ class MainActivity : AppCompatActivity() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Opciones de Presupuesto")
         builder.setItems(opciones) { _, which ->
+            Log.d("DEBUG", "Opción menú principal: $which")
             when (which) {
                 0 -> if (lista.isEmpty()) {
                     abrirSelectorPresupuesto()
                 } else {
                     enviarPresupuestoPorChat()
                 }
-                1 -> abrirSelectorPresupuesto()
-                2 -> if (lista.isNotEmpty()) guardarComoJSON()
-                3 -> if (lista.isNotEmpty()) compartirPresupuesto()
+                1 -> {
+                    Log.d("DEBUG", "Llamando a mostrarMenuEdicionMasiva()")
+                    mostrarMenuEdicionMasiva()
+                }
+                2 -> abrirSelectorPresupuesto()
+                3 -> if (lista.isNotEmpty()) guardarComoJSON()
+                4 -> if (lista.isNotEmpty()) compartirPresupuesto()
             }
         }
+
         builder.show()
     }
-
     // Función para guardar como JSON:
     private fun guardarComoJSON() {
         val cliente = binding.clienteEditxt.text.toString().takeIf { it.isNotEmpty() } ?: "Sin nombre"
@@ -1255,16 +1306,27 @@ class MainActivity : AppCompatActivity() {
         val jsonString = gson.toJson(presupuesto)
 
         val fileName = "presupuesto_${cliente}_${System.currentTimeMillis()}.json"
-        val file = File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), fileName)
+
+        // ✅ CREAR ESTRUCTURA DE CARPETAS:
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val crystalDir = File(downloadsDir, "Crystal")
+        val presupuestosDir = File(crystalDir, "PresupuestosJ")
+
+        // Crear las carpetas si no existen
+        if (!presupuestosDir.exists()) {
+            presupuestosDir.mkdirs() // Crea toda la estructura de carpetas
+        }
+
+        // Archivo final en la carpeta correcta
+        val file = File(presupuestosDir, fileName)
 
         try {
             file.writeText(jsonString)
-            Toast.makeText(this, "Presupuesto guardado en: ${file.absolutePath}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "✅ Presupuesto guardado en:\nDescargas/Crystal/PresupuestosJ/\n$fileName", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Toast.makeText(this, "Error al guardar: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-
     // Función para compartir presupuesto:
     private fun compartirPresupuesto() {
         val cliente = binding.clienteEditxt.text.toString().takeIf { it.isNotEmpty() } ?: "Sin nombre"
@@ -1302,7 +1364,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error al compartir: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-
     // Modificar la función cargarPresupuestoDesdeJson para mejor UX:
     private fun cargarPresupuestoDesdeJson(jsonString: String): Boolean {
         return try {
@@ -1344,7 +1405,6 @@ class MainActivity : AppCompatActivity() {
             false
         }
     }
-
     // Funciones auxiliares para cargar presupuesto:
     @SuppressLint("NewApi", "SetTextI18n")
     private fun mostrarOpcionesCargar(presupuesto: PresupuestoCompleto) {
@@ -1373,7 +1433,6 @@ class MainActivity : AppCompatActivity() {
         builder.setNeutralButton("❌ Cancelar", null)
         builder.show()
     }
-
     @SuppressLint("NewApi", "SetTextI18n")
     private fun cargarPresupuestoDirecto(presupuesto: PresupuestoCompleto) {
         lista.clear()
@@ -1388,7 +1447,6 @@ class MainActivity : AppCompatActivity() {
         actualizar()
         Toast.makeText(this, "✅ Presupuesto cargado correctamente", Toast.LENGTH_SHORT).show()
     }
-
     private fun enviarPresupuestoPorChat() {
         if (lista.isEmpty()) {
             Toast.makeText(this, "No hay elementos en el presupuesto para enviar", Toast.LENGTH_SHORT).show()
@@ -1435,7 +1493,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error al preparar presupuesto: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-
     // Función para manejar archivos de presupuesto recibidos
     private fun manejarArchivoPresupuesto(uri: Uri) {
         try {
@@ -1451,17 +1508,17 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error al abrir archivo: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-
     private fun abrirSelectorPresupuesto() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/json"
+            // ✅ AGREGAR ESTO para empezar en la carpeta correcta:
+            putExtra("android.provider.extra.INITIAL_URI",
+                Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload%2FCrystal%2FPresupuestosJ"))
         }
         startActivityForResult(intent, RECEIVE_PRESUPUESTO_REQUEST)
     }
-
-    //Funciones para abrir e enviar presupuestos por mensaje texto
-
+    //Funciones Para Abrir e Enviar Presupuestos Por Mensaje Texto
     // Función para detectar si un mensaje tiene formato de medidas
     private fun esFormatoMedidas(mensaje: String): Boolean {
         val lineas = mensaje.trim().split("\n").filter { it.isNotBlank() }
@@ -1492,7 +1549,6 @@ class MainActivity : AppCompatActivity() {
 
         return true
     }
-
     // Función para parsear mensaje con medidas
     private fun parsearMensajeMedidas(mensaje: String): Pair<String, List<Triple<Float, Float, Float>>>? {
         try {
@@ -1542,7 +1598,6 @@ class MainActivity : AppCompatActivity() {
             return null
         }
     }
-
     // Función para importar medidas parseadas
     @SuppressLint("NewApi")
     private fun importarMedidasParseadas(producto: String, medidas: List<Triple<Float, Float, Float>>) {
@@ -1576,9 +1631,8 @@ class MainActivity : AppCompatActivity() {
         builder.setNeutralButton("❌ Cancelar", null)
         builder.show()
     }
-
     // 4. Función para manejar mensaje de medidas recibido (llamada desde ChatActivity)
-    @RequiresApi(Build.VERSION_CODES.N)
+
     private fun manejarMensajeMedidas() {
         val mensajeTexto = intent.getStringExtra("importar_medidas_texto")
 
@@ -1596,7 +1650,6 @@ class MainActivity : AppCompatActivity() {
             intent.removeExtra("importar_medidas_texto")
         }
     }
-
     // 1. Función para buscar precios en la base de datos
     @SuppressLint("NewApi")
     private fun buscarPrecioEnBaseDatos(producto: String, medidas: List<Triple<Float, Float, Float>>) {
@@ -1628,7 +1681,7 @@ class MainActivity : AppCompatActivity() {
 
     // 2. Función para mostrar opciones de productos encontrados
     @SuppressLint("DefaultLocale")
-    @RequiresApi(Build.VERSION_CODES.N)
+
     private fun mostrarOpcionesProductos(productos: List<Product>, productoOriginal: String, medidas: List<Triple<Float, Float, Float>>) {
         val opcionesLista = mutableListOf<String>()
 
@@ -1662,7 +1715,7 @@ class MainActivity : AppCompatActivity() {
         builder.show()
     }
     @SuppressLint("SetTextI18n", "DefaultLocale")
-    @RequiresApi(Build.VERSION_CODES.N)
+
     private fun importarMedidasConPrecio(producto: String, medidas: List<Triple<Float, Float, Float>>, precio: Double) {
         var elementosAgregados = 0
 
@@ -1728,6 +1781,399 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "❌ No se pudo importar ningún elemento", Toast.LENGTH_SHORT).show()
         }
     }
+
+    //FUNCIONES PARA EDITAR MASIVAMENTE
+    // VERSIÓN COMPATIBLE CON API 21 - REEMPLAZAR FUNCIONES ANTERIORES
+
+    // 1. Función principal para mostrar menú (sin problemas de API)
+    private fun mostrarMenuEdicionMasiva() {
+        if (lista.isEmpty()) {
+            Toast.makeText(this, "No hay elementos para editar", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("🔧 Edición Masiva")
+        // ← QUITAR esta línea: builder.setMessage("Selecciona qué quieres hacer:")
+
+        val opciones = arrayOf(
+            "📝 Editar precios por producto",
+            "🏷️ Cambiar nombre de producto",
+            "💰 Aplicar descuento general",
+            "🔄 Recalcular todos los costos"
+        )
+
+        builder.setItems(opciones) { _, which ->
+            when (which) {
+                0 -> mostrarEdicionPreciosPorProductoCompatible()
+                1 -> mostrarCambioNombreProductoCompatible()
+                2 -> mostrarAplicarDescuentoCompatible()
+                3 -> recalcularTodosLosCostosCompatible()
+            }
+        }
+
+        builder.setNegativeButton("❌ Cancelar", null)
+        builder.show()
+    }
+
+    // 2. Función compatible para agrupar productos (sin groupBy)
+    @SuppressLint("NewApi")
+    private fun mostrarEdicionPreciosPorProductoCompatible() {
+        // Crear mapa manual compatible con API 21
+        val productosUnicos = mutableMapOf<String, MutableList<Listado>>()
+
+        // Agrupar manualmente (compatible API 21)
+        for (elemento in lista) {
+            val producto = elemento.producto
+            if (productosUnicos.containsKey(producto)) {
+                productosUnicos[producto]!!.add(elemento)
+            } else {
+                productosUnicos[producto] = mutableListOf(elemento)
+            }
+        }
+
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("💰 Editar Precios por Producto")
+
+        // Crear lista de opciones
+        val opcionesLista = mutableListOf<String>()
+        val productosOrdenados = mutableListOf<String>()
+
+        for ((producto, elementos) in productosUnicos) {
+            val precioActual = elementos[0].precio
+            val cantidad = elementos.size
+
+            opcionesLista.add("🏷️ $producto\n💰 Precio: S/ ${formatearPrecio(precioActual)}\n📦 $cantidad elementos")
+            productosOrdenados.add(producto)
+        }
+
+        builder.setItems(opcionesLista.toTypedArray()) { _, which ->
+            val productoSeleccionado = productosOrdenados[which]
+            val elementosDelProducto = productosUnicos[productoSeleccionado]!!
+            mostrarDialogoEditarPrecioCompatible(productoSeleccionado, elementosDelProducto)
+        }
+
+        builder.setNegativeButton("🔙 Volver", null)
+        builder.show()
+    }
+
+    // 3. Función para formatear precio compatible
+    private fun formatearPrecio(precio: Float): String {
+        return "%.2f".format(precio)
+    }
+
+    // 4. Diálogo para editar precio compatible
+    @SuppressLint("SetTextI18n")
+    private fun mostrarDialogoEditarPrecioCompatible(producto: String, elementos: List<Listado>) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("💰 Editar Precio")
+
+        val precioActual = elementos[0].precio
+        val mensaje = "🏷️ Producto: $producto\n" +
+                "📦 Elementos: ${elementos.size}\n" +
+                "💰 Precio actual: S/ ${formatearPrecio(precioActual)}\n\n" +
+                "Ingresa el nuevo precio:"
+
+        builder.setMessage(mensaje)
+
+        // Input para nuevo precio
+        val input = EditText(this)
+        input.setText(precioActual.toString())
+        input.selectAll()
+        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+
+        builder.setView(input)
+
+        builder.setPositiveButton("✅ Aplicar") { _, _ ->
+            val nuevoPrecio = input.text.toString().toFloatOrNull()
+
+            if (nuevoPrecio != null && nuevoPrecio > 0) {
+                aplicarNuevoPrecioCompatible(elementos, nuevoPrecio)
+            } else {
+                Toast.makeText(this, "❌ Precio inválido", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        builder.setNegativeButton("❌ Cancelar", null)
+        builder.show()
+
+        // Mostrar teclado
+        input.requestFocus()
+    }
+
+    // 5. Aplicar nuevo precio compatible
+    private fun aplicarNuevoPrecioCompatible(elementos: List<Listado>, nuevoPrecio: Float) {
+        var elementosActualizados = 0
+
+        for (elemento in elementos) {
+            // Encontrar índice en lista principal
+            var index = -1
+            for (i in 0 until lista.size) {
+                if (lista[i] === elemento) { // Comparación por referencia
+                    index = i
+                    break
+                }
+            }
+
+            if (index != -1) {
+                // Actualizar precio
+                lista[index].precio = nuevoPrecio
+
+                // Recalcular costo según escala
+                val nuevoCosto = when (lista[index].escala) {
+                    "p2" -> lista[index].piescua * nuevoPrecio
+                    "m2" -> lista[index].metcua * nuevoPrecio
+                    "ml" -> lista[index].metli * nuevoPrecio
+                    "m3" -> lista[index].metcub * nuevoPrecio
+                    "uni" -> lista[index].canti * nuevoPrecio
+                    else -> lista[index].piescua * nuevoPrecio
+                }
+
+                lista[index].costo = nuevoCosto
+                elementosActualizados++
+            }
+        }
+
+        // Actualizar interfaz
+        actualizar()
+
+        Toast.makeText(this, "✅ $elementosActualizados elementos actualizados con precio S/ ${formatearPrecio(nuevoPrecio)}", Toast.LENGTH_LONG).show()
+    }
+
+    // 6. Cambio de nombre compatible
+    private fun mostrarCambioNombreProductoCompatible() {
+        // Agrupar productos manualmente
+        val productosUnicos = mutableMapOf<String, MutableList<Listado>>()
+
+        for (elemento in lista) {
+            val producto = elemento.producto
+            if (productosUnicos.containsKey(producto)) {
+                productosUnicos[producto]!!.add(elemento)
+            } else {
+                productosUnicos[producto] = mutableListOf(elemento)
+            }
+        }
+
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("🏷️ Cambiar Nombre de Producto")
+
+        val opcionesLista = mutableListOf<String>()
+        val productosOrdenados = mutableListOf<String>()
+
+        for ((producto, elementos) in productosUnicos) {
+            opcionesLista.add("🏷️ $producto (${elementos.size} elementos)")
+            productosOrdenados.add(producto)
+        }
+
+        builder.setItems(opcionesLista.toTypedArray()) { _, which ->
+            val productoSeleccionado = productosOrdenados[which]
+            val elementosDelProducto = productosUnicos[productoSeleccionado]!!
+            mostrarDialogoCambiarNombreCompatible(productoSeleccionado, elementosDelProducto)
+        }
+
+        builder.setNegativeButton("🔙 Volver", null)
+        builder.show()
+    }
+
+    // 7. Diálogo cambiar nombre compatible
+    private fun mostrarDialogoCambiarNombreCompatible(productoActual: String, elementos: List<Listado>) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("🏷️ Cambiar Nombre")
+        builder.setMessage("Producto actual: $productoActual\nElementos: ${elementos.size}\n\nNuevo nombre:")
+
+        val input = EditText(this)
+        input.setText(productoActual)
+        input.selectAll()
+
+        builder.setView(input)
+
+        builder.setPositiveButton("✅ Cambiar") { _, _ ->
+            val nuevoNombre = input.text.toString().trim()
+
+            if (nuevoNombre.isNotEmpty()) {
+                // Cambiar nombre en todos los elementos
+                for (elemento in elementos) {
+                    var index = -1
+                    for (i in 0 until lista.size) {
+                        if (lista[i] === elemento) {
+                            index = i
+                            break
+                        }
+                    }
+                    if (index != -1) {
+                        lista[index].producto = nuevoNombre
+                    }
+                }
+
+                actualizar()
+                Toast.makeText(this, "✅ Nombre cambiado a: $nuevoNombre", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "❌ Nombre no puede estar vacío", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        builder.setNegativeButton("❌ Cancelar", null)
+        builder.show()
+    }
+
+    // 8. Descuento compatible
+    private fun mostrarAplicarDescuentoCompatible() {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("💰 Aplicar Descuento General")
+        builder.setMessage("Aplicar descuento a TODOS los elementos:\n\nIngresa el porcentaje de descuento:")
+
+        val input = EditText(this)
+        input.hint = "Ejemplo: 10 (para 10%)"
+        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+
+        builder.setView(input)
+
+        builder.setPositiveButton("✅ Aplicar") { _, _ ->
+            val porcentaje = input.text.toString().toFloatOrNull()
+
+            if (porcentaje != null && porcentaje > 0 && porcentaje <= 100) {
+                val factor = 1 - (porcentaje / 100)
+
+                var elementosActualizados = 0
+                for (i in 0 until lista.size) {
+                    val nuevoPrecio = lista[i].precio * factor
+                    lista[i].precio = nuevoPrecio
+
+                    // Recalcular costo
+                    val nuevoCosto = when (lista[i].escala) {
+                        "p2" -> lista[i].piescua * nuevoPrecio
+                        "m2" -> lista[i].metcua * nuevoPrecio
+                        "ml" -> lista[i].metli * nuevoPrecio
+                        "m3" -> lista[i].metcub * nuevoPrecio
+                        "uni" -> lista[i].canti * nuevoPrecio
+                        else -> lista[i].piescua * nuevoPrecio
+                    }
+
+                    lista[i].costo = nuevoCosto
+                    elementosActualizados++
+                }
+
+                actualizar()
+                Toast.makeText(this, "✅ Descuento del $porcentaje% aplicado a $elementosActualizados elementos", Toast.LENGTH_LONG).show()
+
+            } else {
+                Toast.makeText(this, "❌ Porcentaje inválido (debe ser entre 1 y 100)", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        builder.setNegativeButton("❌ Cancelar", null)
+        builder.show()
+    }
+
+    // 9. Recalcular compatible
+    private fun recalcularTodosLosCostosCompatible() {
+        for (i in 0 until lista.size) {
+            val nuevoCosto = when (lista[i].escala) {
+                "p2" -> lista[i].piescua * lista[i].precio
+                "m2" -> lista[i].metcua * lista[i].precio
+                "ml" -> lista[i].metli * lista[i].precio
+                "m3" -> lista[i].metcub * lista[i].precio
+                "uni" -> lista[i].canti * lista[i].precio
+                else -> lista[i].piescua * lista[i].precio
+            }
+            lista[i].costo = nuevoCosto
+        }
+
+        actualizar()
+        Toast.makeText(this, "✅ Todos los costos recalculados", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun mostrarDialogoPrecioPactado() {
+        if (lista.isEmpty()) {
+            Toast.makeText(this, "No hay elementos para ajustar", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Calcular costo total actual
+        val costoTotalActual = lista.sumOf { it.costo.toDouble() }.toFloat()
+
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("💰 Precio Pactado")
+
+        val mensaje = "💰 Costo actual: S/ ${df2(costoTotalActual)}\n\n" +
+                "Ingresa el precio pactado con el cliente:"
+
+        builder.setMessage(mensaje)
+
+        // Input para el precio pactado
+        val input = EditText(this)
+        input.hint = "Ejemplo: 1500.00"
+        input.setText(costoTotalActual.toString())
+        input.selectAll()
+        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+
+        builder.setView(input)
+
+        builder.setPositiveButton("✅ Aplicar") { _, _ ->
+            val precioPactado = input.text.toString().toFloatOrNull()
+
+            if (precioPactado != null && precioPactado > 0) {
+                aplicarPrecioPactado(costoTotalActual, precioPactado)
+            } else {
+                Toast.makeText(this, "❌ Precio inválido", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        builder.setNegativeButton("❌ Cancelar", null)
+        builder.show()
+
+        // Mostrar teclado
+        input.requestFocus()
+    }
+
+    private fun aplicarPrecioPactado(costoActual: Float, precioPactado: Float) {
+        // Calcular factor de descuento/aumento
+        val factor = precioPactado / costoActual
+
+        val porcentajeDescuento = if (factor < 1) {
+            ((1 - factor) * 100)
+        } else {
+            0f
+        }
+
+        var elementosActualizados = 0
+
+        for (i in 0 until lista.size) {
+            // Aplicar factor al precio
+            val nuevoPrecio = lista[i].precio * factor
+            lista[i].precio = nuevoPrecio
+
+            // Recalcular costo con el nuevo precio
+            val nuevoCosto = when (lista[i].escala) {
+                "p2" -> lista[i].piescua * nuevoPrecio
+                "m2" -> lista[i].metcua * nuevoPrecio
+                "ml" -> lista[i].metli * nuevoPrecio
+                "m3" -> lista[i].metcub * nuevoPrecio
+                "uni" -> lista[i].canti * nuevoPrecio
+                else -> lista[i].piescua * nuevoPrecio
+            }
+
+            lista[i].costo = nuevoCosto
+            elementosActualizados++
+        }
+
+        // Actualizar interfaz
+        actualizar()
+
+        // Mensaje informativo
+        val mensaje = if (factor < 1) {
+            "✅ Precio pactado: S/ ${df2(precioPactado)}\n" +
+                    "📉 Descuento aplicado: ${df2(porcentajeDescuento)}%\n" +
+                    "📦 $elementosActualizados elementos actualizados"
+        } else {
+            "✅ Precio pactado: S/ ${df2(precioPactado)}\n" +
+                    "📈 Aumento aplicado: ${df2((factor - 1) * 100)}%\n" +
+                    "📦 $elementosActualizados elementos actualizados"
+        }
+
+        Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show()
+    }
+
     //FUNCIONES DE CHAT
 
     private fun setupUnreadMessagesListener() {
@@ -1780,6 +2226,9 @@ class MainActivity : AppCompatActivity() {
         else { "%.1f".format(defo)
         }
         return resultado.replace(",", ".")
+    }
+    private fun df2(defo: Float): String {
+        return "%.2f".format(defo).replace(".", ",")
     }
     private fun uni1() {
         usados = findViewById(R.id.spinner_usa)

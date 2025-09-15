@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#F5F5F5"
+    tools:context=".optimizadores.corte.ResultadoOptimizacionActivity">
+
+    <!-- Header con estadísticas -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="4dp"
+        app:cardBackgroundColor="@android:color/white">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📊 Resumen de Optimización"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#2196F3"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:id="@+id/tvBarrasUsadas"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Barras a cortar: 0"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#333333"
+                android:layout_marginBottom="8dp"
+                tools:text="Barras a cortar: 5" />
+
+            <TextView
+                android:id="@+id/tvCantidadCortes"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Cantidad de cortes: 0 (0 errores)"
+                android:textSize="14sp"
+                android:textColor="#666666"
+                tools:text="Cantidad de cortes: 12 (0 errores)" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Título de la lista -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔧 Detalle de Cortes"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#333333"
+        android:layout_marginBottom="12dp" />
+
+    <!-- RecyclerView para mostrar los resultados detallados -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerResultados"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp"
+        tools:listitem="@layout/item_resultado_varilla" />
+
+    <!-- Botón para volver -->
+    <Button
+        android:id="@+id/btnVolver"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="← Volver"
+        android:textSize="16sp"
+        android:backgroundTint="#2196F3"
+        android:textColor="@android:color/white"
+        android:padding="12dp" />
+
+</LinearLayout>

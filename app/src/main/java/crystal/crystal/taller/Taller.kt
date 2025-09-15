@@ -4,10 +4,13 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.Diseno.BarandaActivity
 import crystal.crystal.Diseno.DisenoActivity
+import crystal.crystal.Diseno.nova.DisenoNovaActivity
 import crystal.crystal.MainActivity
 import crystal.crystal.databinding.ActivityTallerBinding
-import crystal.crystal.optimizadores.Corte
 import crystal.crystal.optimizadores.Ncurvos
+import crystal.crystal.optimizadores.corte.CorteActivity
+import crystal.crystal.taller.nova.NovaApa
+import crystal.crystal.taller.nova.NovaIna
 
 class Taller : AppCompatActivity() {
 
@@ -90,10 +93,11 @@ class Taller : AppCompatActivity() {
         binding.btnA001.setOnClickListener { startActivity(Intent(this, PDuchaActivity::class.java)) }
 
         binding.btCurvo.setOnClickListener { startActivity(Intent(this, Ncurvos::class.java)) }
-        binding.btOptiLineal.setOnClickListener { startActivity(Intent(this, Corte::class.java)) }
+        binding.btOptiLineal.setOnClickListener { startActivity(Intent(this, CorteActivity::class.java)) }
         binding.tbX.setOnClickListener { startActivity(Intent(this, DisenoActivity::class.java)) }
         binding.btUnidades.setOnClickListener { startActivity(Intent(this, RejasActivity::class.java)) }
         binding.btOpti.setOnClickListener { startActivity(Intent(this, BarandaActivity::class.java)) }
+        binding.novaBtn.setOnClickListener { startActivity(Intent(this, DisenoNovaActivity::class.java))  }
 
     }
 
