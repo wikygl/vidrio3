@@ -176,29 +176,6 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/lyScan"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <ImageView
-                android:id="@+id/ivScan"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_margin="9dp"
-                android:contentDescription="@string/todo"
-                tools:srcCompat="@tools:sample/avatars" />
-
-            <Button
-                android:id="@+id/btConver"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/convertir" />
-
-        </LinearLayout>
-
-        <LinearLayout
             android:id="@+id/lyCuello"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -766,7 +743,7 @@
                                 tools:ignore="TooManyViews">
 
                                 <TextView
-                                    android:id="@+id/textView36"
+                                    android:id="@+id/txCostoTotal"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="0.63"

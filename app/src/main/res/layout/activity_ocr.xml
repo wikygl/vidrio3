@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorPrimary"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Encabezado -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <ImageButton
+                android:id="@+id/btnVolver"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_arrow_back"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Volver" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📷 OCR - Texto a Medidas"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white"
+                android:gravity="center" />
+
+            <TextView
+                android:id="@+id/tvContador"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📊 0 elementos"
+                android:textSize="12sp"
+                android:textColor="@android:color/white"
+                android:background="@drawable/fondo_insignia"
+                android:padding="6dp" />
+
+        </LinearLayout>
+
+        <!-- Estado actual -->
+        <TextView
+            android:id="@+id/tvEstado"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📷 Selecciona una imagen para comenzar el análisis OCR"
+            android:textSize="16sp"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="@drawable/fondo_redondeado"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Área de imagen -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📷 Vista previa de imagen"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black"
+                android:layout_marginBottom="12dp" />
+
+            <ImageView
+                android:id="@+id/ivVistaPrevia"
+                android:layout_width="match_parent"
+                android:layout_height="200dp"
+                android:src="@drawable/ic_placeholder_camara"
+                android:scaleType="centerCrop"
+                android:background="@drawable/borde_imagen"
+                android:layout_marginBottom="12dp"
+                android:contentDescription="Vista previa de imagen" />
+
+            <!-- Botones de imagen -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center">
+
+                <Button
+                    android:id="@+id/btnCamara"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:text="📷 Foto/Galería"
+                    android:textColor="@android:color/white"
+                    android:background="@drawable/fondo_boton_azul"
+                    android:padding="12dp" />
+
+                <Button
+                    android:id="@+id/btnProcesar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="🔍 Procesar"
+                    android:textColor="@android:color/white"
+                    android:background="@drawable/button_background_green"
+                    android:padding="12dp"
+                    android:enabled="false" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Texto extraído -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📝 Texto extraído"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black"
+                android:layout_marginBottom="8dp" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:background="@drawable/fondo_texto">
+
+                <TextView
+                    android:id="@+id/tvTextoExtraido"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="El texto extraído aparecerá aquí..."
+                    android:textSize="14sp"
+                    android:textColor="@android:color/black"
+                    android:padding="12dp"
+                    android:lineSpacingExtra="2dp" />
+
+            </ScrollView>
+
+        </LinearLayout>
+
+        <!-- Elementos encontrados -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📋 Elementos encontrados"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black"
+                android:layout_marginBottom="8dp" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:background="@drawable/fondo_texto">
+
+                <TextView
+                    android:id="@+id/tvElementosEncontrados"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No se han encontrado elementos aún"
+                    android:textSize="14sp"
+                    android:textColor="@android:color/darker_gray"
+                    android:padding="12dp"
+                    android:minHeight="80dp" />
+
+            </ScrollView>
+
+        </LinearLayout>
+
+        <!-- Botones de acción -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/btnLimpiar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="🧹 Limpiar"
+                android:textColor="@android:color/white"
+                android:background="@drawable/fondo_boton_gris"
+                android:padding="12dp" />
+
+            <Button
+                android:id="@+id/btnCancelar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:text="❌ Cancelar"
+                android:textColor="@android:color/white"
+                android:background="@drawable/button_background_red"
+                android:padding="12dp" />
+
+            <Button
+                android:id="@+id/btnFinalizar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="✅ Finalizar"
+                android:textColor="@android:color/white"
+                android:background="@drawable/button_background_green"
+                android:padding="12dp"
+                android:enabled="false" />
+
+        </LinearLayout>
+
+        <!-- Espacio adicional -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="16dp" />
+
+    </LinearLayout>
+
+</ScrollView>

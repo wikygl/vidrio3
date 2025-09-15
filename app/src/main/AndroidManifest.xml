@@ -40,10 +40,26 @@
         tools:ignore="AllowBackup,HardcodedDebugMode"
         tools:targetApi="p">
         <activity
+            android:name=".taller.venAl.Serie25Activity"
+            android:exported="false" />
+        <activity
+            android:name=".dictado.DictadoActivity"
+            android:exported="false"
+            android:label="Dictado de Medidas"
+            android:screenOrientation="portrait"
+            android:theme="@style/AppTheme" />
+        <activity
             android:name=".Diseno.BarandaActivity"
             android:exported="false" />
         <activity
+            android:name=".Diseno.nova.DisenoNovaActivity"
+            android:exported="false"
+            android:label="Diseño Nova" />
+        <activity
             android:name=".red.VisorArchivoActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ocr.OcrActivity"
             android:exported="false" />
         <activity
             android:name=".taller.PDuchaActivity"
@@ -80,6 +96,9 @@
             android:name=".optimizadores.OptimizadosActivity"
             android:exported="false" />
         <activity
+            android:name=".optimizadores.corte.ResultadoOptimizacionActivity"
+            android:exported="false" />
+        <activity
             android:name=".BaulActivity"
             android:exported="false" />
         <activity
@@ -92,7 +111,7 @@
             android:name=".red.ListChatActivity"
             android:exported="false" />
         <activity
-            android:name=".optimizadores.Corte"
+            android:name=".optimizadores.corte.CorteActivity"
             android:exported="false" />
         <activity
             android:name=".taller.PivotAl"
@@ -114,19 +133,22 @@
             android:screenOrientation="portrait"
             tools:ignore="DiscouragedApi,LockedOrientationActivity" />
         <activity
-            android:name=".catalogo.Catalogo"
+            android:name=".catalogo.CatalogoActivity"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
+        <activity
+            android:name=".catalogo.Fotos"
+            android:exported="false" />
         <activity
             android:name=".taller.MamparaPaflon"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
         <activity
-            android:name=".taller.NovaApa"
+            android:name=".taller.nova.NovaApa"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
         <activity
-            android:name=".taller.NovaIna"
+            android:name=".taller.nova.NovaIna"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
         <activity
@@ -149,20 +171,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
         <activity
             android:name=".MainActivity"
-            android:screenOrientation="portrait"
             android:exported="true"
             android:launchMode="singleTop"
+            android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity,AppLinkUrlError">
-
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
+
                 <category android:name="android.intent.category.DEFAULT" />
+
                 <data android:mimeType="application/json" />
             </intent-filter>
-
         </activity>
 
         <provider
@@ -174,7 +195,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-
     </application>
 
 </manifest>

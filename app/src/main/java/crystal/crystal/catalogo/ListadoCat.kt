@@ -6,13 +6,19 @@ class ListadoCat {
 
         val productos= mutableListOf(
             Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/portada%2Fpa%20inicio.jpg?alt=media&token=24e5fe92-c305-4c95-baf9-88582efa89a9",
-                "Puertas"),
+                "Puertas aluminio"),
             Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/portada%2Fventanas.jpg?alt=media&token=3bf21ee8-bfa5-4cfd-9b46-ca1491947e3e",
                 "Ventanas"),
+            Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/portada%2Fnova.jpg?alt=media&token=da32b2fa-3b8e-4dae-b920-8ff3ef0414c7",
+                "Nova"),
+            Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/portada%2Fven%20PVC.png?alt=media&token=71bceacb-ae81-40c5-8ff3-68b273b5bcf7",
+                "Ventanas PVC"),
             Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/portada%2Fmampara.jpg?alt=media&token=79fb095a-4b90-422a-8cb3-e636f5c8cdc3",
                 "Mamparas"),
+            Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/portada%2Fbaranda%20AL.jpg?alt=media&token=45917d3e-4038-4aac-986a-7f0f2f93332b",
+        "Baranda aluminio"),
             Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/portada%2Fpasamanos.jpg?alt=media&token=2694fc89-f55a-4f23-8a88-f694c548d68a",
-        "Pasamanos"),
+                "Baranda inox"),
             Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/portada%2Fpd.jpg?alt=media&token=63137e12-e613-4336-aa5e-49b9c7ffdb84",
                 "Puertas ducha"),
             Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/portada%2Fvitro.jpg?alt=media&token=efa79184-d471-403d-a584-06da040a3c04",
@@ -41,61 +47,6 @@ class ListadoCat {
                 "Contraplacadas de madera"),
             Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/contrametal%2Fcontrametal.jpeg?alt=media&token=46b9107a-61b1-4fd7-9762-eeee72b1b410",
                     "Contraplacadas de metal")
-        )
-        val ventanas = mutableListOf(
-            Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg",
-                "")
-        )
-        val puertas = mutableListOf(
-            Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg",""),
-        )
-         val mamparas = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val muroCortina = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val driwall = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val barandas = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val espejos = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val ducha = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val techos = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val cieloRazo = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val melamina = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val muebles = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val rejas = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val vitroven = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val cuadros = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-         val ladrillos = mutableListOf(
-             Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
-         )
-        val contram = mutableListOf(
-            Data("https://firebasestorage.googleapis.com/v0/b/calculadora-de-vidriero.appspot.com/o/contramadera%2Fpuertacon.jpg?alt=media&token=ed5fa847-8fb7-45ac-83d7-0a8a1aa50542", "")
-        )
-        val contraf = mutableListOf(
-            Data("https://tgfiletolink.herokuapp.com/8788710446109832/2022-05-13_20:29:10.jpg","")
         )
     }
 }

@@ -175,7 +175,7 @@ private fun referencias() {
     val ancho = binding.med1.text.toString().toFloat()
     val alto = binding.med2.text.toString().toFloat()
     val hojaVal = binding.hojatx.text.toString().toFloat()
-    binding.referenciasNfcfi.text =
+    binding.txReferencias.text =
         "An: ${df1(ancho)}  x  Al: ${df1(alto)}\nAltura de puente:" +
                 if (alto > hojaVal) df1(altoHoja()) else "sin puente" +
                         "\nDivisiones: ${divisiones()} -> Fs: ${nFijos()};Cs: ${nCorredizas()}" +

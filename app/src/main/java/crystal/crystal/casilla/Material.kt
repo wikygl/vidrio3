@@ -50,7 +50,7 @@ data class MaterialEntity(
     }
 }
 
-// 3. DAO: consultas específicas
+// 3. DAO: consultas especÃ­ficas
 @Dao
 interface MaterialDao {
     @Query("SELECT * FROM materiales WHERE tipo = :tipo")
@@ -77,7 +77,7 @@ abstract class AppDatabase : RoomDatabase() {
     }
 }
 
-// 5. Repositorio: interfaz y su implementación
+// 5. Repositorio: interfaz y su implementaciÃ³n
 interface MaterialRepository {
     fun getMateriales(tipo: TipoMaterial): Flow<List<Material>>
     suspend fun recargar(materiales: List<Material>)
@@ -109,6 +109,6 @@ object MaterialData {
         Material(id = 0, drawableId = R.drawable.mpfijof,      nombre = "Fijo Futuro",     tipo = TipoMaterial.OTROS),
         Material(id = 0, drawableId = R.drawable.baranda,       nombre = "BARANDA INOX",     tipo = TipoMaterial.PRODUCTOS)
 
-        // …añade todos los que necesites…
+        // â€¦aÃ±ade todos los que necesitesâ€¦
     )
 }
