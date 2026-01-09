@@ -5,7 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import crystal.crystal.ListaActivity
+import crystal.crystal.datos.ListaActivity
 import crystal.crystal.databinding.ActivityMamparaFcBinding
 
 class MamparaFC : AppCompatActivity() {

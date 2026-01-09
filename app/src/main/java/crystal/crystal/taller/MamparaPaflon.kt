@@ -13,7 +13,6 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import crystal.crystal.FichaActivity
 import crystal.crystal.R
 import crystal.crystal.casilla.DialogosProyecto
 import crystal.crystal.casilla.ListaCasilla
@@ -149,7 +148,7 @@ class MamparaPaflon : AppCompatActivity() {
 
     }
     binding.imgV.setOnClickListener {
-      startActivity(Intent(this,FichaActivity::class.java))
+      startActivity(Intent(this, FichaActivity::class.java))
     }
   }
 

@@ -50,7 +50,7 @@ data class MaterialEntity(
     }
 }
 
-// 3. DAO: consultas especÃ­ficas
+// 3. DAO: consultas específicas
 @Dao
 interface MaterialDao {
     @Query("SELECT * FROM materiales WHERE tipo = :tipo")
