@@ -11,6 +11,7 @@ import crystal.crystal.optimizadores.Ncurvos
 import crystal.crystal.optimizadores.corte.CorteActivity
 import crystal.crystal.taller.nova.NovaApa
 import crystal.crystal.taller.nova.NovaIna
+import crystal.crystal.taller.puerta.PuertasActivity
 
 class Taller : AppCompatActivity() {
 
@@ -28,7 +29,7 @@ class Taller : AppCompatActivity() {
         binding.puerta.setOnClickListener {
             val paquete = Bundle().apply { putString("rcliente", binding.cliente.text.toString())}
 
-            val intent = Intent(this, Puertas::class.java)
+            val intent = Intent(this, PuertasActivity::class.java)
             intent.putExtras(paquete)
             startActivity(intent)}
 
