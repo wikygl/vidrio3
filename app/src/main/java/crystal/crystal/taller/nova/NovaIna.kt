@@ -11,7 +11,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.Diseno.nova.DisenoNovaActivity
-import crystal.crystal.FichaActivity
+import crystal.crystal.taller.FichaActivity
 import crystal.crystal.R
 import crystal.crystal.casilla.DialogosProyecto
 import crystal.crystal.casilla.ListaCasilla

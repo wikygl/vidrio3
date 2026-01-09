@@ -11,7 +11,6 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import crystal.crystal.FichaActivity
 import crystal.crystal.casilla.DialogosProyecto
 import crystal.crystal.casilla.ListaCasilla
 import crystal.crystal.casilla.MapStorage
