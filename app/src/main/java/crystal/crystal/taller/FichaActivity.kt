@@ -1,4 +1,4 @@
-package crystal.crystal
+package crystal.crystal.taller
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -10,10 +10,16 @@ import android.text.style.StyleSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.TableLayout
+import android.widget.TableRow
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import crystal.crystal.R
 import crystal.crystal.casilla.MapStorage
 import crystal.crystal.databinding.ActivityFichaBinding
 import java.io.File
