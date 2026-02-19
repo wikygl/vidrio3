@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Nombre del vendedor:"
+        android:textSize="14sp"
+        android:textColor="@color/color"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/etNombreVendedor"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Ej: María González"
+        android:inputType="textPersonName"
+        android:layout_marginBottom="16dp" />
+    <!-- DESPUÉS DEL EditText etNombreVendedor -->
+
+    <ImageView
+        android:id="@+id/ivFotoTerminal"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:layout_gravity="center"
+        android:layout_marginTop="16dp"
+        android:contentDescription="Foto del terminal"
+        android:scaleType="centerCrop"
+        android:src="@drawable/usr"/>
+
+    <Button
+        android:id="@+id/btnSeleccionarFoto"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="9dp"
+        android:textSize="14sp"
+        android:text="📷 Seleccionar Foto"/>
+
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Método de autorización:"
+        android:textSize="14sp"
+        android:textColor="@color/color"
+        android:layout_marginBottom="8dp" />
+
+    <RadioGroup
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <RadioButton
+            android:id="@+id/radioQR"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📱 Código QR (recomendado)"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radioPIN"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔐 PIN de 6 dígitos" />
+
+    </RadioGroup>
+
+</LinearLayout>

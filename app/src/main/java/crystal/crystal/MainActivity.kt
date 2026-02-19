@@ -1,17 +1,19 @@
 package crystal.crystal
 
+// Android Core
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.text.Editable
 import android.text.Spannable
@@ -28,44 +30,34 @@ import android.widget.EditText
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+
+// AndroidX
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import com.bumptech.glide.Glide
+import androidx.lifecycle.lifecycleScope
+
+// Firebase
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.FirebaseStorage
+
+// Librerías externas
+import com.bumptech.glide.Glide
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.itextpdf.text.BaseColor
-import com.itextpdf.text.Chunk
-import com.itextpdf.text.Document
-import com.itextpdf.text.Element
-import com.itextpdf.text.Font
-import com.itextpdf.text.Image
-import com.itextpdf.text.PageSize
-import com.itextpdf.text.Paragraph
-import com.itextpdf.text.Phrase
-import com.itextpdf.text.Rectangle
-import com.itextpdf.text.pdf.ColumnText
-import com.itextpdf.text.pdf.PdfPCell
-import com.itextpdf.text.pdf.PdfPTable
-import com.itextpdf.text.pdf.PdfPageEventHelper
-import com.itextpdf.text.pdf.PdfWriter
-import com.itextpdf.text.pdf.draw.LineSeparator
-import crystal.crystal.catalogo.CatalogoActivity
-import crystal.crystal.databinding.ActivityMainBinding
-import crystal.crystal.red.ListChatActivity
-import crystal.crystal.registro.InicioActivity
-import crystal.crystal.registro.Registro
-import crystal.crystal.taller.Taller
-import kotlinx.coroutines.CoroutineScope
+
+// Coroutines
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
+
+// Java IO y utilidades
 import java.io.File
 import java.io.FileOutputStream
 import java.io.ObjectOutputStream
@@ -73,31 +65,136 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+// Módulos del proyecto - Catálogo y datos
+import crystal.crystal.catalogo.CatalogoActivity
+import crystal.crystal.databinding.ActivityMainBinding
+import crystal.crystal.datos.ListaActivity
+import crystal.crystal.datos.Product
+
+// Módulos del proyecto - Clientes
+import crystal.crystal.clientes.Cliente
+import crystal.crystal.clientes.ClienteDatabase
+import crystal.crystal.clientes.ClienteRepository
+import crystal.crystal.clientes.DialogoSeleccionClientes
+import crystal.crystal.clientes.GestionClientesActivity
+import crystal.crystal.clientes.SyncClientesWorker
+import crystal.crystal.clientes.SyncInicialClientesWorker
+import crystal.crystal.clientes.VoiceSearchManager
+
+// Módulos del proyecto - Productos
+import crystal.crystal.productos.GestionProductosActivity
+import crystal.crystal.productos.Producto
+import crystal.crystal.productos.ProductoDatabase
+import crystal.crystal.productos.ProductoRepository
+import crystal.crystal.productos.ProductoVoiceSearchManager
+import crystal.crystal.productos.SyncProductosWorker
+
+// Módulos del proyecto - Comprobantes y tickets
+import crystal.crystal.comprobantes.*
+
+// Módulos del proyecto - Dictado
+import crystal.crystal.dictado.DictadoMedidas
+
+// Módulos del proyecto - POS
+import crystal.crystal.pos.EdicionMasivaManager
+import crystal.crystal.pos.ImportadorMedidas
+import crystal.crystal.pos.PosManager
+import crystal.crystal.pos.RoleConfigManager
+
+// Módulos del proyecto - Red, registro y taller
+import crystal.crystal.red.ListChatActivity
+import crystal.crystal.registro.AyudaActivity
+import crystal.crystal.registro.GestionDispositivosActivity
+import crystal.crystal.registro.InicioActivity
+import crystal.crystal.registro.PinAuthActivity
+import crystal.crystal.registro.Registro
+import crystal.crystal.taller.Taller
+
+@RequiresApi(Build.VERSION_CODES.M)
+@SuppressLint("NewApi", "SetTextI18n")
 @Suppress("NAME_SHADOWING", "UNUSED_ANONYMOUS_PARAMETER", "DEPRECATION")
 class MainActivity : AppCompatActivity() {
 
-
-    private var lista: MutableList<Listado> = mutableListOf()
-    companion object {private const val RECEIVE_PRESUPUESTO_REQUEST = 3
+    // ─── Constantes ───
+    companion object {
+        private const val RECEIVE_PRESUPUESTO_REQUEST = 3
         private const val DICTADO_REQUEST_CODE = 200
-        private const val CODIGO_SOLICITUD_OCR = 300 }
+        private const val CODIGO_SOLICITUD_OCR = 300
+    }
+
+    // ─── Core / UI ───
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var sharedPreferences: SharedPreferences
+    private var lista: MutableList<Listado> = mutableListOf()
+    private var selectedPosition: Int = -1
+    private var colorSeleccionado: Int = 0
+
+    // ─── Firebase / Autenticación ───
     private val auth = FirebaseAuth.getInstance()
     private lateinit var currentUserId: String
     private var db = Firebase.firestore
 
+    // ─── Roles y dispositivo ───
+    private var rolDispositivo: String = "TERMINAL"
+    private var esPatron: Boolean = false
+    private var nombreVendedor: String = "Vendedor"
+
+    // ─── Spinners y unidades ───
     private lateinit var usados: Spinner
     private lateinit var unidades: Spinner
-    private var colorSeleccionado: Int = 0
+    private var retaso = 1.8f
+
+    // ─── Cámara / Galería ───
     private val RECORD_REQUEST_CODE = 101
     private val REQUEST_IMAGE_CAPTURE = 1
     private val REQUEST_IMAGE_GALLERY = 2
-    private var selectedPosition: Int = -1
-    private val retaso = 1.8f
 
-    private lateinit var sharedPreferences: SharedPreferences
-    private lateinit var binding: ActivityMainBinding
-    // Mapa para almacenar el contador de mensajes no leídos por chat
+    // ─── POS / Ventas (delegado a PosManager) ───
+    private lateinit var posManager: PosManager
+    private lateinit var edicionMasivaManager: EdicionMasivaManager
+    private lateinit var roleConfigManager: RoleConfigManager
+
+    private val posCallback = object : PosManager.PosCallback {
+        override fun obtenerLista(): MutableList<Listado> = lista
+        override fun obtenerNombreVendedor(): String = nombreVendedor
+        override fun obtenerEsPatron(): Boolean = esPatron
+        override fun obtenerRolDispositivo(): String = rolDispositivo
+        override fun actualizar() = this@MainActivity.actualizar()
+        override fun obtenerUidParaConsulta(): String? {
+            val esTerminalPIN = sharedPreferences.getBoolean("es_terminal_pin", false)
+            return if (esTerminalPIN) {
+                sharedPreferences.getString("patron_uid", null)
+            } else {
+                FirebaseAuth.getInstance().currentUser?.uid
+            }
+        }
+        override fun guardarDatos() = this@MainActivity.guardarDatos()
+        override fun mostrarDialogoPatronNoEncontrado() = roleConfigManager.mostrarDialogoPatronNoEncontrado()
+        override fun mostrarOpcionReconectar() = roleConfigManager.mostrarOpcionReconectar()
+    }
+
+    // ─── Clientes ───
+    private lateinit var clienteRepository: ClienteRepository
+    private lateinit var voiceSearchManager: VoiceSearchManager
+    private var clienteSeleccionado: Cliente? = null
+
+    // ─── Productos ───
+    private lateinit var productoRepository: ProductoRepository
+    private lateinit var productoVoiceSearchManager: ProductoVoiceSearchManager
+    private var productoSeleccionado: Producto? = null
+    private var modoBusqueda: Boolean = false
+
+    // ─── Importador de medidas ───
+    private lateinit var importadorMedidas: ImportadorMedidas
+
+    // ─── Dictado por voz ───
+    private var dictadoMedidas: DictadoMedidas? = null
+    private var dictadoActivo = false
+    private var backgroundOriginalMed1: Drawable? = null
+
+    // ─── Chat ───
     private val unreadCountByChat = mutableMapOf<String, Int>()
+    private var ultimaSincronizacion: Long = 0L
 
     @SuppressLint("NewApi", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,30 +204,55 @@ class MainActivity : AppCompatActivity() {
 
         // Inicializar SharedPreferences
         sharedPreferences = this.getSharedPreferences("MyPrefs", Context.MODE_PRIVATE)
-
-        binding.clienteEditxt.setText(cargarDatosGuardados())
-
-        // Cargar los datos guardados
-        cargarDatosGuardados()
-
         fotoUsuario()
-
+        // Inicializar RoleConfigManager
+        roleConfigManager = RoleConfigManager(this, binding, sharedPreferences, auth, db)
+        roleConfigManager.callback = object : RoleConfigManager.Callback {
+            override fun onRoleConfigured(rolDispositivo: String, esPatron: Boolean, nombreVendedor: String) {
+                this@MainActivity.rolDispositivo = rolDispositivo
+                this@MainActivity.esPatron = esPatron
+                this@MainActivity.nombreVendedor = nombreVendedor
+            }
+            override fun guardarDatos() = this@MainActivity.guardarDatos()
+            override fun sincronizarDatosManualmente() = posManager.sincronizarDatosManualmente()
+        }
+        // Cargar y consultar estado del usuario
+        roleConfigManager.cargarEstadoUsuario()
+        lifecycleScope.launch { roleConfigManager.cargarRolYConfigurar() }
         cliente()
-
         uni1()
-
         uni2()
-
         eliminar()
-
         abrir()
-
+        importadorMedidas = ImportadorMedidas(
+            activity = this,
+            binding = binding,
+            obtenerLista = { lista },
+            actualizar = { actualizar() },
+            conversor = { conver(it) },
+            calcPies = { m1, m2 -> pies(m1, m2) },
+            calcMetroCua = { m1, m2 -> metroCua(m1, m2) },
+            calcMLineales = { m1, m2 -> mLineales(m1, m2) },
+            calcMCubicos = { m1, m2, m3 -> mCubicos(m1, m2, m3) }
+        )
         manejarPresupuestoRecibido()
+        posManager = PosManager(this, binding, sharedPreferences)
+        posManager.setCallback(posCallback)
+        posManager.inicializarControlesPOS()
+
+        edicionMasivaManager = EdicionMasivaManager(this, lista)
+        edicionMasivaManager.onListaModificada = { actualizar() }
+        roleConfigManager.verificarAutorizacionTerminal()
+        inicializarClientes()
+        inicializarProductos()
+        configurarBusqueda()
+        inicializarDictadoMedidas()
+        configurarRetrocesoEditTexts()
 
         binding.btnLimpiar.setOnClickListener {
             try {
                 if (binding.usTxt.text != "uni") {
-                    binding.med1Editxt.requestFocus()
+                    focusMed1()
                 } else {
                     binding.cantEditxt.requestFocus()
                 }
@@ -153,7 +275,7 @@ class MainActivity : AppCompatActivity() {
                 binding.metrosTotal.text = "0.0"
                 binding.per.text = "0.0"
                 binding.prueTxt.text= ""
-                binding.tvpCliente.text = "Presupuesto"
+                binding.tvpCliente.text = "Cliente"
                 lista.clear()
                 binding.list.onRemoteAdapterConnected()
                 actualizar()
@@ -183,20 +305,19 @@ class MainActivity : AppCompatActivity() {
             putExtra("monto", binding.per.text.toString()))}
 
         binding.tallerCal.setOnClickListener {
-            if (binding.clienteEditxt.text.isNotEmpty()) {
-                val paquete = Bundle().apply {
-                    putString("cliente", binding.clienteEditxt.text.toString())
-                }
-                val intent = Intent(this, Taller::class.java)
-                intent.putExtras(paquete)
-                startActivity(intent)
-            } else {
-                startActivity(Intent(this, Taller::class.java))
+            val intent = Intent(this, Taller::class.java)
+            val cliente = binding.clienteEditxt.text.toString()
+            if (cliente.isNotEmpty()) {
+                intent.putExtra("cliente", cliente)
             }
+            if (lista.isNotEmpty()) {
+                intent.putExtra("lista_presupuesto", ArrayList(lista))
+            }
+            startActivity(intent)
         }
 
         // Supongamos que el usuario ya está autenticado
-        currentUserId = obtenerUsuarioActual()
+        currentUserId = roleConfigManager.obtenerIdUsuarioActual()
 
         setupUnreadMessagesListener()
 
@@ -211,25 +332,11 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, CatalogoActivity::class.java))}
 
         // Agregar OnLongClickListener al textView prodtxt
+        // MODIFICAR el listener existente de prodtxt:
         binding.prodtxt.setOnLongClickListener {
-            // Agregar el TextWatcher al EditText pro_editxt
-            binding.proEditxt.addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
-                    // No se utiliza en este caso
-                }
-
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                    // Filtrar la lista con el texto ingresado en el EditText
-                    val criterio = s.toString()
-                    filtrarLista(criterio)
-                }
-
-                override fun afterTextChanged(s: Editable?) {
-                    // No se utiliza en este caso
-                }
-            })
-
-            // Devolver true para indicar que se ha manejado el evento de clic largo
+            voiceSearchManager.iniciarBusquedaPorVoz { resultado ->
+                manejarResultadoBusqueda(resultado)
+            }
             true
         }
 
@@ -237,7 +344,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 //Zona real
                 if (binding.usTxt.text!="uni") {
-                    binding.med1Editxt.requestFocus()} else {
+                    focusMed1()} else {
                     binding.cantEditxt.requestFocus()
                 }
 
@@ -250,12 +357,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.btMicro.setOnClickListener {
-            val intent = Intent(this, crystal.crystal.dictado.DictadoActivity::class.java)
-            startActivityForResult(intent, DICTADO_REQUEST_CODE)
+        binding.btWallet.setOnClickListener {
+            // en MainActivity (donde tengas el onClick del botón Wallet)
+            startActivity(Intent(this, PinAuthActivity::class.java))
         }
 
-        binding.btScan.setOnClickListener {
+        /*binding.btScan.setOnClickListener {
             val opciones = arrayOf<CharSequence>(
                 "📷 Tomar foto",
                 "🖼️ Elegir de la galería",
@@ -274,10 +381,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             builder.show()
+        }*/
+
+        binding.btAyuda.setOnClickListener {
+            startActivity(Intent(this, AyudaActivity::class.java))
         }
 
         binding.txtRetaso.setOnClickListener {
-            binding.prueTxt.text= cargarDatosGuardados()
+            mostrarDialogoRetaso()
         }
 
         binding.tvpCliente.setOnLongClickListener {
@@ -291,12 +402,58 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // En tu onCreate() o donde inicialices la interfaz
-        binding.txCostoTotal.setOnLongClickListener {
-            mostrarDialogoPrecioPactado()
-            true
+        binding.btnProcesarVenta.setOnLongClickListener {
+            // Abrir DisenoTicketActivity
+            val intent = Intent(this, DisenoTicketActivity::class.java)
+            startActivity(intent)
+            true // Consumir el evento
+        }
+        // Click normal genera el ticket
+        binding.btnProcesarVenta.setOnClickListener {
+            // Obtener datos reales de la venta
+            val cliente = binding.clienteEditxt.text.toString().trim()
+            val total = binding.precioTotal.text.toString().trim()
+
+            // Validar que no estén vacíos
+            if (cliente.isEmpty()) {
+                Toast.makeText(this, "Ingresa el nombre del cliente", Toast.LENGTH_SHORT).show()
+                binding.clienteEditxt.requestFocus()
+                return@setOnClickListener
+            }
+            clienteSeleccionado?.let { clienteBD ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val totalTexto = binding.precioTotal.text.toString()
+                            .replace("S/", "")
+                            .replace(" ", "")
+                            .trim()
+
+                        // ⭐ CLAVE: Reemplazar coma por punto ANTES de convertir
+                        val totalFloat: Float = totalTexto.replace(",", ".").toFloatOrNull() ?: 0f
+
+                        clienteRepository.registrarVenta(clienteBD.id, totalFloat)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+
+            if (lista.isEmpty()) {
+                Toast.makeText(this, "Agrega productos a la venta", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            posManager.generarTicketVenta(cliente, total)
         }
 
+        posManager.cargarConfiguracionTicket()
+        posManager.cargarDatosEmpresa()
+        roleConfigManager.verificarAutenticacionTerminal()
+        // Cargar timestamp de última sincronización
+        ultimaSincronizacion = sharedPreferences.getLong("empresa_ultima_sincronizacion", 0L)
+
+        binding.txSincronizar.setOnClickListener {
+            posManager.sincronizarDatosManualmente()
+        }
     }
 
     override fun onPause() {
@@ -307,11 +464,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+
+        // ⭐ SI ES TERMINAL, NO VERIFICAR FIREBASE AUTH
+        val tipoSesion = sharedPreferences.getString("session_type", null)
+        if (tipoSesion == "TERMINAL") {
+            // Terminal no usa FirebaseAuth
+            return
+        }
+
+        // Usuario normal: verificar autenticación
         val auth = FirebaseAuth.getInstance()
-        val currentUser = auth.currentUser
-        currentUser?.reload()?.addOnCompleteListener { task ->
-            if (!task.isSuccessful) {
-                // Si la recarga falla, es probable que el usuario haya sido eliminado
+        val usuarioActual = auth.currentUser
+        usuarioActual?.reload()?.addOnCompleteListener { tarea ->
+            if (!tarea.isSuccessful) {
                 auth.signOut()
                 startActivity(Intent(this, InicioActivity::class.java))
                 finish()
@@ -319,37 +484,101 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("SetTextI18n")
-    private fun fotoUsuario(){
-        val currentUser = auth.currentUser
+    override fun onResume() {
+        super.onResume()
 
-        if (currentUser?.photoUrl != null) {
+        val estadoUsuario = roleConfigManager.obtenerEstadoUsuario()
+        if (estadoUsuario == "VENTAS") {
+            lifecycleScope.launch {
+                roleConfigManager.verificarAutorizacionVentas()
+            }
+        }
+    }
+    // ═══════════════════════════════════════════════════
+    // ─── PERFIL DE USUARIO ───
+    // ═══════════════════════════════════════════════════
+    @SuppressLint("HardwareIds")
+    private fun fotoUsuario(){
+        val tipoSesion = sharedPreferences.getString("session_type", null)
+
+        if (tipoSesion == "TERMINAL") {
+            val nombreVendedor = sharedPreferences.getString("nombre_vendedor", "Terminal") ?: "Terminal"
+            val patronUid = sharedPreferences.getString("patron_uid", null)
+
+            binding.txUser.text = nombreVendedor
+
+            if (patronUid != null) {
+                val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+
+                db.collection("usuarios")
+                    .document(patronUid)
+                    .collection("plan_ventas")
+                    .document("dispositivos")
+                    .collection("autorizados")
+                    .document(deviceId)
+                    .get()
+                    .addOnSuccessListener { doc ->
+                        val fotoUrl = doc.getString("foto_url")
+
+                        if (fotoUrl != null && fotoUrl.isNotEmpty()) {
+                            Glide.with(this)
+                                .load(fotoUrl)
+                                .circleCrop()
+                                .placeholder(R.drawable.ic_usuario4)
+                                .error(R.drawable.ic_usuario4)
+                                .into(binding.btUser)
+                        } else {
+                            Glide.with(this)
+                                .load(R.drawable.ic_usuario4)
+                                .circleCrop()
+                                .into(binding.btUser)
+                        }
+                    }
+                    .addOnFailureListener {
+                        Glide.with(this)
+                            .load(R.drawable.ic_usuario4)
+                            .circleCrop()
+                            .into(binding.btUser)
+                    }
+            } else {
+                Glide.with(this)
+                    .load(R.drawable.ic_usuario4)
+                    .circleCrop()
+                    .into(binding.btUser)
+            }
+
+            return
+        }
+
+        // Usuario normal con Google
+        val usuarioActual = auth.currentUser
+
+        if (usuarioActual?.photoUrl != null) {
             Glide.with(this)
-                .load(currentUser.photoUrl)
+                .load(usuarioActual.photoUrl)
                 .circleCrop()
-                .placeholder(R.drawable.ic_usuario4)  // Imagen mientras se carga
-                .error(R.drawable.ic_usuario4)       // En caso de error
+                .placeholder(R.drawable.ic_usuario4)
+                .error(R.drawable.ic_usuario4)
                 .into(binding.btUser)
         } else {
-            // Si no hay foto de perfil, cargamos la imagen predeterminada
             Glide.with(this)
                 .load(R.drawable.ic_usuario4)
                 .circleCrop()
                 .into(binding.btUser)
         }
 
-        if (currentUser?.displayName != null && currentUser.displayName!!.isNotEmpty()) {
-            // Separa el nombre completo por espacios y toma el primer elemento
-            val firstName = currentUser.displayName!!.split(" ").firstOrNull() ?: "Usuario"
-            binding.txUser.text = firstName
+        if (usuarioActual?.displayName != null && usuarioActual.displayName!!.isNotEmpty()) {
+            val primerNombre = usuarioActual.displayName!!.split(" ").firstOrNull() ?: "Usuario"
+            binding.txUser.text = primerNombre
         } else {
-            // Si no hay displayName, asigna un valor predeterminado
             binding.txUser.text = "Usuario"
         }
-
     }
+    // ═══════════════════════════════════════════════════
+    // ─── LISTADO / CARRITO ───
+    // agregarListado, actualizar, adaptadores, filtrarLista
+    // ═══════════════════════════════════════════════════
     @SuppressLint("SetTextI18n")
-
     private fun agregarListado() {
         // escalas, unidades y colores
         val escala = binding.usTxt.text.toString()
@@ -414,8 +643,6 @@ class MainActivity : AppCompatActivity() {
 
         lista.add(medidas)
     }
-
-
     @SuppressLint("SetTextI18n")
     private fun actualizar() {
         // Creamos un nuevo adapter con los datos de la lista
@@ -445,7 +672,6 @@ class MainActivity : AppCompatActivity() {
         // Notificamos al adapter que se actualizaron los datos
         adapter.notifyDataSetChanged()
     }
-
     private fun adaptadores(): ArrayAdapter<SpannableString> {
         val clipCodigo = 0x1F4CE
         val clip = String(Character.toChars(clipCodigo))
@@ -505,75 +731,504 @@ class MainActivity : AppCompatActivity() {
 
         return adapter
     }
-
+    // ═══════════════════════════════════════════════════
+    // ─── CLIENTES ───
+    // cliente, inicializarClientes, buscarCliente,
+    // seleccionarCliente, mostrarListaClientes,
+    // manejarResultadoBusqueda
+    // ═══════════════════════════════════════════════════
     @SuppressLint("SetTextI18n")
     private fun cliente() {
-
         val paqueteR = intent.extras
-        val clienteIntent = paqueteR?.getString("rcliente")
-        val clienteRecup = cargarDatosGuardados()
+        val clienteIntent = paqueteR?.getString("rcliente")  // Cliente desde baulActivity
+        val clienteRecup = cargarDatosGuardados()  // Cliente de SharedPreferences
 
+        // ⭐ PRIORIDAD 1: Cliente desde baulActivity (presupuesto abierto)
         if (clienteIntent != null) {
-            // Si hay un cliente en los extras del intent, priorizarlo
-            sharedPreferences.edit().putString("cliente", clienteIntent).apply()
+            Log.d("MainActivity", "✅ Cliente desde presupuesto: $clienteIntent")
+
+            // Actualizar UI
             binding.tvpCliente.text = "Presupuesto de $clienteIntent"
             binding.clienteEditxt.setText(clienteIntent)
 
-            // Ajustar la visibilidad: ocultar lyCuello y mostrar lyCuerpo
+            // Guardar en SharedPreferences para próxima sesión
+            sharedPreferences.edit()
+                .putString("cliente", clienteIntent)
+                .putString("tvpCliente", "Presupuesto de $clienteIntent")
+                .apply()
+
+            // Mostrar cuerpo (área de trabajo)
             binding.lyCuello.visibility = View.GONE
             binding.lyCuerpo.visibility = View.VISIBLE
-        } else {
-            // Si no hay cliente en los extras, usar el valor de SharedPreferences
-            if (clienteRecup.isNotEmpty()) {
-                binding.tvpCliente.text = "Presupuesto de $clienteRecup"
-                binding.clienteEditxt.setText(clienteRecup)
+        }
+        // ⭐ PRIORIDAD 2: Cliente guardado de sesión anterior
+        else if (clienteRecup.isNotEmpty()) {
+            Log.d("MainActivity", "✅ Cliente de sesión anterior: $clienteRecup")
 
-                // Ajustar la visibilidad: ocultar lyCuello y mostrar lyCuerpo
-                binding.lyCuello.visibility = View.GONE
-                binding.lyCuerpo.visibility = View.VISIBLE
-            } else {
-                binding.tvpCliente.text = "Presupuesto"
-                binding.clienteEditxt.setText("")
+            // Restaurar de SharedPreferences
+            val tvpClienteGuardado = sharedPreferences.getString("tvpCliente", "Presupuesto de $clienteRecup")
 
-                // Ajustar la visibilidad: mostrar lyCuello y ocultar lyCuerpo
-                binding.lyCuello.visibility = View.VISIBLE
-                binding.lyCuerpo.visibility = View.GONE
-            }
+            binding.tvpCliente.text = tvpClienteGuardado
+            binding.clienteEditxt.setText(clienteRecup)
+
+            binding.lyCuello.visibility = View.GONE
+            binding.lyCuerpo.visibility = View.VISIBLE
+        }
+        // ⭐ PRIORIDAD 3: Sin cliente (nuevo presupuesto)
+        else {
+            Log.d("MainActivity", "📝 Nuevo presupuesto (sin cliente)")
+
+            binding.tvpCliente.text = "Cliente"
+            binding.clienteEditxt.setText("")
+
+            // Mostrar cuello (header para ingresar cliente)
+            binding.lyCuello.visibility = View.VISIBLE
+            binding.lyCuerpo.visibility = View.GONE
         }
 
+        // ========== LISTENER: Click en tvpCliente ==========
+        // Permite cambiar de cliente tocando el título
         binding.tvpCliente.setOnClickListener {
             binding.lyCuello.visibility = View.VISIBLE
             binding.lyCuerpo.visibility = View.GONE
         }
 
+        // ========== LISTENER: Click en btGo (GUARDAR CLIENTE) ==========
         binding.btGo.setOnClickListener {
             val clientet = binding.clienteEditxt.text.toString().trim()
+
+            // Actualizar tvpCliente según haya o no cliente
             binding.tvpCliente.text = if (clientet.isNotEmpty()) {
                 "Presupuesto de $clientet"
             } else {
-                "Presupuesto"
+                "Cliente"
             }
 
             if (clientet.isNotEmpty()) {
-                // Si hay un cliente, ocultar lyCuello y mostrar lyCuerpo
+                // HAY CLIENTE: Guardar y mostrar área de trabajo
+
                 binding.lyCuello.visibility = View.GONE
                 binding.lyCuerpo.visibility = View.VISIBLE
 
-                // Guardar el cliente en SharedPreferences
-                sharedPreferences.edit().putString("cliente", clientet).apply()
+                // Guardar en SharedPreferences
+                sharedPreferences.edit()
+                    .putString("cliente", clientet)
+                    .putString("tvpCliente", "Presupuesto de $clientet")
+                    .apply()
+
                 Toast.makeText(this, "Cliente guardado correctamente", Toast.LENGTH_SHORT).show()
+
+                Log.d("MainActivity", "💾 Cliente guardado: $clientet")
             } else {
-                // Si no hay cliente, mostrar lyCuello y ocultar lyCuerpo
+                // SIN CLIENTE: Eliminar y mostrar área de trabajo vacía
+
                 binding.lyCuello.visibility = View.GONE
                 binding.lyCuerpo.visibility = View.VISIBLE
 
-                // Eliminar el cliente de SharedPreferences
-                sharedPreferences.edit().remove("cliente").apply()
-                // No mostrar toast al eliminar
+                // Eliminar de SharedPreferences
+                sharedPreferences.edit()
+                    .remove("cliente")
+                    .remove("tvpCliente")
+                    .apply()
+
+                Log.d("MainActivity", "🗑️ Cliente eliminado")
             }
         }
     }
+    private fun inicializarClientes() {
+        val database = ClienteDatabase.getDatabase(this)
+        clienteRepository = ClienteRepository(database.clienteDao(), this)
+        voiceSearchManager = VoiceSearchManager(this, clienteRepository)
 
+        val prefs = getSharedPreferences("MyPrefs", MODE_PRIVATE)
+        val primeraVez = prefs.getBoolean("clientes_primera_vez", true)
+
+        if (primeraVez) {
+            SyncInicialClientesWorker.descargarClientesIniciales(this)
+            prefs.edit().putBoolean("clientes_primera_vez", false).apply()
+        } else {
+            SyncClientesWorker.programarSincronizacionPeriodica(this)
+        }
+    }
+    private fun buscarCliente(consulta: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val resultados = clienteRepository.buscar(consulta)
+
+                withContext(Dispatchers.Main) {
+                    when (resultados.size) {
+                        0 -> {
+                            Toast.makeText(this@MainActivity, "❌ Cliente no encontrado", Toast.LENGTH_SHORT).show()
+                        }
+                        1 -> {
+                            seleccionarCliente(resultados[0])
+
+                            // Desactivar modo búsqueda si está activo
+                            if (modoBusqueda) {
+                                modoBusqueda = false
+                                binding.proEditxt.backgroundTintList = ContextCompat.getColorStateList(this@MainActivity, R.color.color)
+                                binding.proEditxt.setText("")
+                            }
+                        }
+                        else -> {
+                            mostrarListaClientes(resultados)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error: ${e.message}")
+            }
+        }
+    }
+    private fun seleccionarCliente(cliente: Cliente) {
+        clienteSeleccionado = cliente
+
+        // Actualizar UI
+        binding.clienteEditxt.setText(cliente.getTextoCompleto())
+        binding.tvpCliente.text = "Presupuesto de ${cliente.nombreCompleto}"
+
+        // Guardar en SharedPreferences
+        sharedPreferences.edit()
+            .putString("cliente", cliente.nombreCompleto)
+            .putString("tvpCliente", "Presupuesto de ${cliente.nombreCompleto}")
+            .apply()
+
+        Toast.makeText(this, "✅ ${cliente.nombreCompleto}", Toast.LENGTH_SHORT).show()
+
+        Log.d("MainActivity", "✅ Cliente seleccionado: ${cliente.nombreCompleto}")
+    }
+    private fun mostrarListaClientes(clientes: List<Cliente>) {
+        val items = clientes.map { it.getTextoCompleto() }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("Selecciona cliente (${clientes.size})")
+            .setItems(items) { _, which ->
+                seleccionarCliente(clientes[which])
+
+                // Desactivar modo búsqueda si está activo
+                if (modoBusqueda) {
+                    modoBusqueda = false
+                    binding.proEditxt.backgroundTintList = ContextCompat.getColorStateList(this, R.color.color)
+                    binding.proEditxt.setText("")
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+    private fun manejarResultadoBusqueda(resultado: VoiceSearchManager.ResultadoBusqueda) {
+        when (resultado) {
+            is VoiceSearchManager.ResultadoBusqueda.ClienteUnico -> {
+                seleccionarCliente(resultado.cliente)
+            }
+
+            is VoiceSearchManager.ResultadoBusqueda.ClientesMultiples -> {
+                mostrarListaClientes(resultado.clientes)
+            }
+
+            VoiceSearchManager.ResultadoBusqueda.NoEncontrado -> {
+                Toast.makeText(this, "❌ Cliente no encontrado", Toast.LENGTH_SHORT).show()
+            }
+
+            VoiceSearchManager.ResultadoBusqueda.Cancelado -> {
+                // Usuario canceló
+            }
+
+            is VoiceSearchManager.ResultadoBusqueda.Producto -> {
+                val nombreProducto = resultado.nombre
+                Log.d("MainActivity", "🔍 Texto original: '$nombreProducto'")
+
+                // ⭐ LIMPIAR palabra "producto" o "p" de manera robusta
+                val nombreLimpio = limpiarPrefijo(nombreProducto)
+
+                Log.d("MainActivity", "🔍 Texto limpio: '$nombreLimpio'")
+
+                if (nombreLimpio.isEmpty()) {
+                    Toast.makeText(this, "❌ Debes decir el nombre del producto", Toast.LENGTH_SHORT).show()
+                    return
+                }
+
+                // Buscar en productos
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val resultados = productoRepository.buscar(nombreLimpio, 5)
+
+                        Log.d("MainActivity", "📦 Resultados: ${resultados.size}")
+
+                        withContext(Dispatchers.Main) {
+                            when (resultados.size) {
+                                0 -> {
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "❌ Producto no encontrado: $nombreLimpio",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                                1 -> {
+                                    seleccionarProducto(resultados[0])
+                                }
+                                else -> {
+                                    mostrarListaProductos(resultados)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error: ${e.message}")
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "❌ Error buscando producto",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private fun limpiarPrefijo(texto: String): String {
+        val textoLimpio = texto.lowercase().trim()
+
+        // Lista de prefijos a eliminar (del más largo al más corto)
+        val prefijos = listOf("productos", "producto", "p")
+
+        for (prefijo in prefijos) {
+            // Verificar si empieza con el prefijo seguido de espacio
+            if (textoLimpio.startsWith("$prefijo ")) {
+                return texto.substring(prefijo.length).trim()
+            }
+        }
+
+        // Si no empieza con ningún prefijo, retornar el texto original
+        return texto.trim()
+    }
+// PRODUCTOS
+    // ═══════════════════════════════════════════════════
+    // ─── PRODUCTOS ───
+    // inicializarProductos, buscarProducto,
+    // seleccionarProducto, mostrarListaProductos,
+    // manejarResultadoBusquedaProducto, configurarBusqueda
+    // ═══════════════════════════════════════════════════
+    private fun inicializarProductos() {
+        val database = ProductoDatabase.getDatabase(this)
+        productoRepository = ProductoRepository(database.productoDao(), this)
+        productoVoiceSearchManager = ProductoVoiceSearchManager(this, productoRepository)
+
+        SyncProductosWorker.programarSincronizacionPeriodica(this)
+
+        Log.d("MainActivity", "✅ Productos inicializados")
+    }
+    // ==================== DICTADO DE MEDIDAS ====================
+    // ═══════════════════════════════════════════════════
+    // ─── DICTADO POR VOZ ───
+    // inicializarDictadoMedidas, activarDictado,
+    // desactivarDictado, procesarResultadoDictado
+    // ═══════════════════════════════════════════════════
+    private fun inicializarDictadoMedidas() {
+        dictadoMedidas = DictadoMedidas()
+        backgroundOriginalMed1 = binding.med1Lay.background
+
+        binding.med1Lay.setOnLongClickListener {
+            if (dictadoActivo) {
+                desactivarDictado()
+            } else {
+                activarDictado()
+            }
+            true
+        }
+    }
+    private fun activarDictado() {
+        dictadoActivo = true
+        binding.med1Lay.setBackgroundResource(R.drawable.bg_dictado_activo)
+        dictadoMedidas?.lanzar(this)
+    }
+    private fun desactivarDictado() {
+        dictadoActivo = false
+        binding.med1Lay.background = backgroundOriginalMed1
+    }
+    private fun procesarResultadoDictado(resultado: DictadoMedidas.Resultado) {
+        when (resultado) {
+            is DictadoMedidas.Resultado.Exito -> {
+                val m = resultado.medida
+                binding.med1Editxt.setText(m.medida1.toString())
+                binding.med2Editxt.setText(m.medida2.toString())
+                binding.cantEditxt.setText(m.cantidad.toString())
+                if (!m.producto.isNullOrBlank()) binding.proEditxt.setText(m.producto)
+                if (binding.precioEditxt.text.isNullOrBlank()) binding.precioEditxt.setText("0")
+
+                try {
+                    agregarListado()
+                    actualizar()
+                    Toast.makeText(this, "${m.medida1} x ${m.medida2} = ${m.cantidad}", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+
+                // Relanzar diálogo para seguir dictando
+                if (dictadoActivo) {
+                    dictadoMedidas?.lanzar(this)
+                }
+            }
+
+            is DictadoMedidas.Resultado.Incompleto -> {
+                // No dijo "siguiente", reabrir diálogo acumulando texto
+                Toast.makeText(this, "Acumulado: ${resultado.textoAcumulado}", Toast.LENGTH_SHORT).show()
+                if (dictadoActivo) {
+                    dictadoMedidas?.lanzar(this)
+                }
+            }
+
+            is DictadoMedidas.Resultado.Cancelado -> {
+                desactivarDictado()
+                dictadoMedidas?.resetear()
+            }
+        }
+    }
+    // ==================== FIN DICTADO DE MEDIDAS ====================
+    private fun buscarProducto(consulta: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val resultados = productoRepository.buscar(consulta, 5)
+
+                withContext(Dispatchers.Main) {
+                    when (resultados.size) {
+                        0 -> {
+                            Toast.makeText(this@MainActivity, "❌ Producto no encontrado", Toast.LENGTH_SHORT).show()
+                        }
+                        1 -> {
+                            seleccionarProducto(resultados[0])
+
+                            // Desactivar modo búsqueda si está activo
+                            if (modoBusqueda) {
+                                modoBusqueda = false
+                                binding.proEditxt.backgroundTintList = ContextCompat.getColorStateList(this@MainActivity, R.color.color)
+                            }
+                        }
+                        else -> {
+                            mostrarListaProductos(resultados)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error: ${e.message}")
+            }
+        }
+    }
+    private fun seleccionarProducto(producto: Producto) {
+        productoSeleccionado = producto
+
+        binding.proEditxt.setText(producto.nombre)
+
+        when {
+            !producto.tieneStock() -> {
+                Toast.makeText(this, "⚠️ ${producto.nombre} - Sin stock", Toast.LENGTH_LONG).show()
+            }
+            producto.necesitaReabastecimiento() -> {
+                Toast.makeText(this, "⚠️ ${producto.nombre} - Stock bajo: ${producto.stock}", Toast.LENGTH_LONG).show()
+            }
+            else -> {
+                Toast.makeText(this, "✅ ${producto.nombre} - Stock: ${producto.stock}", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        Log.d("MainActivity", "✅ Producto: ${producto.nombre} (Stock: ${producto.stock})")
+    }
+    private fun mostrarListaProductos(productos: List<Producto>) {
+        val items = productos.map {
+            "${it.nombre} - Stock: ${it.stock} - S/ ${it.precioVenta}"
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("Selecciona producto (${productos.size})")
+            .setItems(items) { _, which ->
+                seleccionarProducto(productos[which])
+
+                // Desactivar modo búsqueda si está activo
+                if (modoBusqueda) {
+                    modoBusqueda = false
+                    binding.proEditxt.backgroundTintList = ContextCompat.getColorStateList(this, R.color.color)
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+    private fun manejarResultadoBusquedaProducto(resultado: ProductoVoiceSearchManager.ResultadoBusqueda) {
+        when (resultado) {
+            is ProductoVoiceSearchManager.ResultadoBusqueda.ProductoUnico -> {
+                seleccionarProducto(resultado.producto)
+            }
+
+            is ProductoVoiceSearchManager.ResultadoBusqueda.ProductosMultiples -> {
+                mostrarListaProductos(resultado.productos)
+            }
+
+            ProductoVoiceSearchManager.ResultadoBusqueda.NoEncontrado -> {
+                Toast.makeText(this, "❌ Producto no encontrado", Toast.LENGTH_SHORT).show()
+            }
+
+            ProductoVoiceSearchManager.ResultadoBusqueda.Cancelado -> {
+                // Usuario canceló
+            }
+        }
+    }
+// BÚSQUEDA POR TEXTO (txBusqueda)
+    private fun configurarBusqueda() {
+        // Botón txBusqueda
+        binding.txBusqueda.setOnClickListener {
+            if (modoBusqueda) {
+                // Desactivar modo búsqueda
+                modoBusqueda = false
+                binding.proEditxt.backgroundTintList = ContextCompat.getColorStateList(this, R.color.color)
+                binding.proEditxt.setText("")
+
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.hideSoftInputFromWindow(binding.proEditxt.windowToken, 0)
+            } else {
+                // Activar modo búsqueda
+                modoBusqueda = true
+                binding.proEditxt.backgroundTintList = ContextCompat.getColorStateList(this, R.color.rojo)
+                binding.proEditxt.setText("")
+                binding.proEditxt.requestFocus()
+
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.showSoftInput(binding.proEditxt, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
+
+        // TextWatcher para búsqueda por texto
+        binding.proEditxt.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+            override fun afterTextChanged(s: Editable?) {
+                if (!modoBusqueda) return
+
+                val texto = s?.toString()?.trim() ?: return
+                if (texto.length < 3) return
+
+                val palabras = texto.split(" ")
+                val primeraPalabra = palabras[0].lowercase()
+
+                when {
+                    primeraPalabra == "cliente" || primeraPalabra == "c" -> {
+                        val consulta = texto.removePrefix("cliente").removePrefix("c").trim()
+                        if (consulta.length >= 2) {
+                            buscarCliente(consulta)
+                        }
+                    }
+                    primeraPalabra == "producto" || primeraPalabra == "p" -> {
+                        val consulta = texto.removePrefix("producto").removePrefix("p").trim()
+                        if (consulta.length >= 2) {
+                            buscarProducto(consulta)
+                        }
+                    }
+                }
+            }
+        })
+    }
+    // ═══════════════════════════════════════════════════
+    // ─── ELIMINACIÓN Y EDICIÓN DE ITEMS ───
+    // eliminar, filtrarLista
+    // ═══════════════════════════════════════════════════
     @RequiresApi(Build.VERSION_CODES.O)
     @SuppressLint("SetTextI18n", "WrongViewCast", "MissingInflatedId")
     private fun eliminar() {
@@ -734,7 +1389,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun filtrarLista(criterio: String) {
         val listaFiltrada = lista.filter { item ->
             item.producto.contains(criterio, ignoreCase = true)
@@ -743,8 +1397,11 @@ class MainActivity : AppCompatActivity() {
         val adaptador = ArrayAdapter(this, R.layout.lista_cal, listaFiltrada.map { it.toString() })
         binding.list.adapter = adaptador
     }
-
     //shared
+    // ═══════════════════════════════════════════════════
+    // ─── PERSISTENCIA LOCAL ───
+    // guardarDatos, cargarDatosGuardados, guardar, abrir
+    // ═══════════════════════════════════════════════════
     private fun guardarDatos() {
         // Obtener los datos que deseas guardar
         val dato1 = binding.med1Editxt.text.toString()
@@ -764,6 +1421,9 @@ class MainActivity : AppCompatActivity() {
         editor.putString("precio", precio)
         editor.putString("producto", producto)
         editor.putString("cliente",cliente)
+        editor.putString("rol_dispositivo", rolDispositivo)
+        editor.putBoolean("es_patron", esPatron)
+        editor.putString("nombre_vendedor", nombreVendedor)
 
         // Convertir la lista en una cadena JSON
         val gson = Gson()
@@ -772,7 +1432,6 @@ class MainActivity : AppCompatActivity() {
 
         editor.apply()
     }
-
     private fun cargarDatosGuardados(): String {
         // Obtener los datos guardados desde SharedPreferences
         val dato1 = sharedPreferences.getString("dato1", "")
@@ -802,7 +1461,6 @@ class MainActivity : AppCompatActivity() {
         }
         return cliente.toString()
     }
-
     // guardar completo
     @RequiresApi(Build.VERSION_CODES.O)
     private fun guardar() {
@@ -810,9 +1468,7 @@ class MainActivity : AppCompatActivity() {
         val sdf = SimpleDateFormat("yyyy-MM-dd_HH:mm:ss", Locale.getDefault())
         val currentDateAndTime = sdf.format(Date())
 
-        val nombreArchivo = if (binding.tvpCliente.text == "Presupuesto"){
-            "Presupuesto ->${"($cliente)"} ${currentDateAndTime}.dat"}else
-        {"Presupuesto ->${"($cliente)"}\n ${currentDateAndTime}.dat"}
+        val nombreArchivo = "Presupuesto ->($cliente) ${currentDateAndTime}.dat"
         val fileOutputStream: FileOutputStream
         try {
             fileOutputStream = openFileOutput(nombreArchivo, Context.MODE_PRIVATE)
@@ -823,8 +1479,6 @@ class MainActivity : AppCompatActivity() {
             e.printStackTrace()
         }
     }
-
-
     private fun abrir() {
         val paquete = intent.extras
         val li = paquete?.getSerializable("lista") as? List<*>
@@ -850,9 +1504,7 @@ class MainActivity : AppCompatActivity() {
             actualizar()
         }
     }
-
     //FUNCIONES DE DICTADO
-
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == RECORD_REQUEST_CODE) {
@@ -863,9 +1515,34 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
+    @SuppressLint("CheckResult")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+
+        // Dictado de medidas
+        dictadoMedidas?.procesarResultado(requestCode, resultCode, data)?.let {
+            procesarResultadoDictado(it)
+            return
+        }
+
+        if (voiceSearchManager.procesarResultadoVoz(requestCode, resultCode, data)) {
+            return
+        }
+        //Búsqueda por voz de PRODUCTOS
+        if (requestCode == ProductoVoiceSearchManager.REQUEST_CODE_SPEECH_PRODUCTO) {
+            if (resultCode == RESULT_OK && data != null) {
+                lifecycleScope.launch {
+                    productoVoiceSearchManager.procesarResultadoVoz(
+                        requestCode,
+                        resultCode,
+                        data
+                    ) { resultado ->
+                        manejarResultadoBusquedaProducto(resultado)
+                    }
+                }
+            }
+            return
+        }
 
         try {
             when (requestCode) {
@@ -994,27 +1671,19 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error al procesar la solicitud: ${e.message}", Toast.LENGTH_SHORT).show()
             e.printStackTrace()
         }
+        super.onActivityResult(requestCode, resultCode, data)
     }
-
     //FUNCIONES SCAN
-// ✅ MANTENER ESTAS FUNCIONES (las necesitas para agregar imágenes a elementos)
-    @SuppressLint("QueryPermissionsNeeded")
-    private fun openCamera() {
-        val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-        if (takePictureIntent.resolveActivity(packageManager) != null) {
-            startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE)
-        } else {
-            Toast.makeText(this, "No se encontró una aplicación de cámara", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     @SuppressLint("IntentReset")
+    // ═══════════════════════════════════════════════════
+    // ─── CÁMARA / GALERÍA ───
+    // openGallery, usoImagenUri
+    // ═══════════════════════════════════════════════════
     private fun openGallery() {
         val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         intent.type = "image/*"
         startActivityForResult(intent, REQUEST_IMAGE_GALLERY)
     }
-
     private fun usoImagenUri(imageUriString: String) {
         if (selectedPosition != -1) {
             // Solo actualizar la interfaz con el URI acortado
@@ -1024,196 +1693,25 @@ class MainActivity : AppCompatActivity() {
         }
         Log.d("Image URI", imageUriString)
     }
-
-    //FUNCIONES PDF
-    /*private fun openPdf() {
-   generarPdf()
-   val pdfFile = File(getExternalFilesDir(null), "Presupuesto_${clienteEditxt.text}.pdf")
-   if (pdfFile.exists() && pdfFile.length() > 0) {
-       val target = Intent(Intent.ACTION_VIEW)
-       target.setDataAndType(Uri.fromFile(pdfFile), "application/pdf")
-       target.flags = Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_GRANT_READ_URI_PERMISSION
-       val intent = Intent.createChooser(target, "Abrir archivo")
-       startActivity(intent)
-   } else {
-       Toast.makeText(this, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
-   }
-}*/
+    // ─── GENERACIÓN DE PDF (delegado a PdfGenerator) ───
+    private val pdfGenerator by lazy { crystal.crystal.pdf.PdfGenerator(this) }
 
     private fun openPdf() {
-        generarPdf()
-        val pdfFile = File(getExternalFilesDir(null), "Presupuesto_${binding.clienteEditxt.text}.pdf")
-        if (pdfFile.exists() && pdfFile.length() > 0) {
-            val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", pdfFile)
-            val shareIntent = Intent(Intent.ACTION_SEND)
-            shareIntent.putExtra(Intent.EXTRA_STREAM, uri)
-            shareIntent.type = "application/pdf"
-            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            val intent = Intent.createChooser(shareIntent, "Compartir archivo")
-            startActivity(intent)
-        } else {
-            Toast.makeText(this, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // Clase para gestionar el evento de numeración de páginas
-    class PageNumeration : PdfPageEventHelper() {
-        override fun onEndPage(writer: PdfWriter, document: Document) {
-            val cb = writer.directContent
-            val pageSize = document.pageSize
-
-            // Fuente para la numeración
-            val pageNumberFont = Font(Font.FontFamily.HELVETICA, 10f, Font.NORMAL)
-            val phrase = Phrase("Página ${writer.pageNumber}", pageNumberFont)
-
-            // Posición de la numeración (pie de página)
-            ColumnText.showTextAligned(
-                cb,
-                Element.ALIGN_RIGHT,
-                phrase,
-                pageSize.right - document.rightMargin(),
-                pageSize.bottom + 18f, // Ajustar la altura si es necesario
-                0f
-            )
-        }
-    }
-
-
-    @SuppressLint("ResourceType")
-    private fun generarPdf() {
         val cliente = binding.clienteEditxt.text.toString()
-        val pdfFileName = "Presupuesto_${cliente}.pdf"
-        val pdfFile = File(getExternalFilesDir(null), pdfFileName)
-
-        val document = Document(PageSize.A4, 36f, 36f, 36f, 36f)
-        val writer = PdfWriter.getInstance(document, FileOutputStream(pdfFile))
-
-        // Añadir el evento para la numeración de páginas
-        val event = PageNumeration()
-        writer.pageEvent = event
-
-        document.open()
-
-        val tituloFont = Font(Font.FontFamily.HELVETICA, 27f, Font.BOLD)
-        document.add(Paragraph("Proforma $cliente", tituloFont))
-
-        if (lista.isEmpty()) {
-            Toast.makeText(this, "La lista está vacía", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        var itemNum = 0 // Para numerar los ítems
-
-        for (item in lista) {
-            itemNum++
-
-            // Crear un bloque de contenido que se mantiene junto (KeepTogether)
-            val block = PdfPTable(1)
-            block.keepTogether = true // Esto evita que el ítem se corte entre páginas
-
-            val itemTitleFont = Font(Font.FontFamily.HELVETICA, 16f, Font.BOLD)
-            val tituloItem = "Ítem $itemNum: ${item.producto}"
-            val tituloItemParagraph = Paragraph(tituloItem, itemTitleFont)
-
-            val cellTitulo = PdfPCell(tituloItemParagraph)
-            cellTitulo.border = Rectangle.NO_BORDER
-            block.addCell(cellTitulo)
-
-            val table = PdfPTable(2)
-            table.widthPercentage = 100f
-
-            val ancho = item.medi1
-            val alto = item.medi2
-            val fondo = item.medi3
-            val cantidad = item.canti
-            val costo = item.costo
-            val anexo = item.uri
-
-            val textoMedidas = when (item.escala) {
-                "p2", "m2" -> "Ancho: ${df1(ancho)}\nAlto: ${df1(alto)}\nCantidad: ${df1(cantidad)}"
-                "ml" -> "Metros: ${df1(ancho)}\nCantidad: ${df1(cantidad)}"
-                "m3" -> "Ancho: ${df1(ancho)}\nAlto: ${df1(alto)}\nFondo: ${df1(fondo)}\nCantidad: ${df1(cantidad)}"
-                "uni" -> "Cantidad: ${df1(cantidad)}"
-                else -> ""
-            }
-
-            val costoFont = Font(Font.FontFamily.HELVETICA, 12f, Font.BOLD)
-            val textoCosto = Chunk("Costo: ${df2(costo)}", costoFont)
-
-            val textoCompleto = Paragraph(textoMedidas)
-            textoCompleto.add(Chunk("\n"))
-            textoCompleto.add(textoCosto)
-
-            val textCell = PdfPCell(textoCompleto)
-            textCell.border = Rectangle.NO_BORDER
-            textCell.setPadding(9f)
-            table.addCell(textCell)
-
-            var imageCell: PdfPCell
-
-            if (anexo.isEmpty()) {
-                // Si el anexo es nulo o vacío, dejamos la celda en blanco
-                imageCell = PdfPCell(Paragraph(""))
-            } else {
-                try {
-                    val imageUri = Uri.parse(anexo)
-                    val bitmap = BitmapFactory.decodeStream(contentResolver.openInputStream(imageUri))
-
-                    if (bitmap != null) {
-                        val stream = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-                        val image = Image.getInstance(stream.toByteArray())
-                        image.scaleToFit(270f, 270f)
-                        imageCell = PdfPCell(image)
-                    } else {
-                        imageCell = PdfPCell(Paragraph("Imagen no disponible"))
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    imageCell = PdfPCell(Paragraph("Imagen no disponible"))
-                }
-            }
-
-            imageCell.border = Rectangle.NO_BORDER
-            imageCell.setPadding(9f)
-            table.addCell(imageCell)
-
-            block.addCell(PdfPCell(table).apply { border = Rectangle.NO_BORDER })
-
-            document.add(block) // Añadir el bloque completo al documento
-
-            // Añadir una línea separadora entre los elementos
-            val separator = LineSeparator()
-            separator.lineColor = BaseColor.GRAY // Color de la línea
-            separator.lineWidth = 1f // Grosor de la línea
-            document.add(Chunk(separator))
-
-            document.add(Paragraph("\n")) // Salto de línea entre ítems
-        }
-
-        // Agregar el cuadro del precio total
-        val totalBox = Rectangle(10f, 50f, 550f, 100f)
-        totalBox.borderWidth = 1f
-        totalBox.borderColor = BaseColor.BLACK
-        document.add(totalBox)
-
-        val precioTotal = binding.precioTotal.text.toString()
-        val tituloTotal = "Precio total: S/.$precioTotal"
-        val tituloTotalItem = Paragraph(tituloTotal, Font(Font.FontFamily.HELVETICA, 16f, Font.BOLD))
-        tituloTotalItem.alignment = Element.ALIGN_RIGHT
-        document.add(tituloTotalItem)
-
-        document.close()
-
-        Toast.makeText(this, "PDF generado: ${pdfFile.absolutePath}", Toast.LENGTH_LONG).show()
+        pdfGenerator.generarYCompartir(cliente, lista, binding.precioTotal.text.toString())
     }
-
     // FUNCIONES PARA ENVIAR Y ABRIR PERUSPUESTOS
-
-    // Función para manejar presupuestos recibidos:
     @SuppressLint("NewApi")
+    // ═══════════════════════════════════════════════════
+    // ─── PRESUPUESTOS ───
+    // manejarPresupuestoRecibido, mostrarMenuPresupuesto,
+    // guardarComoJSON, compartirPresupuesto,
+    // cargarPresupuestoDesdeJson, mostrarOpcionesCargar,
+    // cargarPresupuestoDirecto, enviarPresupuestoPorChat,
+    // manejarArchivoPresupuesto, abrirSelectorPresupuesto
+    // ═══════════════════════════════════════════════════
     private fun manejarPresupuestoRecibido() {
-        manejarMensajeMedidas()
+        importadorMedidas.manejarMensajeMedidas()
         // Manejar contenido JSON directo (nuevo método)
         val jsonContent = intent.getStringExtra("cargar_presupuesto_json")
         val nombreArchivo = intent.getStringExtra("cargar_presupuesto_nombre")
@@ -1246,14 +1744,11 @@ class MainActivity : AppCompatActivity() {
             builder.show()
         }
     }
-    // Agregar onNewIntent para manejar intents cuando la app ya está abierta:
     override fun onNewIntent(intent: Intent) {
         intent.let { super.onNewIntent(it) }
         setIntent(intent)
         manejarPresupuestoRecibido()
     }
-    // Función para mostrar menú de opciones del presupuesto:
-
     private fun mostrarMenuPresupuesto() {
         val opciones = if (lista.isEmpty()) {
             arrayOf("Cargar presupuesto desde archivo")
@@ -1279,7 +1774,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 1 -> {
                     Log.d("DEBUG", "Llamando a mostrarMenuEdicionMasiva()")
-                    mostrarMenuEdicionMasiva()
+                    edicionMasivaManager.mostrarMenuEdicionMasiva()
                 }
                 2 -> abrirSelectorPresupuesto()
                 3 -> if (lista.isNotEmpty()) guardarComoJSON()
@@ -1289,7 +1784,6 @@ class MainActivity : AppCompatActivity() {
 
         builder.show()
     }
-    // Función para guardar como JSON:
     private fun guardarComoJSON() {
         val cliente = binding.clienteEditxt.text.toString().takeIf { it.isNotEmpty() } ?: "Sin nombre"
         val presupuesto = PresupuestoCompleto(
@@ -1327,7 +1821,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error al guardar: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-    // Función para compartir presupuesto:
     private fun compartirPresupuesto() {
         val cliente = binding.clienteEditxt.text.toString().takeIf { it.isNotEmpty() } ?: "Sin nombre"
         val presupuesto = PresupuestoCompleto(
@@ -1364,7 +1857,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error al compartir: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-    // Modificar la función cargarPresupuestoDesdeJson para mejor UX:
     private fun cargarPresupuestoDesdeJson(jsonString: String): Boolean {
         return try {
             val gson = Gson()
@@ -1405,7 +1897,6 @@ class MainActivity : AppCompatActivity() {
             false
         }
     }
-    // Funciones auxiliares para cargar presupuesto:
     @SuppressLint("NewApi", "SetTextI18n")
     private fun mostrarOpcionesCargar(presupuesto: PresupuestoCompleto) {
         val builder = AlertDialog.Builder(this)
@@ -1422,6 +1913,17 @@ class MainActivity : AppCompatActivity() {
             }
             binding.clienteEditxt.setText(nuevoCliente)
             binding.tvpCliente.text = "Presupuesto de $nuevoCliente"
+
+            // ⭐ AGREGAR ESTAS LÍNEAS (después de línea 1931):
+            sharedPreferences.edit()
+                .putString("cliente", nuevoCliente)
+                .putString("tvpCliente", "Presupuesto de $nuevoCliente")
+                .apply()
+
+            // Ajustar visibilidad
+            binding.lyCuello.visibility = View.GONE
+            binding.lyCuerpo.visibility = View.VISIBLE
+
             actualizar()
             Toast.makeText(this, "✅ Presupuesto sumado correctamente", Toast.LENGTH_SHORT).show()
         }
@@ -1439,6 +1941,12 @@ class MainActivity : AppCompatActivity() {
         lista.addAll(presupuesto.elementos)
         binding.clienteEditxt.setText(presupuesto.cliente)
         binding.tvpCliente.text = "Presupuesto de ${presupuesto.cliente}"
+
+        // ⭐ AGREGAR ESTAS LÍNEAS (después de línea 1948):
+        sharedPreferences.edit()
+            .putString("cliente", presupuesto.cliente)
+            .putString("tvpCliente", "Presupuesto de ${presupuesto.cliente}")
+            .apply()
 
         // Ajustar visibilidad
         binding.lyCuello.visibility = View.GONE
@@ -1493,7 +2001,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error al preparar presupuesto: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-    // Función para manejar archivos de presupuesto recibidos
     private fun manejarArchivoPresupuesto(uri: Uri) {
         try {
             val inputStream = contentResolver.openInputStream(uri)
@@ -1518,664 +2025,11 @@ class MainActivity : AppCompatActivity() {
         }
         startActivityForResult(intent, RECEIVE_PRESUPUESTO_REQUEST)
     }
-    //Funciones Para Abrir e Enviar Presupuestos Por Mensaje Texto
-    // Función para detectar si un mensaje tiene formato de medidas
-    private fun esFormatoMedidas(mensaje: String): Boolean {
-        val lineas = mensaje.trim().split("\n").filter { it.isNotBlank() }
-
-        if (lineas.size < 2) return false
-
-        // Regex para detectar medidas: número x número = número (con decimales)
-        val regexMedida = Regex("""^\s*\d+(\.\d+)?\s*[xX]\s*\d+(\.\d+)?\s*=\s*\d+(\.\d+)?\s*$""")
-
-        // Buscar la primera línea que sea una medida
-        var primeraMedida = -1
-        for (i in lineas.indices) {
-            if (regexMedida.matches(lineas[i].trim())) {
-                primeraMedida = i
-                break
-            }
-        }
-
-        // Debe haber al menos una línea antes (producto) y debe encontrar medidas
-        if (primeraMedida <= 0) return false
-
-        // Desde la primera medida en adelante, TODAS deben ser medidas
-        for (i in primeraMedida until lineas.size) {
-            if (!regexMedida.matches(lineas[i].trim())) {
-                return false
-            }
-        }
-
-        return true
-    }
-    // Función para parsear mensaje con medidas
-    private fun parsearMensajeMedidas(mensaje: String): Pair<String, List<Triple<Float, Float, Float>>>? {
-        try {
-            val lineas = mensaje.trim().split("\n").filter { it.isNotBlank() }
-
-            if (!esFormatoMedidas(mensaje)) return null
-
-            val regexMedida = Regex("""^\s*\d+(\.\d+)?\s*[xX]\s*\d+(\.\d+)?\s*=\s*\d+(\.\d+)?\s*$""")
-
-            // Encontrar donde empiezan las medidas
-            var inicieMedidas = -1
-            for (i in lineas.indices) {
-                if (regexMedida.matches(lineas[i].trim())) {
-                    inicieMedidas = i
-                    break
-                }
-            }
-
-            // ✅ TODO ANTES DE LA PRIMERA MEDIDA = PRODUCTO
-            val producto = lineas.take(inicieMedidas).joinToString(" ").trim()
-            val medidas = mutableListOf<Triple<Float, Float, Float>>()
-
-            // Procesar todas las medidas
-            for (i in inicieMedidas until lineas.size) {
-                val linea = lineas[i].trim()
-
-                val partes = linea.split("=")
-                if (partes.size == 2) {
-                    val cantidad = partes[1].trim().toFloatOrNull()
-                    val medidaParte = partes[0].trim()
-                    val medidasSplit = medidaParte.split(Regex("[xX]"))
-
-                    if (medidasSplit.size == 2 && cantidad != null) {
-                        val med1 = medidasSplit[0].trim().toFloatOrNull()
-                        val med2 = medidasSplit[1].trim().toFloatOrNull()
-
-                        if (med1 != null && med2 != null) {
-                            medidas.add(Triple(med1, med2, cantidad))
-                        }
-                    }
-                }
-            }
-
-            return if (medidas.isNotEmpty()) Pair(producto, medidas) else null
-
-        } catch (e: Exception) {
-            return null
-        }
-    }
-    // Función para importar medidas parseadas
-    @SuppressLint("NewApi")
-    private fun importarMedidasParseadas(producto: String, medidas: List<Triple<Float, Float, Float>>) {
-        if (medidas.isEmpty()) {
-            Toast.makeText(this, "No se encontraron medidas válidas", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("📐 Importar Medidas")
-        builder.setMessage(
-            "Producto: $producto\n" +
-                    "Elementos encontrados: ${medidas.size}\n" +
-                    "Unidad: Pies cuadrados (p2)\n\n" +
-                    "Ejemplos:\n" +
-                    medidas.take(3).joinToString("\n") { "${it.first} x ${it.second} = ${it.third}" } +
-                    if (medidas.size > 3) "\n..." else "" +
-                            "\n\n¿Deseas buscar el precio en la base de datos?"
-        )
-
-        builder.setPositiveButton("💰 Buscar precio") { _, _ ->
-            // Buscar precio en base de datos
-            buscarPrecioEnBaseDatos(producto, medidas)
-        }
-
-        builder.setNegativeButton("📋 Sin precio") { _, _ ->
-            // Importar directamente con precio 0
-            importarMedidasConPrecio(producto, medidas, 0.0)
-        }
-
-        builder.setNeutralButton("❌ Cancelar", null)
-        builder.show()
-    }
-    // 4. Función para manejar mensaje de medidas recibido (llamada desde ChatActivity)
-
-    private fun manejarMensajeMedidas() {
-        val mensajeTexto = intent.getStringExtra("importar_medidas_texto")
-
-        if (mensajeTexto != null) {
-            val resultado = parsearMensajeMedidas(mensajeTexto)
-
-            if (resultado != null) {
-                val (producto, medidas) = resultado
-                importarMedidasParseadas(producto, medidas)
-            } else {
-                Toast.makeText(this, "❌ No se pudo parsear el mensaje de medidas", Toast.LENGTH_SHORT).show()
-            }
-
-            // Limpiar el extra para evitar procesarlo de nuevo
-            intent.removeExtra("importar_medidas_texto")
-        }
-    }
-    // 1. Función para buscar precios en la base de datos
-    @SuppressLint("NewApi")
-    private fun buscarPrecioEnBaseDatos(producto: String, medidas: List<Triple<Float, Float, Float>>) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val db = DatabaseProvider.getInstance(this@MainActivity)
-
-                // Buscar productos similares
-                val productosEncontrados = db.productDao().searchProductsByDescription("%$producto%")
-
-                withContext(Dispatchers.Main) {
-                    if (productosEncontrados.isNotEmpty()) {
-                        // Mostrar opciones de productos encontrados
-                        mostrarOpcionesProductos(productosEncontrados, producto, medidas)
-                    } else {
-                        // No se encontraron productos, continuar con precio 0
-                        Toast.makeText(this@MainActivity, "❌ No se encontraron productos similares en la base de datos", Toast.LENGTH_SHORT).show()
-                        importarMedidasConPrecio(producto, medidas, 0.0)
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Error al buscar en BD: ${e.message}", Toast.LENGTH_SHORT).show()
-                    importarMedidasConPrecio(producto, medidas, 0.0)
-                }
-            }
-        }
-    }
-
-    // 2. Función para mostrar opciones de productos encontrados
-    @SuppressLint("DefaultLocale")
-
-    private fun mostrarOpcionesProductos(productos: List<Product>, productoOriginal: String, medidas: List<Triple<Float, Float, Float>>) {
-        val opcionesLista = mutableListOf<String>()
-
-        productos.forEach { producto ->
-            opcionesLista.add("💰 ${producto.description}\n   Precio: S/ ${String.format("%.2f", producto.price)}")
-        }
-
-        opcionesLista.add("📋 Sin precio (S/ 0.00)")
-        opcionesLista.add("❌ Cancelar")
-
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("💰 Seleccionar Producto (${productos.size} encontrados)")
-
-        builder.setItems(opcionesLista.toTypedArray()) { _, which ->
-            when {
-                which < productos.size -> {
-                    val productoSeleccionado = productos[which]
-                    Toast.makeText(this, "🔄 Seleccionado: ${productoSeleccionado.description}", Toast.LENGTH_SHORT).show()
-                    importarMedidasConPrecio(productoOriginal, medidas, productoSeleccionado.price)
-                }
-                which == productos.size -> {
-                    Toast.makeText(this, "📋 Sin precio", Toast.LENGTH_SHORT).show()
-                    importarMedidasConPrecio(productoOriginal, medidas, 0.0)
-                }
-                else -> {
-                    Toast.makeText(this, "❌ Cancelado", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
-        builder.show()
-    }
-    @SuppressLint("SetTextI18n", "DefaultLocale")
-
-    private fun importarMedidasConPrecio(producto: String, medidas: List<Triple<Float, Float, Float>>, precio: Double) {
-        var elementosAgregados = 0
-
-        for ((med1, med2, cantidad) in medidas) {
-            try {
-                // Configurar temporalmente la unidad para que conver() funcione
-                val unidadOriginal = binding.prTxt.text.toString()
-                binding.prTxt.text = "Centímetros"
-
-                // Calcular correctamente con conver()
-                val piescua = pies(med1, med2)
-                val metroscua = metroCua(med1, med2)
-                val ml = mLineales(med1, med2)
-                val cub = mCubicos(med1, med2, 1f)
-                val peri = ((conver(med1) * 2) + (conver(med2) * 2))
-
-                // Restaurar unidad original
-                binding.prTxt.text = unidadOriginal
-
-                // Calcular costo total
-                val costoTotal = (piescua * cantidad) * precio.toFloat()
-
-                val elemento = Listado(
-                    escala = "p2",
-                    uni = "Centímetros",
-                    medi1 = med1,
-                    medi2 = med2,
-                    medi3 = 1f,
-                    canti = cantidad,
-                    piescua = piescua * cantidad,
-                    precio = precio.toFloat(),
-                    costo = costoTotal,
-                    producto = producto,
-                    peri = peri,
-                    metcua = metroscua,
-                    metli = ml * cantidad,
-                    metcub = cub,
-                    color = ContextCompat.getColor(this, R.color.color),
-                    uri = ""
-                )
-
-                lista.add(elemento)
-                elementosAgregados++
-
-            } catch (e: Exception) {
-                continue
-            }
-        }
-
-        if (elementosAgregados > 0) {
-            actualizar()
-            val mensajePrecio = if (precio > 0) {
-                "con precio S/ ${String.format("%.2f", precio)}"
-            } else {
-                "sin precio (completar manualmente)"
-            }
-            Toast.makeText(this, "✅ $elementosAgregados elementos importados $mensajePrecio", Toast.LENGTH_LONG).show()
-
-            if (precio == 0.0) {
-                binding.precioEditxt.requestFocus()
-            }
-        } else {
-            Toast.makeText(this, "❌ No se pudo importar ningún elemento", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    //FUNCIONES PARA EDITAR MASIVAMENTE
-    // VERSIÓN COMPATIBLE CON API 21 - REEMPLAZAR FUNCIONES ANTERIORES
-
-    // 1. Función principal para mostrar menú (sin problemas de API)
-    private fun mostrarMenuEdicionMasiva() {
-        if (lista.isEmpty()) {
-            Toast.makeText(this, "No hay elementos para editar", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("🔧 Edición Masiva")
-        // ← QUITAR esta línea: builder.setMessage("Selecciona qué quieres hacer:")
-
-        val opciones = arrayOf(
-            "📝 Editar precios por producto",
-            "🏷️ Cambiar nombre de producto",
-            "💰 Aplicar descuento general",
-            "🔄 Recalcular todos los costos"
-        )
-
-        builder.setItems(opciones) { _, which ->
-            when (which) {
-                0 -> mostrarEdicionPreciosPorProductoCompatible()
-                1 -> mostrarCambioNombreProductoCompatible()
-                2 -> mostrarAplicarDescuentoCompatible()
-                3 -> recalcularTodosLosCostosCompatible()
-            }
-        }
-
-        builder.setNegativeButton("❌ Cancelar", null)
-        builder.show()
-    }
-
-    // 2. Función compatible para agrupar productos (sin groupBy)
-    @SuppressLint("NewApi")
-    private fun mostrarEdicionPreciosPorProductoCompatible() {
-        // Crear mapa manual compatible con API 21
-        val productosUnicos = mutableMapOf<String, MutableList<Listado>>()
-
-        // Agrupar manualmente (compatible API 21)
-        for (elemento in lista) {
-            val producto = elemento.producto
-            if (productosUnicos.containsKey(producto)) {
-                productosUnicos[producto]!!.add(elemento)
-            } else {
-                productosUnicos[producto] = mutableListOf(elemento)
-            }
-        }
-
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("💰 Editar Precios por Producto")
-
-        // Crear lista de opciones
-        val opcionesLista = mutableListOf<String>()
-        val productosOrdenados = mutableListOf<String>()
-
-        for ((producto, elementos) in productosUnicos) {
-            val precioActual = elementos[0].precio
-            val cantidad = elementos.size
-
-            opcionesLista.add("🏷️ $producto\n💰 Precio: S/ ${formatearPrecio(precioActual)}\n📦 $cantidad elementos")
-            productosOrdenados.add(producto)
-        }
-
-        builder.setItems(opcionesLista.toTypedArray()) { _, which ->
-            val productoSeleccionado = productosOrdenados[which]
-            val elementosDelProducto = productosUnicos[productoSeleccionado]!!
-            mostrarDialogoEditarPrecioCompatible(productoSeleccionado, elementosDelProducto)
-        }
-
-        builder.setNegativeButton("🔙 Volver", null)
-        builder.show()
-    }
-
-    // 3. Función para formatear precio compatible
-    private fun formatearPrecio(precio: Float): String {
-        return "%.2f".format(precio)
-    }
-
-    // 4. Diálogo para editar precio compatible
-    @SuppressLint("SetTextI18n")
-    private fun mostrarDialogoEditarPrecioCompatible(producto: String, elementos: List<Listado>) {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("💰 Editar Precio")
-
-        val precioActual = elementos[0].precio
-        val mensaje = "🏷️ Producto: $producto\n" +
-                "📦 Elementos: ${elementos.size}\n" +
-                "💰 Precio actual: S/ ${formatearPrecio(precioActual)}\n\n" +
-                "Ingresa el nuevo precio:"
-
-        builder.setMessage(mensaje)
-
-        // Input para nuevo precio
-        val input = EditText(this)
-        input.setText(precioActual.toString())
-        input.selectAll()
-        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-
-        builder.setView(input)
-
-        builder.setPositiveButton("✅ Aplicar") { _, _ ->
-            val nuevoPrecio = input.text.toString().toFloatOrNull()
-
-            if (nuevoPrecio != null && nuevoPrecio > 0) {
-                aplicarNuevoPrecioCompatible(elementos, nuevoPrecio)
-            } else {
-                Toast.makeText(this, "❌ Precio inválido", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        builder.setNegativeButton("❌ Cancelar", null)
-        builder.show()
-
-        // Mostrar teclado
-        input.requestFocus()
-    }
-
-    // 5. Aplicar nuevo precio compatible
-    private fun aplicarNuevoPrecioCompatible(elementos: List<Listado>, nuevoPrecio: Float) {
-        var elementosActualizados = 0
-
-        for (elemento in elementos) {
-            // Encontrar índice en lista principal
-            var index = -1
-            for (i in 0 until lista.size) {
-                if (lista[i] === elemento) { // Comparación por referencia
-                    index = i
-                    break
-                }
-            }
-
-            if (index != -1) {
-                // Actualizar precio
-                lista[index].precio = nuevoPrecio
-
-                // Recalcular costo según escala
-                val nuevoCosto = when (lista[index].escala) {
-                    "p2" -> lista[index].piescua * nuevoPrecio
-                    "m2" -> lista[index].metcua * nuevoPrecio
-                    "ml" -> lista[index].metli * nuevoPrecio
-                    "m3" -> lista[index].metcub * nuevoPrecio
-                    "uni" -> lista[index].canti * nuevoPrecio
-                    else -> lista[index].piescua * nuevoPrecio
-                }
-
-                lista[index].costo = nuevoCosto
-                elementosActualizados++
-            }
-        }
-
-        // Actualizar interfaz
-        actualizar()
-
-        Toast.makeText(this, "✅ $elementosActualizados elementos actualizados con precio S/ ${formatearPrecio(nuevoPrecio)}", Toast.LENGTH_LONG).show()
-    }
-
-    // 6. Cambio de nombre compatible
-    private fun mostrarCambioNombreProductoCompatible() {
-        // Agrupar productos manualmente
-        val productosUnicos = mutableMapOf<String, MutableList<Listado>>()
-
-        for (elemento in lista) {
-            val producto = elemento.producto
-            if (productosUnicos.containsKey(producto)) {
-                productosUnicos[producto]!!.add(elemento)
-            } else {
-                productosUnicos[producto] = mutableListOf(elemento)
-            }
-        }
-
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("🏷️ Cambiar Nombre de Producto")
-
-        val opcionesLista = mutableListOf<String>()
-        val productosOrdenados = mutableListOf<String>()
-
-        for ((producto, elementos) in productosUnicos) {
-            opcionesLista.add("🏷️ $producto (${elementos.size} elementos)")
-            productosOrdenados.add(producto)
-        }
-
-        builder.setItems(opcionesLista.toTypedArray()) { _, which ->
-            val productoSeleccionado = productosOrdenados[which]
-            val elementosDelProducto = productosUnicos[productoSeleccionado]!!
-            mostrarDialogoCambiarNombreCompatible(productoSeleccionado, elementosDelProducto)
-        }
-
-        builder.setNegativeButton("🔙 Volver", null)
-        builder.show()
-    }
-
-    // 7. Diálogo cambiar nombre compatible
-    private fun mostrarDialogoCambiarNombreCompatible(productoActual: String, elementos: List<Listado>) {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("🏷️ Cambiar Nombre")
-        builder.setMessage("Producto actual: $productoActual\nElementos: ${elementos.size}\n\nNuevo nombre:")
-
-        val input = EditText(this)
-        input.setText(productoActual)
-        input.selectAll()
-
-        builder.setView(input)
-
-        builder.setPositiveButton("✅ Cambiar") { _, _ ->
-            val nuevoNombre = input.text.toString().trim()
-
-            if (nuevoNombre.isNotEmpty()) {
-                // Cambiar nombre en todos los elementos
-                for (elemento in elementos) {
-                    var index = -1
-                    for (i in 0 until lista.size) {
-                        if (lista[i] === elemento) {
-                            index = i
-                            break
-                        }
-                    }
-                    if (index != -1) {
-                        lista[index].producto = nuevoNombre
-                    }
-                }
-
-                actualizar()
-                Toast.makeText(this, "✅ Nombre cambiado a: $nuevoNombre", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "❌ Nombre no puede estar vacío", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        builder.setNegativeButton("❌ Cancelar", null)
-        builder.show()
-    }
-
-    // 8. Descuento compatible
-    private fun mostrarAplicarDescuentoCompatible() {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("💰 Aplicar Descuento General")
-        builder.setMessage("Aplicar descuento a TODOS los elementos:\n\nIngresa el porcentaje de descuento:")
-
-        val input = EditText(this)
-        input.hint = "Ejemplo: 10 (para 10%)"
-        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-
-        builder.setView(input)
-
-        builder.setPositiveButton("✅ Aplicar") { _, _ ->
-            val porcentaje = input.text.toString().toFloatOrNull()
-
-            if (porcentaje != null && porcentaje > 0 && porcentaje <= 100) {
-                val factor = 1 - (porcentaje / 100)
-
-                var elementosActualizados = 0
-                for (i in 0 until lista.size) {
-                    val nuevoPrecio = lista[i].precio * factor
-                    lista[i].precio = nuevoPrecio
-
-                    // Recalcular costo
-                    val nuevoCosto = when (lista[i].escala) {
-                        "p2" -> lista[i].piescua * nuevoPrecio
-                        "m2" -> lista[i].metcua * nuevoPrecio
-                        "ml" -> lista[i].metli * nuevoPrecio
-                        "m3" -> lista[i].metcub * nuevoPrecio
-                        "uni" -> lista[i].canti * nuevoPrecio
-                        else -> lista[i].piescua * nuevoPrecio
-                    }
-
-                    lista[i].costo = nuevoCosto
-                    elementosActualizados++
-                }
-
-                actualizar()
-                Toast.makeText(this, "✅ Descuento del $porcentaje% aplicado a $elementosActualizados elementos", Toast.LENGTH_LONG).show()
-
-            } else {
-                Toast.makeText(this, "❌ Porcentaje inválido (debe ser entre 1 y 100)", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        builder.setNegativeButton("❌ Cancelar", null)
-        builder.show()
-    }
-
-    // 9. Recalcular compatible
-    private fun recalcularTodosLosCostosCompatible() {
-        for (i in 0 until lista.size) {
-            val nuevoCosto = when (lista[i].escala) {
-                "p2" -> lista[i].piescua * lista[i].precio
-                "m2" -> lista[i].metcua * lista[i].precio
-                "ml" -> lista[i].metli * lista[i].precio
-                "m3" -> lista[i].metcub * lista[i].precio
-                "uni" -> lista[i].canti * lista[i].precio
-                else -> lista[i].piescua * lista[i].precio
-            }
-            lista[i].costo = nuevoCosto
-        }
-
-        actualizar()
-        Toast.makeText(this, "✅ Todos los costos recalculados", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun mostrarDialogoPrecioPactado() {
-        if (lista.isEmpty()) {
-            Toast.makeText(this, "No hay elementos para ajustar", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // Calcular costo total actual
-        val costoTotalActual = lista.sumOf { it.costo.toDouble() }.toFloat()
-
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("💰 Precio Pactado")
-
-        val mensaje = "💰 Costo actual: S/ ${df2(costoTotalActual)}\n\n" +
-                "Ingresa el precio pactado con el cliente:"
-
-        builder.setMessage(mensaje)
-
-        // Input para el precio pactado
-        val input = EditText(this)
-        input.hint = "Ejemplo: 1500.00"
-        input.setText(costoTotalActual.toString())
-        input.selectAll()
-        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-
-        builder.setView(input)
-
-        builder.setPositiveButton("✅ Aplicar") { _, _ ->
-            val precioPactado = input.text.toString().toFloatOrNull()
-
-            if (precioPactado != null && precioPactado > 0) {
-                aplicarPrecioPactado(costoTotalActual, precioPactado)
-            } else {
-                Toast.makeText(this, "❌ Precio inválido", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        builder.setNegativeButton("❌ Cancelar", null)
-        builder.show()
-
-        // Mostrar teclado
-        input.requestFocus()
-    }
-
-    private fun aplicarPrecioPactado(costoActual: Float, precioPactado: Float) {
-        // Calcular factor de descuento/aumento
-        val factor = precioPactado / costoActual
-
-        val porcentajeDescuento = if (factor < 1) {
-            ((1 - factor) * 100)
-        } else {
-            0f
-        }
-
-        var elementosActualizados = 0
-
-        for (i in 0 until lista.size) {
-            // Aplicar factor al precio
-            val nuevoPrecio = lista[i].precio * factor
-            lista[i].precio = nuevoPrecio
-
-            // Recalcular costo con el nuevo precio
-            val nuevoCosto = when (lista[i].escala) {
-                "p2" -> lista[i].piescua * nuevoPrecio
-                "m2" -> lista[i].metcua * nuevoPrecio
-                "ml" -> lista[i].metli * nuevoPrecio
-                "m3" -> lista[i].metcub * nuevoPrecio
-                "uni" -> lista[i].canti * nuevoPrecio
-                else -> lista[i].piescua * nuevoPrecio
-            }
-
-            lista[i].costo = nuevoCosto
-            elementosActualizados++
-        }
-
-        // Actualizar interfaz
-        actualizar()
-
-        // Mensaje informativo
-        val mensaje = if (factor < 1) {
-            "✅ Precio pactado: S/ ${df2(precioPactado)}\n" +
-                    "📉 Descuento aplicado: ${df2(porcentajeDescuento)}%\n" +
-                    "📦 $elementosActualizados elementos actualizados"
-        } else {
-            "✅ Precio pactado: S/ ${df2(precioPactado)}\n" +
-                    "📈 Aumento aplicado: ${df2((factor - 1) * 100)}%\n" +
-                    "📦 $elementosActualizados elementos actualizados"
-        }
-
-        Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show()
-    }
-
     //FUNCIONES DE CHAT
-
+    // ═══════════════════════════════════════════════════
+    // ─── CHAT / MENSAJES NO LEÍDOS ───
+    // setupUnreadMessagesListener, actualizarBadgeChat
+    // ═══════════════════════════════════════════════════
     private fun setupUnreadMessagesListener() {
         // Escuchar los chats de la colección personal del usuario
         val userChatsRef = db.collection("usuarios").document(currentUserId).collection("chats")
@@ -2199,7 +2053,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
     @SuppressLint("SetTextI18n")
     private fun actualizarBadgeChat() {
         val totalUnread = unreadCountByChat.values.sum()
@@ -2213,14 +2066,13 @@ class MainActivity : AppCompatActivity() {
             binding.tvBadge.visibility = View.GONE
         }
     }
-
-    private fun obtenerUsuarioActual(): String {
-        // Implementa la lógica para obtener el id del usuario autenticado (por ejemplo, usando FirebaseAuth)
-        return "usuarioActualEjemplo"
-    }
-
     //FUNCIONES GENERALES
-
+    // ═══════════════════════════════════════════════════
+    // ─── UTILIDADES DE FORMATO Y CONVERSIÓN ───
+    // df1, df2, conver, focusMed1,
+    // configurarRetrocesoEditTexts, retasoEnUnidad,
+    // limpiarPrefijo
+    // ═══════════════════════════════════════════════════
     private fun df1(defo: Float): String {
         val resultado =if ("$defo".endsWith(".0")) {"$defo".replace(".0", "")}
         else { "%.1f".format(defo)
@@ -2230,6 +2082,10 @@ class MainActivity : AppCompatActivity() {
     private fun df2(defo: Float): String {
         return "%.2f".format(defo).replace(".", ",")
     }
+    // ═══════════════════════════════════════════════════
+    // ─── SPINNERS DE UNIDADES ───
+    // uni1, uni2
+    // ═══════════════════════════════════════════════════
     private fun uni1() {
         usados = findViewById(R.id.spinner_usa)
         val listaUsados = arrayOf("p2", "m2", "ml", "m3", "uni")
@@ -2266,7 +2122,7 @@ class MainActivity : AppCompatActivity() {
                         binding.spinnerUni.visibility = View.VISIBLE
                         binding.med1Editxt.setText("")
                         binding.med2Editxt.setText("")
-                        binding.med1Editxt.requestFocus() }
+                        focusMed1() }
                     "m2" -> {
                         binding.med3Lay.visibility = View.GONE
                         binding.med2Lay.visibility = View.VISIBLE
@@ -2274,7 +2130,7 @@ class MainActivity : AppCompatActivity() {
                         binding.spinnerUni.visibility = View.VISIBLE
                         binding.med1Editxt.setText("")
                         binding.med2Editxt.setText("")
-                        binding.med1Editxt.requestFocus() }
+                        focusMed1() }
                     "ml" -> {
                         binding.med3Lay.visibility = View.GONE
                         binding.med2Lay.visibility = View.GONE
@@ -2282,7 +2138,7 @@ class MainActivity : AppCompatActivity() {
                         binding.spinnerUni.visibility = View.VISIBLE
                         binding.med1Editxt.setText("")
                         binding.med2Editxt.setText("1")
-                        binding.med1Editxt.requestFocus() }
+                        focusMed1() }
                     "m3" -> {
                         binding.med3Lay.visibility = View.VISIBLE
                         binding.med2Lay.visibility = View.VISIBLE
@@ -2290,7 +2146,7 @@ class MainActivity : AppCompatActivity() {
                         binding.spinnerUni.visibility = View.VISIBLE
                         binding.med1Editxt.setText("")
                         binding.med2Editxt.setText("")
-                        binding.med1Editxt.requestFocus() }
+                        focusMed1() }
                     "uni" -> {
                         binding.med3Lay.visibility = View.GONE
                         binding.med2Lay.visibility = View.GONE
@@ -2317,6 +2173,30 @@ class MainActivity : AppCompatActivity() {
             override fun onItemSelected(
                 parent: AdapterView<*>?, view: View?, position: Int,
                 p3: Long) { binding.prTxt.text = unidades.selectedItem.toString()
+                if (unidades.selectedItem.toString() == "Pulgadas") {
+                    binding.med1Editxt.isFocusable = false
+                    binding.med1Editxt.isFocusableInTouchMode = false
+                    binding.med2Editxt.isFocusable = false
+                    binding.med2Editxt.isFocusableInTouchMode = false
+                    binding.med1Editxt.setOnClickListener {
+                        DialogoPulgadas(this@MainActivity) { valor ->
+                            binding.med1Editxt.setText(valor.toString())
+                            binding.med2Editxt.performClick()
+                        }.mostrar()
+                    }
+                    binding.med2Editxt.setOnClickListener {
+                        DialogoPulgadas(this@MainActivity) { valor ->
+                            binding.med2Editxt.setText(valor.toString())
+                        }.mostrar()
+                    }
+                } else {
+                    binding.med1Editxt.isFocusable = true
+                    binding.med1Editxt.isFocusableInTouchMode = true
+                    binding.med2Editxt.isFocusable = true
+                    binding.med2Editxt.isFocusableInTouchMode = true
+                    binding.med1Editxt.setOnClickListener(null)
+                    binding.med2Editxt.setOnClickListener(null)
+                }
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
@@ -2335,13 +2215,57 @@ class MainActivity : AppCompatActivity() {
             else -> med
         }
     }
+    private fun focusMed1() {
+        if (binding.prTxt.text == "Pulgadas") {
+            binding.med1Editxt.performClick()
+        } else {
+            binding.med1Editxt.requestFocus()
+        }
+    }
+    private fun configurarRetrocesoEditTexts() {
+        val campos = listOf(
+            binding.med1Editxt to null,
+            binding.med2Editxt to binding.med1Editxt,
+            binding.cantEditxt to binding.med2Editxt,
+            binding.precioEditxt to binding.cantEditxt,
+            binding.proEditxt to binding.precioEditxt
+        )
+        for ((editText, anterior) in campos) {
+            editText.setOnKeyListener { _, keyCode, event ->
+                if (keyCode == android.view.KeyEvent.KEYCODE_DEL
+                    && event.action == android.view.KeyEvent.ACTION_DOWN
+                    && editText.text.isNullOrEmpty()
+                    && anterior != null) {
+                    if (anterior.visibility == View.VISIBLE ||
+                        (anterior.parent as? View)?.visibility == View.VISIBLE) {
+                        anterior.requestFocus()
+                    }
+                    true
+                } else false
+            }
+        }
+    }
+    private fun retasoEnUnidad(): Float {
+        return if (binding.prTxt.text == "Pulgadas") retaso / 2.54f else retaso
+    }
+    // ═══════════════════════════════════════════════════
+    // ─── CÁLCULOS DE MEDIDAS ───
+    // pies, metroCua, mCubicos, mLineales, perim,
+    // med1, med2, med3, mostrarDialogoRetaso
+    // ═══════════════════════════════════════════════════
     private fun pies(medida1: Float, medida2: Float): Float {
-        return (conver(medida1)) * (conver(medida2)) * 11.1f
+        // Suma retaso a cada medida para el cálculo de pies cuadrados
+        val r = retasoEnUnidad()
+        val med1ConRetaso = medida1 + r
+        val med2ConRetaso = medida2 + r
+        return (conver(med1ConRetaso)) * (conver(med2ConRetaso)) * 11.1f
     }
     private fun metroCua(medida1: Float, medida2: Float): Float {
-        val medida1 = conver(medida1).toString().toFloat()
-        val medida2 = conver(medida2).toString().toFloat()
-        return medida1 * medida2
+        // Suma retaso a cada medida para el cálculo de metros cuadrados
+        val r = retasoEnUnidad()
+        val med1ConRetaso = conver(medida1 + r)
+        val med2ConRetaso = conver(medida2 + r)
+        return med1ConRetaso * med2ConRetaso
     }
     private fun mCubicos(medida1: Float, medida2: Float, medida3: Float): Float {
 
@@ -2388,5 +2312,30 @@ class MainActivity : AppCompatActivity() {
         val med = editText.text.toString()
         return med.toFloatOrNull() ?: 1f
     }
+    private fun mostrarDialogoRetaso() {
+        val editText = EditText(this).apply {
+            setText(retaso.toString())
+            hint = "Valor de retaso"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                        android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setPadding(48, 32, 48, 32)
+        }
 
+        AlertDialog.Builder(this)
+            .setTitle("Configurar Retaso")
+            .setMessage("Este valor se sumará a med1 y med2 en los cálculos")
+            .setView(editText)
+            .setPositiveButton("Guardar") { _, _ ->
+                val nuevoValor = editText.text.toString().toFloatOrNull()
+                if (nuevoValor != null) {
+                    retaso = nuevoValor
+                    binding.txtRetaso.text = "Retaso: $retaso"
+                    Toast.makeText(this, "Retaso actualizado a $retaso", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Valor inválido", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
 }

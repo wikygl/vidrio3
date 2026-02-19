@@ -12,7 +12,7 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
-import crystal.crystal.Diseno.DisenoActivity
+import crystal.crystal.taller.MedidaActivity
 import crystal.crystal.R
 import crystal.crystal.casilla.DialogosProyecto
 import crystal.crystal.casilla.ListaCasilla
@@ -20,6 +20,7 @@ import crystal.crystal.casilla.MapStorage
 import crystal.crystal.casilla.ProyectoManager
 import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityPuertaPanoBinding
+import crystal.crystal.taller.ModoMasivoHelper
 import crystal.crystal.taller.nova.NovaUIHelper.esValido
 import crystal.crystal.taller.puerta.datos.PuertaRepositorio
 import crystal.crystal.taller.puerta.dibujo.DibujoPuerta
@@ -76,6 +77,10 @@ class PuertasActivity : AppCompatActivity() {
         inicializarClienteYTipos()
         configurarListenersUI()
         mostrarVariantes()
+
+        // Pre-carga desde presupuesto
+        intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etMed1.setText(it.toString()) }
+        intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.etMed2.setText(it.toString()) }
     }
 
     // ---------------------- Menú Proyecto ----------------------
@@ -183,7 +188,7 @@ class PuertasActivity : AppCompatActivity() {
         }
 
         binding.ivModelo.setOnLongClickListener {
-            val intent = Intent(this, DisenoActivity::class.java)
+            val intent = Intent(this, MedidaActivity::class.java)
             startActivity(intent)
             true
         }
@@ -477,57 +482,91 @@ class PuertasActivity : AppCompatActivity() {
     }
 
     private fun archivarMapas() {
-        // ✅ SIEMPRE limpiar y cargar el Map del proyecto activo actual
         val proyectoActivo = ProyectoManager.getProyectoActivo()
         if (proyectoActivo != null) {
             val mapExistente = MapStorage.cargarProyecto(this, proyectoActivo)
-            mapListas.clear() // Limpiar datos anteriores
+            mapListas.clear()
             if (mapExistente != null) {
-                mapListas.putAll(mapExistente) // Cargar datos del proyecto correcto
+                mapListas.putAll(mapExistente)
             }
-            // Si mapExistente es null, mapListas queda vacío (correcto para proyecto nuevo)
         }
 
         val prefijo = obtenerPrefijo()
-        val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
-        val identificadorPaquete = "p${siguienteNumero}${prefijo}"
+        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        var ultimoID = ""
 
-        // Archivar cada campo si está visible y válido
-        if (esValido(binding.lyClienteData)) {
-            ListaCasilla.procesarArchivarConPrefijo(this, binding.tvCliente, binding.txCliente, mapListas, identificadorPaquete)
-        }
-        if (esValido(binding.lyMed1)) {
-            ListaCasilla.procesarArchivarConPrefijo(this, binding.txMed1, binding.etMed1, mapListas, identificadorPaquete)
-        }
-        if (esValido(binding.lyAlto)) {
-            ListaCasilla.procesarArchivarConPrefijo(this, binding.txMed2, binding.etMed2, mapListas, identificadorPaquete)
-        }
-        if (esValido(binding.lyReferencias)) {
-            ListaCasilla.procesarReferenciasConPrefijo(this, binding.tvReferencias, binding.txRefe, mapListas, identificadorPaquete)
-        }
-        if (esValido(binding.lyMarco)) {
-            ListaCasilla.procesarArchivarConPrefijo(this, binding.txMarco, binding.tvMarco, mapListas, identificadorPaquete)
-        }
-        if (esValido(binding.lyTubo)) {
-            ListaCasilla.procesarArchivarConPrefijo(this, binding.txTubo, binding.tvTubo, mapListas, identificadorPaquete)
-        }
-        if (esValido(binding.lyPaflon)) {
-            ListaCasilla.procesarArchivarConPrefijo(this, binding.txPaflon, binding.tvPaflon, mapListas, identificadorPaquete)
-        }
-        if (esValido(binding.lyJunki)) {
-            ListaCasilla.procesarArchivarConPrefijo(this, binding.txJunki, binding.tvJunki, mapListas, identificadorPaquete)
-        }
-        if (esValido(binding.lyTope)) {
-            ListaCasilla.procesarArchivarConPrefijo(this, binding.txTope, binding.tvTope, mapListas, identificadorPaquete)
-        }
-        if (esValido(binding.lyVidrios)) {
-            ListaCasilla.procesarArchivarConPrefijo(this, binding.txVidrios, binding.tvVidrios, mapListas, identificadorPaquete)
+        for (u in 1..cant) {
+            val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
+            val identificadorPaquete = "p${siguienteNumero}${prefijo}"
+            ultimoID = identificadorPaquete
+
+            if (esValido(binding.lyClienteData)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvCliente, binding.txCliente, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyMed1)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txMed1, binding.etMed1, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyAlto)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txMed2, binding.etMed2, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyReferencias)) {
+                ListaCasilla.procesarReferenciasConPrefijo(this, binding.tvReferencias, binding.txRefe, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyMarco)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txMarco, binding.tvMarco, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyTubo)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txTubo, binding.tvTubo, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyPaflon)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txPaflon, binding.tvPaflon, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyJunki)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txJunki, binding.tvJunki, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyTope)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txTope, binding.tvTope, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyVidrios)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txVidrios, binding.tvVidrios, mapListas, identificadorPaquete)
+            }
+
+            ProyectoManager.actualizarContadorPorPrefijo(this, prefijo, siguienteNumero)
         }
 
-        ProyectoManager.actualizarContadorPorPrefijo(this, prefijo, siguienteNumero)
         MapStorage.guardarMap(this, mapListas)
         ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
 
-        Toast.makeText(this, "Datos archivados como $identificadorPaquete en proyecto: ${ProyectoManager.getProyectoActivo()}", Toast.LENGTH_SHORT).show()
+        val msg = if (cant > 1) "Archivadas $cant unidades en proyecto: ${ProyectoManager.getProyectoActivo()}"
+                  else "Datos archivados como $ultimoID en proyecto: ${ProyectoManager.getProyectoActivo()}"
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (ModoMasivoHelper.esModoMasivo(this)) {
+            val perfiles = mapOf(
+                "Marco" to ModoMasivoHelper.texto(binding.tvMarco),
+                "Tubo" to ModoMasivoHelper.texto(binding.tvTubo),
+                "Paflón" to ModoMasivoHelper.texto(binding.tvPaflon)
+            ).filter { it.value.isNotBlank() }
+
+            val accesorios = mapOf(
+                "Tope" to ModoMasivoHelper.texto(binding.tvTope),
+                "Junquillo" to ModoMasivoHelper.texto(binding.tvJunki)
+            ).filter { it.value.isNotBlank() }
+
+            ModoMasivoHelper.devolverResultado(
+                activity = this,
+                calculadora = "Puerta",
+                perfiles = perfiles,
+                vidrios = ModoMasivoHelper.texto(binding.tvVidrios),
+                accesorios = accesorios,
+                referencias = ModoMasivoHelper.texto(binding.txRefe)
+            )
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onBackPressed()
     }
 }

@@ -1,0 +1,14 @@
+﻿Jerarquía de datos para diseño técnico
+        
+1. categoría o producto (elemento arquitectónico). el qué por ejemplo: ventana, puerta, mampar, etc.
+2. Sistema o línea (línea constructiva): materiales y tecnología estructural, ejemplo: nova, serie 20, plafones, etc
+3. tipo o tipología (mecanismo de apertura): como se mueve, ejemplo: corrediza, batiente, pivotante, fija, etc
+4. geometría y forma (volumetría). planimetría: plano, esquinero, curvo; forma(morfología) plano, circular, irregular, 
+5. encuentros y transiciones:
+encuentro con muro(paramento)
+encuentro con acople(carpinterías), derecha, izquierda, vista.independiente, acoplado
+borde libre, vacío.
+6. modelos(modulación) división del espacio, ejemplo, normal, invertido, bandera, compuesto.
+7. acabado y estética. aparente, inaparente, etc
+8. Especificación de componentes, aluminio: color, medidas; vidrio crudo, templado, insulado, colores.
+9. accesorios. aquí se especifica lo que se requiere, caso contrario la app recomienda.

@@ -23,14 +23,15 @@
         android:id="@+id/tlyMateriales"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:stretchColumns="1"
+        android:shrinkColumns="*"
+        android:stretchColumns="*"
         android:padding="8dp" />
 
     <!-- Botón para eliminar el material -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/linearLayout5"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="wrap_content">
 
         <TextView
             android:id="@+id/txBarras"

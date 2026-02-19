@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/blanco"
+    tools:context=".registro.TerminalLoginActivity">
+
+    <!-- Header -->
+    <LinearLayout
+        android:id="@+id/header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/azul"
+        android:padding="24dp"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🏪 CRYSTAL POS"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:textColor="@color/blanco"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Acceso Terminal"
+            android:textSize="16sp"
+            android:textColor="@color/blanco"
+            android:gravity="center"
+            android:layout_marginTop="8dp"
+            android:alpha="0.9" />
+
+    </LinearLayout>
+
+    <!-- Contenido principal -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/header"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <!-- ==================== MÉTODO QR ==================== -->
+            <LinearLayout
+                android:id="@+id/layoutQR"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="visible">
+
+                <androidx.cardview.widget.CardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="24dp">
+
+                        <ImageView
+                            android:layout_width="120dp"
+                            android:layout_height="120dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_qr_code"
+                            android:contentDescription="QR Code"
+                            app:tint="@color/azul"
+                            android:layout_marginBottom="16dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Escanea el código QR"
+                            android:textSize="20sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/color"
+                            android:gravity="center"
+                            android:layout_marginBottom="8dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Solicita al administrador que genere un código QR desde Gestión de Terminales"
+                            android:textSize="14sp"
+                            android:textColor="@color/color"
+                            android:gravity="center"
+                            android:alpha="0.7"
+                            android:layout_marginBottom="24dp" />
+
+                        <Button
+                            android:id="@+id/btnEscanearQR"
+                            android:layout_width="match_parent"
+                            android:layout_height="56dp"
+                            android:text="📷 ESCANEAR QR"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/blanco"
+                            android:background="@drawable/botoncircular"
+                            android:backgroundTint="@color/azul"
+                            tools:ignore="ButtonStyle" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- Toggle a PIN -->
+                <TextView
+                    android:id="@+id/btnCambiarAPIN"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="¿No funciona la cámara? Usa PIN en su lugar"
+                    android:textSize="14sp"
+                    android:textColor="@color/azul"
+                    android:textStyle="bold"
+                    android:padding="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    tools:ignore="TouchTargetSizeCheck" />
+
+            </LinearLayout>
+
+            <!-- ==================== MÉTODO PIN ==================== -->
+            <LinearLayout
+                android:id="@+id/layoutPIN"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <androidx.cardview.widget.CardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="24dp">
+
+                        <ImageView
+                            android:layout_width="100dp"
+                            android:layout_height="100dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_pin"
+                            android:contentDescription="PIN"
+                            app:tint="@color/verde"
+                            android:layout_marginBottom="16dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Ingresa tu PIN"
+                            android:textSize="20sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/color"
+                            android:gravity="center"
+                            android:layout_marginBottom="8dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Código de 6 dígitos proporcionado por el administrador"
+                            android:textSize="14sp"
+                            android:textColor="@color/color"
+                            android:gravity="center"
+                            android:alpha="0.7"
+                            android:layout_marginBottom="24dp" />
+
+                        <!-- ⭐⭐⭐ CAMBIO AQUÍ ⭐⭐⭐ -->
+                        <!-- QUITAR: style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox" -->
+                        <!-- QUITAR: app:boxStrokeColor -->
+                        <!-- QUITAR: app:hintTextColor -->
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/tilPIN"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="PIN de 6 dígitos"
+                            android:layout_marginBottom="16dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etPIN"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:maxLength="6"
+                                android:textSize="24sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:letterSpacing="0.3" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <Button
+                            android:id="@+id/btnLoginPIN"
+                            android:layout_width="match_parent"
+                            android:layout_height="56dp"
+                            android:text="🔐 INICIAR SESIÓN"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/blanco"
+                            android:background="@drawable/botoncircular"
+                            android:backgroundTint="@color/verde"
+                            tools:ignore="ButtonStyle" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+                <!-- Toggle a QR -->
+                <TextView
+                    android:id="@+id/btnCambiarAQR"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="⬅️ Volver a escanear QR"
+                    android:textSize="14sp"
+                    android:textColor="@color/azul"
+                    android:textStyle="bold"
+                    android:padding="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    tools:ignore="TouchTargetSizeCheck" />
+
+            </LinearLayout>
+
+            <!-- Separador -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/sombra"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="24dp" />
+
+            <!-- Botón volver a login con Google -->
+            <Button
+                android:id="@+id/btnVolverGoogle"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Volver a Login con Google"
+                android:textSize="14sp"
+                android:textColor="@color/color"
+                android:background="@drawable/botoncircular"
+                android:backgroundTint="@color/sombra2"
+                tools:ignore="ButtonStyle" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+    <!-- ProgressBar -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

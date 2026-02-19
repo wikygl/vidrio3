@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/coordinator_ayuda"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/blanco"
+    tools:context=".registro.AyudaActivity">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbarAyuda"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:titleTextColor="@color/blanco">
+
+        <!-- Contenido personalizado dentro del toolbar -->
+        <LinearLayout
+            android:id="@+id/layoutToolbarContenido"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:id="@+id/tvTituloToolbar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Crystal"
+                android:textColor="@color/blanco"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:id="@+id/tabAyudaToolbar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:background="@android:color/transparent">
+
+                <TextView
+                    android:id="@+id/tvTabAyuda"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ayuda"
+                    android:textColor="@color/blanco"
+                    android:textSize="18sp" />
+            </LinearLayout>
+
+            <!-- Tab Tutos -->
+            <LinearLayout
+                android:id="@+id/tabTutosToolbar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:background="@android:color/transparent">
+
+                <TextView
+                    android:id="@+id/tvTabTutos"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tutos"
+                    android:textColor="@color/blanco"
+                    android:textSize="18sp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </androidx.appcompat.widget.Toolbar>
+
+    <LinearLayout
+        android:id="@+id/layoutContenidoRaiz"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:layout_marginTop="?attr/actionBarSize">
+
+        <!-- Contenedor de secciones -->
+        <FrameLayout
+            android:id="@+id/contenedorSecciones"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <!-- Sección AYUDA -->
+            <ScrollView
+                android:id="@+id/seccionAyuda"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                android:padding="16dp"
+                android:visibility="visible">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tvTituloAyuda"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="Ayuda, seguridad y emergencia"
+                        android:textColor="@color/negro"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvDescripcionAyuda"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:text="Desde aquí puedes bloquear tu wallet Crystal en caso de pérdida o robo de tu equipo. Puedes hacerlo usando un celular prestado"
+                        android:textColor="@color/negro"
+                        android:textSize="14sp" />
+
+                    <!-- Estado de sesión + botones de login/cambio de cuenta -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        app:cardCornerRadius="12dp"
+                        app:cardElevation="4dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:padding="16dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="¿Perdiste tu equipo? Sigue los pasos:"
+                                android:textColor="@color/negro"
+                                android:textSize="16sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:text="1. Pide prestado el celular de un familiar o amigo.
+                                \n2. Abre Crystal e ingresa a esta pantalla de Ayuda.
+                                \n3. Escribe la cuenta google que quieres bloquear en el campo de texto.
+                                \n4. Pulsa en iniciar sesión.
+                                \n5. En el dialogo que aparece, pulsa en continuar.
+                                \n6. Usa el botón rojo para bloquear el wallet en todos los dispositivos.
+                                \n7. Escribe el PIN de tu wallet, elige continuar y listo."
+                                android:textColor="@color/negro"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+                    </androidx.cardview.widget.CardView>
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        app:cardCornerRadius="12dp"
+                        app:cardElevation="4dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:padding="16dp">
+
+                            <!-- YA NO HAY EditText: solo botones -->
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="end"
+                                android:orientation="horizontal">
+
+                                <Button
+                                    android:id="@+id/btnIniciarSesion"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginEnd="8dp"
+                                    android:text="Iniciar sesión"
+                                    android:textAllCaps="false"
+                                    android:visibility="visible" />
+                            </LinearLayout>
+
+                            <Button
+                                android:id="@+id/btnBloquearEmergencia"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:backgroundTint="@color/fucsia"
+                                android:text="Bloquear mi wallet en todos los dispositivos"
+                                android:textAllCaps="false"
+                                android:textColor="@color/blanco" />
+
+                        </LinearLayout>
+                    </androidx.cardview.widget.CardView>
+
+
+                    <!-- Sección: ¿Perdiste tu equipo? -->
+
+                    <!-- Preguntas frecuentes -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        app:cardCornerRadius="12dp"
+                        app:cardElevation="4dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:padding="16dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Preguntas frecuentes"
+                                android:textColor="@color/negro"
+                                android:textSize="16sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:text="• ¿El ladrón puede usar mi saldo si no conoce mi PIN?\nNo. Sin tu PIN no puede entrar a la wallet.\n\n• ¿Qué pasa si bloqueo mi wallet?\nNingún dispositivo podrá usar tu saldo ni activar planes hasta que la wallet sea activada de nuevo.\n\n• ¿Puedo desbloquear desde aquí?\nNo. Esta pantalla es solo para emergencia, para bloquear rápido. Para activar tu wallet debes usar el flujo normal de la app."
+                                android:textColor="@color/negro"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- Botón de bloqueo de emergencia -->
+
+                    <!-- Botón cerrar -->
+
+                </LinearLayout>
+            </ScrollView>
+
+            <!-- Sección TUTOS -->
+            <ScrollView
+                android:id="@+id/seccionTutos"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="Videos tutoriales"
+                        android:textColor="@color/negro"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:text="Aquí encontrarás enlaces a videos de YouTube con tutoriales sobre Crystal, configuración de cuentas, uso de la wallet y más."
+                        android:textColor="@color/negro"
+                        android:textSize="14sp" />
+
+                    <!-- Ejemplos de links (cámbialos por tus videos reales) -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:autoLink="web"
+                        android:text="• Introducción a Crystal\nhttps://www.youtube.com/watch?v=AAAAAAAAAA"
+                        android:textColor="@color/negro"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:autoLink="web"
+                        android:text="• Cómo usar la wallet y planes\nhttps://www.youtube.com/watch?v=BBBBBBBBBB"
+                        android:textColor="@color/negro"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:autoLink="web"
+                        android:text="• Seguridad y bloqueo de dispositivos\nhttps://www.youtube.com/watch?v=CCCCCCCCCC"
+                        android:textColor="@color/negro"
+                        android:textSize="14sp" />
+
+                </LinearLayout>
+            </ScrollView>
+
+        </FrameLayout>
+
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

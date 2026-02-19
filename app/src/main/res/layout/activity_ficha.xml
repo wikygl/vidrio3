@@ -5,7 +5,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    tools:context=".FichaActivity">
+    tools:context=".taller.FichaActivity">
 
     <LinearLayout
         android:id="@+id/titulo_lay"
@@ -48,8 +48,20 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="9dp"
         android:text="Lista x ventana"
+        android:textSize="11sp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/btCliente" />
+
+    <Button
+        android:id="@+id/btCliente"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Lista x cliente"
+        android:textSize="11sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/btAbrir"
+        app:layout_constraintEnd_toStartOf="@+id/btMaterial" />
 
     <Button
         android:id="@+id/btMaterial"
@@ -57,7 +69,9 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="9dp"
         android:text="Lista x material"
+        android:textSize="11sp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/btCliente" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

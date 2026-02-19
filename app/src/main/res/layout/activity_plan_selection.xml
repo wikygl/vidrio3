@@ -8,33 +8,191 @@
     android:layout_height="match_parent"
     tools:context=".registro.PlanSelectionActivity">
 
-    <LinearLayout
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical">
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
 
-        <TextView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Elige tu plan:" />
+            android:orientation="vertical"
+            android:padding="20dp">
 
-        <Button
-            android:id="@+id/btnFree"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Gratis" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Elige tu plan Crystal"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="16dp" />
 
-        <Button
-            android:id="@+id/btnMensual"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Mensual" />
+            <!-- Plan Mensual -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
 
-        <Button
-            android:id="@+id/btnAnual"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Anual" />
-    </LinearLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Plan Mensual"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="S/ 15.00 (IGV incluido). 30 días desde la activación."
+                        android:layout_marginTop="4dp" />
+
+                    <Button
+                        android:id="@+id/btnMensual"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Activar Mensual (pagar con wallet)" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Plan Anual -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Plan Anual"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="S/ 150.00 (IGV incluido). 365 días desde la activación."
+                        android:layout_marginTop="4dp" />
+
+                    <Button
+                        android:id="@+id/btnAnual"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Activar Anual (pagar con wallet)" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Plan Prepago -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Plan Prepago"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="S/ 1.00 por día. Cada vez que actives, se descuenta S/1 y obtienes 1 día FULL."
+                        android:layout_marginTop="4dp" />
+
+                    <Button
+                        android:id="@+id/btnPrepago"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Activar 1 día Prepago (pagar con wallet)" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Plan VENTAS -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp"
+                app:cardBackgroundColor="#E3F2FD">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="🏪 Plan VENTAS (POS Multi-terminal)"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="#1976D2" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Ideal para negocios con múltiples puntos de venta."
+                        android:layout_marginTop="4dp"
+                        android:textStyle="italic" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="• Base: S/ 30.00/mes (1 terminal)\n• Adicionales: S/ 10.00 por terminal\n• Sincronización en red local\n• Inventario compartido\n• Reportes consolidados"
+                        android:layout_marginTop="8dp"
+                        android:lineSpacingExtra="2dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Ejemplos:\n- 1 terminal: S/ 30/mes\n- 3 terminales: S/ 50/mes\n- 5 terminales: S/ 70/mes"
+                        android:layout_marginTop="8dp"
+                        android:textSize="12sp"
+                        android:textColor="#666666" />
+
+                    <Button
+                        android:id="@+id/btnVentas"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Activar Plan VENTAS (seleccionar terminales)"
+                        android:textColor="@color/blanco"
+                        android:backgroundTint="#1976D2" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+        </LinearLayout>
+    </ScrollView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

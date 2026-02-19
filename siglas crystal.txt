@@ -1,0 +1,534 @@
+﻿Siglas crystal 
+* Ventanas (V)
+   * Nova aparente (Vna)
+   * Nova inaparente (Vni)
+   * Nova pivotante (Vnp)
+   * Clásica económica (Vce)
+   * Clásica comercial (Vcc)
+   * Serie 8425 (V84)
+   * Serie 20 (V20)
+   * Serie 25 (V25)
+   * Serie 80 (V80)
+   * Pvc (Vvc)
+* Puertas (P)
+   * Puerta vidrio (Pv)
+   * Puerta aluminio Mary (Pam)
+   * Puerta Aluminio ade (Paa)
+   * Puerta Aluminio Tere ( Pat)
+   * Puerta pvc (Pvc)
+* Mamparas(M)
+   * Nova corrediza (Mnc)
+   * Nova pivotante (Mnp)
+   * Clásica estructurada (Mce)
+   * Serie 80 (M80)8
+   * Mampara PVC (Mvc)
+* Baranda(B)
+   * Pasamano pared (Bpp)
+   * Aluminio rectángulo (Bar)
+   * Aluminio balaustre (Bab)
+   * Inox estructura (Bie)
+   * Inox vidrio (Biv)
+   * Vidrio templado (Bvt) 
+* Portones (Po)
+   * Seccionales (Pos)
+* Rejas (R) 
+   * Rejas aluminio (Ral)
+* Exhibidores (E) 
+   * Vitrina mostrador(Evm)
+   * Exhibidores aluminio (Eea)
+   * Exhibidores vidrio (Eev)
+* Muro Cortina (MC) 
+   * Modular serie 70 (MCm)
+   * Stick serie 44(MCp)
+   * Spider (MCa)
+   * Estándar (MCs)
+* Espejos (Es)
+   * Biselados (Esb)
+   * Iluminados (Est)
+* Puerta Ducha (PD)
+   * P2 (PDp2)
+   * C1 (PDc1)
+   * F1 (PDf1)
+   * A001 (PD01)
+   * 005 (PD05)
+* Drywall (D)
+* Celosía ( C)
+* Cielo Raso (CR)
+* Techos (T)
+* Cuadros(Cu)
+* Melamina (Me)
+
+
+Formato de presentación de resultados
+Organización: por material 
+Referencias
+Ventana Nova Inaparente 1(Vni1)
+Tipo: nova inaparente 
+Cliente : Dora
+Aluminio : negro
+Vidrio : piro 6mm
+Ancho: 143 
+Alto: 145
+Altura de puente: 100
+Divisiones: 3
+fijos: 2
+corredizas: 1
+Ventana Nova Aparente 1(Vna1)
+Tipo : nova aparente
+Cliente : Dora
+Aluminio : bronce
+Vidrio : bronce 8 mm
+Ancho: 145 
+Alto: 140
+Altura de puente: 100
+Divisiones: 3
+fijos: 2
+corredizas: 1
+Ventana Nova Aparente 2(Vna2)
+Tipo : nova aparente
+Cliente : Dora
+Aluminio : negro
+Vidrio : bronce arenado de 5.5mm
+Ancho : 199.9
+Alto : 152.4
+Altura de puente: 108.9
+Divisiones: 4
+fijos: 2
+corredizas: 2
+Ventana Nova Aparente 3(Vna3)
+Tipo : nova aparente
+Cliente : Yoyo
+Aluminio: madera
+Vidrio : transparente 5.5mm
+Ancho: 189.6
+Alto: 191.1
+Altura de puente : 110.5
+Divisiones : 3
+Fijos: 2
+Corredizas: 1
+Puerta Aluminio 1(Pa1)
+Tipo: puerta de aluminio
+Cliente: Dora 
+Aluminio: dorado 
+Vidrio: Arenado 4mm
+ancho: 72
+alto : 240
+Alto hoja:199
+
+
+U-13 negro
+• 48.3 = 2 -> Vni1, Dora
+• 142 = 2 -> Vni1, Dora
+• 143 = 1 -> Vni1, Dora
+• 50.5 = 2 -> Vna2, Dora
+• 107.2 = 2 -> Vna2, Dora
+• 40.5 = 2 -> Vna2, Dora
+• 199.9 = 1 -> Vna2, Dora
+U-3 /8 bronce
+• 49 = 2 -> Vna1, Dora
+• 98.3 = 2 -> Vna1, Dora
+• 37 = 2 -> Vna1, Dora
+• 145 = 1-> Vna1, Dora
+U-1.8 madera
+• 63.9 = 2 -> Vna3, Yoyo
+• 108.8 = 2 -> Vna3, Yoyo
+• 36.8 = 4 -> Vna3, Yoyo
+• 189.6 = 2 -> Vna3, Yoyo
+U-felpero negro
+• 149.9 = 1 -> Vni1, Dora
+Múltiple bronce
+• 145 = 1 -> Vna1, Dora
+Múltiple negro
+• 199.9 = 1 -> Vna2, Dora
+Múltiple madera
+• 189.6 = 1 -> Vna3, Yoyo
+Puente negro
+• 149.9 = 1 -> Vni1, Dora
+Riel Nova negro
+• 149.9 = 1 -> Vni1, Dora
+• 199.9 = 1 -> Vna2, Dora
+Riel Nova bronce
+• 145 = 1 -> Vna1, Dora
+Riel Nova madera
+• 189.6 = 1 -> Vna3, Yoyo
+Portafelpa negro
+• 98.4 = 4 -> Vni1, Dora
+• 107.3 = 6 -> Vna2, Dora
+Portafelpa bronce
+• 98.4 = 4 ->  Vna1, Dora
+Portafelpa madera
+• 108.9 = 4 -> Vna3, Yoyo
+Tee negro
+• 40.5 = 1 -> Vna2, Dora
+Tee madera
+• 38 = 2 -> Vna3, Yoyo
+Hache negro
+• 48,3 = 1 -> Vni1, Dora
+• 50.5 = 1 -> Vna2, Dora
+Hache bronce
+• 49:1 -> Vna1, Dora
+Hache madera
+• 63.9 = 1 -> Vna3, Yoyo
+Marco dorado
+• 67.6 = 1 -> Pam1, Dora
+Paflon dorado
+• 50.1 = 3 -> Pam1, Dora
+• 198 = 2 -> Pam1, Dora
+Junkillo dorado
+• 79.5 = 4 -> Pam1, Dora
+• 50.1 = 4 -> Pam1, Dora
+• 67.6 = 2 -> Pam1, Dora
+• 33.3 = 2 -> Pam1, Dora
+Ángulo tope dorado
+• 67.6 = 1 -> Pam1, Dora
+• 199 = 2 -> Pam1, Dora
+Vidrio piro 6 mm
+• 47.9 x 143.3 = 2 -> Vni1, Dora
+• 46.9 x 96.5 = 1 -> Vni1, Dora
+• 46 x 45.7 = 1 -> Vni1, Dora
+Vidrio Bronce 8mm
+• 48.6 x 98.3 = 2 ->  Vna2, Dora
+• 47.6 x 96.5 = 1 ->  Vna2, Dora
+• 144.3 x 38.1 = 1 ->  Vna2, Dora 
+Vidrio Bronce Arenado 5.5mm
+• 50.1 x 107.2 = 2 ->  Vna3, Yoyo
+• 49.1 x 105.4 = 1 ->  Vna3, Yoyo
+• 99.4 x 41.7 = 2 ->  Vna3, Yoyo
+Vidrio Arenado 4mm
+• 49.7 x 86.2 = 2 Pam1, Dora
+• 67.2 x 35.9 = 1 Pam1, Dora
+
+
+Organización: por cliente
+
+
+Cliente: Dora
+Referencias
+Ventana Nova Inaparente 1 (Vni1)
+Tipo: nova inaparente
+Cliente: Dora
+Aluminio: negro
+Vidrio: piro 6mm
+Ancho: 143
+Alto: 145
+Altura de puente: 100
+Divisiones: 3
+Fijos: 2
+Corredizas: 1
+
+
+Ventana Nova Aparente 1 (Vna1)
+Tipo: nova aparente
+Cliente: Dora
+Aluminio: bronce
+Vidrio: bronce 8 mm
+Ancho: 145
+Alto: 140
+Altura de puente: 100
+Divisiones: 3
+Fijos: 2
+Corredizas: 1
+
+
+Ventana Nova Aparente 2 (Vna2)
+Tipo: nova aparente
+Cliente: Dora
+Aluminio: negro
+Vidrio: bronce arenado de 5.5mm
+Ancho: 199.9
+Alto: 152.4
+Altura de puente: 108.9
+Divisiones: 4
+Fijos: 2
+Corredizas: 2
+
+
+Puerta Aluminio 1 (Pam1)
+Tipo: puerta de aluminio
+Cliente: Dora
+Aluminio: dorado
+Vidrio: Arenado 4mm
+Ancho: 72
+Alto: 240
+Alto hoja: 199
+Aluminio
+U-13 negro
+• 48.3 = 2 → Vni1
+• 142 = 2 → Vni1
+• 143 = 1 → Vni1
+U-3 /8 bronce
+• 49 = 2 → Vna1
+• 98.3 = 2 → Vna1
+• 37 = 2 → Vna1
+• 145 = 1 → Vna1
+U-13 negro
+• 50.5 = 2 → Vna2
+• 107.2 = 2 → Vna2
+• 40.5 = 2 → Vna2
+• 199.9 = 1 → Vna2
+U-felpero negro
+• 149.9 = 1 → Vni1
+Múltiple bronce
+• 145 = 1 → Vna1
+Múltiple negro
+• 199.9 = 1 → Vna2
+Puente negro
+• 149.9 = 1 → Vni1
+Riel Nova negro
+• 149.9 = 1 → Vni1
+• 199.9 = 1 → Vna2
+Riel Nova bronce
+• 145 = 1 → Vna1
+Portafelpa negro
+• 98.4 = 4 → Vni1
+• 107.3 = 6 → Vna2
+Portafelpa bronce
+• 98.4 = 4 → Vna1
+Tee negro
+• 40.5 = 1 → Vna2
+Hache negro
+• 48.3 = 1 → Vni1
+• 50.5 = 1 → Vna2
+Hache bronce
+• 49 = 1 → Vna1
+
+
+Aluminio — Puerta (dorado)
+Marco dorado
+• 67.6 = 1 → Pam1
+Paflon dorado
+• 50.1 = 3 → Pam1
+• 198 = 2 → Pam1
+Junkillo dorado
+• 79.5 = 4 → Pam1
+• 50.1 = 4 → Pam1
+• 67.6 = 2 → Pam1
+• 33.3 = 2 → Pam1
+Ángulo tope dorado
+• 67.6 = 1 → Pam1
+• 199 = 2 → Pam1
+Vidrio
+Vidrio piro 6 mm
+47.9 x 143.3 = 2 → Vni1
+46.9 x 96.5 = 1 → Vni1
+46 x 45.7 = 1 → Vni1
+Vidrio Bronce 8mm
+48.6 x 98.3 = 2 → Vna1
+47.6 x 96.5 = 1 → Vna1
+144.3 x 38.1 = 1 → Vna1
+Vidrio Arenado 4mm
+49.7 x 86.2 = 2 → Pam1
+67.2 x 35.9 = 1 → Pam1
+
+
+Cliente: Yoyo
+Referencias
+Ventana Nova Aparente 3 (Vna3)
+Tipo: nova aparente
+Cliente: Yoyo
+Aluminio: madera
+Vidrio: transparente 5.5mm
+Ancho: 189.6
+Alto: 191.1
+Altura de puente: 110.5
+Divisiones: 3
+Fijos: 2
+Corredizas: 1
+Aluminio
+U-1.8 madera
+• 63.9 = 2 → Vna3
+• 108.8 = 2 → Vna3
+• 36.8 = 4 → Vna3
+• 189.6 = 2 → Vna3
+Múltiple madera
+• 189.6 = 1 → Vna3
+Riel Nova madera
+• 189.6 = 1 → Vna3
+Portafelpa madera
+• 108.9 = 4 → Vna3
+Tee madera
+• 38 = 2 → Vna3
+Hache madera
+• 63.9 = 1 → Vna3
+Vidrio
+Vidrio Bronce Arenado 5.5mm
+50.1 x 107.2 = 2 → Vna3
+49.1 x 105.4 = 1 → Vna3
+99.4 x 41.7 = 2 → Vna3
+
+
+Organización: por producto
+
+
+Ventana Nova Inaparente 1 (Vni1)
+Referencia
+Tipo: nova inaparente
+Cliente: Dora
+Aluminio: negro
+Vidrio: piro 6mm
+Ancho: 143
+Alto: 145
+Altura de puente: 100
+Divisiones: 3
+Fijos: 2
+Corredizas: 1
+Aluminio
+U-13 negro
+• 48.3 = 2
+• 142 = 2
+• 143 = 1
+U-felpero negro
+• 149.9 = 1
+Puente negro
+• 149.9 = 1
+Riel Nova negro
+• 149.9 = 1
+Portafelpa negro
+• 98.4 = 4
+Hache negro
+• 48.3 = 1
+Vidrio
+Vidrio piro 6 mm
+47.9 x 143.3 = 2
+46.9 x 96.5 = 1
+46 x 45.7 = 1
+Diseño 
+Imagen 
+
+
+Ventana Nova Aparente 1 (Vna1)
+Referencia
+Tipo: nova aparente
+Cliente: Dora
+Aluminio: bronce
+Vidrio: bronce 8 mm
+Ancho: 145
+Alto: 140
+Altura de puente: 100
+Divisiones: 3
+Fijos: 2
+Corredizas: 1
+Aluminio
+U-3 /8 bronce
+• 49 = 2
+• 98.3 = 2
+• 37 = 2
+• 145 = 1
+Múltiple bronce
+• 145 = 1
+Riel Nova bronce
+• 145 = 1
+Portafelpa bronce
+• 98.4 = 4
+Hache bronce
+• 49 = 1
+Vidrio
+Vidrio bronce 8 mm
+48.6 x 98.3 = 2
+47.6 x 96.5 = 1
+144.3 x 38.1 = 1
+Diseño
+Imagen
+
+
+Ventana Nova Aparente 2 (Vna2)
+Referencia
+Tipo: nova aparente
+Cliente: Dora
+Aluminio: negro
+Vidrio: bronce arenado de 5.5mm
+Ancho: 199.9
+Alto: 152.4
+Altura de puente: 108.9
+Divisiones: 4
+Fijos: 2
+Corredizas: 2
+Aluminio
+U-13 negro
+• 50.5 = 2
+• 107.2 = 2
+• 40.5 = 2
+• 199.9 = 1
+Múltiple negro
+• 199.9 = 1
+Riel Nova negro
+• 199.9 = 1
+Portafelpa negro
+• 107.3 = 6
+Tee negro
+• 40.5 = 1
+Hache negro
+• 50.5 = 1
+Vidrio
+Vidrio bronce arenado 5.5 mm
+48.6 x 98.3 = 2
+47.6 x 96.5 = 1
+144.3 x 38.1 = 1
+Diseño 
+Imagen 
+
+
+Ventana Nova Aparente 3 (Vna3)
+Referencia
+Tipo: nova aparente
+Cliente: Yoyo
+Aluminio: madera
+Vidrio: transparente 5.5mm
+Ancho: 189.6
+Alto: 191.1
+Altura de puente: 110.5
+Divisiones: 3
+Fijos: 2
+Corredizas: 1
+Aluminio
+U-1.8 madera
+• 63.9 = 2
+• 108.8 = 2
+• 36.8 = 4
+• 189.6 = 2
+Múltiple madera
+• 189.6 = 1
+Riel Nova madera
+• 189.6 = 1
+Portafelpa madera
+• 108.9 = 4
+Tee madera
+• 38 = 2
+Hache madera
+• 63.9 = 1
+Vidrio
+Vidrio bronce arenado 5.5 mm
+50.1 x 107.2 = 2
+49.1 x 105.4 = 1
+99.4 x 41.7 = 2
+
+
+Puerta Aluminio 1 (Pam1)
+Referencia
+Tipo: puerta de aluminio
+Cliente: Dora
+Aluminio: dorado
+Vidrio: arenado 4mm
+Ancho: 72
+Alto: 240
+Alto hoja: 199
+Aluminio
+Marco dorado
+• 67.6 = 1
+Paflon dorado
+• 50.1 = 3
+• 198 = 2
+Junkillo dorado
+• 79.5 = 4
+• 50.1 = 4
+• 67.6 = 2
+• 33.3 = 2
+Ángulo tope dorado
+• 67.6 = 1
+• 199 = 2
+Vidrio
+Vidrio arenado 4 mm
+49.7 x 86.2 = 2
+67.2 x 35.9 = 1
+Diseño 
+Imagen

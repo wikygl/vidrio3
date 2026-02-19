@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@android:color/white">
+
+    <!-- Título -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Ajustar Stock"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Nombre del producto -->
+    <TextView
+        android:id="@+id/tvProducto"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Vidrio Templado 6mm"
+        android:textSize="16sp"
+        android:textColor="@android:color/black"
+        android:layout_marginBottom="8dp"/>
+
+    <!-- Stock actual -->
+    <TextView
+        android:id="@+id/tvStockActual"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Stock actual: 25"
+        android:textSize="14sp"
+        android:textColor="@android:color/darker_gray"
+        android:layout_marginBottom="20dp"/>
+
+    <!-- Label Cantidad -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Cantidad"
+        android:textSize="14sp"
+        android:textColor="@android:color/darker_gray"
+        android:paddingStart="4dp"
+        android:paddingBottom="4dp"/>
+
+    <!-- Campo cantidad - EditText simple -->
+    <EditText
+        android:id="@+id/etCantidad"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:inputType="number"
+        android:textSize="18sp"
+        android:padding="12dp"
+        android:background="@drawable/spinner_background"
+        android:hint="Ingresa cantidad"
+        android:layout_marginBottom="24dp"/>
+
+    <!-- Botones AGREGAR y QUITAR - Grandes y visibles -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp"
+        android:weightSum="2">
+
+        <!-- Botón QUITAR -->
+        <Button
+            android:id="@+id/btnQuitar"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="➖ QUITAR"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:background="@drawable/botoncircular"
+            android:backgroundTint="@color/rojo"
+            android:layout_marginEnd="8dp"/>
+
+        <!-- Botón AGREGAR -->
+        <Button
+            android:id="@+id/btnAgregar"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="➕ AGREGAR"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:background="@drawable/botoncircular"
+            android:backgroundTint="@color/verde"
+            android:layout_marginStart="8dp"/>
+    </LinearLayout>
+
+    <!-- Botón CANCELAR - Grande y centrado -->
+    <Button
+        android:id="@+id/btnCancelar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="CANCELAR"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="@color/gris"
+        android:background="@drawable/botoncircular"
+        android:backgroundTint="@color/sombra2"/>
+
+</LinearLayout>

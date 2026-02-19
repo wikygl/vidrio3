@@ -138,6 +138,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
+        android:visibility="visible"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -159,13 +160,6 @@
             android:layout_height="match_parent"
             android:layout_weight="6"
             android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/txTitulo"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="9dp"
-                android:text="Templado Diseñado con: " />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -213,6 +207,14 @@
 
                 </Button>
 
+                <Button
+                    android:id="@+id/btBaulMedida"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="baul"
+                    android:textSize="11sp" />
+
             </LinearLayout>
 
             <LinearLayout
@@ -225,6 +227,34 @@
                     android:layout_height="match_parent"
                     android:layout_weight="0.5"
                     android:orientation="vertical">
+
+                    <ScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" >
+
+                            <TextView
+                                android:id="@+id/tvMedidaAbierta"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="9dp"
+                                android:layout_marginTop="4dp"
+                                android:layout_marginEnd="9dp"
+                                android:text="Sin medida abierta"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </ScrollView>
+
+                    <TextView
+                        android:id="@+id/txTitulo"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="9dp"
+                        android:text="Templado Diseñado con: " />
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/rvDiseno"
@@ -292,6 +322,10 @@
 
 
     </LinearLayout>
+
+    <!-- ==================== NUEVA UI PRINCIPAL ==================== -->
+
+    <!-- ==================== FLUJO DE 9 ETAPAS ==================== -->
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>

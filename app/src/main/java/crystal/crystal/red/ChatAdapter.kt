@@ -37,20 +37,21 @@ class ChatAdapter(
     override fun onBindViewHolder(holder: ChatViewHolder, position: Int) {
         val chat = chats[position]
 
-        // 1) Poner el nombre como título grande
+        // ✅ USAR EL NOMBRE QUE YA VIENE DE FIREBASE
         holder.binding.chatNameText.text = chat.name
 
-        // 2) Poner el subtítulo: aquí ejemplo fijo “Último mensaje”
-        // Ahora muestra el mensaje real o un placeholder si está vacío
-        holder.binding.usersTextView.text =
-            if (chat.lastMessageText.isNotBlank()) chat.lastMessageText
-            else " "  // o "Sin mensajes aún"
+        // Mostrar último mensaje o placeholder
+        holder.binding.usersTextView.text = if (chat.lastMessageText.isNotBlank()) {
+            chat.lastMessageText
+        } else {
+            "Sin mensajes aún"
+        }
 
-        // (Si tienes el texto real del último mensaje, sustitúyelo aquí)
-
-        // 3) Cargar la foto de perfil como antes…
+        // Cargar foto de perfil del otro usuario
         val otherUserId = chat.users.firstOrNull { it != currentUserId }
-        if (otherUserId != null) {
+
+        if (otherUserId != null && otherUserId != currentUserId) {
+            // Es un chat con otra persona, cargar su foto
             Firebase.firestore
                 .collection("usuarios")
                 .document(otherUserId)
@@ -61,23 +62,25 @@ class ChatAdapter(
                         .load(url.takeUnless { it.isNullOrBlank() } ?: R.drawable.ic_mensajesno)
                         .circleCrop()
                         .placeholder(R.drawable.ic_dormido)
-                        .error(R.drawable.ic_peru)
+                        .error(R.drawable.ic_mensajesno)
                         .into(holder.binding.ivFoto)
                 }
                 .addOnFailureListener {
+                    // Si falla cargar foto, usar imagen por defecto
                     Glide.with(holder.itemView.context)
-                        .load(R.drawable.ic_chckr)
+                        .load(R.drawable.ic_mensajesno)
                         .circleCrop()
                         .into(holder.binding.ivFoto)
                 }
         } else {
+            // Es "Mensajes guardados" (self-chat), usar icono especial
             Glide.with(holder.itemView.context)
                 .load(R.drawable.ic_chckr)
                 .circleCrop()
                 .into(holder.binding.ivFoto)
         }
 
-        // 4) Badge de mensajes no leídos: un TextView circular a la derecha
+        // Badge de mensajes no leídos
         if (chat.unreadCount > 0) {
             holder.binding.tvUnreadCount.apply {
                 text = chat.unreadCount.toString()
@@ -87,12 +90,11 @@ class ChatAdapter(
             holder.binding.tvUnreadCount.visibility = View.GONE
         }
 
-        // 5) Click handler
+        // Click handler
         holder.binding.root.setOnClickListener {
             chatClick(chat)
         }
     }
-
 
     override fun getItemCount(): Int = chats.size
 

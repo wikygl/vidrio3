@@ -14,19 +14,32 @@ object ListaCasilla {
     fun procesarTextoTxU(tv: TextView): MutableList<MutableList<String>> {
         val lista = mutableListOf<MutableList<String>>()
 
-        // Separar el texto por saltos de lÃ­nea
         val lineas = tv.text.toString().split("\n")
 
-        // Procesar cada lÃ­nea dividiendo por el sÃ­mbolo "="
         for (linea in lineas) {
             val partes = linea.split("=")
             if (partes.size == 2) {
-                val primerElemento = partes[0]
-                val segundoElemento = partes[1]
+                val primerElemento = partes[0].trim()
+                val segundoElemento = partes[1].trim()
+                if (esEntradaVacia(primerElemento, segundoElemento)) continue
                 lista.add(mutableListOf(primerElemento, segundoElemento, ""))
             }
         }
         return lista
+    }
+
+    /**
+     * Descarta entradas con valor 0 o cantidad vacía/0.
+     * Valores tipo "45x30" (vidrios) NO se descartan.
+     */
+    private fun esEntradaVacia(valor: String, cantidad: String): Boolean {
+        if (valor.isBlank() || cantidad.isBlank()) return true
+        val cantidadNum = cantidad.toIntOrNull()
+        if (cantidadNum == null || cantidadNum == 0) return true
+        // Solo filtrar por valor 0 si es un número simple (no dimensiones tipo "45x30")
+        val valorNum = valor.toFloatOrNull()
+        if (valorNum != null && valorNum == 0f) return true
+        return false
     }
 
     fun agregarTercerElemento(context: Context, lista: MutableList<MutableList<String>>) {
@@ -103,13 +116,15 @@ object ListaCasilla {
         tvNombre: TextView,
         tvDatos: TextView,
         mapListas: MutableMap<String, MutableList<MutableList<String>>>,
-        identificadorPaquete: String
+        identificadorPaquete: String,
+        color: String = ""
     ) {
-        val nombreLista = obtenerNombreLista(tvNombre)
+        val nombreBase = obtenerNombreLista(tvNombre)
+        val nombreLista = if (color.isNotBlank()) "$nombreBase $color" else nombreBase
         val listaProcesada = procesarTextoTxU(tvDatos)
+        if (listaProcesada.isEmpty()) return // No crear entrada vacía
         agregarIdentificadorPaquete(listaProcesada, identificadorPaquete)
 
-        // Verificar si la lista ya existe en el Map
         if (mapListas.containsKey(nombreLista)) {
             mapListas[nombreLista]?.addAll(listaProcesada)
         } else {

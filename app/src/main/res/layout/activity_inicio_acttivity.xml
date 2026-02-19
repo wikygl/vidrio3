@@ -147,6 +147,28 @@
                 app:layout_constraintTop_toTopOf="parent"
                 tools:ignore="HardcodedText,TextContrastCheck" />
         </androidx.constraintlayout.widget.ConstraintLayout>
+        <Button
+            android:id="@+id/btnAccesoTerminal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="📱 ACCESO TERMINAL"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/blanco"
+            android:background="@drawable/botoncircular"
+            android:backgroundTint="@color/azul"
+            tools:ignore="ButtonStyle" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Para puntos de venta sin cuenta Google"
+            android:textSize="12sp"
+            android:textColor="@color/color"
+            android:gravity="center"
+            android:alpha="0.7" />
 
         <TextView
             android:id="@+id/textView14"

@@ -37,6 +37,9 @@ class VentanaAl : AppCompatActivity() {
                     "Div=${divisiones()} -> Fjs=${nFijos()} -> Crzas=${nCorredizas()}\n" +
                     "hHoja = ${df1(altoHoja())}"
             binding.tvPruebas.text=divisiones().toString()
+
+            // Ocultar layouts si sus TextViews están vacíos
+            actualizarVisibilidadLayouts()
         }
         binding.ivModelo.setOnClickListener {
             actualizarVentana()
@@ -47,6 +50,9 @@ class VentanaAl : AppCompatActivity() {
             archivarMapas()
         }
 
+        // Pre-carga desde presupuesto
+        intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etAncho.setText(df1(it)) }
+        intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.etAlto.setText(df1(it)) }
     }
 
     // FUNCIONES PARA RECUPERAR ESTADO DE MODELO
@@ -232,82 +238,47 @@ class VentanaAl : AppCompatActivity() {
 
     //FUNCIONES DE ARCHIVO
     private fun archivarMapas() {
-        ListaCasilla.incrementarContadorVentanas(this)
+        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
 
-        // Caso especial para txReferencias
-        /*if (esValido(binding.lyReferencias)) {
-            ListaCasilla.procesarReferencias(this, binding.tvReferencias, binding.txReferencias, mapListas) // referencias
-        }*/
+        for (u in 1..cant) {
+            ListaCasilla.incrementarContadorVentanas(this)
 
-        // Usar la clase ListaCasilla para procesar y archivar solo los TextView válidos
-        if (esValido(binding.lyMarco)) {
-            ListaCasilla.procesarArchivar(this, binding.tvMarco, binding.txMarco, mapListas) // u
+            if (esValido(binding.lyMarco)) {
+                ListaCasilla.procesarArchivar(this, binding.tvMarco, binding.txMarco, mapListas)
+            }
+            if (esValido(binding.lyParante)) {
+                ListaCasilla.procesarArchivar(this, binding.tvParante, binding.txParante, mapListas)
+            }
+            if (esValido(binding.lyZocalo)) {
+                ListaCasilla.procesarArchivar(this, binding.tvZocalo, binding.txZocalo, mapListas)
+            }
+            if (esValido(binding.lyRiel)) {
+                ListaCasilla.procesarArchivar(this, binding.tvRiel, binding.txRiel, mapListas)
+            }
+            if (esValido(binding.lyTubo)) {
+                ListaCasilla.procesarArchivar(this, binding.tvTubo, binding.txTubo, mapListas)
+            }
+            if (esValido(binding.lyJunki)) {
+                ListaCasilla.procesarArchivar(this, binding.tvJunki, binding.txJunki, mapListas)
+            }
         }
-        if (esValido(binding.lyParante)) {
-            ListaCasilla.procesarArchivar(this, binding.tvParante, binding.txParante, mapListas) // puente
-        }
-        if (esValido(binding.lyZocalo)) {
-            ListaCasilla.procesarArchivar(this, binding.tvZocalo, binding.txZocalo, mapListas) // fijo corredizo
-        }
-        if (esValido(binding.lyRiel)) {
-            ListaCasilla.procesarArchivar(this, binding.tvRiel, binding.txRiel, mapListas) // riel
-        }
-        if (esValido(binding.lyTubo)) {
-            ListaCasilla.procesarArchivar(this, binding.tvTubo, binding.txTubo, mapListas) // tubo
-        }
-        if (esValido(binding.lyJunki)) {
-            ListaCasilla.procesarArchivar(this, binding.tvJunki, binding.txJunki, mapListas) // portafelpa
-        }
-        /*if (esValido(binding.tLayout)) {
-            ListaCasilla.procesarArchivar(this, binding.tvTe, binding.txTe, mapListas) // tee
-        }
-        if (esValido(binding.angLayout)) {
-            ListaCasilla.procesarArchivar(this, binding.tvTo, binding.txTo, mapListas) // tope
-        }
-        if (esValido(binding.hLayout)) {
-            ListaCasilla.procesarArchivar(this, binding.tvH, binding.txH, mapListas) // h
-        }
-        if (esValido(binding.vidriosLayout)) {
-            ListaCasilla.procesarArchivar(this, binding.tvV, binding.txV, mapListas) // vidrios
-        }
-        if (esValido(binding.lyClient)) {
-            ListaCasilla.procesarArchivar(this, binding.tvC, binding.txC, mapListas) // cliente
-        }
-        if (esValido(binding.lyAncho)) {
-            ListaCasilla.procesarArchivar(this, binding.tvAncho, binding.txAncho, mapListas) // ancho
-        }
-        if (esValido(binding.lyAlto)) {
-            ListaCasilla.procesarArchivar(this, binding.tvAlto, binding.txAlto, mapListas) // alto
-        }
-        if (esValido(binding.lyPuente)) {
-            ListaCasilla.procesarArchivar(this, binding.tvPuente, binding.txPuente, mapListas) // altura Puente
-        }
-        if (esValido(binding.lyDivisiones)) {
-            ListaCasilla.procesarArchivar(this, binding.tvDivisiones, binding.txDivisiones, mapListas) // divisiones
-        }
-        if (esValido(binding.lyFijos)) {
-            ListaCasilla.procesarArchivar(this, binding.tvFijos, binding.txFijos, mapListas) // nFijos
-        }
-        if (esValido(binding.lyCorredizas)) {
-            ListaCasilla.procesarArchivar(this, binding.tvCorredizas, binding.txCorredizas, mapListas) // nCorredizas
-        }
-        if (esValido(binding.lyDiseno)) {
-            ListaCasilla.procesarArchivar(this, binding.tvDiseno, binding.txDiseno, mapListas) // diseño
-        }
-        if (esValido(binding.lyGrados)) {
-            ListaCasilla.procesarArchivar(this, binding.tvGrados, binding.txGrados, mapListas) // grados
-        }
-        if(esValido(binding.lyTipo)){
-            ListaCasilla.procesarArchivar(this, binding.tvTipo, binding.txTipo, mapListas) // tipo de ventana
-        }*/
 
-        // Aquí puedes hacer algo con `mapListas`, como mostrarlo o guardarlo
-        //binding.txPr.text = mapListas.toString()
         println(mapListas)
     }
     // Función para verificar si un Layout es visible o tiene estado GONE
     private fun esValido(ly: LinearLayout): Boolean {
         return ly.visibility == View.VISIBLE || ly.visibility == View.INVISIBLE
+    }
+
+    // Oculta layouts si el TextView de resultado está vacío
+    private fun actualizarVisibilidadLayouts() {
+        binding.lyMarco.visibility = if (binding.tvMarco.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        binding.lyParante.visibility = if (binding.tvParante.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        binding.lyZocalo.visibility = if (binding.tvZocalo.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        binding.lyRiel.visibility = if (binding.tvRiel.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        // lyTubo ya se maneja en puente() según condición de altura
+        binding.lyJunki.visibility = if (binding.tvJunki.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        binding.lyTope.visibility = if (binding.tvTope.text.isNullOrBlank()) View.GONE else View.VISIBLE
     }
 
     //   FUNCIONES GENERALES
@@ -434,6 +405,33 @@ class VentanaAl : AppCompatActivity() {
         }
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (ModoMasivoHelper.esModoMasivo(this)) {
+            // Solo incluir perfiles cuyos layouts sean visibles
+            val perfiles = mutableMapOf<String, String>()
+            if (esValido(binding.lyParante)) perfiles["Parante"] = ModoMasivoHelper.texto(binding.tvParante)
+            if (esValido(binding.lyZocalo)) perfiles["Zócalo"] = ModoMasivoHelper.texto(binding.tvZocalo)
+            if (esValido(binding.lyRiel)) perfiles["Riel"] = ModoMasivoHelper.texto(binding.tvRiel)
+            if (esValido(binding.lyTubo)) perfiles["Tubo"] = ModoMasivoHelper.texto(binding.tvTubo)
+
+            val accesorios = mutableMapOf<String, String>()
+            if (esValido(binding.lyTope)) accesorios["Tope"] = ModoMasivoHelper.texto(binding.tvTope)
+            if (esValido(binding.lyJunki)) accesorios["Junquillo"] = ModoMasivoHelper.texto(binding.tvJunki)
+
+            ModoMasivoHelper.devolverResultado(
+                activity = this,
+                calculadora = "Ventana Aluminio",
+                perfiles = perfiles,
+                vidrios = ModoMasivoHelper.texto(binding.tvVidriosR),
+                accesorios = accesorios,
+                referencias = ModoMasivoHelper.texto(binding.tvReferencias)
+            )
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onBackPressed()
+    }
 }
 
 data class Serie(val nombre: String, val medida: String, val zocalo: String)

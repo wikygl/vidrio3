@@ -5,9 +5,14 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import crystal.crystal.casilla.DialogosProyecto
+import crystal.crystal.casilla.MapStorage
+import crystal.crystal.casilla.ProyectoManager
+import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityMamparaVidrioBinding
 
 class MamparaVidrioActivity : AppCompatActivity() {
@@ -16,6 +21,8 @@ private lateinit var binding: ActivityMamparaVidrioBinding
 private val hoja: Float = 199.0f
 private var contadorVentana: Int = 1
 private val ventanas: MutableMap<String, MutableMap<String, Any>> = LinkedHashMap()
+private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
+private var primerClickArchivarRealizado = false
 
 override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -30,17 +37,49 @@ override fun onCreate(savedInstanceState: Bundle?) {
     binding.ulayout.visibility = View.VISIBLE
 
     binding.btArchivar.setOnClickListener {
-        //bloqueDatos()
-        binding.med2.setText("")
-        binding.med1.setText("")
+        if (binding.txU.text.isNullOrBlank() && binding.txV.text.isNullOrBlank()) {
+            Toast.makeText(this, "Haz nuevo cálculo", Toast.LENGTH_SHORT).show()
+            return@setOnClickListener
+        }
+
+        if (!primerClickArchivarRealizado) {
+            DialogosProyecto.mostrarDialogoSeleccionarParaArchivar(this, object : DialogosProyecto.ProyectoCallback {
+                override fun onProyectoSeleccionado(nombreProyecto: String) {
+                    primerClickArchivarRealizado = true
+                    val mapExistente = MapStorage.cargarProyecto(this@MamparaVidrioActivity, nombreProyecto)
+                    if (mapExistente != null) { mapListas.clear(); mapListas.putAll(mapExistente) }
+                    archivarMapas()
+                    Toast.makeText(this@MamparaVidrioActivity, "Archivado", Toast.LENGTH_SHORT).show()
+                    binding.med1.setText(""); binding.med2.setText("")
+                }
+                override fun onProyectoCreado(nombreProyecto: String) {
+                    primerClickArchivarRealizado = true
+                    archivarMapas()
+                    Toast.makeText(this@MamparaVidrioActivity, "Archivado", Toast.LENGTH_SHORT).show()
+                    binding.med1.setText(""); binding.med2.setText("")
+                }
+                override fun onProyectoEliminado(nombreProyecto: String) {}
+            })
+        } else {
+            if (!ProyectoManager.hayProyectoActivo()) {
+                primerClickArchivarRealizado = false
+                Toast.makeText(this, "No hay proyecto activo. Selecciona uno.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            archivarMapas()
+            Toast.makeText(this, "Archivado", Toast.LENGTH_SHORT).show()
+            binding.med1.setText(""); binding.med2.setText("")
+        }
     }
 
     binding.btArchivar.setOnLongClickListener {
-        val intent = Intent(this, FichaActivity::class.java)
-        intent.putExtra("materiales", HashMap(ventanas))
-        startActivity(intent)
+        startActivity(Intent(this, FichaActivity::class.java))
         true
     }
+
+    // Pre-carga desde presupuesto
+    intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.med1.setText(df1(it)) }
+    intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.med2.setText(df1(it)) }
 }
 
 private fun cliente() {
@@ -553,4 +592,105 @@ private fun divisiones(): Int {
     return divis
 }
 
+    // ==================== ARCHIVAR ====================
+    private fun obtenerPrefijo(): String = "MV"
+
+    private fun archivarMapas() {
+        val proyectoActivo = ProyectoManager.getProyectoActivo()
+        if (proyectoActivo != null) {
+            val mapExistente = MapStorage.cargarProyecto(this, proyectoActivo)
+            mapListas.clear()
+            if (mapExistente != null) mapListas.putAll(mapExistente)
+        }
+
+        val prefijo = obtenerPrefijo()
+        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+
+        for (u in 1..cant) {
+            val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
+            val paqueteID = "v${siguienteNumero}${prefijo}"
+
+            if (binding.lyU.visibility == View.VISIBLE) archivarConNombre("U-13", binding.txU.text.toString(), paqueteID)
+            if (binding.u38layout.visibility == View.VISIBLE) archivarConNombre("Zócalo", binding.u38tx.text.toString(), paqueteID)
+            if (binding.ulayout.visibility == View.VISIBLE) archivarConNombre("U", binding.uxtx.text.toString(), paqueteID)
+            archivarConNombre("Puente", binding.txT.text.toString(), paqueteID)
+            archivarConNombre("Riel", binding.txR.text.toString(), paqueteID)
+            if (binding.lyUf.visibility == View.VISIBLE) archivarConNombre("U felpero", binding.txUf.text.toString(), paqueteID)
+            if (binding.lyFijoCorre.visibility == View.VISIBLE) archivarConNombre("FC", binding.txFc.text.toString(), paqueteID)
+            archivarConNombre("H", binding.txH.text.toString(), paqueteID)
+            if (binding.lyTo.visibility == View.VISIBLE) archivarConNombre("Tope", binding.txTo.text.toString(), paqueteID)
+            archivarConNombre("Portafelpa", binding.txPf.text.toString(), paqueteID)
+            archivarConNombre("Vidrios", binding.txV.text.toString(), paqueteID)
+            archivarReferencias(binding.txReferencias.text.toString(), paqueteID)
+
+            ProyectoManager.actualizarContadorPorPrefijo(this, prefijo, siguienteNumero)
+        }
+
+        MapStorage.guardarMap(this, mapListas)
+    }
+
+    private fun archivarConNombre(nombre: String, texto: String, paqueteID: String) {
+        if (texto.isBlank()) return
+        val entradas = parsearTexto(texto, paqueteID)
+        if (entradas.isNotEmpty()) {
+            mapListas.getOrPut(nombre) { mutableListOf() }.addAll(entradas)
+        }
+    }
+
+    private fun archivarReferencias(texto: String, paqueteID: String) {
+        if (texto.isBlank()) return
+        val entrada = mutableListOf(texto, "", paqueteID)
+        mapListas.getOrPut("Referencias") { mutableListOf() }.add(entrada)
+    }
+
+    private fun parsearTexto(texto: String, paqueteID: String): MutableList<MutableList<String>> {
+        val resultado = mutableListOf<MutableList<String>>()
+        for (linea in texto.split("\n")) {
+            val l = linea.trim()
+            if (l.isEmpty()) continue
+            val partes = l.split("=")
+            if (partes.size == 2) {
+                val valor = partes[0].trim()
+                val cantidad = partes[1].trim()
+                if (cantidad.isBlank()) continue
+                val cantidadNum = cantidad.toIntOrNull()
+                if (cantidadNum == null || cantidadNum == 0) continue
+                val valorNum = valor.toFloatOrNull()
+                if (valorNum != null && valorNum == 0f) continue
+                if (valor.isBlank()) continue
+                resultado.add(mutableListOf(valor, cantidad, paqueteID))
+            } else {
+                resultado.add(mutableListOf(l, "", paqueteID))
+            }
+        }
+        return resultado
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (ModoMasivoHelper.esModoMasivo(this)) {
+            val perfiles = mapOf(
+                "U" to ModoMasivoHelper.texto(binding.txU),
+                "Puente" to ModoMasivoHelper.texto(binding.txT),
+                "Riel" to ModoMasivoHelper.texto(binding.txR)
+            ).filter { it.value.isNotBlank() }
+
+            val accesorios = mapOf(
+                "U felpero" to ModoMasivoHelper.texto(binding.txUf),
+                "FC" to ModoMasivoHelper.texto(binding.txFc)
+            ).filter { it.value.isNotBlank() }
+
+            ModoMasivoHelper.devolverResultado(
+                activity = this,
+                calculadora = "Mampara Vidrio",
+                perfiles = perfiles,
+                vidrios = ModoMasivoHelper.texto(binding.txReferencias),
+                accesorios = accesorios,
+                referencias = ModoMasivoHelper.texto(binding.txReferencias)
+            )
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onBackPressed()
+    }
 }

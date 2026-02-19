@@ -252,8 +252,8 @@ object NovaPerfilesHelper {
     ) {
         val nFijos = NovaCalculos.nFijos(divisiones)
         val fijoUParante = NovaCalculos.fijoUParante(divisiones)
-        val uFijos = NovaCalculos.uFijos(ancho, divisiones, cruce)
-        val mPuentes = NovaCalculos.mPuentes1(ancho, divisiones)
+        val uFijos = NovaCalculos.uFijos(ancho, divisiones, cruce, tipoVentana)
+        val mPuentes = NovaCalculos.mPuentes1(ancho, divisiones, tipoVentana)
         val uSuperior = calcularUSuperior(mPuentes)
 
         val uParante = when (tipoVentana) {

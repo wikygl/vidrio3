@@ -16,7 +16,7 @@ import crystal.crystal.casilla.ProyectoManager
  */
 object NovaUIHelper {
 
-    // ==================== FUNCIÃ“N DE VALIDACIÃ“N ====================
+    // ==================== FUNCIÓN DE VALIDACIÓN ====================
 
     fun esValido(ly: LinearLayout): Boolean {
         return ly.visibility == View.VISIBLE || ly.visibility == View.INVISIBLE
@@ -206,16 +206,18 @@ object NovaUIHelper {
         NovaCalculos.df1(altoHoja)
         } else {""}
 
+        val mochetasTxt = NovaCalculos.ordenMochetasConParantes(divisiones, ancho)
+
         val referenciasBase =
             when(texto){
                 "nn" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
-                        "s<$altoPuenteTexto>(${NovaCalculos.ordenDivis(divisiones, ancho)});m<${NovaCalculos.df1(mo)}>" +
-                        "(${NovaCalculos.ordenMochetas(anchMota, ancho)})"
+                        "s<$altoPuenteTexto>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});m<${NovaCalculos.df1(mo)}>" +
+                        "($mochetasTxt)"
                 "nr" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
-                        "m<${NovaCalculos.df1(mo)}>(f);s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivis(divisiones,ancho)})"
+                        "m<${NovaCalculos.df1(mo)}>($mochetasTxt);s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones,ancho)})"
                 "np" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
-                        "m<${NovaCalculos.df1(moDos)}>(f);s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivis(divisiones,ancho)});" +
-                        "m<${NovaCalculos.df1(moDos)}>(f)"
+                        "m<${NovaCalculos.df1(moDos)}>($mochetasTxt);s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones,ancho)});" +
+                        "m<${NovaCalculos.df1(moDos)}>($mochetasTxt)"
                 "ncc" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
                         "s<$altoPuenteTexto>(cc);m<${NovaCalculos.df1(mo)}>(f)"
                 "n3c" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
@@ -233,35 +235,4 @@ object NovaUIHelper {
                 return referenciasBase
 
     }
-
-
-    fun mostrarSpinner(lySpinner: View) {
-        lySpinner.alpha = 0f
-        lySpinner.visibility = View.VISIBLE
-        lySpinner.animate()
-            .alpha(1f)
-            .setDuration(300)
-            .start()
-    }
-
-    fun ocultarSpinner(lySpinner: View) {
-        lySpinner.animate()
-            .alpha(0f)
-            .setDuration(300)
-            .withEndAction {
-                lySpinner.visibility = View.GONE
-            }
-            .start()
-    }
-
-    // ==================== FUNCIÃ“N PARA ROTACIÃ“N DE DISEÃ‘O ====================
-
-    fun rotarDiseno(
-        ivDiseno: android.widget.ImageView,
-        gradosActuales: Int,
-        onGradosActualizados: (Int) -> Unit
-    ) {
-        ivDiseno.animate().rotationBy(180f).setDuration(500).start()
-        val nuevosGrados = (gradosActuales + 180) % 360
-        onGradosActualizados(nuevosGrados)
-    }}
+}

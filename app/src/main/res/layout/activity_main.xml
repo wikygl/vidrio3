@@ -21,7 +21,7 @@
         <LinearLayout
             android:id="@+id/lyCabeza"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="45dp"
             android:background="@color/color"
             android:orientation="vertical"
             android:paddingStart="4.5dp"
@@ -31,60 +31,78 @@
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="0.9"
-                tools:ignore="UselessParent">
-
-                <ImageButton
-                    android:id="@+id/btUser"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_margin="1.8dp"
-                    android:layout_weight="1"
-                    android:background="@color/color"
-                    android:contentDescription="@string/todo"
-                    app:srcCompat="@drawable/ic_usuario4"
-                    tools:ignore="NestedWeights,TouchTargetSizeCheck,TouchTargetSizeCheck,DuplicateSpeakableTextCheck,DuplicateSpeakableTextCheck" />
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="horizontal">
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_weight="0.9"
-                    android:orientation="horizontal"
-                    tools:ignore="DisableBaselineAlignment,
-                    NestedWeights">
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.8"
+                    android:orientation="horizontal">
 
                     <androidx.constraintlayout.widget.ConstraintLayout
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
 
-                        <TextView
-                            android:id="@+id/textView2"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="-9dp"
-                            android:layout_marginTop="-6dp"
-                            android:text="@string/crystal"
-                            android:textColor="@color/blanco"
-                            android:textSize="24sp"
-                            app:layout_constraintEnd_toEndOf="parent"
+                        <ImageButton
+                            android:id="@+id/btUser"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@color/color"
+                            android:contentDescription="@string/todo"
+                            app:layout_constraintBottom_toBottomOf="parent"
                             app:layout_constraintStart_toStartOf="parent"
                             app:layout_constraintTop_toTopOf="parent"
-                            tools:ignore="RtlCompat" />
+                            app:srcCompat="@drawable/ic_usuario4"
+                            tools:ignore="NestedWeights,TouchTargetSizeCheck,TouchTargetSizeCheck,DuplicateSpeakableTextCheck,DuplicateSpeakableTextCheck" />
 
-                        <TextView
-                            android:id="@+id/txUser"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/daniel"
-                            android:textColor="@color/blanco"
+                        <LinearLayout
+                            android:id="@+id/linearLayout17"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
                             app:layout_constraintBottom_toBottomOf="parent"
                             app:layout_constraintEnd_toEndOf="parent"
-                            tools:ignore="TextContrastCheck" />
+                            app:layout_constraintStart_toEndOf="@+id/btUser"
+                            app:layout_constraintTop_toTopOf="parent"
+                            tools:ignore="DisableBaselineAlignment,
+                            NestedWeights">
 
+                            <androidx.constraintlayout.widget.ConstraintLayout
+                                android:id="@+id/lyUs"
+                                android:layout_width="0dp"
+                                android:layout_height="match_parent"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
 
+                                <TextView
+                                    android:id="@+id/txUser"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="-9dp"
+                                    android:layout_marginTop="-3dp"
+                                    android:text="@string/crystal"
+                                    android:textColor="@color/blanco"
+                                    android:textSize="18sp"
+                                    app:layout_constraintEnd_toEndOf="parent"
+                                    app:layout_constraintStart_toStartOf="parent"
+                                    app:layout_constraintTop_toTopOf="parent"
+                                    tools:ignore="RtlCompat" />
+
+                                <TextView
+                                    android:id="@+id/txModo"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Basic"
+                                    android:textColor="@color/blanco"
+                                    app:layout_constraintBottom_toBottomOf="parent"
+                                    app:layout_constraintEnd_toEndOf="parent"
+                                    tools:ignore="TextContrastCheck" />
+
+                            </androidx.constraintlayout.widget.ConstraintLayout>
+
+                        </LinearLayout>
                     </androidx.constraintlayout.widget.ConstraintLayout>
 
                 </LinearLayout>
@@ -95,81 +113,97 @@
                     android:layout_weight="1"
                     android:orientation="horizontal">
 
-                    <androidx.constraintlayout.widget.ConstraintLayout
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:layout_weight="1">
+                        android:layout_weight="1"
+                        android:orientation="horizontal">
 
-                        <ImageButton
-                            android:id="@+id/btnChat"
+                        <androidx.constraintlayout.widget.ConstraintLayout
                             android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_margin="1.8dp"
-                            android:layout_weight="1"
-                            android:background="@color/color"
-                            android:contentDescription="@string/todo"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintTop_toTopOf="parent"
-                            app:srcCompat="@drawable/ic_mensajes"
-                            tools:ignore="TouchTargetSizeCheck,
-                        DuplicateSpeakableTextCheck" />
+                            android:layout_height="match_parent"
+                            android:layout_weight="1">
 
-                        <TextView
-                            android:id="@+id/tvBadge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/_0"
-                            app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent" />
-                    </androidx.constraintlayout.widget.ConstraintLayout>
+                            <ImageButton
+                                android:id="@+id/btnChat"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_margin="1.8dp"
+                                android:layout_weight="1"
+                                android:background="@color/color"
+                                android:contentDescription="@string/todo"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintEnd_toEndOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent"
+                                app:srcCompat="@drawable/ic_mensajes"
+                                tools:ignore="TouchTargetSizeCheck,
+                            DuplicateSpeakableTextCheck" />
 
+                            <TextView
+                                android:id="@+id/tvBadge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/_0"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintEnd_toEndOf="parent" />
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+
+                    </LinearLayout>
+
+                    <ImageButton
+                        android:id="@+id/taller_cal"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@color/color"
+                        android:contentDescription="@string/todo"
+                        app:srcCompat="@drawable/disco"
+                        tools:ignore="TouchTargetSizeCheck,
+                    TouchTargetSizeCheck" />
+
+                    <ImageButton
+                        android:id="@+id/btWallet"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@color/color"
+                        android:contentDescription="TODO"
+                        app:srcCompat="@drawable/dolar"
+                        tools:ignore="ContentDescription,HardcodedText,TouchTargetSizeCheck" />
+
+                    <ImageButton
+                        android:id="@+id/btn_catalogo"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@color/color"
+                        android:contentDescription="@string/todo"
+                        app:srcCompat="@drawable/ic_catalogo"
+                        tools:ignore="TouchTargetSizeCheck" />
+
+                    <ImageButton
+                        android:id="@+id/btAyuda"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@color/color"
+                        android:contentDescription="@string/todo"
+                        app:srcCompat="@drawable/interrogar"
+                        tools:ignore="TouchTargetSizeCheck" />
+
+                    <TextView
+                        android:id="@+id/txPuntoV"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:padding="8dp"
+                        android:text="🛒 PUNTO DE VENTA"
+                        android:textColor="@color/blanco"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
                 </LinearLayout>
-
-                <ImageButton
-                    android:id="@+id/taller_cal"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:background="@color/color"
-                    android:contentDescription="@string/todo"
-                    app:srcCompat="@drawable/ic_taller2"
-                    tools:ignore="TouchTargetSizeCheck,
-                TouchTargetSizeCheck" />
-
-                <ImageButton
-                    android:id="@+id/btMicro"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_margin="1.8dp"
-                    android:layout_weight="1"
-                    android:background="@color/color"
-                    android:contentDescription="TODO"
-                    app:srcCompat="@drawable/micro"
-                    tools:ignore="ContentDescription,HardcodedText,TouchTargetSizeCheck" />
-
-                <ImageButton
-                    android:id="@+id/btScan"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_margin="1.8dp"
-                    android:layout_weight="1"
-                    android:background="@color/color"
-                    android:contentDescription="@string/todo"
-                    app:srcCompat="@drawable/scan"
-                    tools:ignore="TouchTargetSizeCheck" />
-
-                <ImageButton
-                    android:id="@+id/btn_catalogo"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_margin="1.8dp"
-                    android:layout_weight="1"
-                    android:background="@color/color"
-                    android:contentDescription="@string/todo"
-                    app:srcCompat="@drawable/ic_catalogo"
-                    tools:ignore="TouchTargetSizeCheck" />
 
             </LinearLayout>
 
@@ -188,7 +222,7 @@
             android:paddingTop="18dp"
             android:paddingEnd="3dp"
             android:paddingBottom="3dp"
-            android:visibility="visible">
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -234,20 +268,19 @@
 
                     <ImageButton
                         android:id="@+id/btBuscar"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center_vertical"
                         android:layout_marginStart="3dp"
                         android:background="@drawable/botonverde"
-                        android:src="@drawable/tres_puntos"
-                        tools:ignore="ContentDescription,TouchTargetSizeCheck,TouchTargetSizeCheck,SpeakableTextPresentCheck,SpeakableTextPresentCheck"
-                        tools:src="@drawable/tres_puntos" />
+                        android:src="@drawable/tres_puntos" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_vertical"
+                    android:layout_weight="1"
                     android:orientation="vertical">
 
 
@@ -265,10 +298,6 @@
                         tools:ignore="ButtonStyle,TextContrastCheck,
                                 TooManyViews,TouchTargetSizeCheck" />
                 </LinearLayout>
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
 
 
             </LinearLayout>
@@ -514,18 +543,9 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <TextView
-                        android:id="@+id/textView20"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:text="@string/referencias"
-                        android:textColor="@color/color"
-                        tools:ignore="TextContrastCheck" />
-
                     <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="126dp"
+                        android:layout_height="180dp"
                         android:orientation="vertical">
 
                         <ScrollView
@@ -541,18 +561,37 @@
                                 <LinearLayout
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:orientation="horizontal">
+                                    android:orientation="vertical">
 
-                                    <TextView
-                                        android:id="@+id/prodtxt"
+                                    <LinearLayout
                                         android:layout_width="match_parent"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginStart="3dp"
+                                        android:layout_height="match_parent"
                                         android:layout_weight="1"
-                                        android:background="@drawable/botoncircular"
-                                        android:paddingStart="6dp"
-                                        android:text="@string/producto"
-                                        tools:ignore="RtlSymmetry,TooDeepLayout" />
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/prodtxt"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginStart="3dp"
+                                            android:layout_marginEnd="3dp"
+                                            android:layout_weight="1"
+                                            android:background="@drawable/botoncircular"
+                                            android:backgroundTint="@color/color"
+                                            android:gravity="center"
+                                            android:padding="3dp"
+                                            android:paddingStart="6dp"
+                                            android:text="@string/producto"
+                                            android:textColor="@color/blanco"
+                                            tools:ignore="RtlSymmetry,TooDeepLayout" />
+
+                                        <TextView
+                                            android:id="@+id/txBusqueda"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="7"
+                                            android:text="🔍" />
+                                    </LinearLayout>
 
                                     <EditText
                                         android:id="@+id/pro_editxt"
@@ -717,7 +756,7 @@
                         android:background="@drawable/corner2"
                         android:backgroundTint="@color/color"
                         android:gravity="center"
-                        android:text="@string/presupuesto"
+                        android:text="Cliente"
                         android:textColor="@color/blanco"
                         tools:ignore="TextContrastCheck" />
 
@@ -953,7 +992,8 @@
                         android:layout_height="match_parent"
                         android:layout_weight="1.5"
                         android:gravity="bottom"
-                        android:orientation="horizontal">
+                        android:orientation="horizontal"
+                        android:layout_marginTop="3dp">
 
                         <Button
                             android:id="@+id/btnLimpiar"
@@ -981,6 +1021,7 @@
                             tools:ignore="ButtonStyle,TextContrastCheck,
                             TooManyViews,TouchTargetSizeCheck" />
 
+
                     </LinearLayout>
 
                 </LinearLayout>
@@ -990,12 +1031,164 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/linearLayout2"
+            android:id="@+id/lyPiernas"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:layout_margin="9dp"
+            android:background="@drawable/corner"
             android:orientation="vertical"
-            tools:ignore="TooManyViews" />
+            android:padding="12dp"
+            android:visibility="gone"
+            tools:ignore="TooManyViews">
+
+            <!-- ==================== SPINNERS DE VENTA ==================== -->
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:orientation="horizontal">
+
+                        <!-- Spinner Forma de Pago -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:paddingStart="4dp"
+                                android:paddingBottom="4dp"
+                                android:text="🧾 Tipo de Recibo"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spinnerTipoRecibo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/cornere"
+                                android:backgroundTint="@color/blanco"
+                                android:minHeight="48dp"
+                                android:padding="8dp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="6dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:paddingStart="4dp"
+                                android:paddingBottom="4dp"
+                                android:text="💳 Forma de Pago"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spinnerFormaPago"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/cornere"
+                                android:backgroundTint="@color/blanco"
+                                android:minHeight="48dp"
+                                android:padding="8dp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/txSincronizar"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="🔄" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:orientation="horizontal">
+
+                        <Button
+                            android:id="@+id/btnProcesarVenta"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="4dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/botoncircular"
+                            android:backgroundTint="@color/verde"
+                            android:text="💰 PROCESAR\nVENTA"
+                            android:textColor="@color/blanco"
+                            android:textStyle="bold"
+                            tools:ignore="ButtonStyle" />
+
+                        <Button
+                            android:id="@+id/btnGestionProductos"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/botoncircular"
+                            android:backgroundTint="@color/azul"
+                            android:text="📦 GESTIÓN\nPRODUCTOS"
+                            android:textColor="@color/blanco"
+                            tools:ignore="ButtonStyle" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <Button
+                            android:id="@+id/btnGestionClientes"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="4dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/botoncircular"
+                            android:backgroundTint="@color/naranja"
+                            android:text="👥 GESTIÓN\nCLIENTES"
+                            android:textColor="@color/blanco"
+                            tools:ignore="ButtonStyle" />
+
+                        <Button
+                            android:id="@+id/btnReportes"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/botoncircular"
+                            android:backgroundTint="@color/color"
+                            android:text="📊 REPORTES\nINFORMES"
+                            android:textColor="@color/blanco"
+                            tools:ignore="ButtonStyle" />
+
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
+
+            <!-- ==================== BOTONES POS ==================== -->
+
+            <!-- Fila 1: Botones principales -->
+
+            <!-- Fila 2: Botones secundarios -->
+
+        </LinearLayout>
 
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

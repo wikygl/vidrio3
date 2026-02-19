@@ -5,12 +5,15 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.databinding.ActivityDisenoNovaBinding
 import kotlin.math.max
@@ -24,6 +27,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         const val EXTRA_RET_PADDING_PX = "extra_ret_padding_px"
         const val EXTRA_OUTPUT_FORMAT = "extra_output_format" // "svg" | "png"
         const val RESULT_URI = "resultado_uri_imagen"
+        const val RESULT_PAQUETE = "resultado_paquete"
     }
 
     // ----------------- Estado del diseño (Float) -----------------
@@ -34,6 +38,7 @@ class DisenoNovaActivity : AppCompatActivity() {
     private var mochetaLateralCm: Float = 0f
     private val franjas: MutableList<Franja> = mutableListOf() // orden: abajo→arriba
     private var indiceFranjaActiva: Int = -1
+    private var paqueteOriginal: String = "" // guardar paquete de entrada
 
     // ----------------- Binding -----------------
     private lateinit var binding: ActivityDisenoNovaBinding
@@ -48,6 +53,7 @@ class DisenoNovaActivity : AppCompatActivity() {
     )
 
     // =========================================================================================
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -105,6 +111,20 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.btnAgregarModulo.setOnClickListener { dialogoAgregarModulo() }
         binding.btnQuitarModulo.setOnClickListener { quitarUltimoModulo() }
         binding.btnMostrarOcultar.setOnClickListener { alternarColumnaBotones() }
+        binding.btnMedidasRapidas.setOnClickListener { dialogoMedidasRapidas() }
+        binding.btnCotasPlanos.setOnClickListener { togglePanelCotasPlanos() }
+        binding.btnTipoEnsamble.setOnClickListener { alternarEnsamble() }
+        binding.btnEnviarCalculadora.setOnClickListener { Toast.makeText(this, "No disponible", Toast.LENGTH_SHORT).show() }
+        binding.btnLimpiarDiseno.setOnClickListener { limpiarDiseno() }
+        binding.btnProductos.setOnClickListener { togglePanelProductos() }
+        binding.btnAplicarMedidasRapidas.setOnClickListener { aplicarMedidasRapidas() }
+
+        // Acciones rápidas (panel productos)
+        binding.cardFranja.setOnClickListener { dialogoAgregarFranja() }
+        binding.fijo.setOnClickListener { agregarModuloDirecto(TipoModulo.FIJO) }
+        binding.corrediza.setOnClickListener { agregarModuloDirecto(TipoModulo.CORREDIZA) }
+        binding.parante.setOnClickListener { Toast.makeText(this, "Parante no disponible", Toast.LENGTH_SHORT).show() }
+        binding.cardEliminarModulo.setOnClickListener { quitarUltimoModulo() }
 
         // Menú inferior
         binding.botonEditar.setOnClickListener { mostrarMenuEditar() }
@@ -143,8 +163,69 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     private fun alternarColumnaBotones() {
-        val v = binding.columnaBotones
-        v.visibility = if (v.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        val mostrar = binding.panelControles.visibility != View.VISIBLE
+        if (mostrar) {
+            binding.panelMedidasRapidas.visibility = View.GONE
+            binding.panelProductos.visibility = View.GONE
+            binding.panelCotasPlanos.visibility = View.GONE
+        }
+        setPanelControlesVisible(mostrar)
+    }
+
+    private fun dialogoMedidasRapidas() {
+        val panel = binding.panelMedidasRapidas
+        if (panel.visibility == View.VISIBLE) {
+            panel.visibility = View.GONE
+            return
+        }
+        setPanelControlesVisible(false)
+        binding.panelProductos.visibility = View.GONE
+        binding.panelCotasPlanos.visibility = View.GONE
+        binding.etAnchoRapido.setText(df1(anchoCm))
+        binding.etAltoRapido.setText(df1(altoCm))
+        binding.etPuenteRapido.setText("0")
+        panel.visibility = View.VISIBLE
+    }
+
+    private fun aplicarMedidasRapidas() {
+        anchoCm = binding.etAnchoRapido.text.toString().aNumeroSeguro().takeIf { it > 0 } ?: anchoCm
+        altoCm = binding.etAltoRapido.text.toString().aNumeroSeguro().takeIf { it > 0 } ?: altoCm
+        binding.panelMedidasRapidas.visibility = View.GONE
+        actualizarVista()
+    }
+
+    private fun togglePanelProductos() {
+        val panel = binding.panelProductos
+        if (panel.visibility == View.VISIBLE) {
+            panel.visibility = View.GONE
+            return
+        }
+        setPanelControlesVisible(false)
+        binding.panelMedidasRapidas.visibility = View.GONE
+        binding.panelCotasPlanos.visibility = View.GONE
+        panel.visibility = View.VISIBLE
+    }
+
+    private fun togglePanelCotasPlanos() {
+        val panel = binding.panelCotasPlanos
+        if (panel.visibility == View.VISIBLE) {
+            panel.visibility = View.GONE
+            return
+        }
+        setPanelControlesVisible(false)
+        binding.panelMedidasRapidas.visibility = View.GONE
+        binding.panelProductos.visibility = View.GONE
+        actualizarPanelCotas()
+        panel.visibility = View.VISIBLE
+    }
+
+    private fun setPanelControlesVisible(mostrar: Boolean) {
+        binding.panelControles.visibility = if (mostrar) View.VISIBLE else View.GONE
+        val vis = if (mostrar) View.VISIBLE else View.INVISIBLE
+        binding.btnAgregarModulo.visibility = vis
+        binding.btnQuitarModulo.visibility = vis
+        binding.btnAgregarFranja.visibility = vis
+        binding.btnQuitarFranja.visibility = vis
     }
 
     // --- Ver / copiar paquete ---
@@ -262,6 +343,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
     private fun quitarFranja() {
         if (franjas.isNotEmpty()) {
             franjas.removeLast()
@@ -278,6 +360,17 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarVista()
     }
 
+    private fun agregarModuloDirecto(tipo: TipoModulo) {
+        if (indiceFranjaActiva !in franjas.indices) {
+            Toast.makeText(this, "Primero agrega/selecciona una franja.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val fr = franjas[indiceFranjaActiva]
+        fr.modulos.add(tipo)
+        actualizarVista()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
     private fun quitarUltimoModulo() {
         if (indiceFranjaActiva !in franjas.indices) return
         val fr = franjas[indiceFranjaActiva]
@@ -507,6 +600,7 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     private fun cargarDesdePaquete(p: String?) {
         if (p.isNullOrBlank()) return
+        paqueteOriginal = p // guardar para actualizarVista()
         try {
             val t = p.replace(" ", "")
             val reCabecera = Regex("""^\{([^,]+),([^,]+),\[(-?\d+(?:[.,]\d+)?),(-?\d+(?:[.,]\d+)?):(.*)]}""")
@@ -544,11 +638,23 @@ class DisenoNovaActivity : AppCompatActivity() {
     // =========================== VISTA / REDIBUJO ===========================
 
     private fun actualizarVista() {
-        val paquete = aPaquete()
+        // Usar paquete original si existe, sino regenerar desde franjas
+        val paquete = if (paqueteOriginal.isNotBlank()) paqueteOriginal else aPaquete()
         binding.vistaDiseno.actualizarDesdePaquete(paquete, 0f, 0f, mochetaLateralCm)
         // resalta si hay franja activa conocida
         binding.vistaDiseno.resaltarFranja(indiceFranjaActiva)
         binding.vistaDiseno.invalidate()
+    }
+
+    private fun actualizarPanelCotas() {
+        binding.tvTituloCotas.text = "Cotas"
+        binding.contenedorCotas.removeAllViews()
+        if (franjas.isEmpty()) return
+        val fr = franjas.getOrNull(indiceFranjaActiva) ?: franjas.first()
+        val label = TextView(this).apply {
+            text = "Módulos: ${fr.modulos.size}"
+        }
+        binding.contenedorCotas.addView(label)
     }
 
     // =========================== UTILIDADES ===========================

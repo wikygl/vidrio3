@@ -11,92 +11,87 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.FirebaseException
-import com.google.firebase.auth.*
-import crystal.crystal.MainActivity
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.PhoneAuthCredential
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
 import crystal.crystal.databinding.ActivityRegistroBinding
 import java.util.concurrent.TimeUnit
 
-
 class Registro : AppCompatActivity() {
     private val auth = FirebaseAuth.getInstance()
+    private val db = FirebaseFirestore.getInstance()
     private lateinit var binding: ActivityRegistroBinding
     private val GOOGLE_SIGN_IN_CODE = 100
     private val IMAGE_PICK_CODE = 101
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityRegistroBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.btnRegis.setOnClickListener {
-            crearUsuario()
-        }
+        binding.btnRegis.setOnClickListener { crearUsuario() }
+        binding.foto.setOnClickListener { seleccionarImagenDeGaleria() }
 
-        binding.foto.setOnClickListener {
-            seleccionarImagenDeGaleria()
-        }
         verificarUsuario()
     }
 
     private fun verificarUsuario() {
         val usuario = auth.currentUser
         if (usuario != null) {
-            val intent = Intent(this, MainActivity::class.java)
-            intent.putExtra("user", usuario.email)
-            startActivity(intent)
-            finish()
+            // Asegurar estructura y pasar a selección de plan
+            crearEstructuraBaseSiNoExiste(usuario.uid) {
+                startActivity(Intent(this, PlanSelectionActivity::class.java))
+                finish()
+            }
         }
     }
 
     private fun crearUsuario() {
         val email = binding.emailUser.text.toString()
-
         val contra = binding.contrasenaUser.text.toString()
 
         if (email.isNotEmpty() && contra.isNotEmpty()) {
             auth.createUserWithEmailAndPassword(email, contra).addOnCompleteListener { task ->
                 if (task.isSuccessful) {
-                    verificarUsuario()
-                } else {
-                    task.exception?.let {
-                        Toast.makeText(this, "Error al registrar el usuario", Toast.LENGTH_LONG)
-                            .show()
+                    val uid = task.result?.user?.uid ?: return@addOnCompleteListener
+                    crearEstructuraBaseSiNoExiste(uid) {
+                        startActivity(Intent(this, PlanSelectionActivity::class.java))
+                        finish()
                     }
+                } else {
+                    Toast.makeText(this, "Error al registrar el usuario", Toast.LENGTH_LONG).show()
                 }
             }
         } else {
-            Toast.makeText(this, "Por favor, complete todos los campos.", Toast.LENGTH_SHORT)
-                .show()
+            Toast.makeText(this, "Complete todos los campos.", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun iniciarSesionUsuario() {
-        val email = binding.emailUser.text.toString()
-        val contra = binding.contrasenaUser.text.toString()
-
-        if (email.isNotEmpty() && contra.isNotEmpty()) {
-            auth.signInWithEmailAndPassword(email, contra).addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    verificarUsuario()
-                } else {
-                    task.exception?.let {
-                        Toast.makeText(
-                            this, "El usuario no existe o la contraseña es incorrecta",
-                            Toast.LENGTH_LONG
-                        ).show()
+    private fun crearEstructuraBaseSiNoExiste(uid: String, onReady: () -> Unit) {
+        val doc = db.collection("usuarios").document(uid)
+        doc.get().addOnSuccessListener { snap ->
+            if (!snap.exists()) {
+                val data = hashMapOf(
+                    "nombre" to (binding.nombre.text?.toString() ?: ""),
+                    "email" to (binding.emailUser.text?.toString() ?: ""),
+                    "wallet" to mapOf("saldo" to 0.0),
+                    "plan" to mapOf("tipo" to "free", "estado" to "activo"),
+                    "trial" to mapOf("creditos" to 5)
+                )
+                doc.set(data).addOnSuccessListener { onReady() }
+                    .addOnFailureListener {
+                        Toast.makeText(this, "Error guardando base de usuario", Toast.LENGTH_LONG).show()
                     }
-                }
-            }
-        } else {
-            Toast.makeText(this, "Por favor, complete todos los campos.", Toast.LENGTH_SHORT)
-                .show()
+            } else onReady()
         }
     }
 
+    // -------- Teléfono (sin cambios de UX, solo flujo base) --------
     private fun iniciarSesionTelefono() {
         val telefono = binding.nombre.text.toString()
-
         if (telefono.isNotEmpty()) {
             val opciones = PhoneAuthOptions.newBuilder(auth)
                 .setPhoneNumber(telefono)
@@ -106,61 +101,38 @@ class Registro : AppCompatActivity() {
                     override fun onVerificationCompleted(credential: PhoneAuthCredential) {
                         iniciarSesionConCredencialTelefonica(credential)
                     }
-
                     override fun onVerificationFailed(e: FirebaseException) {
-                        Toast.makeText(
-                            this@Registro, "Verificación fallida: ${e.message}",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast.makeText(this@Registro, "Verificación fallida: ${e.message}", Toast.LENGTH_LONG).show()
                     }
-
-                    override fun onCodeSent(
-                        verificationId: String,
-                        token: PhoneAuthProvider.ForceResendingToken
-                    ) {
-                        // Guarda el verificationId en una variable si es necesario para usarlo más tarde.
-                        // Por ejemplo, podrías guardar esta variable en el estado de tu actividad o ViewModel.
-                    }
+                    override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) { }
                 })
                 .build()
-
             PhoneAuthProvider.verifyPhoneNumber(opciones)
         } else {
-            Toast.makeText(
-                this,
-                "Por favor, ingrese su número de teléfono.",
-                Toast.LENGTH_SHORT
-            ).show()
+            Toast.makeText(this, "Ingrese su número de teléfono.", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun iniciarSesionConCredencialTelefonica(credencial: PhoneAuthCredential) {
         auth.signInWithCredential(credencial).addOnCompleteListener { task ->
             if (task.isSuccessful) {
-                val usuario = task.result?.user
-                Toast.makeText(
-                    this, "Inicio de sesión con número de teléfono exitoso.",
-                    Toast.LENGTH_LONG
-                ).show()
-                // Realiza las acciones adicionales necesarias después de un inicio de sesión exitoso.
+                val uid = task.result?.user?.uid ?: return@addOnCompleteListener
+                crearEstructuraBaseSiNoExiste(uid) {
+                    startActivity(Intent(this, PlanSelectionActivity::class.java))
+                    finish()
+                }
             } else {
-                Toast.makeText(
-                    this, "Error al iniciar sesión con número de teléfono.",
-                    Toast.LENGTH_LONG
-                ).show()
+                Toast.makeText(this, "Error al iniciar sesión con teléfono.", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    // INICIO DE SESIÓN CON GOOGLE
-
+    // -------- Google --------
     private fun iniciarSesionConGoogle() {
         val opcionesInicioSesionGoogle =
             GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-
                 .requestEmail()
                 .build()
-
         val clienteInicioSesionGoogle = GoogleSignIn.getClient(this, opcionesInicioSesionGoogle)
         val intentInicioSesionGoogle = clienteInicioSesionGoogle.signInIntent
         startActivityForResult(intentInicioSesionGoogle, GOOGLE_SIGN_IN_CODE)
@@ -172,44 +144,35 @@ class Registro : AppCompatActivity() {
             val resultado = GoogleSignIn.getSignedInAccountFromIntent(data)
             try {
                 val cuenta = resultado.getResult(ApiException::class.java)
-                iniciarSesionConCredencialGoogle(cuenta.idToken!!)
+                val cred = GoogleAuthProvider.getCredential(cuenta.idToken, null)
+                auth.signInWithCredential(cred).addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        val uid = task.result?.user?.uid ?: return@addOnCompleteListener
+                        crearEstructuraBaseSiNoExiste(uid) {
+                            startActivity(Intent(this, PlanSelectionActivity::class.java))
+                            finish()
+                        }
+                    } else {
+                        Toast.makeText(this, "Error al iniciar sesión con Google", Toast.LENGTH_LONG).show()
+                    }
+                }
             } catch (e: ApiException) {
-                Toast.makeText(this, "Error al iniciar sesión con Google", Toast.LENGTH_LONG)
-                    .show()
+                Toast.makeText(this, "Error al iniciar sesión con Google", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    private fun iniciarSesionConCredencialGoogle(tokenId: String) {
-        val credencial = GoogleAuthProvider.getCredential(tokenId, null)
-        auth.signInWithCredential(credencial).addOnCompleteListener(this) { task ->
-            if (task.isSuccessful) {
-                // Inicio de sesión con Google exitoso
-                verificarUsuario()
-            } else {
-                Toast.makeText(this, "Error al iniciar sesión con Google", Toast.LENGTH_LONG)
-                    .show()
-            }
-        }
-    }
-
-    // LÓGICA PARA ELEGIR IMAGEN DE GALERÍA
-
+    // -------- Imagen perfil (opcional) --------
     private fun seleccionarImagenDeGaleria() {
         val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         seleccionarImagen.launch(intent)
     }
 
-    // Registra el resultado de la selección de la imagen de galería
     private val seleccionarImagen =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
-                val data = result.data
-                val imageUri = data?.data
-                // Aquí puedes procesar la imagen y guardar su URL en la base de datos
-                // Por ejemplo, puedes mostrar la imagen seleccionada en una ImageView
+                val imageUri = result.data?.data
                 binding.foto.setImageURI(imageUri)
             }
         }
 }
-

@@ -1,0 +1,517 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/taller_raiz"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white">
+
+
+    <!-- APP BAR (sin Material) -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/taller_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@android:color/white"
+        android:elevation="4dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        app:title="Crystal"
+        app:titleTextColor="@android:color/black" />
+
+
+    <!-- CONTENIDO -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/taller_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="?attr/actionBarSize"
+        android:fillViewport="true">
+
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/taller_contenido"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="120dp">
+
+
+            <!-- (SIN TEXTO HEADER) -->
+            <View
+                android:id="@+id/taller_espacio_header"
+                android:layout_width="0dp"
+                android:layout_height="6dp"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+
+            <!-- BLOQUE 1: CALCULADORAS -->
+            <TextView
+                android:id="@+id/taller_tvCalculadoras"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Calculadoras"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="@android:color/black"
+                app:layout_constraintTop_toBottomOf="@id/taller_espacio_header"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/taller_rvCalculadoras"
+                android:layout_width="0dp"
+                android:layout_height="120dp"
+                android:layout_marginTop="10dp"
+                android:clipToPadding="false"
+                android:overScrollMode="never"
+                android:paddingEnd="8dp"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                app:orientation="horizontal"
+                app:layout_constraintTop_toBottomOf="@id/taller_tvCalculadoras"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+
+            <!-- BLOQUE 2: OPTIMIZADORES -->
+            <TextView
+                android:id="@+id/taller_tvOptimizadores"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="Optimizadores"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="@android:color/black"
+                app:layout_constraintTop_toBottomOf="@id/taller_rvCalculadoras"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+
+            <!-- Grid (2 columnas) con CardView AndroidX -->
+            <androidx.gridlayout.widget.GridLayout
+                android:id="@+id/taller_gridOptimizadores"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:alignmentMode="alignMargins"
+                android:columnCount="2"
+                android:useDefaultMargins="true"
+                app:layout_constraintTop_toBottomOf="@id/taller_tvOptimizadores"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
+
+
+                <!-- Diseño -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/taller_cardDiseno"
+                    android:layout_width="0dp"
+                    android:layout_height="112dp"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="3dp"
+                    app:cardUseCompatPadding="true">
+
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+
+                        <ImageView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:src="@drawable/ic_diseno"
+                            android:contentDescription="@null" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="Diseño"
+                            android:textStyle="bold"
+                            android:textSize="15sp"
+                            android:textColor="@android:color/black" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Bocetos y planos"
+                            android:textSize="12sp"
+                            android:textColor="#6A6A6A" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+
+                <!-- Corte varillas -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/taller_cardCorteVarillas"
+                    android:layout_width="0dp"
+                    android:layout_height="112dp"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="3dp"
+                    app:cardUseCompatPadding="true">
+
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+
+                        <ImageView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:src="@drawable/ic_varillas"
+                            android:contentDescription="@null" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="Corte varillas"
+                            android:textStyle="bold"
+                            android:textSize="15sp"
+                            android:textColor="@android:color/black" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Optimiza perfiles"
+                            android:textSize="12sp"
+                            android:textColor="#6A6A6A" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+
+                <!-- Corte planchas -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/taller_cardCortePlanchas"
+                    android:layout_width="0dp"
+                    android:layout_height="112dp"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="3dp"
+                    app:cardUseCompatPadding="true">
+
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+
+                        <ImageView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:src="@drawable/ic_planchas"
+                            android:contentDescription="@null" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="Corte planchas"
+                            android:textStyle="bold"
+                            android:textSize="15sp"
+                            android:textColor="@android:color/black" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Optimiza vidrio"
+                            android:textSize="12sp"
+                            android:textColor="#6A6A6A" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+
+                <!-- Vidrios curvos -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/taller_cardCurvos"
+                    android:layout_width="0dp"
+                    android:layout_height="112dp"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="3dp"
+                    app:cardUseCompatPadding="true">
+
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+
+                        <ImageView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:src="@drawable/ic_curvos"
+                            android:contentDescription="@null" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="Vidrios curvos"
+                            android:textStyle="bold"
+                            android:textSize="15sp"
+                            android:textColor="@android:color/black" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Generador"
+                            android:textSize="12sp"
+                            android:textColor="#6A6A6A" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+
+                <!-- Faro -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/taller_cardFaro"
+                    android:layout_width="0dp"
+                    android:layout_height="112dp"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="3dp"
+                    app:cardUseCompatPadding="true">
+
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+
+                        <ImageView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:src="@drawable/ic_faro"
+                            android:contentDescription="@null" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="Faro"
+                            android:textStyle="bold"
+                            android:textSize="15sp"
+                            android:textColor="@android:color/black" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Montaje en pantalla"
+                            android:textSize="12sp"
+                            android:textColor="#6A6A6A" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+
+            </androidx.gridlayout.widget.GridLayout>
+
+
+            <View
+                android:id="@+id/taller_sep"
+                android:layout_width="0dp"
+                android:layout_height="18dp"
+                app:layout_constraintTop_toBottomOf="@id/taller_gridOptimizadores"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.core.widget.NestedScrollView>
+
+
+    <!-- TARJETA COMPACTA DE PROYECTO (siempre visible abajo) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/taller_cardProyectoActivo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="8dp"
+        app:cardUseCompatPadding="true">
+
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="14dp"
+            android:gravity="centerVertical">
+
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+
+                <TextView
+                    android:id="@+id/taller_tvProyectoNombre"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Proyecto"
+                    android:textStyle="bold"
+                    android:textSize="15sp"
+                    android:textColor="@android:color/black" />
+
+
+                <TextView
+                    android:id="@+id/taller_tvProyectoEstado"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Pendientes: 0"
+                    android:textSize="12sp"
+                    android:textColor="#6A6A6A" />
+            </LinearLayout>
+
+
+            <Button
+                android:id="@+id/taller_btBaul"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="BAÚL" />
+
+
+            <Button
+                android:id="@+id/taller_btProcesar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="PROCESAR" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+
+    <!-- PANEL OVERLAY: "PROYECTOS" (se muestra/oculta, y se anima hacia arriba con Kotlin) -->
+    <FrameLayout
+        android:id="@+id/taller_overlayProyectos"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#80000000"
+        android:visibility="gone">
+
+
+        <!-- Panel blanco que "sube" -->
+        <LinearLayout
+            android:id="@+id/taller_panelProyectos"
+            android:layout_width="match_parent"
+            android:layout_height="70%"
+            android:layout_gravity="bottom"
+            android:background="@android:color/white"
+            android:orientation="vertical"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:elevation="12dp">
+
+
+            <!-- Manija -->
+            <View
+                android:layout_width="46dp"
+                android:layout_height="5dp"
+                android:layout_gravity="center_horizontal"
+                android:background="#B0B0B0" />
+
+
+            <TextView
+                android:id="@+id/taller_tvProyectosTitulo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="10dp"
+                android:text="Proyectos"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="@android:color/black" />
+
+
+            <!-- Filtros simples (sin chips Material) -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:overScrollMode="never"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="8dp">
+
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+
+                    <Button
+                        android:id="@+id/taller_btFiltroPendientes"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Pendientes" />
+
+
+                    <Button
+                        android:id="@+id/taller_btFiltroEnProceso"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:text="En proceso" />
+
+
+                    <Button
+                        android:id="@+id/taller_btFiltroTerminados"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:text="Terminados" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/taller_rvProyectos"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:overScrollMode="never" />
+
+
+        </LinearLayout>
+    </FrameLayout>
+
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

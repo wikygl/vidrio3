@@ -26,6 +26,7 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <application
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
@@ -40,20 +41,22 @@
         tools:ignore="AllowBackup,HardcodedDebugMode"
         tools:targetApi="p">
         <activity
-            android:name=".clientes.GestionClientesActivity"
-            android:label="Gestión de Clientes"
-            android:parentActivityName=".MainActivity"
+            android:name=".taller.MedidaActivity"
             android:exported="false" />
         <activity
-            android:name="crystal.crystal.productos.GestionProductosActivity"
+            android:name=".clientes.GestionClientesActivity"
+            android:exported="false"
+            android:label="Gestión de Clientes"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".productos.GestionProductosActivity"
             android:label="Gestión de Productos"
-            android:screenOrientation="portrait"/>
-
+            android:screenOrientation="portrait" />
         <activity
             android:name=".comprobantes.DisenoTicketActivity"
+            android:exported="true"
             android:label="Diseño de Ticket"
-            android:parentActivityName=".MainActivity"
-            android:exported="true" />
+            android:parentActivityName=".MainActivity" />
         <activity
             android:name=".registro.TerminalLoginActivity"
             android:exported="false" />
@@ -101,11 +104,20 @@
             android:exported="false"
             android:label="Diseño Nova" />
         <activity
+            android:name=".Diseno.vitroven.VitroActivity"
+            android:exported="false"
+            android:label="Dise�o Vitro" />
+        <activity
             android:name=".red.VisorArchivoActivity"
             android:exported="false" />
         <activity
             android:name=".ocr.OcrActivity"
             android:exported="false" />
+        <activity
+            android:name=".taller.DivisionBanoActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity" />
         <activity
             android:name=".taller.PDuchaActivity"
             android:exported="false" />
@@ -166,7 +178,7 @@
             android:name=".registro.Acliente"
             android:exported="false" />
         <activity
-            android:name=".optimizadores.Ncurvos"
+            android:name=".optimizadores.NcurvosActivity"
             android:exported="false" />
         <activity android:name=".taller.FichaActivity" />
         <activity android:name=".registro.Registro" />
@@ -187,11 +199,7 @@
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
         <activity
-            android:name=".taller.nova.NovaApa"
-            android:screenOrientation="portrait"
-            tools:ignore="DiscouragedApi,LockedOrientationActivity" />
-        <activity
-            android:name=".taller.nova.NovaIna"
+            android:name=".taller.nova.NovaCorrediza"
             android:screenOrientation="portrait"
             tools:ignore="DiscouragedApi,LockedOrientationActivity" />
         <activity android:name=".taller.Taller" />

@@ -150,6 +150,10 @@ class MamparaPaflon : AppCompatActivity() {
     binding.imgV.setOnClickListener {
       startActivity(Intent(this, FichaActivity::class.java))
     }
+
+    // Pre-carga desde presupuesto
+    intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.med1.setText(df1(it)) }
+    intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.med2.setText(df1(it)) }
   }
 
   // ==================== NUEVO MENÚ DE OPCIONES ====================
@@ -394,69 +398,62 @@ class MamparaPaflon : AppCompatActivity() {
 
 
   private fun archivarMapas() {
-    // Usar el nuevo método que incluye context y proyecto activo
-    ListaCasilla.incrementarContadorVentanas(this)
+    val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
 
-    // Caso especial para txReferencias
-    /* if (esValido(binding.lyReferencias)) {
-       ListaCasilla.procesarReferencias(this, binding.tvReferencias, binding.txReferencias, mapListas)
-     }*/
+    for (u in 1..cant) {
+      ListaCasilla.incrementarContadorVentanas(this)
 
-    // Usar la clase ListaCasilla para procesar y archivar solo los TextView válidos
-    if (esValido(binding.lyMarco)) {
-      ListaCasilla.procesarArchivar(this, binding.tvMarco, binding.txMarco, mapListas) // marco
-    }
-    if (esValido(binding.lyPaflon)) {
-      ListaCasilla.procesarArchivar(this, binding.tvPaflon, binding.txPaflon, mapListas) // paflon
-    }
-
-    if (esValido(binding.lyRiel)) {
-      ListaCasilla.procesarArchivar(this, binding.tvRiel, binding.txRiel, mapListas) // riel
-    }
-    if (esValido(binding.lyJunki)) {
-      ListaCasilla.procesarArchivar(this, binding.tvJunki, binding.txJunki, mapListas) // porta
-    }
-    if (esValido(binding.lyTope)) {
-      ListaCasilla.procesarArchivar(this, binding.tvTope, binding.txTope, mapListas) // tope
-    }
-    if (esValido(binding.lyVidrio)) {
-      ListaCasilla.procesarArchivar(this, binding.tvVidrio, binding.txVidrio, mapListas) // vidrios
-    }
-    if (esValido(binding.lyClient)) {
-      ListaCasilla.procesarArchivar(this, binding.tvC, binding.txC, mapListas) // cliente
-    }
-    if (esValido(binding.lyAncho)) {
-      ListaCasilla.procesarArchivar(this, binding.tvAncho, binding.txAncho, mapListas) // ancho
-    }
-    if (esValido(binding.lyAlto)) {
-      ListaCasilla.procesarArchivar(this, binding.tvAlto, binding.txAlto, mapListas) // alto
-    }
-    if (esValido(binding.lyPuente)) {
-      ListaCasilla.procesarArchivar(this, binding.tvPuente, binding.txPuente, mapListas) // altura Puente
-    }
-    if (esValido(binding.lyDivisiones)) {
-      ListaCasilla.procesarArchivar(this, binding.tvDivisiones, binding.txDivisiones, mapListas) // divisiones
-    }
-    if (esValido(binding.lyFijos)) {
-      ListaCasilla.procesarArchivar(this, binding.tvFijos, binding.txFijos, mapListas) // nFijos
-    }
-    if (esValido(binding.lyCorredizas)) {
-      ListaCasilla.procesarArchivar(this, binding.tvCorredizas, binding.txCorredizas, mapListas) // nCorredizas
-    }
-    if (esValido(binding.lyDiseno)) {
-      ListaCasilla.procesarArchivar(this, binding.tvDiseno, binding.txDiseno, mapListas) // diseño
-    }
-    if (esValido(binding.lyGrados)) {
-      ListaCasilla.procesarArchivar(this, binding.tvGrados, binding.txGrados, mapListas) // grados
-    }
-    if(esValido(binding.lyTipo)){
-      ListaCasilla.procesarArchivar(this, binding.tvTipo,binding.txTipo,mapListas) // tipo de ventana
+      if (esValido(binding.lyMarco)) {
+        ListaCasilla.procesarArchivar(this, binding.tvMarco, binding.txMarco, mapListas)
+      }
+      if (esValido(binding.lyPaflon)) {
+        ListaCasilla.procesarArchivar(this, binding.tvPaflon, binding.txPaflon, mapListas)
+      }
+      if (esValido(binding.lyRiel)) {
+        ListaCasilla.procesarArchivar(this, binding.tvRiel, binding.txRiel, mapListas)
+      }
+      if (esValido(binding.lyJunki)) {
+        ListaCasilla.procesarArchivar(this, binding.tvJunki, binding.txJunki, mapListas)
+      }
+      if (esValido(binding.lyTope)) {
+        ListaCasilla.procesarArchivar(this, binding.tvTope, binding.txTope, mapListas)
+      }
+      if (esValido(binding.lyVidrio)) {
+        ListaCasilla.procesarArchivar(this, binding.tvVidrio, binding.txVidrio, mapListas)
+      }
+      if (esValido(binding.lyClient)) {
+        ListaCasilla.procesarArchivar(this, binding.tvC, binding.txC, mapListas)
+      }
+      if (esValido(binding.lyAncho)) {
+        ListaCasilla.procesarArchivar(this, binding.tvAncho, binding.txAncho, mapListas)
+      }
+      if (esValido(binding.lyAlto)) {
+        ListaCasilla.procesarArchivar(this, binding.tvAlto, binding.txAlto, mapListas)
+      }
+      if (esValido(binding.lyPuente)) {
+        ListaCasilla.procesarArchivar(this, binding.tvPuente, binding.txPuente, mapListas)
+      }
+      if (esValido(binding.lyDivisiones)) {
+        ListaCasilla.procesarArchivar(this, binding.tvDivisiones, binding.txDivisiones, mapListas)
+      }
+      if (esValido(binding.lyFijos)) {
+        ListaCasilla.procesarArchivar(this, binding.tvFijos, binding.txFijos, mapListas)
+      }
+      if (esValido(binding.lyCorredizas)) {
+        ListaCasilla.procesarArchivar(this, binding.tvCorredizas, binding.txCorredizas, mapListas)
+      }
+      if (esValido(binding.lyDiseno)) {
+        ListaCasilla.procesarArchivar(this, binding.tvDiseno, binding.txDiseno, mapListas)
+      }
+      if (esValido(binding.lyGrados)) {
+        ListaCasilla.procesarArchivar(this, binding.tvGrados, binding.txGrados, mapListas)
+      }
+      if (esValido(binding.lyTipo)) {
+        ListaCasilla.procesarArchivar(this, binding.tvTipo, binding.txTipo, mapListas)
+      }
     }
 
-    // Actualizar el visor del proyecto después de archivar
     ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
-
-    // Aquí puedes hacer algo con `mapListas`, como mostrarlo o guardarlo
     println("Datos agregados al proyecto: ${ProyectoManager.getProyectoActivo()}")
     println(mapListas)
   }
@@ -687,4 +684,32 @@ class MamparaPaflon : AppCompatActivity() {
     return ancho()-(2*marco)
   }
 
+  @Deprecated("Deprecated in Java")
+  override fun onBackPressed() {
+      if (ModoMasivoHelper.esModoMasivo(this)) {
+          val perfiles = mapOf(
+              "Marco" to ModoMasivoHelper.texto(binding.txMarco),
+              "Riel" to ModoMasivoHelper.texto(binding.txRiel),
+              "Paflón" to ModoMasivoHelper.texto(binding.txPaflon)
+          ).filter { it.value.isNotBlank() }
+
+          val accesorios = mapOf(
+              "Junquillo" to ModoMasivoHelper.texto(binding.txJunki),
+              "Tope" to ModoMasivoHelper.texto(binding.txTope),
+              "Porta" to ModoMasivoHelper.texto(binding.txPorta)
+          ).filter { it.value.isNotBlank() }
+
+          ModoMasivoHelper.devolverResultado(
+              activity = this,
+              calculadora = "Mampara Paflón",
+              perfiles = perfiles,
+              vidrios = ModoMasivoHelper.texto(binding.txVidrio),
+              accesorios = accesorios,
+              referencias = ModoMasivoHelper.texto(binding.txTipo)
+          )
+          return
+      }
+      @Suppress("DEPRECATION")
+      super.onBackPressed()
+  }
 }

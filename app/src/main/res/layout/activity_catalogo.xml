@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/blanco"
-    tools:context="calculaora.e.crystal.catalogo.CatalogoActivity">
+    tools:context="crystal.crystal.catalogo.CatalogoActivity">
 
     <LinearLayout
         android:id="@+id/layout_cabeza"

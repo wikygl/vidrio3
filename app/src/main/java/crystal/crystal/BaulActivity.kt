@@ -3,6 +3,7 @@ package crystal.crystal
 
 import android.content.Context
 import android.content.Intent
+import android.os.Environment
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -10,6 +11,8 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import crystal.crystal.Diseno.DisenoActivity
+import crystal.crystal.baul.MedicionProyectoBaulPayload
 import crystal.crystal.databinding.ActivityBaulBinding
 import java.io.File
 import java.io.FileInputStream
@@ -18,10 +21,23 @@ import java.io.ObjectInputStream
 class BaulActivity : AppCompatActivity() {
 
     private lateinit var archivosGuardados: MutableList<String>
+    private val archivosTodos = mutableListOf<ArchivoBaul>()
+    private val archivosFiltrados = mutableListOf<ArchivoBaul>()
+    private var filtroActual = FiltroBaul.PROFORMAS
     companion object { var estaEnModoSeleccion = false}
     private lateinit var adapter: ArchivosAdapter
 
     private lateinit var binding: ActivityBaulBinding
+
+    private data class ArchivoBaul(
+        val nombre: String,
+        val file: File,
+        val filtro: FiltroBaul
+    )
+
+    private enum class FiltroBaul {
+        PROFORMAS, CONTRATOS, OTROS, MEDIDAS
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,11 +47,17 @@ class BaulActivity : AppCompatActivity() {
         generarLista()
         binding.btEliminar.setOnClickListener { eliminarArchivo() }
         binding.btCompartir.setOnClickListener { compartirArchivos() }
+        binding.btProf.setOnClickListener { cambiarFiltro(FiltroBaul.PROFORMAS) }
+        binding.btCont.setOnClickListener { cambiarFiltro(FiltroBaul.CONTRATOS) }
+        binding.btOtro.setOnClickListener { cambiarFiltro(FiltroBaul.OTROS) }
+        binding.btMedi.setOnClickListener { cambiarFiltro(FiltroBaul.MEDIDAS) }
 
     }
 
     private fun generarLista() {
-        archivosGuardados = obtenerArchivosDat()
+        archivosTodos.clear()
+        archivosTodos.addAll(obtenerArchivos())
+        aplicarFiltro()
         adapter = ArchivosAdapter(this, R.layout.lista_check, archivosGuardados)
 
         val listView = findViewById<ListView>(R.id.list_view)
@@ -51,16 +73,58 @@ class BaulActivity : AppCompatActivity() {
             if (estaEnModoSeleccion) {
                 actualizarEstadoCheckmark(adapter, position)
             } else {
-                val archivoSeleccionado = adapter.getItem(position)
-                abrirArchivo(archivoSeleccionado.toString())
+                val archivoSeleccionado = archivosFiltrados.getOrNull(position) ?: return@setOnItemClickListener
+                abrirArchivo(archivoSeleccionado)
             }
         }
     }
 
-    private fun obtenerArchivosDat(): MutableList<String> {
-        return File(filesDir.absolutePath).listFiles { file ->
+    private fun obtenerArchivos(): MutableList<ArchivoBaul> {
+        val out = mutableListOf<ArchivoBaul>()
+        val internos = File(filesDir.absolutePath).listFiles { file ->
             file.extension == "dat"
-        }?.map { it.name }?.toMutableList() ?: mutableListOf()
+        }?.toList().orEmpty()
+        internos.forEach { f ->
+            val nombre = f.name
+            val filtro = when {
+                nombre.contains("contrato", ignoreCase = true) -> FiltroBaul.CONTRATOS
+                nombre.contains("medida", ignoreCase = true) -> FiltroBaul.MEDIDAS
+                // Todo .dat legacy cae en Proformas para mantener comportamiento histórico.
+                else -> FiltroBaul.PROFORMAS
+            }
+            out += ArchivoBaul(nombre = nombre, file = f, filtro = filtro)
+        }
+
+        val medidasDir = File(
+            File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "Crystal"
+            ),
+            "Medidas"
+        )
+        val externos = medidasDir.listFiles { f ->
+            f.isFile && (f.extension.equals("json", true) || f.extension.equals("txt", true))
+        }?.toList().orEmpty()
+        externos.forEach { f ->
+            out += ArchivoBaul(nombre = f.name, file = f, filtro = FiltroBaul.MEDIDAS)
+        }
+        return out
+    }
+
+    private fun cambiarFiltro(nuevoFiltro: FiltroBaul) {
+        filtroActual = nuevoFiltro
+        aplicarFiltro()
+        adapter.setData(archivosGuardados)
+        if (estaEnModoSeleccion) {
+            estaEnModoSeleccion = false
+            binding.lyCom.visibility = View.GONE
+        }
+    }
+
+    private fun aplicarFiltro() {
+        archivosFiltrados.clear()
+        archivosFiltrados.addAll(archivosTodos.filter { it.filtro == filtroActual })
+        archivosGuardados = archivosFiltrados.map { it.nombre }.toMutableList()
     }
 
     private fun alternarModoSeleccion(adapter: ArchivosAdapter) {
@@ -91,24 +155,78 @@ class BaulActivity : AppCompatActivity() {
         adapter.setSeleccionado(position, !adapter.estaItemSeleccionado(position))
     }
 
-    private fun abrirArchivo(nombreArchivo: String) {
-        val archivo = File(filesDir, nombreArchivo)
+    private fun abrirArchivo(archivoSeleccionado: ArchivoBaul) {
+        val archivo = archivoSeleccionado.file
 
         if (archivo.exists()) {
             try {
+                if (archivo.extension.equals("json", true) || archivo.extension.equals("txt", true)) {
+                    if (intent.getBooleanExtra("desde_taller", false)) {
+                        val contenido = leerContenidoArchivoSeguro(archivo)
+                        val resultIntent = Intent().apply {
+                            putExtra("medicion_proyecto_nombre", archivo.nameWithoutExtension)
+                            putExtra("medicion_proyecto_archivo", archivo.name)
+                            putExtra("medicion_proyecto_ruta", archivo.absolutePath)
+                            putExtra("medicion_proyecto_cliente", "")
+                            putExtra("medicion_proyecto_contenido", contenido)
+                        }
+                        setResult(RESULT_OK, resultIntent)
+                        finish()
+                        return
+                    }
+                    val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", archivo)
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, if (archivo.extension.equals("json", true)) "application/json" else "text/plain")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(intent, "Abrir archivo"))
+                    return
+                }
+
                 val input = ObjectInputStream(FileInputStream(archivo))
-                val listaRecibida = input.readObject() as MutableList<*>
+                val dataLeida = input.readObject()
                 input.close()
 
-                // Obtener el nombre del cliente del archivo seleccionado
-                val cliente = nombreArchivo.substringAfter("(").substringBefore(")")
+                if (dataLeida is MedicionProyectoBaulPayload) {
+                    if (intent.getBooleanExtra("desde_taller", false)) {
+                        val resultIntent = Intent().apply {
+                            putExtra("medicion_proyecto_json", dataLeida.itemsJson)
+                            putExtra("medicion_proyecto_nombre", dataLeida.nombreProyecto)
+                            putExtra("medicion_proyecto_cliente", dataLeida.clienteNombre)
+                            putExtra("medicion_proyecto_archivo", archivo.name)
+                            putExtra("medicion_proyecto_ruta", archivo.absolutePath)
+                        }
+                        setResult(RESULT_OK, resultIntent)
+                        finish()
+                        return
+                    }
+                    val disenoIntent = Intent(this, DisenoActivity::class.java).apply {
+                        putExtra("medicion_proyecto_json", dataLeida.itemsJson)
+                        putExtra("medicion_proyecto_nombre", dataLeida.nombreProyecto)
+                        putExtra("medicion_proyecto_cliente", dataLeida.clienteNombre)
+                    }
+                    startActivity(disenoIntent)
+                    return
+                }
 
-                // Enviar el nombre del cliente y la lista recibida a la MainActivity
+                val listaRecibida = dataLeida as MutableList<*>
+                val cliente = archivo.name.substringAfter("(").substringBefore(")").replace("\n", "").trim()
+
                 val paquete = Bundle().apply {
                     putString("rcliente", cliente)
                     putSerializable("lista", ArrayList(listaRecibida))
                 }
 
+                // Si viene desde Taller, devolver datos con setResult
+                if (intent.getBooleanExtra("desde_taller", false)) {
+                    val resultIntent = Intent()
+                    resultIntent.putExtras(paquete)
+                    setResult(RESULT_OK, resultIntent)
+                    finish()
+                    return
+                }
+
+                // Flujo normal: abrir MainActivity
                 val datosIntent = Intent(this, MainActivity::class.java)
                 datosIntent.putExtras(paquete)
                 startActivity(datosIntent)
@@ -118,6 +236,19 @@ class BaulActivity : AppCompatActivity() {
             }
         } else {
             Toast.makeText(this, "El archivo no existe", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun leerContenidoArchivoSeguro(archivo: File): String {
+        return try {
+            val texto = archivo.readText()
+            if (texto.length > 20000) {
+                texto.take(20000) + "\n\n...[contenido truncado]"
+            } else {
+                texto
+            }
+        } catch (e: Exception) {
+            "[No se pudo leer contenido: ${e.message}]"
         }
     }
 
@@ -132,14 +263,17 @@ class BaulActivity : AppCompatActivity() {
 
         // Eliminar los archivos de la lista de archivosGuardados
         for (index in indicesSeleccionados.reversed()) {
-            val nombreArchivo = archivosGuardados[index]
-            val archivo = File(filesDir, nombreArchivo)
+            val item = archivosFiltrados[index]
+            val archivo = item.file
             archivo.delete()
+            archivosTodos.remove(item)
             archivosGuardados.removeAt(index)
         }
+        archivosFiltrados.clear()
+        archivosFiltrados.addAll(archivosTodos.filter { it.filtro == filtroActual })
 
         // Actualizar la vista del ListView
-        adapter.notifyDataSetChanged()
+        adapter.setData(archivosGuardados)
 
         // Salir del modo de selección y ocultar el layout
         estaEnModoSeleccion = false
@@ -157,8 +291,7 @@ class BaulActivity : AppCompatActivity() {
 
         if (indicesSeleccionados.size == 1) {
             try {
-                val nombreArchivo = archivosGuardados[indicesSeleccionados.first()]
-                val archivo = File(filesDir, nombreArchivo)
+                val archivo = archivosFiltrados[indicesSeleccionados.first()].file
                 if (archivo.exists()) {
                     val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", archivo)
 
@@ -231,15 +364,18 @@ class BaulActivity : AppCompatActivity() {
         fun estaItemSeleccionado(position: Int): Boolean {
             return itemsSeleccionados[position]
         }
+
+        fun setData(nuevos: List<String>) {
+            clear()
+            addAll(nuevos)
+            itemsSeleccionados.clear()
+            for (i in nuevos.indices) {
+                itemsSeleccionados.add(estaEnModoSeleccion)
+            }
+            notifyDataSetChanged()
+        }
     }
 }
-
-
-
-
-
-
-
 
 
 

@@ -7,6 +7,17 @@
     tools:context=".red.ListChatActivity"
     android:layout_margin="9dp">
 
+    <!-- AGREGADO: TabLayout arriba de todo -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/sombra"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- ORIGINAL: Campo de búsqueda (ahora debajo del TabLayout) -->
     <LinearLayout
         android:id="@+id/linearLayout3"
         android:layout_width="match_parent"
@@ -14,9 +25,10 @@
         android:background="@drawable/cornere"
         android:orientation="horizontal"
         android:padding="9dp"
+        android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toBottomOf="@+id/tabLayout">
 
         <EditText
             android:id="@+id/etNuevoMsm"
@@ -24,9 +36,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="0.36"
             android:ems="10"
-            android:inputType="text"
-            android:text="Name"
-            tools:ignore="TouchTargetSizeCheck" />
+            android:hint="Buscar por email"
+            android:inputType="text" />
 
         <Button
             android:id="@+id/btnEnviar"
@@ -36,6 +47,7 @@
             android:text="Buscar" />
     </LinearLayout>
 
+    <!-- ORIGINAL: LinearLayout con RecyclerView -->
     <LinearLayout
         android:id="@+id/linearLayout8"
         android:layout_width="match_parent"
@@ -56,6 +68,7 @@
 
     </LinearLayout>
 
+    <!-- ORIGINAL: Barra inferior sin cambios -->
     <LinearLayout
         android:id="@+id/linearLayout4"
         android:layout_width="match_parent"

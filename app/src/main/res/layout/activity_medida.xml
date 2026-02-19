@@ -1,0 +1,526 @@
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/layout_principal"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".taller.MedidaActivity">
+
+
+    <FrameLayout
+        android:id="@+id/lyVista"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="9dp"
+        android:layout_marginEnd="9dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:elevation="2dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/imageView7"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:srcCompat="@drawable/ojos"
+                android:layout_marginEnd="9dp"/>
+
+            <TextView
+                android:id="@+id/textView18"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="F"
+                android:textStyle="bold"
+                android:layout_marginEnd="9dp"/>
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/lyLienzoRectangulos"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/tvClienteHeader"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="92dp"
+            android:background="@drawable/bg_control_panel"
+            android:padding="8dp"
+            android:text="Cliente: sin datos"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <crystal.crystal.taller.RectanglesDrawingView
+            android:id="@+id/rectanglesDrawingView"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:background="#F5F5F5"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/tvClienteHeader" />
+
+        <FrameLayout
+            android:id="@+id/overlayControlesMedida"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="9dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/columnaBotonesMedida"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:elevation="6dp"
+                android:padding="8dp">
+
+                <LinearLayout
+                    android:id="@+id/panelClienteMedida"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:background="@drawable/bg_control_panel"
+                    android:elevation="8dp"
+                    android:orientation="vertical"
+                    android:padding="10dp"
+                    android:visibility="gone"
+                    app:layout_constraintBottom_toTopOf="@+id/btnControlCliente"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="Cliente"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/etClienteNombrePanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Nombre del cliente"
+                        android:inputType="textCapWords" />
+
+                    <EditText
+                        android:id="@+id/etClienteDocumentoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="Documento / RUC / DNI"
+                        android:inputType="text" />
+
+                    <EditText
+                        android:id="@+id/etClienteTelefonoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="Telefono"
+                        android:inputType="phone" />
+
+                    <EditText
+                        android:id="@+id/etClienteDireccionPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="Direccion / referencia"
+                        android:inputType="textCapSentences" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/panelProductosMedida"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:background="@drawable/bg_control_panel"
+                    android:elevation="8dp"
+                    android:orientation="vertical"
+                    android:padding="10dp"
+                    android:visibility="gone"
+                    app:layout_constraintBottom_toTopOf="@+id/btnControlProductos"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="Productos"
+                        android:textStyle="bold" />
+
+                    <CheckBox
+                        android:id="@+id/cbProductoVentanaPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Ventana" />
+
+                    <CheckBox
+                        android:id="@+id/cbProductoPuertaPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Puerta" />
+
+                    <CheckBox
+                        android:id="@+id/cbProductoMamparaPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Mampara" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/panelDatosTecnicosMedida"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:background="@drawable/bg_control_panel"
+                    android:elevation="8dp"
+                    android:orientation="vertical"
+                    android:padding="10dp"
+                    android:visibility="gone"
+                    app:layout_constraintBottom_toTopOf="@+id/btnControlDatosTecnicos"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="Datos tecnicos"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/btnSistemaPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Sistema: sin seleccionar" />
+
+                    <Button
+                        android:id="@+id/btnTipoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Tipo: sin seleccionar" />
+
+                    <Button
+                        android:id="@+id/btnModeloPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Modelo: sin seleccionar" />
+
+                    <Button
+                        android:id="@+id/btnAcabadoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Acabado: sin seleccionar" />
+
+                    <Button
+                        android:id="@+id/btnEspecificacionesPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Especificaciones" />
+
+                    <Button
+                        android:id="@+id/btnAccesoriosPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Accesorios" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/panelGeometriaMedida"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:background="@drawable/bg_control_panel"
+                    android:elevation="8dp"
+                    android:orientation="vertical"
+                    android:padding="10dp"
+                    android:visibility="gone"
+                    app:layout_constraintBottom_toTopOf="@+id/btnControlGeometria"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="Geometria"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/btnGeometriaPlanoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Plano (elevacion)" />
+
+                    <Button
+                        android:id="@+id/btnGeometriaEsquineroPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Esquinero (L)" />
+
+                    <Button
+                        android:id="@+id/btnGeometriaCurvoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Curvo (arco)" />
+
+                    <Button
+                        android:id="@+id/btnGeometriaCTopPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Top en C" />
+
+                    <Button
+                        android:id="@+id/btnGeometriaMultiLadoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Multiple lado" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/panelEncuentrosMedida"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:background="@drawable/bg_control_panel"
+                    android:elevation="8dp"
+                    android:orientation="vertical"
+                    android:padding="10dp"
+                    android:visibility="gone"
+                    app:layout_constraintBottom_toTopOf="@+id/btnControlEncuentros"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="Encuentros y transiciones"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/btnEncuentroMuroPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Muro" />
+
+                    <Button
+                        android:id="@+id/btnEncuentroAcopladoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Acoplado" />
+
+                    <Button
+                        android:id="@+id/btnEncuentroIndependientePanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Independiente" />
+
+                    <Button
+                        android:id="@+id/btnEncuentroBordeLibrePanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Borde libre" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/panelMedidasPanel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:background="@drawable/bg_control_panel"
+                    android:elevation="8dp"
+                    android:orientation="vertical"
+                    android:padding="10dp"
+                    android:visibility="gone"
+                    app:layout_constraintBottom_toTopOf="@+id/btnControlMedidas"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="Ingresar cotas por lado"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/etMedidaSuperiorPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Lado superior"
+                        android:inputType="numberDecimal" />
+
+                    <EditText
+                        android:id="@+id/etMedidaDerechaPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="Altura lado derecho (desde base)"
+                        android:inputType="numberDecimal" />
+
+                    <EditText
+                        android:id="@+id/etMedidaInferiorPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="Lado inferior"
+                        android:inputType="numberDecimal" />
+
+                    <EditText
+                        android:id="@+id/etMedidaIzquierdaPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="Lado izquierdo"
+                        android:inputType="numberDecimal" />
+
+                    <EditText
+                        android:id="@+id/etDistPisoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:hint="Distancia piso a base (cm)"
+                        android:inputType="numberDecimal" />
+
+                    <EditText
+                        android:id="@+id/etDistTechoPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="Distancia techo a parte superior (cm)"
+                        android:inputType="numberDecimal" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/filaControlesMedida"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <Button
+                        android:id="@+id/btnControlCliente"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="Cliente"
+                        android:textAllCaps="false" />
+
+                    <Button
+                        android:id="@+id/btnControlProductos"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Productos"
+                        android:textAllCaps="false" />
+
+                    <Button
+                        android:id="@+id/btnControlDatosTecnicos"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Datos"
+                        android:textAllCaps="false" />
+
+                    <Button
+                        android:id="@+id/btnControlEncuentros"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Encuentros"
+                        android:textAllCaps="false" />
+
+                    <Button
+                        android:id="@+id/btnControlGeometria"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Geometria"
+                        android:textAllCaps="false" />
+
+                    <Button
+                        android:id="@+id/btnControlMedidas"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Medidas"
+                        android:textAllCaps="false" />
+                </LinearLayout>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </FrameLayout>
+
+        <Button
+            android:id="@+id/btnDeshacerAccion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            android:text="Atras"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btnLimpiarLienzo" />
+
+        <Button
+            android:id="@+id/btnArchivarMedida"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            android:text="Archivar"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btnDeshacerAccion" />
+
+        <Button
+            android:id="@+id/btnLimpiarLienzo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            android:text="Limpiar"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+
+
+
+

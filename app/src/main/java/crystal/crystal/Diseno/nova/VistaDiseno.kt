@@ -21,7 +21,8 @@ enum class ModoEnsamble { INA, APA }
 data class FranjaNova(
     val tipo: TipoFranja,
     val modulos: List<TipoModulo>,
-    val alturaCm: Float? = null
+    val alturaCm: Float? = null,
+    val parantePosiciones: List<Int> = emptyList()
 )
 
 class VistaDiseno @JvmOverloads constructor(
@@ -43,14 +44,15 @@ class VistaDiseno @JvmOverloads constructor(
 
     // INA: módulos de la franja S + alturas de mocheta local (cm) arriba/abajo
     private var sistemaModulos: List<TipoModulo> = listOf(TipoModulo.CORREDIZA)
+    private var sistemaParantes: List<Int> = emptyList()
     private var alturaMochetaTopCm: Float = 0f
     private var alturaMochetaBottomCm: Float = 0f
 
     // ------------ Estética / grosores ------------
-    private val margenPx = 24f
+    private val margenPx = 55f   // margen para cotas
     private val anchoMarcoPx   = 7f   // contorno exterior
     private val anchoLineaPx   = 4f   // resto de líneas
-    private val anchoReflejoPx = 1.5f // rayas de “reflejo”
+    private val anchoReflejoPx = 1.5f // rayas de "reflejo"
 
     private val altoPuentePx = 12f    // banda en APA (junta m↔s)
     private val altoZocaloPx = 12f    // zócalo bajo cada ‘c’
@@ -89,6 +91,16 @@ class VistaDiseno @JvmOverloads constructor(
         color = ContextCompat.getColor(context, R.color.celeste)
         style = Paint.Style.FILL
         alpha = 50
+    }
+    private val pTextoCota = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorNegro
+        textSize = 28f
+        textAlign = Paint.Align.CENTER
+    }
+    private val pLineaCota = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorNegro
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
     }
 
     fun resaltarFranja(indice: Int) {
@@ -132,6 +144,7 @@ class VistaDiseno @JvmOverloads constructor(
             require(idxS >= 0) { "Modelo INA requiere al menos una franja s(...)." }
 
             sistemaModulos = franjas[idxS].modulos
+            sistemaParantes = franjas[idxS].parantePosiciones
 
             // Fallback para franjas con altura AUTO (sin <...>): mismo reparto que APA
             val alturasFallback = distribuirAlturas(franjas)
@@ -181,10 +194,7 @@ class VistaDiseno @JvmOverloads constructor(
     }
 
     private fun parsearModeloConAlturas(modelo: String): List<FranjaNova> {
-        val secciones = modelo
-            .replace(" ", "")
-            .split(';', ',')
-            .map { it.trim() }
+        val secciones = splitRespetandoParentesis(modelo.replace(" ", ""))
             .filter { it.isNotEmpty() }
 
         return secciones.map { frag ->
@@ -203,17 +213,47 @@ class VistaDiseno @JvmOverloads constructor(
                 altura = null
                 modTxt = low.substringAfter("(").substringBeforeLast(")")
             }
-            FranjaNova(tipo, parsearModulos(modTxt), altura)
+            val (mods, parantes) = parsearModulosConParantes(modTxt)
+            FranjaNova(tipo, mods, altura, parantes)
         }
     }
 
-    private fun parsearModulos(texto: String): List<TipoModulo> {
-        val res = mutableListOf<TipoModulo>()
-        for (ch in texto.lowercase()) when (ch) {
-            'f' -> res.add(TipoModulo.FIJO)
-            'c' -> res.add(TipoModulo.CORREDIZA)
+    private fun parsearModulosConParantes(texto: String): Pair<List<TipoModulo>, List<Int>> {
+        val modulos = mutableListOf<TipoModulo>()
+        val parantes = mutableListOf<Int>()
+        val partes = texto.split(Regex(";?p;?", RegexOption.IGNORE_CASE))
+        for ((idx, parte) in partes.withIndex()) {
+            for (ch in parte.lowercase()) {
+                when (ch) {
+                    'f' -> modulos.add(TipoModulo.FIJO)
+                    'c' -> modulos.add(TipoModulo.CORREDIZA)
+                }
+            }
+            if (idx < partes.lastIndex) {
+                parantes.add(modulos.size)
+            }
         }
-        return if (res.isEmpty()) listOf(TipoModulo.FIJO) else res
+        if (modulos.isEmpty()) modulos.add(TipoModulo.FIJO)
+        return Pair(modulos, parantes)
+    }
+
+    private fun splitRespetandoParentesis(texto: String): List<String> {
+        val result = mutableListOf<String>()
+        var depth = 0
+        val current = StringBuilder()
+        for (ch in texto) {
+            when {
+                ch == '(' -> { depth++; current.append(ch) }
+                ch == ')' -> { depth--; current.append(ch) }
+                ch == ';' && depth == 0 -> {
+                    if (current.isNotEmpty()) result.add(current.toString())
+                    current.clear()
+                }
+                else -> current.append(ch)
+            }
+        }
+        if (current.isNotEmpty()) result.add(current.toString())
+        return result
     }
 
     // ================= Export helpers =================
@@ -278,6 +318,11 @@ class VistaDiseno @JvmOverloads constructor(
         } else {
             dibujarINA(canvas, xVentIni, y0, x1, y1, anchoVentPx, escala)
         }
+
+        // Dibujar cotas exteriores (solo si no es exportación)
+        if (!omitirFondoAlExportar) {
+            dibujarCotas(canvas, x0, y0, x1, y1, escala)
+        }
     }
 
     // ---- APA: respeta alturas por franja, puentes, zócalos y REFLEJO en cada vidrio ----
@@ -291,6 +336,7 @@ class VistaDiseno @JvmOverloads constructor(
 
         val alturasCm = distribuirAlturas(franjasAbajoArriba)
         var yAbajo = yBotTotal
+        val parantesX = mutableListOf<Float>()
 
         franjasAbajoArriba.forEachIndexed { idx, franja ->
             val altoFpx = alturasCm[idx] * escalaPxPorCm
@@ -321,11 +367,22 @@ class VistaDiseno @JvmOverloads constructor(
 
             val n = franja.modulos.size
             val anchoModulo = anchoVentPx / n
+            val parantesSet = franja.parantePosiciones.toSet()
             for (i in 1 until n) {
+                if (i in parantesSet) continue
                 val xSep = xIni + i * anchoModulo
                 canvas.drawLine(xSep, yTop, xSep, yBottom, pLinea)
             }
             canvas.drawRect(RectF(xIni, yTop, xFin, yBottom), pLinea)
+
+            // Guardar posiciones de parantes (desde la franja sistema)
+            if (franja.parantePosiciones.isNotEmpty()) {
+                for (pos in franja.parantePosiciones) {
+                    if (pos in 1 until n) {
+                        parantesX.add(xIni + pos * anchoModulo)
+                    }
+                }
+            }
 
             // Zócalos + Reflejo
             when (franja.tipo) {
@@ -368,6 +425,15 @@ class VistaDiseno @JvmOverloads constructor(
             }
 
             yAbajo = yArriba
+        }
+
+        // Dibujar parantes a toda la altura (rectángulo de 2.5 cm, mínimo 10px)
+        if (parantesX.isNotEmpty()) {
+            val yTopVentana = yBotTotal - altoCm * escalaPxPorCm
+            val anchoParante = max(10f, 2.5f * escalaPxPorCm)
+            for (x in parantesX) {
+                canvas.drawRect(RectF(x - anchoParante / 2, yTopVentana, x + anchoParante / 2, yBotTotal), pRellenoNegro)
+            }
         }
     }
 
@@ -456,6 +522,7 @@ class VistaDiseno @JvmOverloads constructor(
         val yPanelBottom = yBottom - mBottomPx
 
         // Separadores que no cruzan mochetas si hay C a ambos lados
+        // En INA, parantes se dibujan como líneas (no como rectángulos)
         for (i in 1 until n) {
             val izqC = (sistemaModulos[i - 1] == TipoModulo.CORREDIZA)
             val derC = (sistemaModulos[i]     == TipoModulo.CORREDIZA)
@@ -463,6 +530,9 @@ class VistaDiseno @JvmOverloads constructor(
             val yB = if (izqC && derC && mBottomPx > 0f) yPanelBottom else yBottom
             canvas.drawLine(xs[i], yA, xs[i], yB, pLinea)
         }
+
+        // Parantes en INA: solo línea (va por detrás del vidrio)
+        // No se dibujan como rectángulo, el usuario intuye que va un parante
 
         // Tramos contiguos de C para mochetas continuas
         fun tramosC(): List<IntRange> {
@@ -558,6 +628,61 @@ class VistaDiseno @JvmOverloads constructor(
         }
     }
 
+    // ================= COTAS =================
+    private fun dibujarCotas(canvas: Canvas, x0: Float, y0: Float, x1: Float, y1: Float, escala: Float) {
+        val offsetH = 40f // separación horizontal
+        val offsetV = 35f // separación vertical
+        val flechaLen = 12f // longitud de las flechas
+        val espacioTexto = 50f // espacio necesario para el texto rotado
+
+        // Formato de número
+        fun fmt(v: Float) = if (v % 1 == 0f) v.toInt().toString() else "%.1f".format(v).replace(",", ".")
+
+        // Cota horizontal (ancho) - abajo
+        val yLineaH = y1 + offsetH
+        val xCentroH = (x0 + x1) / 2
+        val textoAncho = fmt(anchoCm + mochetaLateralCm)
+        val anchoTexto = pTextoCota.measureText(textoAncho)
+        // Línea interrumpida por el texto
+        canvas.drawLine(x0, yLineaH, xCentroH - anchoTexto/2 - 5, yLineaH, pLineaCota)
+        canvas.drawLine(xCentroH + anchoTexto/2 + 5, yLineaH, x1, yLineaH, pLineaCota)
+        // Flechas
+        canvas.drawLine(x0, yLineaH, x0 + flechaLen, yLineaH - flechaLen/2, pLineaCota)
+        canvas.drawLine(x0, yLineaH, x0 + flechaLen, yLineaH + flechaLen/2, pLineaCota)
+        canvas.drawLine(x1, yLineaH, x1 - flechaLen, yLineaH - flechaLen/2, pLineaCota)
+        canvas.drawLine(x1, yLineaH, x1 - flechaLen, yLineaH + flechaLen/2, pLineaCota)
+        // Texto centrado en la línea
+        canvas.drawText(textoAncho, xCentroH, yLineaH + 8f, pTextoCota)
+
+        // Cota vertical (alto) - SIEMPRE fuera del diseño
+        val espacioDisponibleDer = width - x1 - margenPx
+        val espacioDisponibleIzq = x0 - margenPx
+        val xLineaV = if (espacioDisponibleDer >= espacioDisponibleIzq) {
+            // Preferir derecha si hay más o igual espacio
+            x1 + offsetV
+        } else {
+            // Poner a la izquierda
+            x0 - offsetV
+        }
+
+        val yCentroV = (y0 + y1) / 2
+        val textoAlto = fmt(altoCm)
+        val anchoTextoAlto = pTextoCota.measureText(textoAlto)
+        // Línea interrumpida por el texto
+        canvas.drawLine(xLineaV, y0, xLineaV, yCentroV - anchoTextoAlto/2 - 5, pLineaCota)
+        canvas.drawLine(xLineaV, yCentroV + anchoTextoAlto/2 + 5, xLineaV, y1, pLineaCota)
+        // Flechas
+        canvas.drawLine(xLineaV, y0, xLineaV - flechaLen/2, y0 + flechaLen, pLineaCota)
+        canvas.drawLine(xLineaV, y0, xLineaV + flechaLen/2, y0 + flechaLen, pLineaCota)
+        canvas.drawLine(xLineaV, y1, xLineaV - flechaLen/2, y1 - flechaLen, pLineaCota)
+        canvas.drawLine(xLineaV, y1, xLineaV + flechaLen/2, y1 - flechaLen, pLineaCota)
+        // Texto rotado, centrado en la línea
+        canvas.save()
+        canvas.rotate(-90f, xLineaV, yCentroV)
+        canvas.drawText(textoAlto, xLineaV, yCentroV + 8f, pTextoCota)
+        canvas.restore()
+    }
+
     // ================= SVG: exporta solo el diseño (recortado) =================
     fun exportarSoloDisenoSVG(paddingPx: Int = 0): String {
         val anchoDisp = width - 2 * margenPx
@@ -602,10 +727,11 @@ class VistaDiseno @JvmOverloads constructor(
         if (mochetaLateralCm > 0f) rectStroke(x0, y0, xVentIni, y1, 3f)
         val anchoVentPx = xVentFin - xVentIni
 
-        if (modo == ModoEnsamble.APA) {
-            val alturasCm = distribuirAlturas(franjasAbajoArriba)
-            var yAbajo = y1
-            franjasAbajoArriba.forEachIndexed { idx, franja ->
+          if (modo == ModoEnsamble.APA) {
+              val alturasCm = distribuirAlturas(franjasAbajoArriba)
+              var yAbajo = y1
+              val parantesXsvg = mutableListOf<Float>()
+              franjasAbajoArriba.forEachIndexed { idx, franja ->
                 val altoFpx = alturasCm[idx] * escala
                 val yArriba = yAbajo - altoFpx
                 val yTop = yArriba
@@ -626,13 +752,24 @@ class VistaDiseno @JvmOverloads constructor(
 
                 line(xVentIni, yTop,    xVentFin, yTop,    3f)
                 line(xVentIni, yBottom, xVentFin, yBottom, 3f)
-                val n = franja.modulos.size
-                val anchoModulo = anchoVentPx / n
-                for (i in 1 until n) {
-                    val xSep = xVentIni + i * anchoModulo
-                    line(xSep, yTop, xSep, yBottom, 3f)
-                }
-                rectStroke(xVentIni, yTop, xVentFin, yBottom, 3f)
+                  val n = franja.modulos.size
+                  val anchoModulo = anchoVentPx / n
+                  val parantesSet = franja.parantePosiciones.toSet()
+                  for (i in 1 until n) {
+                      if (i in parantesSet) continue
+                      val xSep = xVentIni + i * anchoModulo
+                      line(xSep, yTop, xSep, yBottom, 3f)
+                  }
+                  rectStroke(xVentIni, yTop, xVentFin, yBottom, 3f)
+
+                  // Guardar posiciones de parantes (desde la franja sistema)
+                  if (franja.parantePosiciones.isNotEmpty()) {
+                      for (pos in franja.parantePosiciones) {
+                          if (pos in 1 until n) {
+                              parantesXsvg.add(xVentIni + pos * anchoModulo)
+                          }
+                      }
+                  }
 
                 when (franja.tipo) {
                     TipoFranja.SISTEMA -> {
@@ -666,33 +803,45 @@ class VistaDiseno @JvmOverloads constructor(
                         }
                     }
                 }
-                yAbajo = yArriba
-            }
-        } else {
-            val yTop = y0 + 0.5f * 7f
-            val yBottom = y1 - 0.5f * 7f
+                  yAbajo = yArriba
+              }
+
+              // Parantes SVG a toda la altura (rectángulo de 2.5 cm, mínimo 10px)
+              if (parantesXsvg.isNotEmpty()) {
+                  val anchoParante = max(10f, 2.5f * escala)
+                  for (xP in parantesXsvg) {
+                      rectFill(xP - anchoParante / 2, y0, xP + anchoParante / 2, y1)
+                  }
+              }
+          } else {
+              val yTop = y0 + 0.5f * 7f
+              val yBottom = y1 - 0.5f * 7f
 
             line(xVentIni, yTop,    xVentFin, yTop,    3f)
             line(xVentIni, yBottom, xVentFin, yBottom, 3f)
             rectStroke(xVentIni, yTop, xVentFin, yBottom, 3f)
 
-            val n = sistemaModulos.size
-            if (n > 0) {
-                val anchoModulo = anchoVentPx / n
-                val xs = FloatArray(n + 1) { i -> xVentIni + i * anchoModulo }
+              val n = sistemaModulos.size
+              if (n > 0) {
+                  val anchoModulo = anchoVentPx / n
+                  val xs = FloatArray(n + 1) { i -> xVentIni + i * anchoModulo }
+
+                  // Parantes en INA: solo línea (va por detrás del vidrio)
+                  // No se dibujan como rectángulo en el SVG
 
                 val mTopPx    = max(0f, alturaMochetaTopCm)    * escala
                 val mBottomPx = max(0f, alturaMochetaBottomCm) * escala
                 val yPanelTop    = yTop + mTopPx
                 val yPanelBottom = yBottom - mBottomPx
 
-                for (i in 1 until n) {
-                    val izqC = (sistemaModulos[i - 1] == TipoModulo.CORREDIZA)
-                    val derC = (sistemaModulos[i]     == TipoModulo.CORREDIZA)
-                    val yA = if (izqC && derC && mTopPx > 0f) yPanelTop else yTop
-                    val yB = if (izqC && derC && mBottomPx > 0f) yPanelBottom else yBottom
-                    line(xs[i], yA, xs[i], yB, 3f)
-                }
+                  // En INA, parantes se dibujan como líneas (no como rectángulos)
+                  for (i in 1 until n) {
+                      val izqC = (sistemaModulos[i - 1] == TipoModulo.CORREDIZA)
+                      val derC = (sistemaModulos[i]     == TipoModulo.CORREDIZA)
+                      val yA = if (izqC && derC && mTopPx > 0f) yPanelTop else yTop
+                      val yB = if (izqC && derC && mBottomPx > 0f) yPanelBottom else yBottom
+                      line(xs[i], yA, xs[i], yB, 3f)
+                  }
 
                 fun tramosC(): List<IntRange> {
                     val res = mutableListOf<IntRange>()

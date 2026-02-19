@@ -493,7 +493,7 @@ object DialogosProyecto {
     /**
      * Diálogo para crear nuevo proyecto
      */
-    fun mostrarDialogoCrearProyecto(context: Context, callback: ProyectoCallback) {
+    fun mostrarDialogoCrearProyecto(context: Context, callback: ProyectoCallback, nombreInicial: String = "") {
         val layout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(50, 40, 50, 10)
@@ -506,6 +506,10 @@ object DialogosProyecto {
 
         val editNombre = EditText(context).apply {
             hint = "Ej: Casa Juan Pérez"
+            if (nombreInicial.isNotEmpty()) {
+                setText(nombreInicial)
+                setSelection(nombreInicial.length)
+            }
         }
 
         val labelDescripcion = TextView(context).apply {
@@ -740,8 +744,8 @@ object DialogosProyecto {
      */
     private fun extraerTipoActivity(paquete: String): String {
         return when {
-            paquete.contains("NA") -> "NovaApa"
-            paquete.contains("NI") -> "NovaIna"
+            paquete.contains("NA") -> "NovaCorrediza"
+            paquete.contains("NI") -> "NovaCorrediza"
             paquete.startsWith("p") && paquete.contains("PD") -> "PDucha"
             paquete.startsWith("p") && !paquete.contains("PD") -> "Puertas"
             paquete.contains("MP") -> "MamparaPaflon"

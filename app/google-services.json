@@ -7,6 +7,35 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:529436008604:android:c496a3b5abbdc9c20b4d59",
+        "android_client_info": {
+          "package_name": "com.crystal.admin"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "529436008604-hajctsrpuh5skhj3vaab1jg0sj1ift6h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBe_HvZcfanHn4LvKky87FUQ0hlojtVXmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "529436008604-6lrq8gi817mihij95q9hbj0ih35i7rpk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:529436008604:android:0d37cfd408374e760b4d59",
         "android_client_info": {
           "package_name": "crystal.crystal"
@@ -21,6 +50,43 @@
             "certificate_hash": "b7b07c4021d3a133680a0cfd33f4f6dde1c0928e"
           }
         },
+        {
+          "client_id": "529436008604-ipg315ofsgprikmurikphf17melud12g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "crystal.crystal",
+            "certificate_hash": "ebf996f3b850e0deb311319d0db413214940839c"
+          }
+        },
+        {
+          "client_id": "529436008604-hajctsrpuh5skhj3vaab1jg0sj1ift6h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBe_HvZcfanHn4LvKky87FUQ0hlojtVXmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "529436008604-6lrq8gi817mihij95q9hbj0ih35i7rpk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:529436008604:android:8ddd0c7c5bbe3e660b4d59",
+        "android_client_info": {
+          "package_name": "crystal.server"
+        }
+      },
+      "oauth_client": [
         {
           "client_id": "529436008604-hajctsrpuh5skhj3vaab1jg0sj1ift6h.apps.googleusercontent.com",
           "client_type": 3

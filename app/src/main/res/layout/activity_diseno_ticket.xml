@@ -1,0 +1,565 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   activity_diseno_ticket.xml
+   Layout COMPLETO para configuración de empresa y diseño de tickets
+   SIN Material Design - Solo componentes nativos
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#F5F5F5">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- ========== DATOS DE EMPRESA ========== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Datos de Empresa"
+                android:textColor="#000000"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RUC *"
+                android:textSize="12sp"
+                android:textColor="#666666" />
+
+            <EditText
+                android:id="@+id/etRUC"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="20123456789"
+                android:inputType="number"
+                android:maxLength="11"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Razón Social *"
+                android:textSize="12sp"
+                android:textColor="#666666" />
+
+            <EditText
+                android:id="@+id/etRazonSocial"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="MI EMPRESA SAC"
+                android:inputType="textCapCharacters"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Nombre Comercial (opcional)"
+                android:textSize="12sp"
+                android:textColor="#666666" />
+
+            <EditText
+                android:id="@+id/etNombreComercial"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="EL CRISTAL"
+                android:inputType="textCapWords"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Dirección *"
+                android:textSize="12sp"
+                android:textColor="#666666" />
+
+            <EditText
+                android:id="@+id/etDireccion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Jr. Los Andes 456, Huancayo"
+                android:inputType="textCapWords"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Teléfono *"
+                android:textSize="12sp"
+                android:textColor="#666666" />
+
+            <EditText
+                android:id="@+id/etTelefono"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="964123456"
+                android:inputType="phone"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Email (opcional)"
+                android:textSize="12sp"
+                android:textColor="#666666" />
+
+            <EditText
+                android:id="@+id/etEmail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="ventas@miempresa.com"
+                android:inputType="textEmailAddress" />
+
+        </LinearLayout>
+
+        <!-- ========== LOGO ========== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Logo"
+                android:textColor="#000000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarLogo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar logo en tickets" />
+
+            <Button
+                android:id="@+id/btnSeleccionarLogo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Seleccionar logo" />
+
+            <ImageView
+                android:id="@+id/ivPreviewLogo"
+                android:layout_width="100dp"
+                android:layout_height="100dp"
+                android:layout_gravity="center"
+                android:layout_marginTop="8dp"
+                android:visibility="gone"
+                android:scaleType="centerInside" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Tamaño del logo"
+                android:textSize="14sp" />
+
+            <RadioGroup
+                android:id="@+id/radioGroupTamanoLogo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/radioPequeno"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Pequeño" />
+
+                <RadioButton
+                    android:id="@+id/radioMediano"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:checked="true"
+                    android:text="Mediano" />
+
+                <RadioButton
+                    android:id="@+id/radioGrande"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Grande" />
+            </RadioGroup>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Posición del logo"
+                android:textSize="14sp" />
+
+            <RadioGroup
+                android:id="@+id/radioGroupPosicionLogo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/radioIzquierda"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Izquierda" />
+
+                <RadioButton
+                    android:id="@+id/radioCentro"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:checked="true"
+                    android:text="Centro" />
+
+                <RadioButton
+                    android:id="@+id/radioDerecha"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Derecha" />
+            </RadioGroup>
+
+        </LinearLayout>
+
+        <!-- ========== ENCABEZADO ========== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Encabezado del Ticket"
+                android:textColor="#000000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarNombre"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar nombre de empresa" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvTamanoNombre"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="16 pt" />
+
+                <SeekBar
+                    android:id="@+id/seekBarTamanoNombre"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="12"
+                    android:progress="4" />
+            </LinearLayout>
+
+            <CheckBox
+                android:id="@+id/switchMostrarRUC"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar RUC" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarDireccion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar dirección" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarTelefono"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar teléfono" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarEmail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar email" />
+
+        </LinearLayout>
+
+        <!-- ========== INFORMACIÓN DE VENTA ========== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Información de Venta"
+                android:textColor="#000000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Formato de fecha y hora"
+                android:textSize="14sp" />
+
+            <Spinner
+                android:id="@+id/spinnerFormatoFecha"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarVendedor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar vendedor" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarTerminal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar terminal" />
+
+        </LinearLayout>
+
+        <!-- ========== ITEMS ========== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Detalle de Items"
+                android:textColor="#000000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarCodigo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar código de producto" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarDimensiones"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar dimensiones (vidrios)" />
+
+        </LinearLayout>
+
+        <!-- ========== TOTALES ========== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Totales"
+                android:textColor="#000000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarSubtotal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar subtotal" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarIGV"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar IGV" />
+
+            <CheckBox
+                android:id="@+id/switchDesglosarIGV"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Desglosar IGV (Base + IGV)" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvTamanoTotal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="14 pt" />
+
+                <SeekBar
+                    android:id="@+id/seekBarTamanoTotal"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="8"
+                    android:progress="2" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- ========== PIE DE PÁGINA ========== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Pie de Página"
+                android:textColor="#000000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarDespedida"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar mensaje de despedida" />
+
+            <EditText
+                android:id="@+id/etMensajeDespedida"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="¡Gracias por su compra!"
+                android:inputType="text" />
+
+            <CheckBox
+                android:id="@+id/switchMostrarTextoPersonalizado"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mostrar texto personalizado" />
+
+            <EditText
+                android:id="@+id/etTextoPersonalizado"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Texto adicional (opcional)"
+                android:inputType="textMultiLine"
+                android:maxLines="3" />
+
+        </LinearLayout>
+
+        <!-- ========== FORMATO DE PAPEL ========== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Formato de Papel"
+                android:textColor="#000000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <RadioGroup
+                android:id="@+id/radioGroupAnchoPapel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <RadioButton
+                    android:id="@+id/radio58mm"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Térmico 58mm (compacto)" />
+
+                <RadioButton
+                    android:id="@+id/radio80mm"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="Térmico 80mm (estándar)" />
+
+                <RadioButton
+                    android:id="@+id/radioA4"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="A4 (hoja carta)" />
+            </RadioGroup>
+
+        </LinearLayout>
+
+        <!-- ========== BOTONES ========== -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnRestaurar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="Restaurar" />
+
+            <Button
+                android:id="@+id/btnGuardar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="GUARDAR" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

@@ -86,9 +86,9 @@ object ProyectoManager {
         // Obtener paquetes que realmente existen en el proyecto
         val paquetesExistentes = obtenerListaPaquetes(context)
 
-        // Filtrar solo los paquetes del prefijo específico
+        // Filtrar solo los paquetes del prefijo específico (nuevo formato: Vna1, Vni2, etc.)
         val paquetesDelPrefijo = paquetesExistentes.filter { paquete ->
-            paquete.endsWith(prefijo)
+            paquete.startsWith(prefijo, ignoreCase = true)
         }
 
         if (paquetesDelPrefijo.isEmpty()) {
@@ -97,8 +97,8 @@ object ProyectoManager {
 
         // Extraer números de los identificadores y encontrar el más alto
         val numerosExistentes = paquetesDelPrefijo.mapNotNull { paquete ->
-            // Extraer número de "v35NA" -> 35, "p5" -> 5, etc.
-            val regex = Regex("v?(\\d+)$prefijo", RegexOption.IGNORE_CASE)
+            // Extraer número de "Vna1" -> 1, "Vni35" -> 35, etc.
+            val regex = Regex("$prefijo(\\d+)", RegexOption.IGNORE_CASE)
             val match = regex.find(paquete)
             match?.groupValues?.get(1)?.toIntOrNull()
         }

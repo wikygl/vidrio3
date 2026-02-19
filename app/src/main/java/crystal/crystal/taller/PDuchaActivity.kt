@@ -94,6 +94,10 @@ class PDuchaActivity : AppCompatActivity() {
 
         // Inicializamos la serie por primera vez (texto en tvDucha):
         actualizarDuchas()
+
+        // Pre-carga desde presupuesto
+        intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etAncho1.setText(df1(it)) }
+        intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.etAlto.setText(df1(it)) }
     }
 
     private fun df1(defo: Float): String {
@@ -922,6 +926,26 @@ class PDuchaActivity : AppCompatActivity() {
         }
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (ModoMasivoHelper.esModoMasivo(this)) {
+            val perfiles = mapOf(
+                "Parante" to ModoMasivoHelper.texto(binding.tvParante)
+            ).filter { it.value.isNotBlank() }
+
+            ModoMasivoHelper.devolverResultado(
+                activity = this,
+                calculadora = "Puerta Ducha",
+                perfiles = perfiles,
+                vidrios = ModoMasivoHelper.texto(binding.tvVidrios),
+                accesorios = emptyMap(),
+                referencias = ""
+            )
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onBackPressed()
+    }
 }
 
 data class SerieDucha(val nombre: String)
