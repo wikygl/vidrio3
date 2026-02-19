@@ -203,6 +203,106 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
         }
     }
 
+    // ==================== MENÚ DE OPCIONES ====================
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menu?.let { ProyectoUIHelper.agregarOpcionesMenuProyecto(it) }
+        return super.onCreateOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        val manejado = ProyectoUIHelper.manejarSeleccionMenu(
+            context = this,
+            itemId = item.itemId,
+            callback = proyectoCallback,
+            onProyectoCambiado = {
+                ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+            }
+        )
+        return if (manejado) true else super.onOptionsItemSelected(item)
+    }
+
+    // ==================== RECIBIR PROYECTO DESDE MAINACTIVITY ====================
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        procesarIntentProyecto(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+    }
+
+    private fun procesarIntentProyecto(intent: Intent) {
+        val nombreProyecto = intent.getStringExtra("proyecto_nombre")
+        val crearNuevo = intent.getBooleanExtra("crear_proyecto", false)
+        val descripcionProyecto = intent.getStringExtra("proyecto_descripcion") ?: ""
+
+        if (crearNuevo && !nombreProyecto.isNullOrEmpty()) {
+            if (MapStorage.crearProyecto(this, nombreProyecto, descripcionProyecto)) {
+                ProyectoManager.setProyectoActivo(this, nombreProyecto)
+                ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+                Toast.makeText(this, "Proyecto '$nombreProyecto' creado y activado", Toast.LENGTH_SHORT).show()
+            }
+        } else if (!nombreProyecto.isNullOrEmpty()) {
+            if (MapStorage.existeProyecto(this, nombreProyecto)) {
+                ProyectoManager.setProyectoActivo(this, nombreProyecto)
+                ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+                Toast.makeText(this, "Proyecto '$nombreProyecto' activado", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // ==================== ACTUALIZACIÓN AUTOMÁTICA ====================
+
+    private fun configurarActualizacionAutomatica() {
+        val textWatcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                // Cancelar runnable previo para no encolar muchas actualizaciones
+                runnableActualizacion?.let { binding.rectanguloView.removeCallbacks(it) }
+                runnableActualizacion = Runnable { actualizarDisenoAutomaticamente() }
+                binding.rectanguloView.postDelayed(runnableActualizacion!!, 300)
+            }
+        }
+
+        binding.med1.addTextChangedListener(textWatcher)   // Ancho total
+        binding.med2.addTextChangedListener(textWatcher)   // Alto total
+        binding.nCol.addTextChangedListener(textWatcher)   // Número de columnas
+        binding.nFilas.addTextChangedListener(textWatcher) // Número de filas
+    }
+
+    private fun actualizarDisenoAutomaticamente() {
+        try {
+            val ancho = binding.med1.text.toString().toFloatOrNull() ?: anchoTotal
+            val alto  = binding.med2.text.toString().toFloatOrNull() ?: altoTotal
+            val colum = binding.nCol.text.toString().toIntOrNull()  ?: 3
+            val filas = binding.nFilas.text.toString().toIntOrNull() ?: 2
+
+            // Validaciones básicas
+            if (ancho <= 0f || alto <= 0f || colum <= 0 || filas <= 0) return
+
+            // >>> SIN LÍMITE A 10: usamos exactamente lo que ingrese el usuario <<<
+            anchoTotal = ancho
+            altoTotal  = alto
+
+            anchosColumnas = MutableList(colum) { ancho / colum }
+            alturasFilasPorColumna = MutableList(colum) { MutableList(filas) { alto / filas } }
+
+            binding.rectanguloView.configurarParametros(
+                anchoTotal,
+                altoTotal,
+                anchosColumnas,
+                alturasFilasPorColumna
+            )
+
+        } catch (_: Exception) {
+            // evitar crash silenciosamente
+        }
+    }
+
     private fun disenoInicial(){
         // Consistente: 2 columnas y 2 filas por columna
         anchosColumnas = mutableListOf(anchoTotal / 2f, anchoTotal / 2f)
