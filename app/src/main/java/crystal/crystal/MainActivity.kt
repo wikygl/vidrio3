@@ -2087,7 +2087,12 @@ class MainActivity : AppCompatActivity() {
     // uni1, uni2
     // ═══════════════════════════════════════════════════
     private fun uni1() {
-        usados = findViewById(R.id.spinner_usa)
+        val spinnerUsa = findViewById<Spinner?>(R.id.spinner_usa)
+        if (spinnerUsa == null) {
+            Log.e("MainActivity", "uni1: spinner_usa no encontrado en layout")
+            return
+        }
+        usados = spinnerUsa
         val listaUsados = arrayOf("p2", "m2", "ml", "m3", "uni")
         val colores = arrayOf(R.color.color, R.color.fucsia, R.color.verde, R.color.violeta, R.color.naranja)
         val adaptadorU = object : ArrayAdapter<String>(
@@ -2164,7 +2169,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun uni2(){
-        unidades = findViewById(R.id.spinner_uni)
+        val spinnerUni = findViewById<Spinner?>(R.id.spinner_uni)
+        if (spinnerUni == null) {
+            Log.e("MainActivity", "uni2: spinner_uni no encontrado en layout")
+            return
+        }
+        unidades = spinnerUni
         val listaUnidades = arrayOf("Centímetros", "Metros", "Milímetros", "Pulgadas")
         val adaptador: ArrayAdapter<String> = ArrayAdapter(
             this, R.layout.lista_spinner, listaUnidades)

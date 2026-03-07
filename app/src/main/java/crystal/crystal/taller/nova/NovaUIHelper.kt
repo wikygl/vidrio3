@@ -176,7 +176,9 @@ object NovaUIHelper {
         nFijos: Int,
         nCorredizas: Int,
         siNoMoch: Int,
-        puntosU: String = ""
+        puntosU: String = "",
+        modelo: String = "nn",
+        alturaPuente: Float = 2.5f
     ): String {
         val altoPuenteTexto = if (siNoMoch == 1) {
             NovaCalculos.df1(altoHoja)
@@ -184,8 +186,29 @@ object NovaUIHelper {
             "sin puente"
         }
 
+        val (mochetaInf, mochetaSup) = if (siNoMoch == 0) {
+            0f to 0f
+        } else {
+            when (modelo) {
+                "nr" -> 0f to (alto - altoHoja).coerceAtLeast(0f)
+                "np" -> {
+                    val alturas = NovaInaCalculos.alturasMochetasPorModelo(
+                        modelo = modelo,
+                        alto = alto,
+                        altoHoja = altoHoja,
+                        alturaPuente = alturaPuente
+                    )
+                    val inf = alturas.inferior ?: alturas.superior
+                    inf.coerceAtLeast(0f) to alturas.superior.coerceAtLeast(0f)
+                }
+                else -> (alto - altoHoja).coerceAtLeast(0f) to 0f
+            }
+        }
+
         val referenciasBase = "An: ${NovaCalculos.df1(ancho)}  x  Al: ${NovaCalculos.df1(alto)}\n" +
                 "Altura de puente: $altoPuenteTexto\n" +
+                "mocheta inf: ${NovaCalculos.df1(mochetaInf)}\n" +
+                "mocheta sup: ${NovaCalculos.df1(mochetaSup)}\n" +
                 "Divisiones: $divisiones -> fjs: $nFijos;czs: $nCorredizas"
 
         return if (divisiones > 4 && puntosU.isNotEmpty()) {
@@ -196,43 +219,89 @@ object NovaUIHelper {
     }
 //{nova,apa,[150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)}]
 
-    fun generarDiseno(ancho: Float, alto: Float, altoHoja: Float,
-                      divisiones: Int, siNoMoch: Int, texto: String,anchMota:Int): String {
+    fun generarDiseno(
+        ancho: Float,
+        alto: Float,
+        altoHoja: Float,
+        divisiones: Int,
+        siNoMoch: Int,
+        texto: String
+    ): String {
+        val presets = mapOf(
+            "nu" to "150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)",
+            "ns" to "150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)",
+            "ncu" to "150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)"
+        )
+        presets[texto]?.let { return it }
 
-       val mo = NovaCalculos.altoMocheta(alto, altoHoja, tubo = 2.5f)
-       val moDos = (alto - altoHoja)/2
+        val mo = NovaCalculos.altoMocheta(alto, altoHoja, tubo = 2.5f)
+        val moDos = ((alto - altoHoja).coerceAtLeast(0f)) / 2f
+        val altoPuenteTexto = if (siNoMoch == 1) NovaCalculos.df1(altoHoja) else ""
+        val mochetasTxt = NovaCalculos.ordenMochetasConParantesModelo(divisiones, ancho, texto)
+        val encabezado = "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:"
 
-        val altoPuenteTexto = if (siNoMoch == 1) {
-        NovaCalculos.df1(altoHoja)
-        } else {""}
+        return when (texto) {
+            "nn" -> encabezado +
+                    "s<$altoPuenteTexto>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});" +
+                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
+            "nl" -> encabezado +
+                    "s<$altoPuenteTexto>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});" +
+                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
+            "nr" -> encabezado +
+                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt);" +
+                    "s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)})"
+            "np" -> encabezado +
+                    "m<${NovaCalculos.df1(moDos)}>($mochetasTxt);" +
+                    "s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});" +
+                    "m<${NovaCalculos.df1(moDos)}>($mochetasTxt)"
+            "nci" -> encabezado +
+                    "m<${NovaCalculos.df1(moDos)}>($mochetasTxt);" +
+                    "s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});" +
+                    "m<${NovaCalculos.df1(moDos)}>($mochetasTxt)"
+            "ncc" -> encabezado +
+                    "s<$altoPuenteTexto>(${NovaCalculos.ordenCorredizasConParantes(divisiones, ancho)});" +
+                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
+            "n3c" -> encabezado +
+                    "s<$altoPuenteTexto>(${NovaCalculos.ordenCorredizasConParantes(divisiones, ancho, 3)});" +
+                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
+            "ncfc" -> encabezado +
+                    "s<$altoPuenteTexto>(${NovaCalculos.ordenNcfcConParantes(divisiones, ancho)});" +
+                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
+            else -> ""
+        }
+    }
 
-        val mochetasTxt = NovaCalculos.ordenMochetasConParantes(divisiones, ancho)
+    fun generarPuntosU(
+        ancho: Float,
+        divisManual: Int,
+        cruce: Float,
+        tipoCalculo: String
+    ): String {
+        val divisiones = NovaCalculos.divisiones(ancho, divisManual)
+        val partes = NovaCalculos.uFijos(ancho, divisiones, cruce, tipoCalculo)
 
-        val referenciasBase =
-            when(texto){
-                "nn" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
-                        "s<$altoPuenteTexto>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});m<${NovaCalculos.df1(mo)}>" +
-                        "($mochetasTxt)"
-                "nr" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
-                        "m<${NovaCalculos.df1(mo)}>($mochetasTxt);s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones,ancho)})"
-                "np" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
-                        "m<${NovaCalculos.df1(moDos)}>($mochetasTxt);s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones,ancho)});" +
-                        "m<${NovaCalculos.df1(moDos)}>($mochetasTxt)"
-                "ncc" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
-                        "s<$altoPuenteTexto>(cc);m<${NovaCalculos.df1(mo)}>(f)"
-                "n3c" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
-                        "s<$altoPuenteTexto>(ccc);m<${NovaCalculos.df1(mo)}>(f)"
-                "ncfc" -> "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:" +
-                        "s<$altoPuenteTexto>(cfc);m<${NovaCalculos.df1(mo)}>(f)"
-                "nl" -> "150,150:m<25>(f<100>f<50>);s<100>(fcf);m<25>(cfc)"
-                "nu" -> "150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)"
-                "ns" -> "150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)"
-                "ncu" ->"150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)"
-                "nci" ->"150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)"
+        val punto1 = NovaCalculos.df1((partes * 2) - cruce * 2).toFloat()
+        val punto2 = NovaCalculos.df1((partes * 4) - cruce * 4).toFloat()
+        val punto3 = NovaCalculos.df1((partes * 6) - cruce * 6).toFloat()
 
-                else -> {""}
-            }
-                return referenciasBase
+        return when (divisiones) {
+            5, 6 -> NovaCalculos.df1((partes * 2) - cruce * 2)
+            8, 12 -> NovaCalculos.df1((partes * 3) - cruce * 2)
+            7, 10, 14 -> "${NovaCalculos.df1(punto1)}_${NovaCalculos.df1(punto2)}"
+            9, 11, 13, 15 -> "${NovaCalculos.df1(punto1)}_${NovaCalculos.df1(punto2)}_${NovaCalculos.df1(punto3)}"
+            else -> ""
+        }
+    }
 
+    fun generarPaqueteSimbolico(
+        tipoNova: String,
+        ancho: Float,
+        alto: Float,
+        altoHoja: Float,
+        divisiones: Int,
+        texto: String
+    ): String {
+        val diseno = generarDiseno(ancho, alto, altoHoja, divisiones, siNoMoch = 1, texto)
+        return "{nova,$tipoNova,[$diseno]}"
     }
 }

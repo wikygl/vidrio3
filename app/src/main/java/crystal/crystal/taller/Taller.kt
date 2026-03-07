@@ -329,6 +329,11 @@ class Taller : AppCompatActivity() {
                     val entradaDiseno = mutableListOf(r.disenoPaquete, "", paqueteID)
                     mapListas.getOrPut("DisenoPaquete") { mutableListOf() }.add(entradaDiseno)
                 }
+                // DisenoSimbolicoV2
+                if (r.disenoSimbolicoV2.isNotBlank()) {
+                    val entradaDisenoV2 = mutableListOf(r.disenoSimbolicoV2, "", paqueteID)
+                    mapListas.getOrPut("DisenoSimbolicoV2") { mutableListOf() }.add(entradaDisenoV2)
+                }
             }
         }
 

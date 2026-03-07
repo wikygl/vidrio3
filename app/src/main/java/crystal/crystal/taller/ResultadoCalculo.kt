@@ -20,5 +20,6 @@ data class ResultadoCalculo(
     val corredizas: Int = 0,
     val alturaPuente: Float = 0f,
     val disenoPaquete: String = "",
+    val disenoSimbolicoV2: String = "",
     val cantidad: Int = 1
 ) : Serializable

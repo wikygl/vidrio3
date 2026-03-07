@@ -38,6 +38,9 @@ import java.io.File
 import kotlin.math.acos
 import kotlin.math.abs
 import android.graphics.Color
+import crystal.crystal.baul.MedicionProyectoBaulPayload
+import java.io.FileOutputStream
+import java.io.ObjectOutputStream
 
 class MedidaActivity : AppCompatActivity() {
     companion object {
@@ -2474,7 +2477,7 @@ class MedidaActivity : AppCompatActivity() {
 
         val numeroItem = itemIdEnEdicion
             ?.let { id -> itemsArchivados.firstOrNull { it.id == id }?.numero }
-            ?: obtenerSiguienteNumeroCategoria(categoria)
+            ?: obtenerSiguienteNumeroCategoria(categoria, clienteIdFinal, clienteNombreFinal)
 
         val now = System.currentTimeMillis()
         val item = ItemMedicionObra(
@@ -2572,7 +2575,8 @@ class MedidaActivity : AppCompatActivity() {
             val cliente = (item.clienteNombre ?: "SinCliente")
                 .replace(Regex("[^A-Za-z0-9_\\-]"), "_")
                 .take(30)
-            actualizarLoteClienteEnDescargas(item, medidasDir, cliente)
+            val lote = actualizarLoteClienteEnDescargas(item, medidasDir, cliente)
+            guardarProyectoMedicionEnBaul(lote = lote, clienteSanitizado = cliente)
         }.onSuccess {
             mostrarMensaje("Guardado en lote del cliente")
         }.onFailure {
@@ -2584,7 +2588,7 @@ class MedidaActivity : AppCompatActivity() {
         item: ItemMedicionObra,
         medidasDir: File,
         clienteSanitizado: String
-    ) {
+    ): ClienteLoteArchivo {
         val loteJsonFile = File(medidasDir, "cliente_${clienteSanitizado}_lote.json")
         val loteTxtFile = File(medidasDir, "cliente_${clienteSanitizado}_lote.txt")
 
@@ -2619,6 +2623,7 @@ class MedidaActivity : AppCompatActivity() {
         loteJsonFile.writeText(Gson().toJson(loteFinal))
 
         loteTxtFile.writeText(construirTextoLoteCliente(loteFinal))
+        return loteFinal
     }
 
     private fun construirTextoLoteCliente(lote: ClienteLoteArchivo): String {
@@ -2653,8 +2658,47 @@ class MedidaActivity : AppCompatActivity() {
         archivarItemActual(EstadoMedicion.BORRADOR)
     }
 
-    private fun obtenerSiguienteNumeroCategoria(cat: String): Int {
-        return (itemsArchivados.filter { it.categoria == cat }.maxOfOrNull { it.numero } ?: 0) + 1
+    private fun obtenerSiguienteNumeroCategoria(
+        cat: String,
+        clienteId: String?,
+        clienteNombre: String?
+    ): Int {
+        val claveObjetivo = construirClaveCliente(clienteId = clienteId, clienteNombre = clienteNombre)
+        return (
+            itemsArchivados
+                .filter { it.categoria == cat }
+                .filter {
+                    construirClaveCliente(
+                        clienteId = it.clienteId,
+                        clienteNombre = it.clienteNombre
+                    ) == claveObjetivo
+                }
+                .maxOfOrNull { it.numero } ?: 0
+            ) + 1
+    }
+
+    private fun construirClaveCliente(clienteId: String?, clienteNombre: String?): String {
+        val id = clienteId?.trim().orEmpty()
+        if (id.isNotBlank()) return "id:$id"
+        val nombre = clienteNombre?.trim()?.lowercase(Locale.getDefault()).orEmpty()
+        return if (nombre.isNotBlank()) "name:$nombre" else "anonimo"
+    }
+
+    private fun guardarProyectoMedicionEnBaul(
+        lote: ClienteLoteArchivo,
+        clienteSanitizado: String
+    ) {
+        val nombreProyecto = "medida_${clienteSanitizado}_lote"
+        val payload = MedicionProyectoBaulPayload(
+            nombreProyecto = nombreProyecto,
+            clienteNombre = lote.cliente,
+            itemsJson = Gson().toJson(lote.productos),
+            fechaGuardado = System.currentTimeMillis()
+        )
+        val destino = File(filesDir, "$nombreProyecto.dat")
+        ObjectOutputStream(FileOutputStream(destino)).use { output ->
+            output.writeObject(payload)
+        }
     }
 
     private fun actualizarListaArchivados() = Unit

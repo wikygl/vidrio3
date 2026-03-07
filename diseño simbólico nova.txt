@@ -1,0 +1,132 @@
+﻿Estructura de Denominación.
+
+
+
+
+Segmento
+	Nivel de Jerarquía
+	Sigla Sugerida
+	Opciones y Valores (según fuentes)
+	Cliente
+	0.Id
+	C
+	Nombre completo
+	
+
+
+
+Producto
+	1.producto
+	V  
+	Ventana
+	Numeración
+	2.número
+	1
+	Nventana
+	Línea
+	2.sistema
+	n
+	sistema nova
+	Estético
+	3. Acabado
+	a / i / p 
+	aparente, inaparente, pivotante
+	Mecanismo
+	4. Tipología
+	c / b / p / f
+	corrediza, batiente, pivotante, fija
+	
+
+
+
+Geometría
+	5. Volumen
+6. forma
+	p / e / c
+r / c / p
+	plano, esquinero, curvo
+rectangular, circular, poligonal
+	Transición
+	7. Encuentro
+	m / a / l
+	muro, acople, borde libre
+	Integración
+	8. Modelo
+	n / i / b / x
+	normal, invertido, bandera,x (compuesto)
+	Modulación
+	9. Módulo
+	f / c / p / P
+	fijo, corrediza,pivotante,Parante
+	Franjas
+	10. franja
+	s / m
+	sistema,mocheta
+	Tramo
+	11. condición
+	B / L
+	bloqueado,libre
+	Medidas
+	12.Medida
+	a / h / hp / c / a / d
+	ancho,alto,altura puente, cantidad,alféizar,dintel
+	
+
+
+
+materiales
+	13. aluminio
+14. vidrio
+	
+
+	color, espesor,descripción
+tipo, color,espesor,descripción
+	accesorios
+	15.accesorio
+	
+
+	descripción
+	
+
+
+
+
+
+Orden de Siglas
+Cliente - ancho,alto,hpuente,alféizar, dintel - Producto,sistema,acabado,tipología,número - volumen,forma,encuentro,modelo -  Tramo,condición<medida>(franja<medida>(módulo<medida>módulo<medida>…x módulos)...x franjas)...x tramos - aluminio(descripción) vidrios(descripción) - accesorios (descripción)
+
+
+Ejemplos
+
+
+* ejemplo de ingreso de datos completos (generado en MedidaAcitity o disenoActivity)
+
+
+Dora - 370,140,100,90,10 -Vnic1-prmn -Tb<210>(s(fccf)m(ff)) P Tl<157.5>(s(fcf)m(f)) - aluminio(descripción) vidrios(descripción)-accesorios(descripción)
+
+
+
+
+* ejemplo de ingreso de datos  con nulos
+
+null - 370,140,0,null,null -Vnic null - prmn -null - null - null
+
+
+
+
+   * ejemplo de salida completo sin edición
+
+
+Dora - 370,140,100,90,10 -Vnic1-prmn -Tb<210>(s<100>(f<52.9>c<52.9>c<52.9>f<52.9>)m<37.5>(f<105.7>f<105.7>)) P Tl<157.5>(s<100>(f<52.9>c<52.9>f<52.9>)m<37.5>(f<158.5>)) - aluminio(descripción) vidrios(descripción)-accesorios(descripción)
+
+
+   * ejemplo de salida con edición
+
+
+Dora - 370,140,100,90,10 -Vnic1-prmn -Tb<210>(s<100>(f<52.9>c<52.9>c<52.9>f<52.9>)m<37.5>(c<105.7>f<105.7>)) P Tl<157.5>(m<20>(f<158.5>)s<100>(c<52.9>c<52.9>c<52.9>)m<20>(f<158.5>)) - aluminio(descripción) vidrios(descripción)-accesorios(descripción)
+
+
+   * ejemplo de salida con nulos
+
+
+sin cliente - 370, 140,100,90,10 -Vnic1-prmn -Tb<210>(s<100>(f<52.9>c<52.9>c<52.9>f<52.9>)m<37.5>(f<105.7>f<105.7>)) P Tl<157.5>(s<100>(f<52.9>c<52.9>f<52.9>)m<37.5>(f<158.5>)) -null - null

@@ -24,7 +24,8 @@ object ModoMasivoHelper {
         vidrios: String,
         accesorios: Map<String, String>,
         referencias: String,
-        disenoPaquete: String = ""
+        disenoPaquete: String = "",
+        disenoSimbolicoV2: String = ""
     ) {
         val intent = activity.intent
         val resultado = ResultadoCalculo(
@@ -40,6 +41,7 @@ object ModoMasivoHelper {
             colorAluminio = intent.getStringExtra("color_aluminio") ?: "",
             tipoVidrio = intent.getStringExtra("tipo_vidrio") ?: "",
             disenoPaquete = disenoPaquete,
+            disenoSimbolicoV2 = disenoSimbolicoV2,
             cantidad = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
         )
         val data = Intent().putExtra("resultado", resultado)

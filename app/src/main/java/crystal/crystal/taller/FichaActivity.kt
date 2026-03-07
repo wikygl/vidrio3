@@ -56,7 +56,8 @@ class FichaActivity : AppCompatActivity() {
 
                             // Filtrar valores 0 o cantidad 0 (excepto referencias/diseño/grados/diseno_paquete)
                             if (nombreLista != "Referencias" && nombreLista != "Diseño"
-                                && nombreLista != "Grados" && nombreLista != "DisenoPaquete") {
+                                && nombreLista != "Grados" && nombreLista != "DisenoPaquete"
+                                && nombreLista != "DisenoSimbolicoV2") {
                                 val cantNum = dato2.toIntOrNull()
                                 if (dato2.isBlank() || cantNum == null || cantNum == 0) continue
                                 val valNum = dato1.toFloatOrNull()
@@ -88,6 +89,7 @@ class FichaActivity : AppCompatActivity() {
                 mapListas.forEach { (nombreLista, listas) ->
                     // Excluir listas internas que no son materiales
                     if (nombreLista == "Diseño" || nombreLista == "DisenoPaquete"
+                        || nombreLista == "DisenoSimbolicoV2"
                         || nombreLista == "Grados") return@forEach
                     if (nombreLista == "Pedido" || nombreLista == "Referencias") {
                         // Pedido/Referencias: texto descriptivo, no numérico
@@ -158,7 +160,8 @@ class FichaActivity : AppCompatActivity() {
 
                 mapListas.forEach { (nombreLista, listas) ->
                     if (nombreLista == "Referencias" || nombreLista == "Diseño"
-                        || nombreLista == "DisenoPaquete" || nombreLista == "Grados") return@forEach
+                        || nombreLista == "DisenoPaquete" || nombreLista == "DisenoSimbolicoV2"
+                        || nombreLista == "Grados") return@forEach
 
                     if (nombreLista == "Pedido") {
                         // Agrupar items de pedido por cliente
@@ -208,6 +211,34 @@ class FichaActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "No se encontraron datos para mostrar", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        binding.btDisenoV2.setOnClickListener {
+            val mapListas = MapStorage.cargarMap(this)
+            val listas = mapListas?.get("DisenoSimbolicoV2")
+            if (listas.isNullOrEmpty()) {
+                Toast.makeText(this, "No se encontró DisenoSimbolicoV2 archivado", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val ventanasMap = mutableMapOf<String, MutableList<Pair<String, List<Pair<String, String>>>>>()
+            for (lista in listas) {
+                if (lista.isEmpty()) continue
+                val simbolicoV2 = lista[0].trim()
+                if (simbolicoV2.isBlank()) continue
+                val ventana = lista.getOrElse(2) { "" }.ifBlank { "sin_id" }
+                ventanasMap.getOrPut(ventana) { mutableListOf() }
+                    .add(Pair("DisenoSimbolicoV2", listOf(Pair(simbolicoV2, ""))))
+            }
+
+            if (ventanasMap.isEmpty()) {
+                Toast.makeText(this, "No hay contenido válido en DisenoSimbolicoV2", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val adapter = VentanaAdapter(ventanasMap, this)
+            binding.rvModelo.layoutManager = LinearLayoutManager(this)
+            binding.rvModelo.adapter = adapter
         }
 
     }
@@ -295,8 +326,9 @@ class FichaActivity : AppCompatActivity() {
                     it.first == "Referencias" -> 1
                     it.first.startsWith("Vidrios", ignoreCase = true) -> 3
                     it.first == "DisenoPaquete" -> 4
-                    it.first == "Diseño" -> 5
-                    it.first == "Pedido" -> 6
+                    it.first == "DisenoSimbolicoV2" -> 5
+                    it.first == "Diseño" -> 6
+                    it.first == "Pedido" -> 7
                     else -> 2 // Perfiles de aluminio y demás materiales
                 }
             })
@@ -729,4 +761,6 @@ class FichaActivity : AppCompatActivity() {
     }
 
 }
+
+
 

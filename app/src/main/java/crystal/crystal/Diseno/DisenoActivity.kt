@@ -7,16 +7,22 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import crystal.crystal.BaulActivity
 import crystal.crystal.R
 import crystal.crystal.casilla.MaterialData
 import crystal.crystal.casilla.TipoMaterial
 import crystal.crystal.databinding.ActivityDisenoBinding
+import crystal.crystal.medicion.ItemMedicionObra
 
 class DisenoActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityDisenoBinding
     private lateinit var adapter: MatAdapter
+    private data class LoteMedicionRaw(
+        val productos: List<ItemMedicionObra> = emptyList()
+    )
 
     private val lanzarBaul = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -93,20 +99,35 @@ class DisenoActivity : AppCompatActivity() {
             ?: data.getStringExtra("medicion_proyecto_archivo")
             ?: ""
 
+        val itemsMedicion = extraerItemsMedicion(data)
+        if (itemsMedicion.isNotEmpty()) {
+            aplicarItemMedicionEnFormulario(itemsMedicion.first())
+        }
+
         if (nombre.isNotBlank()) {
             binding.txTitulo.text = "Templado Dise\u00f1ado con: $cliente ($nombre)"
-            val detalle = construirDetalleSeleccion(data, cliente, nombre)
+            val detalle = construirDetalleSeleccion(data, cliente, nombre, itemsMedicion)
             actualizarEstadoMedidaAbierta(cliente, nombre, detalle)
             Toast.makeText(this, "Medida cargada desde Ba\u00fal", Toast.LENGTH_SHORT).show()
         } else {
             binding.txTitulo.text = "Templado Dise\u00f1ado con: $cliente"
-            val detalle = construirDetalleSeleccion(data, cliente = "sin cliente", nombre = "")
+            val detalle = construirDetalleSeleccion(
+                data = data,
+                cliente = "sin cliente",
+                nombre = "",
+                itemsMedicion = itemsMedicion
+            )
             actualizarEstadoMedidaAbierta(cliente = "", nombre = "", detalle = detalle)
             Toast.makeText(this, "No se recibi\u00f3 medida desde Ba\u00fal", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun construirDetalleSeleccion(data: Intent, cliente: String, nombre: String): String {
+    private fun construirDetalleSeleccion(
+        data: Intent,
+        cliente: String,
+        nombre: String,
+        itemsMedicion: List<ItemMedicionObra>
+    ): String {
         val archivo = data.getStringExtra("medicion_proyecto_archivo").orEmpty()
         val ruta = data.getStringExtra("medicion_proyecto_ruta").orEmpty()
         val json = data.getStringExtra("medicion_proyecto_json").orEmpty()
@@ -116,6 +137,11 @@ class DisenoActivity : AppCompatActivity() {
         val lineas = mutableListOf<String>()
         lineas += "Abierto: ${if (nombre.isNotBlank()) nombre else "sin nombre"}"
         lineas += "Cliente: $cliente"
+        if (itemsMedicion.isNotEmpty()) {
+            lineas += "Items de medición: ${itemsMedicion.size}"
+            val primero = itemsMedicion.first()
+            lineas += "Primer item: ${primero.categoria}${primero.numero} (${primero.anchoCm}x${primero.altoCm}cm)"
+        }
         if (archivo.isNotBlank()) lineas += "Archivo: $archivo"
         if (ruta.isNotBlank()) lineas += "Ruta: $ruta"
         if (json.isNotBlank()) lineas += "JSON: $json"
@@ -142,6 +168,42 @@ class DisenoActivity : AppCompatActivity() {
             }
 
         return lineas.joinToString(separator = "\n")
+    }
+
+    private fun extraerItemsMedicion(data: Intent): List<ItemMedicionObra> {
+        val gson = Gson()
+        val listaType = object : TypeToken<List<ItemMedicionObra>>() {}.type
+
+        fun parsearLista(json: String): List<ItemMedicionObra> {
+            if (json.isBlank()) return emptyList()
+            return runCatching { gson.fromJson<List<ItemMedicionObra>>(json, listaType) }
+                .getOrNull()
+                ?: emptyList()
+        }
+
+        fun parsearLote(json: String): List<ItemMedicionObra> {
+            if (json.isBlank()) return emptyList()
+            return runCatching { gson.fromJson(json, LoteMedicionRaw::class.java) }
+                .getOrNull()
+                ?.productos
+                ?: emptyList()
+        }
+
+        val jsonDirecto = data.getStringExtra("medicion_proyecto_json").orEmpty()
+        val contenido = data.getStringExtra("medicion_proyecto_contenido").orEmpty()
+
+        val desdeDirecto = parsearLista(jsonDirecto).ifEmpty { parsearLote(jsonDirecto) }
+        if (desdeDirecto.isNotEmpty()) return desdeDirecto
+
+        return parsearLista(contenido).ifEmpty { parsearLote(contenido) }
+    }
+
+    private fun aplicarItemMedicionEnFormulario(item: ItemMedicionObra) {
+        binding.scMedidas.visibility = View.VISIBLE
+        binding.rvDiseno.visibility = View.GONE
+        binding.contenedorMedidas.etAncho1.setText(item.anchoCm.toString())
+        binding.contenedorMedidas.etAlto.setText(item.altoCm.toString())
+        binding.contenedorMedidas.etAgujero.setText(item.alturaPuenteCm.toString())
     }
 
     private fun actualizarEstadoMedidaAbierta(cliente: String, nombre: String, detalle: String? = null) {

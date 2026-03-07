@@ -41,6 +41,84 @@ object NovaCalculosDesiguales {
         return grupos.joinToString("\n") { "${NovaCalculos.df1(it.first)} = ${it.second}" }
     }
 
+    private fun agruparConCantidad(medidas: List<Float>, cantidadPorMedida: Int): String {
+        if (medidas.isEmpty() || cantidadPorMedida <= 0) return ""
+        val grupos = mutableListOf<Pair<Float, Int>>()
+        for (m in medidas) {
+            val existente = grupos.indexOfFirst { kotlin.math.abs(it.first - m) < 0.05f }
+            if (existente >= 0) {
+                grupos[existente] = grupos[existente].copy(second = grupos[existente].second + cantidadPorMedida)
+            } else {
+                grupos.add(m to cantidadPorMedida)
+            }
+        }
+        return grupos.joinToString("\n") { "${NovaCalculos.df1(it.first)} = ${it.second}" }
+    }
+
+    private fun esPuenteMultipleOGorrito(puente: String): Boolean {
+        val p = puente.lowercase().trim()
+        return p.contains("multi") || p.contains("múlt") || p.contains("mÃºlt") || p.contains("gorrito") || p.contains("ltiple")
+    }
+
+    fun textoUAnchoMochetaPorTramos(
+        modulos: List<ModuloDesigual>,
+        parantes: List<Int>,
+        ancho: Float,
+        tipo: String,
+        tubo: Float,
+        puente: String
+    ): String {
+        val segs = segmentos(modulos, parantes)
+        val anchosSegmento = segs.map { seg -> seg.sumOf { it.ancho.toDouble() }.toFloat() }
+        if (anchosSegmento.isEmpty()) return ""
+
+        return if (tipo == "apa") {
+            val esFijo = esPuenteMultipleOGorrito(puente)
+            val paranteValor = if (esFijo) 2.5f else tubo
+            val cantidadPorTramo = if (esFijo) 1 else 2
+            val nParantes = parantes.size
+            val totalAnchos = anchosSegmento.sum()
+            val anchoDescontado = (ancho - (paranteValor * nParantes)).coerceAtLeast(0f)
+            val uMochetaTramo = if (totalAnchos > 0f) {
+                anchosSegmento.map { (it / totalAnchos) * anchoDescontado }
+            } else {
+                anchosSegmento
+            }
+            agruparConCantidad(uMochetaTramo, cantidadPorTramo)
+        } else {
+            agrupar(anchosSegmento)
+        }
+    }
+
+    fun textoTramosUnitario(
+        modulos: List<ModuloDesigual>,
+        parantes: List<Int>,
+        ancho: Float,
+        tipo: String,
+        tubo: Float,
+        puente: String
+    ): String {
+        val segs = segmentos(modulos, parantes)
+        val anchosSegmento = segs.map { seg -> seg.sumOf { it.ancho.toDouble() }.toFloat() }
+        if (anchosSegmento.isEmpty()) return ""
+
+        return if (tipo == "apa") {
+            val esFijo = esPuenteMultipleOGorrito(puente)
+            val paranteValor = if (esFijo) 2.5f else tubo
+            val nParantes = parantes.size
+            val totalAnchos = anchosSegmento.sum()
+            val anchoDescontado = (ancho - (paranteValor * nParantes)).coerceAtLeast(0f)
+            val medidas = if (totalAnchos > 0f) {
+                anchosSegmento.map { (it / totalAnchos) * anchoDescontado }
+            } else {
+                anchosSegmento
+            }
+            agruparConCantidad(medidas, 1)
+        } else {
+            agruparConCantidad(anchosSegmento, 1)
+        }
+    }
+
     /** Agrupa medidas 2D (ancho x alto): "60 x 110 = 2\n50 x 110 = 3" */
     fun agrupar2D(medidas: List<Pair<Float, Float>>): String {
         if (medidas.isEmpty()) return ""
@@ -73,19 +151,34 @@ object NovaCalculosDesiguales {
         return result
     }
 
+    private fun cantidadPortafelpas(modulos: List<ModuloDesigual>, parantes: List<Int>): Int {
+        val segs = segmentos(modulos, parantes)
+        var total = 0
+        for (seg in segs) {
+            total += seg.count { it.tipo == 'c' } * 2
+            for (i in seg.indices) {
+                if (seg[i].tipo != 'f') continue
+                if (i > 0 && seg[i - 1].tipo == 'c') total += 1
+                if (i < seg.lastIndex && seg[i + 1].tipo == 'c') total += 1
+            }
+        }
+        return total
+    }
+
     // ==================== AJUSTE DE CRUCE ====================
 
     fun calcularAjuste(
         modulos: List<ModuloDesigual>,
         parantes: List<Int>,
         cruce: Float,
-        tipo: String
+        tipo: String,
+        valorParanteApa: Float = 2.5f
     ): Float {
         val transiciones = contarTransiciones(modulos, parantes)
         val cruceTotal = transiciones * cruce
         val nParantes = parantes.size
         return when (tipo) {
-            "apa" -> (cruceTotal - 2.5f * nParantes) / modulos.size
+            "apa" -> (cruceTotal - valorParanteApa * nParantes) / modulos.size
             else -> cruceTotal / modulos.size
         }
     }
@@ -101,9 +194,11 @@ object NovaCalculosDesiguales {
         us: Float,
         cruce: Float,
         tipo: String,
-        tubo: Float
+        tubo: Float,
+        puente: String = "M\u00FAltiple"
     ): String {
-        val ajuste = calcularAjuste(modulos, parantes, cruce, tipo)
+        val valorParanteApa = if (tipo == "apa" && esPuenteMultipleOGorrito(puente)) 2.5f else tubo
+        val ajuste = calcularAjuste(modulos, parantes, cruce, tipo, valorParanteApa)
         val nParantes = parantes.size
         val lines = mutableListOf<String>()
 
@@ -127,15 +222,13 @@ object NovaCalculosDesiguales {
         if (alto > altoHoja) {
             val altoMocheta = NovaCalculos.altoMocheta(alto, altoHoja, tubo)
             if (us != 0f) {
-                val uMocheta = altoMocheta - us
+                val uMocheta = altoMocheta - (2f * us)
                 val nUMocheta = (nParantes + 1) * 2
                 lines.add("${NovaCalculos.df1(uMocheta)} = $nUMocheta")
             }
 
-            // Puentes superiores (horizontales) por segmento
-            val segs = segmentos(modulos, parantes)
-            val puenteMedidas = segs.map { seg -> seg.sumOf { it.ancho.toDouble() }.toFloat() }
-            lines.add(agrupar(puenteMedidas))
+            // U mocheta horizontal por tramo
+            lines.add(textoUAnchoMochetaPorTramos(modulos, parantes, ancho, tipo, tubo, puente))
         }
 
         return lines.filter { it.isNotBlank() }.joinToString("\n")
@@ -202,7 +295,8 @@ object NovaCalculosDesiguales {
         us: Float,
         cruce: Float,
         tipo: String,
-        tubo: Float
+        tubo: Float,
+        modelo: String = "nn"
     ): String {
         val ajuste = calcularAjuste(modulos, parantes, cruce, tipo)
         val lines = mutableListOf<String>()
@@ -230,12 +324,29 @@ object NovaCalculosDesiguales {
 
         // Vidrios mocheta
         if (alto > altoHoja && mocheta.isNotEmpty()) {
-            val altoMocheta = NovaCalculos.altoMocheta(alto, altoHoja, tubo)
-            val holguraMoch = 0.36f
-            val altoVidrioMoch = altoMocheta - holguraMoch
-            val vidriosMoch = mocheta.map { mod ->
-                val anchoVidrio = mod.ancho - holguraMoch
-                Pair(anchoVidrio, altoVidrioMoch)
+            val holguraMochAncho = 0.4f
+
+            val alturasMochetas = if (modelo == "np") {
+                NovaInaCalculos.alturasMochetasPorModelo(
+                    modelo = modelo,
+                    alto = alto,
+                    altoHoja = altoHoja,
+                    alturaPuente = tubo
+                ).lista()
+            } else {
+                listOf(NovaCalculos.altoMocheta(alto, altoHoja, tubo))
+            }
+
+            val vidriosMoch = mutableListOf<Pair<Float, Float>>()
+            for (alturaMocheta in alturasMochetas) {
+                val altoVidrioMoch = when (tipo) {
+                    "ina", "piv" -> alturaMocheta + 1f
+                    else -> alturaMocheta - 0.36f
+                }
+                mocheta.forEach { mod ->
+                    val anchoVidrio = mod.ancho - holguraMochAncho
+                    vidriosMoch.add(Pair(anchoVidrio, altoVidrioMoch))
+                }
             }
             lines.add(agrupar2D(vidriosMoch))
         }
@@ -262,31 +373,50 @@ object NovaCalculosDesiguales {
         us: Float,
         cruce: Float,
         tipo: String,
-        tubo: Float
+        tubo: Float,
+        puente: String = "M\u00FAltiple",
+        modelo: String = "nn"
     ): OtrosResult {
         val ajuste = calcularAjuste(modulos, parantes, cruce, tipo)
         val nCorredizas = modulos.count { it.tipo == 'c' }
 
         // Portafelpa: altoHoja - 1.6 (no varía con ancho)
         val portafelpaVal = altoHoja - 1.6f
-        val divDePortas = when {
-            modulos.size == 1 -> 0
-            modulos.size == 2 || modulos.size == 4 || modulos.size == 8 || modulos.size == 12 ->
-                nCorredizas * 3
-            modulos.size == 14 -> (nCorredizas * 4) - 2
-            else -> nCorredizas * 4
-        }
+        val divDePortas = cantidadPortafelpas(modulos, parantes)
         val portafelpaTxt = if (divDePortas > 0) "${NovaCalculos.df1(portafelpaVal)} = $divDePortas" else ""
 
         // Hache: misma medida que uFijos por módulo corredizo
         val hacheMedidas = modulos.filter { it.tipo == 'c' }.map { it.ancho + ajuste }
         val hacheTxt = if (hacheMedidas.isNotEmpty()) agrupar(hacheMedidas) else ""
 
-        // Tee [APA]: altoMocheta - us
+        // Tee [APA]: medida = u alto mocheta, cantidad = sum(tramoMocheta - 1)
         val teeTxt = if (tipo == "apa" && alto > altoHoja) {
-            val altoMocheta = NovaCalculos.altoMocheta(alto, altoHoja, tubo)
-            val teeVal = altoMocheta - us
-            if (teeVal > 0f) "${NovaCalculos.df1(teeVal)} = $nCorredizas" else ""
+            val alturasMochetas = if (modelo == "np") {
+                NovaInaCalculos.alturasMochetasPorModelo(
+                    modelo = modelo,
+                    alto = alto,
+                    altoHoja = altoHoja,
+                    alturaPuente = tubo
+                ).lista()
+            } else {
+                listOf(NovaCalculos.altoMocheta(alto, altoHoja, tubo))
+            }
+            val nTeesBase = segmentos(modulos, parantes).sumOf { seg ->
+                (NovaCalculos.anchMota(seg.sumOf { it.ancho.toDouble() }.toFloat()) - 1).coerceAtLeast(0)
+            }
+            if (nTeesBase <= 0 || alturasMochetas.isEmpty()) {
+                ""
+            } else {
+                val factor = if (esPuenteMultipleOGorrito(puente)) 1f else 2f
+                val lineas = linkedMapOf<String, Int>()
+                for (alturaMocheta in alturasMochetas) {
+                    val teeVal = alturaMocheta - (factor * us)
+                    if (teeVal <= 0f) continue
+                    val key = NovaCalculos.df1(teeVal)
+                    lineas[key] = (lineas[key] ?: 0) + nTeesBase
+                }
+                lineas.entries.joinToString("\n") { "${it.key} = ${it.value}" }
+            }
         } else ""
 
         // Ángulo tope: solo cuando div==2

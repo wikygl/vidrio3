@@ -8,6 +8,23 @@ import android.annotation.SuppressLint
  */
 object NovaPerfilesHelper {
 
+    data class OtrosAparenteResult(
+        val puentes: String,
+        val mostrarPuentes: Boolean,
+        val rieles: String,
+        val mostrarRieles: Boolean,
+        val tuboTxt: String,
+        val mostrarTubo: Boolean,
+        val portafelpaTxt: String,
+        val mostrarPortafelpa: Boolean,
+        val teeTxt: String,
+        val mostrarTee: Boolean,
+        val topeTxt: String,
+        val mostrarTope: Boolean,
+        val hacheTxt: String,
+        val mostrarHache: Boolean
+    )
+
     // ==================== FUNCIONES DE U ====================
 
     fun calcularUParante(alto: Float, us: Float): Float {
@@ -23,7 +40,7 @@ object NovaPerfilesHelper {
     }
 
     fun calcularUMocheta(altoMocheta: Float, us: Float): Float {
-        return altoMocheta - us
+        return altoMocheta - (2f * us)
     }
 
     fun calcularUSuperior(mPuentes1: Float): Float {
@@ -201,8 +218,95 @@ object NovaPerfilesHelper {
         return uFijos
     }
 
-    fun calcularTe(altoMocheta: Float, us: Float): Float {
-        return altoMocheta - us
+    private fun esPuenteMultipleOGorrito(puente: String): Boolean {
+        val p = puente.lowercase().trim()
+        return p.contains("multi") || p.contains("múlt") || p.contains("mÃºlt") || p.contains("ltiple") || p.contains("gorrito")
+    }
+
+    fun calcularTe(altoMocheta: Float, us: Float, puente: String): Float {
+        val factor = if (esPuenteMultipleOGorrito(puente)) 1f else 2f
+        return altoMocheta - (factor * us)
+    }
+
+    fun calcularOtrosAparente(
+        ancho: Float,
+        alto: Float,
+        hoja: Float,
+        altoHoja: Float,
+        divisiones: Int,
+        nCorredizas: Int,
+        nPuentes: Int,
+        mPuentes1: Float,
+        mPuentes2: Float,
+        portafelpa: Float,
+        divDePortas: Int,
+        uFijos: Float,
+        tubo: Float,
+        us: Float,
+        puente: String,
+        modelo: String = "nn"
+    ): OtrosAparenteResult {
+        val puentesTxt = when {
+            divisiones in 6..12 && divisiones % 2 == 0 ->
+                "${NovaCalculos.df1(mPuentes1)} = $nPuentes\n${NovaCalculos.df1(alto)} = ${nPuentes - 1}"
+            divisiones == 14 ->
+                "${NovaCalculos.df1(mPuentes1)} = ${nPuentes - 1}\n" +
+                        "${NovaCalculos.df1(mPuentes2)} = ${nPuentes - 2}\n" +
+                        "${NovaCalculos.df1(alto)} = ${nPuentes - 1}"
+            divisiones == 1 -> ""
+            else -> "${NovaCalculos.df1(mPuentes1)} = $nPuentes"
+        }
+
+        val rielesTxt = if (divisiones == 1 || nCorredizas == 0) {
+            ""
+        } else {
+            calcularRieles(alto, hoja, ancho, mPuentes1, mPuentes2, nPuentes, divisiones)
+        }
+
+        val tuboTxt = if (alto > altoHoja) "${NovaCalculos.df1(ancho)} = 1" else ""
+        val portafelpaTxt = if (divisiones != 1) "${NovaCalculos.df1(portafelpa)} = $divDePortas" else ""
+
+        val alturasMochetas = if (modelo == "np") {
+            NovaInaCalculos.alturasMochetasPorModelo(
+                modelo = modelo,
+                alto = alto,
+                altoHoja = altoHoja,
+                alturaPuente = tubo
+            ).lista()
+        } else {
+            listOf(NovaCalculos.altoMocheta(alto, altoHoja, tubo))
+        }
+        val nTeesBase = NovaCalculos.cantidadTeePorTramosMocheta(ancho, divisiones, modelo)
+        val teeTxt = if (nTeesBase > 0 && alturasMochetas.isNotEmpty()) {
+            val lineas = linkedMapOf<String, Int>()
+            for (alturaMocheta in alturasMochetas) {
+                val teeVal = calcularTe(alturaMocheta, us, puente)
+                if (teeVal <= 0f) continue
+                val key = NovaCalculos.df1(teeVal)
+                lineas[key] = (lineas[key] ?: 0) + nTeesBase
+            }
+            lineas.entries.joinToString("\n") { "${it.key} = ${it.value}" }
+        } else ""
+
+        val topeTxt = if (divisiones == 2) "${NovaCalculos.df1(altoHoja - 0.9f)} = 1" else ""
+        val hacheTxt = if (nCorredizas > 0) "${NovaCalculos.df1(uFijos)} = $nCorredizas" else ""
+
+        return OtrosAparenteResult(
+            puentes = puentesTxt,
+            mostrarPuentes = divisiones != 1,
+            rieles = rielesTxt,
+            mostrarRieles = divisiones != 1 && nCorredizas > 0,
+            tuboTxt = tuboTxt,
+            mostrarTubo = alto > altoHoja,
+            portafelpaTxt = portafelpaTxt,
+            mostrarPortafelpa = divisiones != 1,
+            teeTxt = teeTxt,
+            mostrarTee = teeTxt.isNotBlank(),
+            topeTxt = topeTxt,
+            mostrarTope = divisiones == 2,
+            hacheTxt = hacheTxt,
+            mostrarHache = nCorredizas > 0
+        )
     }
 
     // ==================== FUNCIÃ“N DE ETIQUETA U ====================

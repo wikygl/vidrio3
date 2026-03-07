@@ -7,78 +7,52 @@ package crystal.crystal.taller.nova
 object NovaInaCalculos {
 
     // ==================== FUNCIONES DE FORMATO ====================
-    fun df1(defo: Float): String {
-        val resultado = if ("$defo".endsWith(".0")) {
-            "$defo".replace(".0", "")
+    fun df1(defo: Float): String = NovaCalculos.df1(defo)
+
+    data class AlturasMochetas(
+        val superior: Float,
+        val inferior: Float? = null
+    ) {
+        fun lista(): List<Float> = listOfNotNull(superior, inferior)
+    }
+
+    fun alturasMochetasPorModelo(
+        modelo: String,
+        alto: Float,
+        altoHoja: Float,
+        alturaPuente: Float
+    ): AlturasMochetas {
+        return if (modelo == "np") {
+            val disponible = (alto - altoHoja).coerceAtLeast(0f)
+            val mocheta = disponible / 2f
+            AlturasMochetas(superior = mocheta, inferior = mocheta)
         } else {
-            "%.1f".format(defo)
+            AlturasMochetas(superior = (alto - altoHoja).coerceAtLeast(0f))
         }
-        return resultado.replace(",", ".")
     }
 
     // ==================== FUNCIONES DE U ====================
-    fun uFijos(ancho: Float, divisiones: Int, cruce: Float): Float {
-        val cruceTotal = when (divisiones) {
-            2, 3, 5, 7, 9, 11, 13, 15 -> divisiones - 1
-            4, 6, 10 -> divisiones - 2
-            8, 12 -> divisiones / 2
-            14 -> divisiones - 4
-            else -> divisiones - 1
-        } * cruce
-        val partes = (ancho + cruceTotal) / divisiones
-        return if (divisiones == 1) ancho else partes
-    }
-
+    fun uFijos(ancho: Float, divisiones: Int, cruce: Float): Float =
+        NovaCalculos.uFijos(ancho, divisiones, cruce, "ina")
     fun uParante(alto: Float, us: Float): Float {
         return alto - (2 * us)
     }
-
     fun uParante2(alto: Float, altoHoja: Float, us: Float): Float {
         return ((alto - altoHoja) - us) + 1.5f
     }
-
     fun uSuperior(ancho: Float): Float {
         return ancho
     }
 
     // ==================== FUNCIONES DE CRUCE ====================
-    fun cruce(cruceExacto: Float, divisiones: Int): Float {
-        val cruceDefault = if (divisiones == 4 || divisiones == 8 || divisiones > 12) {
-            0.8f
-        } else {
-            0.7f
-        }
-        return if (cruceExacto == 0f) cruceDefault else cruceExacto
-    }
+    fun cruce(cruceExacto: Float, divisiones: Int): Float =
+        NovaCalculos.calcularCruce(cruceExacto, divisiones)
 
     // ==================== FUNCIONES DE PUENTES ====================
-    fun nPuentes(divisiones: Int): Int {
-        return when (divisiones) {
-            1, 2, 3, 4, 5, 7, 9, 11, 13, 15 -> 1
-            6, 8, 10 -> 2
-            12, 14 -> 3
-            else -> 0
-        }
-    }
-
-    fun mPuentes(ancho: Float, divisiones: Int): Float {
-        val parantes = 2.5f
-        return when (divisiones) {
-            1, 2, 3, 4, 5, 7, 9, 11, 13, 15 -> ancho
-            6, 8, 10 -> (ancho - parantes) / 2
-            12 -> (ancho - (2 * parantes)) / 3
-            14 -> (ancho - (2 * parantes)) / divisiones * 5
-            else -> 0f
-        }
-    }
-
-    fun mPuentes2(ancho: Float, divisiones: Int): Float {
-        val parantes = 2.5f
-        return when (divisiones) {
-            14 -> (ancho - (2 * parantes)) / divisiones * 4
-            else -> 0f
-        }
-    }
+    fun nPuentes(divisiones: Int): Int = NovaCalculos.nPuentes(divisiones)
+    fun nPuentes(divisiones: Int, ancho: Float): Int = NovaCalculos.nPuentesEfectivos(ancho, divisiones)
+    fun mPuentes(ancho: Float, divisiones: Int): Float = NovaCalculos.mPuentes1(ancho, divisiones, "ina")
+    fun mPuentes2(ancho: Float, divisiones: Int): Float = NovaCalculos.mPuentes2(ancho, divisiones, "ina")
 
     // ==================== FUNCIONES DE RIELES ====================
     fun rieles(alto: Float, hoja: Float, ancho: Float, divisiones: Int): String {
@@ -87,7 +61,7 @@ object NovaInaCalculos {
         val mPuentesRounded = df1(mPuentesVal).toFloat()
         val mPuentes2Val = df1(mPuentes2(ancho, divisiones)).toFloat()
         val ancho6 = df1(ancho - 0.06f).toFloat()
-        val nPuentesVal = nPuentes(divisiones)
+        val nPuentesVal = nPuentes(divisiones, ancho)
 
         return if (alto >= hoja) {
             if (divisiones != 14) {
@@ -100,12 +74,11 @@ object NovaInaCalculos {
             "${df1(ancho6)} = 1"
         }
     }
-
     fun puentes(alto: Float, ancho: Float, divisiones: Int): String {
         val mPuentesVal = mPuentes(ancho, divisiones)
         val mPuentes6 = df1(mPuentesVal - 0.06f).toFloat()
         val mPuentes2Val = df1(mPuentes2(ancho, divisiones)).toFloat()
-        val nPuentesVal = nPuentes(divisiones)
+        val nPuentesVal = nPuentes(divisiones, ancho)
 
         return when {
             divisiones in 6..12 && divisiones % 2 == 0 -> {
@@ -124,71 +97,18 @@ object NovaInaCalculos {
     }
 
     // ==================== FUNCIONES DE OTROS PERFILES ====================
-    fun portafelpa(altoHoja: Float): Float {
-        return df1(altoHoja - 1.6f).toFloat()
-    }
-
-    fun hache(ancho: Float, divisiones: Int, cruce: Float): Float {
-        return df1(uFijos(ancho, divisiones, cruce)).toFloat()
-    }
-
+    fun portafelpa(altoHoja: Float): Float = NovaCalculos.portafelpa(altoHoja)
+    fun hache(ancho: Float, divisiones: Int, cruce: Float): Float =
+        NovaCalculos.uFijos(ancho, divisiones, cruce, "ina")
     fun divDePortas(divisiones: Int, nCorredizas: Int): String {
-        return when (divisiones) {
-            1 -> ""
-            2, 4, 8, 12 -> "${nCorredizas * 3}"
-            14 -> "${(nCorredizas * 4) - 2}"
-            else -> "${nCorredizas * 4}"
-        }
+        if (divisiones <= 1 || nCorredizas <= 0) return ""
+        return NovaCalculos.cantidadPortafelpas(divisiones).toString()
     }
 
     // ==================== FUNCIONES DE CONSTANTES ====================
-    fun altoHoja(alto: Float, hoja: Float): Float {
-        val corre = if (hoja > alto) alto else hoja
-        return if (hoja == 0f) alto / 7 * 5 else corre
-    }
-
-    fun nFijos(divisiones: Int): Int {
-        return when (divisiones) {
-            1 -> 1
-            2 -> 1
-            3 -> 2
-            4 -> 2
-            5 -> 3
-            6 -> 4
-            7 -> 4
-            8 -> 4
-            9 -> 5
-            10 -> 6
-            11 -> 6
-            12 -> 6
-            13 -> 7
-            14 -> 8
-            15 -> 8
-            else -> 0
-        }
-    }
-
-    fun nCorredizas(divisiones: Int): Int {
-        return when (divisiones) {
-            1 -> 0
-            2 -> 1
-            3 -> 1
-            4 -> 2
-            5 -> 2
-            6 -> 2
-            7 -> 3
-            8 -> 4
-            9 -> 4
-            10 -> 4
-            11 -> 5
-            12 -> 6
-            13 -> 6
-            14 -> 6
-            15 -> 7
-            else -> 0
-        }
-    }
-
+    fun altoHoja(alto: Float, hoja: Float): Float = NovaCalculos.altoHoja(alto, hoja)
+    fun nFijos(divisiones: Int): Int = NovaCalculos.nFijos(divisiones)
+    fun nCorredizas(divisiones: Int): Int = NovaCalculos.nCorredizas(divisiones)
     fun fijoUParante(divisiones: Int): Int {
         return when (divisiones) {
             1 -> 2
@@ -197,7 +117,6 @@ object NovaInaCalculos {
             else -> 0
         }
     }
-
     fun divisiones(ancho: Float, divisManual: Int): Int {
         return if (divisManual == 0) {
             when {
@@ -227,41 +146,57 @@ object NovaInaCalculos {
     fun vidrioFijo(ancho: Float, alto: Float, us: Float, divisiones: Int, cruce: Float): String {
         val holgura = if (us == 0f) 1f else 0.2f
         val uFijosVal = uFijos(ancho, divisiones, cruce)
-        val uFijos = df1(uFijosVal).toFloat()
-        val uFijos4 = df1(uFijosVal - 0.4f).toFloat()
-        val uFijos2 = df1(uFijosVal - 0.2f).toFloat()
         val altDes = df1(alto - (us + holgura)).toFloat()
-        val nFijosVal = nFijos(divisiones)
+        val orden = NovaCalculos.ordenDivisConParantes(divisiones, ancho)
+        val tramos = orden
+            .split(";P;")
+            .map { tramo -> tramo.filter { it == 'f' || it == 'c' } }
+            .filter { it.isNotEmpty() }
 
-        return when {
-            divisiones < 5 -> {
-                "${df1(uFijos4)} x ${df1(altDes)} = $nFijosVal"
-            }
-            divisiones == 6 || divisiones == 8 -> {
-                "${df1(uFijos4)} x ${df1(altDes)} = 2\n" +
-                        "${df1(uFijos2)} x ${df1(altDes)} = 2"
-            }
-            divisiones == 10 -> {
-                "${df1(uFijos4)} x ${df1(altDes)} = 2\n" +
-                        "${df1(uFijos2)} x ${df1(altDes)} = 2\n" +
-                        "${df1(uFijos)} x ${df1(altDes)} = 2"
-            }
-            divisiones == 12 -> {
-                "${df1(uFijos4)} x ${df1(altDes)} = 2\n" +
-                        "${df1(uFijos2)} x ${df1(altDes)} = 4"
-            }
-            divisiones == 14 -> {
-                "${df1(uFijos4)} x ${df1(altDes)} = 2\n" +
-                        "${df1(uFijos2)} x ${df1(altDes)} = 4\n" +
-                        "${df1(uFijos)} x ${df1(altDes)} = 2"
-            }
-            else -> {
-                "${df1(uFijos4)} x ${df1(altDes)} = 2\n" +
-                        "${df1(uFijos)} x ${df1(altDes)}= ${nFijosVal - 2}"
+        if (tramos.isEmpty()) {
+            val nFijosVal = nFijos(divisiones)
+            return "${df1(uFijosVal - 0.4f)} x ${df1(altDes)} = $nFijosVal"
+        }
+
+        data class FijoTramo(val tramo: Int, val pos: Int, var descuento: Float)
+        val fijos = mutableListOf<FijoTramo>()
+
+        tramos.forEachIndexed { idxTramo, sec ->
+            val posFijos = sec.mapIndexedNotNull { idx, ch -> if (ch == 'f') idx else null }
+            if (posFijos.isEmpty()) return@forEachIndexed
+
+            // Regla franja/tramo 5: uno queda en uFijo y los otros descuentan 0.4.
+            if (sec.length == 5) {
+                val fijoCentral = posFijos[posFijos.size / 2]
+                posFijos.forEach { pos ->
+                    val descuento = if (pos == fijoCentral) 0f else 0.4f
+                    fijos.add(FijoTramo(idxTramo, pos, descuento))
+                }
+            } else {
+                posFijos.forEach { pos -> fijos.add(FijoTramo(idxTramo, pos, 0.4f)) }
             }
         }
-    }
 
+        // Regla fPf: si dos fijos colindan separados por parante, ambos descuentan 0.2.
+        for (i in 0 until tramos.lastIndex) {
+            val izq = tramos[i]
+            val der = tramos[i + 1]
+            if (izq.lastOrNull() == 'f' && der.firstOrNull() == 'f') {
+                val fijoIzq = fijos.lastOrNull { it.tramo == i && it.pos == (izq.length - 1) }
+                val fijoDer = fijos.firstOrNull { it.tramo == (i + 1) && it.pos == 0 }
+                if (fijoIzq != null) fijoIzq.descuento = 0.2f
+                if (fijoDer != null) fijoDer.descuento = 0.2f
+            }
+        }
+
+        val lineas = linkedMapOf<String, Int>()
+        for (f in fijos) {
+            val medida = (uFijosVal - f.descuento).coerceAtLeast(0f)
+            val key = "${df1(medida)} x ${df1(altDes)}"
+            lineas[key] = (lineas[key] ?: 0) + 1
+        }
+        return lineas.entries.joinToString("\n") { "${it.key} = ${it.value}" }
+    }
     fun vidrioCorre(ancho: Float, altoHoja: Float, divisiones: Int, cruce: Float): String {
         val hacheVal = hache(ancho, divisiones, cruce)
         val anchoVidrio = df1(hacheVal - 1.4f).toFloat()
@@ -269,40 +204,81 @@ object NovaInaCalculos {
         val nCorredizasVal = nCorredizas(divisiones)
         return "${df1(anchoVidrio)} x ${df1(altoVidrio)} = $nCorredizasVal"
     }
-
-    fun vidrioMocheta(ancho: Float, alto: Float, hoja: Float, altoHoja: Float, divisiones: Int, cruce: Float): String {
+    fun vidrioMocheta(
+        ancho: Float,
+        alto: Float,
+        hoja: Float,
+        altoHoja: Float,
+        divisiones: Int,
+        cruce: Float,
+        modelo: String = "nn",
+        alturaPuente: Float = 2.5f
+    ): String {
         val nFijosVal = nFijos(divisiones)
         val nCorredizasVal = nCorredizas(divisiones)
         val uFijosVal = uFijos(ancho, divisiones, cruce)
 
-        val mas1 = df1((alto - altoHoja) + 1).toFloat()
+        val alturasMochetas = alturasMochetasPorModelo(modelo, alto, altoHoja, alturaPuente).lista()
+        if (alturasMochetas.isEmpty()) return ""
+
         val axnfxuf = df1(((ancho - (nFijosVal * uFijosVal))) - 0.6f).toFloat()
         val axnfxuf2 = df1(((ancho - (nFijosVal * uFijosVal)) / 2) - 0.6f).toFloat()
         val axnfxuf3 = df1(((ancho - (nFijosVal * uFijosVal)) / 3) - 0.6f).toFloat()
         val axnfxufn = df1(((ancho - (nFijosVal * uFijosVal)) / nCorredizasVal) - 0.6f).toFloat()
 
-        return when {
-            divisiones <= 1 || alto <= hoja -> ""
-            divisiones == 4 -> "${df1(mas1)} x ${df1(axnfxuf)} = 1"
-            divisiones == 8 -> "${df1(mas1)} x ${df1(axnfxuf2)} = 2"
-            divisiones == 12 -> "${df1(mas1)} x ${df1(axnfxuf3)} = 3"
-            divisiones == 14 -> {
-                "${df1(mas1)} x ${df1(axnfxuf2)} = 1\n" +
-                        "${df1(mas1)} x ${df1(axnfxuf)} = 4"
+        if (divisiones > 1 && alto > hoja && divisiones % 2 != 0) {
+            val orden = NovaCalculos.ordenDivisConParantes(divisiones, ancho)
+            val tramos = orden
+                .split(";P;")
+                .map { tramo -> tramo.filter { it == 'f' || it == 'c' } }
+                .filter { it.isNotEmpty() }
+            if (tramos.isEmpty()) return ""
+
+            val anchoPorDivision = ancho / divisiones
+            val lineas = linkedMapOf<String, Int>()
+            for (tramo in tramos) {
+                val divTramo = tramo.length
+                val fijosTramo = tramo.count { it == 'f' }
+                val baseTramo = (anchoPorDivision * divTramo) - (fijosTramo * uFijosVal)
+                val cantidadBase = if (divTramo == 5) 2 else 1
+                val medida = if (divTramo == 5) {
+                    (baseTramo / 2f) - 0.5f
+                } else {
+                    baseTramo - 0.5f
+                }
+                val medidaAncho = medida.coerceAtLeast(0f)
+                for (alturaMocheta in alturasMochetas) {
+                    val altoVidrioMocheta = (alturaMocheta + 1f).coerceAtLeast(0f)
+                    val key = "${df1(altoVidrioMocheta)} x ${df1(medidaAncho)}"
+                    lineas[key] = (lineas[key] ?: 0) + cantidadBase
+                }
             }
-            else -> "${df1(mas1)} x ${df1(axnfxufn)} = $nCorredizasVal"
+            return lineas.entries.joinToString("\n") { "${it.key} = ${it.value}" }
         }
+
+        if (divisiones <= 1 || alto <= hoja) return ""
+
+        val cantidadesPorAncho = when (divisiones) {
+            4 -> listOf(axnfxuf to 1)
+            8 -> listOf(axnfxuf2 to 2)
+            12 -> listOf(axnfxuf3 to 3)
+            14 -> listOf(axnfxuf2 to 1, axnfxuf to 4)
+            else -> listOf(axnfxufn to nCorredizasVal)
+        }
+
+        val lineas = linkedMapOf<String, Int>()
+        for (alturaMocheta in alturasMochetas) {
+            val altoVidrioMocheta = (alturaMocheta + 1f).coerceAtLeast(0f)
+            for ((anchoMocheta, cantidadBase) in cantidadesPorAncho) {
+                val key = "${df1(altoVidrioMocheta)} x ${df1(anchoMocheta)}"
+                lineas[key] = (lineas[key] ?: 0) + cantidadBase
+            }
+        }
+        return lineas.entries.joinToString("\n") { "${it.key} = ${it.value}" }
     }
 
     // ==================== FUNCIONES DE TEXTO U ====================
-    fun calcularTextoU(
-        ancho: Float,
-        alto: Float,
-        hoja: Float,
-        us: Float,
-        divisiones: Int,
-        cruceExacto: Float
-    ): String {
+    fun calcularTextoU(ancho: Float, alto: Float, hoja: Float, us: Float, divisiones: Int, cruceExacto: Float): String {
         val cruce = cruce(cruceExacto, divisiones)
         val altoHojaVal = altoHoja(alto, hoja)
 
@@ -312,11 +288,13 @@ object NovaInaCalculos {
         val uSuperiorVal = df1(uSuperior(ancho)).toFloat()
         val nFijosVal = nFijos(divisiones)
         val fijoUParanteVal = fijoUParante(divisiones)
+        val textoUFijos = NovaCalculos.textoUFijosColindantes(ancho, divisiones, uFijosVal)
+            .ifBlank { "${df1(uFijosVal)} = $nFijosVal" }
 
         return if (alto > altoHojaVal && us != 0F) {
             when {
                 divisiones == 2 -> {
-                    "${df1(uFijosVal)} = $nFijosVal\n" +
+                    "$textoUFijos\n" +
                             "${df1(uParanteVal)} = $fijoUParanteVal\n" +
                             "${df1(uParante2Val)} = 1\n" +
                             "${df1(uSuperiorVal)} = 1"
@@ -326,7 +304,7 @@ object NovaInaCalculos {
                             "${df1(uParanteVal)} = 2"
                 }
                 else -> {
-                    "${df1(uFijosVal)} = $nFijosVal\n" +
+                    "$textoUFijos\n" +
                             "${df1(uParanteVal)} = $fijoUParanteVal\n" +
                             "${df1(uSuperiorVal)} = 1"
                 }
@@ -334,19 +312,19 @@ object NovaInaCalculos {
         } else if (alto > altoHojaVal && us == 0F) {
             when {
                 divisiones == 2 -> {
-                    "${df1(uFijosVal)} = $nFijosVal\n" +
+                    "$textoUFijos\n" +
                             "${df1(uSuperiorVal)} = 1"
                 }
                 divisiones == 1 -> "${df1(uFijosVal)} = 2"
                 else -> {
-                    "${df1(uFijosVal)} = $nFijosVal\n" +
+                    "$textoUFijos\n" +
                             "${df1(uSuperiorVal)} = 1"
                 }
             }
         } else if (alto <= altoHojaVal && us != 0F) {
             when {
                 divisiones == 2 -> {
-                    "${df1(uFijosVal)} = $nFijosVal\n" +
+                    "$textoUFijos\n" +
                             "${df1(uParanteVal)} = $fijoUParanteVal\n" +
                             "${df1(uParante2Val)} = 1"
                 }
@@ -355,31 +333,26 @@ object NovaInaCalculos {
                             "${df1(uParanteVal)} = 2"
                 }
                 else -> {
-                    "${df1(uFijosVal)} = $nFijosVal\n" +
+                    "$textoUFijos\n" +
                             "${df1(uParanteVal)} = $fijoUParanteVal"
                 }
             }
         } else {
             when {
-                divisiones == 2 -> "${df1(uFijosVal)} = $nFijosVal"
+                divisiones == 2 -> textoUFijos
                 divisiones == 1 -> "${df1(uFijosVal)} = 2"
-                else -> "${df1(uFijosVal)} = $nFijosVal"
+                else -> textoUFijos
             }
         }
     }
 
     // ==================== FUNCIÓN COMPLETA DE OTROS ALUMINIOS ====================
-    fun calcularOtrosAluminios(
-        ancho: Float,
-        alto: Float,
-        hoja: Float,
-        divisiones: Int,
-        cruceExacto: Float
+    fun calcularOtrosAluminios(ancho: Float, alto: Float, hoja: Float, divisiones: Int, cruceExacto: Float
     ): OtrosAluminiosResult {
         val cruce = cruce(cruceExacto, divisiones)
         val altoHojaVal = altoHoja(alto, hoja)
         val nCorredizasVal = nCorredizas(divisiones)
-        val nPuentesVal = nPuentes(divisiones)
+        val nPuentesVal = nPuentes(divisiones, ancho)
         val uFijosVal = uFijos(ancho, divisiones, cruce)
         val hacheVal = hache(ancho, divisiones, cruce)
         val portafelpaVal = portafelpa(altoHojaVal)
@@ -412,14 +385,25 @@ object NovaInaCalculos {
         hoja: Float,
         us: Float,
         divisiones: Int,
-        cruceExacto: Float
+        cruceExacto: Float,
+        modelo: String = "nn",
+        alturaPuente: Float = 2.5f
     ): String {
         val cruce = cruce(cruceExacto, divisiones)
         val altoHojaVal = altoHoja(alto, hoja)
 
         val vidriosFijos = vidrioFijo(ancho, alto, us, divisiones, cruce)
         val vidriosCorre = vidrioCorre(ancho, altoHojaVal, divisiones, cruce)
-        val vidriosMocheta = vidrioMocheta(ancho, alto, hoja, altoHojaVal, divisiones, cruce)
+        val vidriosMocheta = vidrioMocheta(
+            ancho = ancho,
+            alto = alto,
+            hoja = hoja,
+            altoHoja = altoHojaVal,
+            divisiones = divisiones,
+            cruce = cruce,
+            modelo = modelo,
+            alturaPuente = alturaPuente
+        )
 
         return if (divisiones > 1) {
             if (alto > hoja && vidriosMocheta.isNotEmpty()) {
