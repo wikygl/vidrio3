@@ -24,7 +24,9 @@ object DibujoPuerta {
         tipoDivision: String = "H",
         anguloGrados: Float = 0f,
         marcoCm: Float = 2.2f,
-        bastidorCm: Float = 8.25f
+        bastidorCm: Float = 8.25f,
+        marcoCmIzq: Float = marcoCm,
+        marcoCmDer: Float = marcoCm
     ): Bitmap {
         val factorEscala = minOf(anchoContenedor / anchoPuertaCm, altoContenedor / altoPuertaCm)
         val anchoPuertaPx = anchoPuertaCm * factorEscala
@@ -32,6 +34,8 @@ object DibujoPuerta {
         val anchoHojaPx = anchoHojaCm * factorEscala
         val altoHojaPx = altoHojaCm * factorEscala
         val marcoPx = marcoCm * factorEscala
+        val marcoIzqPx = marcoCmIzq * factorEscala
+        val marcoDerPx = marcoCmDer * factorEscala
 
         val bmp = Bitmap.createBitmap(anchoContenedor.toInt(), altoContenedor.toInt(), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
@@ -47,42 +51,42 @@ object DibujoPuerta {
         val pinturaLinea = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; strokeWidth = 3f; style = Paint.Style.STROKE }
 
         // Marco externo (laterales + superior)
-        dibujarMarcoExterno(canvas, anchoPuertaPx, altoPuertaPx, marcoPx, pinturaMarco, pinturaLinea)
+        dibujarMarcoExterno(canvas, anchoPuertaPx, altoPuertaPx, marcoIzqPx, marcoDerPx, marcoPx, pinturaMarco, pinturaLinea)
 
-        // Posición de hoja (a 1 cm del piso)
+        // Posición de hoja (a 0.5 cm del marco izquierdo)
         val offsetHojaBottomPx = 1f * factorEscala
         val bottomHoja = altoPuertaPx - offsetHojaBottomPx
         val topHoja = bottomHoja - altoHojaPx
-        val leftHoja = (anchoPuertaPx - anchoHojaPx) / 2f
+        val leftHoja = marcoIzqPx + 0.5f * factorEscala
         val rectHoja = RectF(leftHoja, topHoja, leftHoja + anchoHojaPx, bottomHoja)
 
         val paflonPx = bastidorCm * factorEscala
         dibujarHojaCompleta(canvas, rectHoja, numeroZocalos, numeroDivisiones, paflonPx, pinturaMarco, pinturaPaflon, pinturaInterior, pinturaLinea, tipoDivision, anguloGrados)
 
         // Mocheta por encima de la hoja (0.5 cm gap + 2.5 cm altura)
-        dibujarMocheta(canvas, anchoPuertaPx, marcoPx, topHoja, factorEscala, pinturaMarco, pinturaInterior, pinturaLinea)
+        dibujarMocheta(canvas, anchoPuertaPx, marcoIzqPx, marcoDerPx, marcoPx, topHoja, factorEscala, pinturaMarco, pinturaInterior, pinturaLinea)
 
         canvas.restore()
         return bmp
     }
 
-    private fun dibujarMarcoExterno(canvas: Canvas, anchoPuertaPx: Float, altoPuertaPx: Float, marcoPx: Float, pMarco: Paint, pLinea: Paint) {
-        val izq = RectF(0f, 0f, marcoPx, altoPuertaPx)
-        val der = RectF(anchoPuertaPx - marcoPx, 0f, anchoPuertaPx, altoPuertaPx)
-        val sup = RectF(marcoPx, 0f, anchoPuertaPx - marcoPx, marcoPx)
+    private fun dibujarMarcoExterno(canvas: Canvas, anchoPuertaPx: Float, altoPuertaPx: Float, marcoIzqPx: Float, marcoDerPx: Float, marcoSupPx: Float, pMarco: Paint, pLinea: Paint) {
+        val izq = RectF(0f, 0f, marcoIzqPx, altoPuertaPx)
+        val der = RectF(anchoPuertaPx - marcoDerPx, 0f, anchoPuertaPx, altoPuertaPx)
+        val sup = RectF(marcoIzqPx, 0f, anchoPuertaPx - marcoDerPx, marcoSupPx)
         canvas.drawRect(izq, pMarco); canvas.drawRect(izq, pLinea)
         canvas.drawRect(der, pMarco); canvas.drawRect(der, pLinea)
         canvas.drawRect(sup, pMarco); canvas.drawRect(sup, pLinea)
     }
 
-    private fun dibujarMocheta(canvas: Canvas, anchoPuertaPx: Float, marcoPx: Float, topHoja: Float, factorEscala: Float, pMarco: Paint, pInterior: Paint, pLinea: Paint) {
+    private fun dibujarMocheta(canvas: Canvas, anchoPuertaPx: Float, marcoIzqPx: Float, marcoDerPx: Float, marcoSupPx: Float, topHoja: Float, factorEscala: Float, pMarco: Paint, pInterior: Paint, pLinea: Paint) {
         val gapBelowFramePx = 0.5f * factorEscala
         val horizontalFrameHeightPx = 2.5f * factorEscala
         val yFrameBottom = topHoja - gapBelowFramePx
         val yFrameTop = yFrameBottom - horizontalFrameHeightPx
-        val rectBlanco = RectF(marcoPx, marcoPx, anchoPuertaPx - marcoPx, yFrameTop)
+        val rectBlanco = RectF(marcoIzqPx, marcoSupPx, anchoPuertaPx - marcoDerPx, yFrameTop)
         canvas.drawRect(rectBlanco, pInterior); canvas.drawRect(rectBlanco, pLinea)
-        val rectMarco = RectF(marcoPx, yFrameTop, anchoPuertaPx - marcoPx, yFrameBottom)
+        val rectMarco = RectF(marcoIzqPx, yFrameTop, anchoPuertaPx - marcoDerPx, yFrameBottom)
         canvas.drawRect(rectMarco, pMarco); canvas.drawRect(rectMarco, pLinea)
     }
 
@@ -162,13 +166,11 @@ object DibujoPuerta {
                 val cx = rect.centerX(); val cy = rect.centerY()
                 canvas.translate(cx, cy); canvas.rotate(anguloGrados); canvas.translate(-cx, -cy)
                 val thickness = paflonPx
-                val totalH = h
-                val gap = (totalH - (barras * thickness)) / (barras + 1)
+                val gap = (h - barras * thickness) / (barras + 1)
+                val diag = kotlin.math.sqrt(w * w + h * h)
                 var y = top + gap
                 repeat(barras) {
-                    val leftBar = paflonPx - w
-                    val rightBar = right + w
-                    val r = RectF(leftBar, y, rightBar, y + thickness)
+                    val r = RectF(paflonPx - diag, y, right + diag, y + thickness)
                     canvas.drawRect(r, pPaflon); canvas.drawRect(r, pLinea)
                     y += thickness + gap
                 }
@@ -185,6 +187,165 @@ object DibujoPuerta {
                         y += paflonPx + gapY
                     }
                 }
+            }
+        }
+    }
+
+    fun generarBitmapTaly(
+        context: Context,
+        anchoPuertaCm: Float,
+        altoPuertaCm: Float,
+        anchoHojaCm: Float,
+        altoHojaCm: Float,
+        anchoContenedor: Float,
+        altoContenedor: Float,
+        numeroDivisiones: Int = 1,
+        anguloGrados: Float = 0f,
+        marcoCm: Float = 2.2f,
+        bastidorCm: Float = 8.25f,
+        maxVacioCm: Float = 20f,
+        marcoCmIzq: Float = marcoCm,
+        marcoCmDer: Float = marcoCm
+    ): Bitmap {
+        val factorEscala = minOf(anchoContenedor / anchoPuertaCm, altoContenedor / altoPuertaCm)
+        val anchoPuertaPx = anchoPuertaCm * factorEscala
+        val altoPuertaPx = altoPuertaCm * factorEscala
+        val anchoHojaPx = anchoHojaCm * factorEscala
+        val altoHojaPx = altoHojaCm * factorEscala
+        val marcoPx = marcoCm * factorEscala
+        val marcoIzqPx = marcoCmIzq * factorEscala
+        val marcoDerPx = marcoCmDer * factorEscala
+        val paflonPx = bastidorCm * factorEscala
+        val maxVacioPx = maxVacioCm * factorEscala
+
+        val bmp = Bitmap.createBitmap(anchoContenedor.toInt(), altoContenedor.toInt(), Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        canvas.drawColor(Color.RED)
+
+        val offsetX = (anchoContenedor - anchoPuertaPx) / 2f
+        val offsetY = (altoContenedor - altoPuertaPx) / 2f
+        canvas.save(); canvas.translate(offsetX, offsetY)
+
+        val pinturaMarco    = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.GRAY; style = Paint.Style.FILL }
+        val pinturaPaflon   = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ContextCompat.getColor(context, R.color.aluminio); style = Paint.Style.FILL }
+        val pinturaInterior = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.FILL }
+        val pinturaLinea    = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; strokeWidth = 3f; style = Paint.Style.STROKE }
+
+        dibujarMarcoExterno(canvas, anchoPuertaPx, altoPuertaPx, marcoIzqPx, marcoDerPx, marcoPx, pinturaMarco, pinturaLinea)
+
+        val offsetHojaBottomPx = 1f * factorEscala
+        val bottomHoja = altoPuertaPx - offsetHojaBottomPx
+        val topHoja = bottomHoja - altoHojaPx
+        val leftHoja = marcoIzqPx + 0.5f * factorEscala
+
+        dibujarMocheta(canvas, anchoPuertaPx, marcoIzqPx, marcoDerPx, marcoPx, topHoja, factorEscala, pinturaMarco, pinturaInterior, pinturaLinea)
+
+        canvas.save()
+        canvas.translate(leftHoja, topHoja)
+        dibujarHojaTaly(canvas, anchoHojaPx, altoHojaPx, paflonPx, maxVacioPx, numeroDivisiones, anguloGrados, pinturaMarco, pinturaPaflon, pinturaInterior, pinturaLinea)
+        canvas.restore()
+
+        canvas.restore()
+        return bmp
+    }
+
+    private fun dibujarHojaTaly(
+        canvas: Canvas,
+        ancho: Float,
+        alto: Float,
+        paflonPx: Float,
+        maxVacioPx: Float,
+        nDiv: Int,
+        anguloGrados: Float,
+        pMarco: Paint,
+        pPaflon: Paint,
+        pInterior: Paint,
+        pLinea: Paint
+    ) {
+        val topY = paflonPx
+        val botY = alto - paflonPx
+
+        // Fondo gris
+        canvas.drawRect(RectF(0f, 0f, ancho, alto), pMarco)
+        // Interior blanco
+        canvas.drawRect(RectF(paflonPx, topY, ancho - paflonPx, botY), pInterior)
+
+        // Bastidor: 4 lados
+        val bastidor = listOf(
+            RectF(0f, 0f, paflonPx, alto),
+            RectF(ancho - paflonPx, 0f, ancho, alto),
+            RectF(paflonPx, 0f, ancho - paflonPx, paflonPx),
+            RectF(paflonPx, botY, ancho - paflonPx, alto)
+        )
+        for (r in bastidor) { canvas.drawRect(r, pPaflon) }
+
+        // Paflones verticales interiores por pares desde los bordes hasta vacío ≤ maxVacioPx
+        var leftX = paflonPx
+        var rightX = ancho - paflonPx
+        while (rightX - leftX > maxVacioPx && rightX - leftX >= paflonPx * 2f) {
+            canvas.drawRect(RectF(leftX, topY, leftX + paflonPx, botY), pPaflon)
+            canvas.drawRect(RectF(rightX - paflonPx, topY, rightX, botY), pPaflon)
+            leftX += paflonPx
+            rightX -= paflonPx
+        }
+
+        // topInner y botInner: horizontales fijos (no se rotan)
+        val topInner = RectF(leftX, topY, rightX, topY + paflonPx)
+        val botInner = RectF(leftX, botY - paflonPx, rightX, botY)
+        canvas.drawRect(topInner, pPaflon)
+        canvas.drawRect(botInner, pPaflon)
+
+        // Divisores interiores en la zona central — estrategia Mari d:
+        // gap = (zoneH - barras * paflonPx) / (barras + 1) → espacios iguales arriba/medio/abajo
+        val zoneTop = topY + paflonPx
+        val zoneBot = botY - paflonPx
+        val zoneH = zoneBot - zoneTop
+        val divisiones = maxOf(1, nDiv)
+        val barras = divisiones - 1
+
+        if (barras > 0 && zoneH > 0f) {
+            val gap = (zoneH - barras * paflonPx) / (barras + 1)
+            val zoneW = rightX - leftX
+            val diag = kotlin.math.sqrt(zoneW * zoneW + zoneH * zoneH)
+            val cx = (leftX + rightX) / 2f
+            val cy = (zoneTop + zoneBot) / 2f
+            val zoneRect = RectF(leftX, zoneTop, rightX, zoneBot)
+
+            canvas.save()
+            canvas.clipRect(zoneRect)
+            canvas.translate(cx, cy); canvas.rotate(anguloGrados); canvas.translate(-cx, -cy)
+            var y = zoneTop + gap
+            repeat(barras) {
+                val bar = RectF(leftX - diag, y, rightX + diag, y + paflonPx)
+                canvas.drawRect(bar, pPaflon)
+                canvas.drawRect(bar, pLinea)
+                y += paflonPx + gap
+            }
+            canvas.restore()
+        }
+
+        // ── Contornos ──
+        canvas.drawRect(RectF(0f, 0f, ancho, alto), pLinea)
+        for (r in bastidor) { canvas.drawRect(r, pLinea) }
+
+        // Contornos paflones verticales interiores
+        var lx = paflonPx; var rx = ancho - paflonPx
+        while (rx - lx > maxVacioPx && rx - lx >= paflonPx * 2f) {
+            canvas.drawRect(RectF(lx, topY, lx + paflonPx, botY), pLinea)
+            canvas.drawRect(RectF(rx - paflonPx, topY, rx, botY), pLinea)
+            lx += paflonPx; rx -= paflonPx
+        }
+
+        canvas.drawRect(topInner, pLinea)
+        canvas.drawRect(botInner, pLinea)
+
+        // Contornos secciones de vidrio (sin rotación, Taly h)
+        if (anguloGrados == 0f && barras > 0 && zoneH > 0f) {
+            val gap = (zoneH - barras * paflonPx) / (barras + 1)
+            var sy = zoneTop + gap + paflonPx
+            repeat(barras - 1) {
+                canvas.drawRect(RectF(leftX, sy, rightX, sy + gap), pLinea)
+                sy += gap + paflonPx
             }
         }
     }

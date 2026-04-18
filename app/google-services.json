@@ -59,6 +59,43 @@
           }
         },
         {
+          "client_id": "529436008604-kc92h1qec3u0atfbo2vgvr1of4am0vvr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "crystal.crystal",
+            "certificate_hash": "80ca8ee7b3463b71c1af61134f402fa156528a5a"
+          }
+        },
+        {
+          "client_id": "529436008604-hajctsrpuh5skhj3vaab1jg0sj1ift6h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBe_HvZcfanHn4LvKky87FUQ0hlojtVXmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "529436008604-6lrq8gi817mihij95q9hbj0ih35i7rpk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:529436008604:android:9b1a13cac412858c0b4d59",
+        "android_client_info": {
+          "package_name": "crystal.crystalpost"
+        }
+      },
+      "oauth_client": [
+        {
           "client_id": "529436008604-hajctsrpuh5skhj3vaab1jg0sj1ift6h.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -87,6 +124,43 @@
         }
       },
       "oauth_client": [
+        {
+          "client_id": "529436008604-hajctsrpuh5skhj3vaab1jg0sj1ift6h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBe_HvZcfanHn4LvKky87FUQ0hlojtVXmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "529436008604-6lrq8gi817mihij95q9hbj0ih35i7rpk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:529436008604:android:b10963272a4aac200b4d59",
+        "android_client_info": {
+          "package_name": "gon.puntos"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "529436008604-1f8tqofellet6r524jquq0e801obqmrb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "gon.puntos",
+            "certificate_hash": "c39755a44dd7664bb54b70fced66d493826b3d63"
+          }
+        },
         {
           "client_id": "529436008604-hajctsrpuh5skhj3vaab1jg0sj1ift6h.apps.googleusercontent.com",
           "client_type": 3

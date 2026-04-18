@@ -150,20 +150,50 @@
 
                         <ImageView
                             android:id="@+id/ivModelo"
-                            android:layout_width="match_parent"
+                            android:layout_width="0dp"
                             android:layout_height="match_parent"
                             android:layout_margin="3.6dp"
                             android:clickable="true"
                             android:focusable="true"
                             android:visibility="visible"
                             app:layout_constraintBottom_toBottomOf="parent"
-                            app:layout_constraintEnd_toStartOf="parent"
-                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintEnd_toStartOf="@+id/btModeloNext"
+                            app:layout_constraintStart_toEndOf="@+id/btModeloPrev"
                             app:layout_constraintTop_toTopOf="parent"
-                            app:layout_constraintVertical_bias="0.0"
                             app:srcCompat="@drawable/ic_pp1"
                             tools:ignore="ContentDescription,SpeakableTextPresentCheck" />
 
+                        <TextView
+                            android:id="@+id/btModeloPrev"
+                            android:layout_width="28dp"
+                            android:layout_height="match_parent"
+                            android:background="@drawable/botoncircular"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:text="‹"
+                            android:textSize="22sp"
+                            android:textStyle="bold"
+                            app:layout_constraintBottom_toBottomOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent"
+                            tools:ignore="ContentDescription,SpeakableTextPresentCheck,SmallSp" />
+
+                        <TextView
+                            android:id="@+id/btModeloNext"
+                            android:layout_width="28dp"
+                            android:layout_height="match_parent"
+                            android:background="@drawable/botoncircular"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:text="›"
+                            android:textSize="22sp"
+                            android:textStyle="bold"
+                            app:layout_constraintBottom_toBottomOf="parent"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintTop_toTopOf="parent"
+                            tools:ignore="ContentDescription,SpeakableTextPresentCheck,SmallSp" />
 
                     </androidx.constraintlayout.widget.ConstraintLayout>
                 </LinearLayout>
@@ -873,6 +903,91 @@
                     </LinearLayout>
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
+            </LinearLayout>
+
+            <!-- Panel derecho: selector de tipo de ventana (vplano/venl/venc/vcurvo/vserie) -->
+            <LinearLayout
+                android:id="@+id/lyPanelModelos"
+                android:layout_width="80dp"
+                android:layout_height="match_parent"
+                android:layout_marginTop="9dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/corner"
+                android:orientation="vertical"
+                android:visibility="gone"
+                tools:ignore="NestedWeights">
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="4dp">
+
+                        <LinearLayout android:id="@+id/itemVplano"
+                            android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="vertical" android:gravity="center" android:padding="4dp"
+                            android:clickable="true" android:focusable="true" android:background="@drawable/cornerv">
+                            <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                                android:importantForAccessibility="no" app:srcCompat="@drawable/vplano" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="Plano" android:textSize="9sp" android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                        <LinearLayout android:id="@+id/itemVenl"
+                            android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="vertical" android:gravity="center" android:padding="4dp"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true" android:focusable="true" android:background="@drawable/cornerv">
+                            <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                                android:importantForAccessibility="no" app:srcCompat="@drawable/venl" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="En L" android:textSize="9sp" android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                        <LinearLayout android:id="@+id/itemVenc"
+                            android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="vertical" android:gravity="center" android:padding="4dp"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true" android:focusable="true" android:background="@drawable/cornerv">
+                            <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                                android:importantForAccessibility="no" app:srcCompat="@drawable/venc" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="En C" android:textSize="9sp" android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                        <LinearLayout android:id="@+id/itemVcurvo"
+                            android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="vertical" android:gravity="center" android:padding="4dp"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true" android:focusable="true" android:background="@drawable/cornerv">
+                            <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                                android:importantForAccessibility="no" app:srcCompat="@drawable/vcurvo" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="Curvo" android:textSize="9sp" android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                        <LinearLayout android:id="@+id/itemVserie"
+                            android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="vertical" android:gravity="center" android:padding="4dp"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true" android:focusable="true" android:background="@drawable/cornerv">
+                            <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                                android:importantForAccessibility="no" app:srcCompat="@drawable/vserie" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="Serie" android:textSize="9sp" android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+                </ScrollView>
             </LinearLayout>
 
         </LinearLayout>
