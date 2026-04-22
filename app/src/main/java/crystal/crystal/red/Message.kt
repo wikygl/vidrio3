@@ -1,3 +1,5 @@
+package crystal.crystal.red
+
 import com.google.firebase.firestore.Exclude
 import java.util.Date
 

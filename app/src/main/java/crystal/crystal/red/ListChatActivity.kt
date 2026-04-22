@@ -11,15 +11,25 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.tabs.TabLayout
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import crystal.crystal.databinding.ActivityListChatBinding
-import java.util.Date
-import java.util.UUID
+import crystal.crystal.red.data.ChatDirectoryRepository
+import crystal.crystal.red.data.ChatConversationRepository
+import crystal.crystal.red.data.ChatListRepository
+import crystal.crystal.red.interop.ChatInteropIntents
+import crystal.crystal.red.interop.ChatPlatform
+import crystal.crystal.registro.UserProfileActivity
+import crystal.crystal.registro.UserProfileRepository
+import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 class ListChatActivity : AppCompatActivity() {
 
@@ -27,47 +37,139 @@ class ListChatActivity : AppCompatActivity() {
     private lateinit var currentUserId: String
     private val db = Firebase.firestore
     private val auth = FirebaseAuth.getInstance()
+    private val chatDirectoryRepository = ChatDirectoryRepository(db)
+    private val chatListRepository = ChatListRepository(db)
+    private val chatConversationRepository = ChatConversationRepository(db, chatListRepository)
+    private lateinit var profileRepository: UserProfileRepository
+    private var chatsListener: ListenerRegistration? = null
+    private var screenInitialized = false
+    private var profileFlowOpened = false
+    private val chatCachePrefs by lazy { getSharedPreferences("chat_list_cache", MODE_PRIVATE) }
 
     private var presupuestoParaEnviar: String? = null
     private var nombrePresupuesto: String? = null
+    private var archivoCompartidoParaEnviar: String? = null
+    private var nombreArchivoCompartido: String? = null
+    private var mimeArchivoCompartido: String? = null
 
     // Listas
     private var chatsActivos = mutableListOf<Chat>()
     private var todosLosContactos = mutableListOf<ContactoTelefono>()
-    private var contactosConCrystal = mutableSetOf<String>() // Set de emails
-
     private val CONTACTS_PERMISSION_CODE = 100
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityListChatBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        profileRepository = UserProfileRepository(this)
 
-        presupuestoParaEnviar = intent.getStringExtra("enviar_presupuesto")
-        nombrePresupuesto = intent.getStringExtra("nombre_presupuesto")
+        presupuestoParaEnviar = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_BUDGET_URI)
+        nombrePresupuesto = intent.getStringExtra(ChatInteropIntents.EXTRA_BUDGET_NAME)
+        archivoCompartidoParaEnviar = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_URI)
+        nombreArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME)
+        mimeArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME)
 
         if (presupuestoParaEnviar != null) {
             Toast.makeText(this, "Selecciona un chat para enviar: $nombrePresupuesto", Toast.LENGTH_LONG).show()
             supportActionBar?.subtitle = "Enviando: $nombrePresupuesto"
+        } else if (archivoCompartidoParaEnviar != null) {
+            Toast.makeText(this, "Selecciona un chat para enviar: $nombreArchivoCompartido", Toast.LENGTH_LONG).show()
+            supportActionBar?.subtitle = "Enviando archivo: $nombreArchivoCompartido"
         }
 
-        currentUserId = intent.getStringExtra("usuario")
-            ?: auth.currentUser?.uid
-                    ?: ""
+        currentUserId = ChatIdentity.resolveChatIdentityUid(
+            context = this,
+            auth = auth,
+            preferredUid = intent.getStringExtra("usuario")
+        )
 
         if (currentUserId.isEmpty()) {
             Toast.makeText(this, "Error: No se pudo identificar usuario", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
+        verificarPerfilYContinuar()
+    }
 
+    override fun onResume() {
+        super.onResume()
+        if (!screenInitialized && profileFlowOpened) {
+            verificarPerfilYContinuar()
+        } else if (screenInitialized) {
+            cargarChats()
+        }
+    }
+
+    private fun verificarPerfilYContinuar() {
+        lifecycleScope.launch {
+            val hasProfile = try {
+                profileRepository.hasCompleteProfile()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@ListChatActivity,
+                    "Error verificando perfil: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+                false
+            }
+
+            if (!hasProfile) {
+                if (profileFlowOpened) {
+                    Toast.makeText(
+                        this@ListChatActivity,
+                        "Debes completar tu perfil antes de usar el chat",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    finish()
+                } else {
+                    profileFlowOpened = true
+                    Toast.makeText(
+                        this@ListChatActivity,
+                        "Completa tu perfil para poder ser encontrado en el chat",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    startActivity(Intent(this@ListChatActivity, UserProfileActivity::class.java))
+                }
+                return@launch
+            }
+
+            if (!screenInitialized) {
+                iniciarPantallaChat()
+            }
+        }
+    }
+
+    private fun iniciarPantallaChat() {
+        screenInitialized = true
         setupTabs()
         setupRecycler()
-        cargarChats()
-
-        binding.btnEnviar.setOnClickListener { buscarPorEmail() }
-
+        mostrarChatsCacheados()
+        configurarAccionesBarra()
+        configurarMigracionManual()
+        ejecutarMigracionAutomatica()
+        binding.btnEnviar.setOnClickListener { buscarUsuario() }
         verificarPermisoContactos()
+    }
+
+    private fun configurarAccionesBarra() {
+        binding.imageView3.setOnClickListener {
+            binding.tabLayout.getTabAt(2)?.select()
+            mostrarBusqueda()
+            binding.etNuevoMsm.requestFocus()
+            Toast.makeText(this, "Busca por nombre o email para crear un chat", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.imageView5.setOnClickListener {
+            cargarChats()
+            if (binding.tabLayout.selectedTabPosition == 1) {
+                cargarContactosDelTelefono()
+            }
+            Toast.makeText(this, "Lista actualizada", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.imageView6.setOnClickListener {
+            startActivity(Intent(this, UserProfileActivity::class.java))
+        }
     }
 
     private fun setupTabs() {
@@ -95,59 +197,138 @@ class ListChatActivity : AppCompatActivity() {
         }
     }
 
+    private fun configurarMigracionManual() {
+        binding.linearLayout4.setOnLongClickListener {
+            mostrarDialogoMigracionManual()
+            true
+        }
+    }
+
+    private fun ejecutarMigracionAutomatica() {
+        lifecycleScope.launch {
+            try {
+                val aliases = ChatIdentity.resolveChatIdentityAliases(this@ListChatActivity, auth, currentUserId)
+                ChatMigrationManager.migrateChatsForUser(
+                    db = db,
+                    stableUid = currentUserId,
+                    knownAliases = aliases
+                )
+            } catch (e: Exception) {
+                Log.e("ListChat", "Error migrando chats: ${e.message}", e)
+            } finally {
+                cargarChats()
+            }
+        }
+    }
+
     private fun cargarChats() {
-        db.collection("chats")
-            .whereArrayContains("users", currentUserId)
-            .orderBy("lastMsgDate", Query.Direction.DESCENDING)
-            .addSnapshotListener { snap, err ->
-                if (err != null) {
-                    Log.e("ListChat", "Error: ${err.message}")
-                    return@addSnapshotListener
+        val aliases = ChatIdentity.resolveChatIdentityAliases(this, auth, currentUserId)
+        val firestoreActorUid = ChatIdentity.resolveFirestoreChatActorUid(this, auth, currentUserId)
+        if (aliases.isEmpty()) {
+            chatsActivos.clear()
+            (binding.rvChatList.adapter as ChatAdapter).setData(emptyList())
+            return
+        }
+
+        chatsListener?.remove()
+        chatsListener = chatListRepository.observeChats(
+            queryUserId = firestoreActorUid,
+            currentUserId = currentUserId,
+            aliases = aliases,
+            onResult = { chats ->
+                runOnUiThread {
+                    chatsActivos = mergeChatRows(chatsActivos, chats).toMutableList()
+                    guardarChatsEnCache(chatsActivos)
+                    (binding.rvChatList.adapter as ChatAdapter).setData(chatsActivos)
                 }
-
-                if (snap == null || snap.isEmpty) {
-                    chatsActivos.clear()
-                    (binding.rvChatList.adapter as ChatAdapter).setData(emptyList())
-                    return@addSnapshotListener
+            },
+            onError = { e ->
+                runOnUiThread {
+                    Log.e("ListChat", "Error: ${e.message}", e)
                 }
+            }
+        )
+    }
 
-                chatsActivos = snap.toObjects(Chat::class.java).toMutableList()
+    private fun mergeChatRows(current: List<Chat>, incoming: List<Chat>): List<Chat> {
+        if (current.isEmpty()) return incoming
 
-                chatsActivos.forEach { chat ->
-                    val otherUid = chat.users.firstOrNull { it != currentUserId } ?: currentUserId
+        val currentById = current.associateBy { it.id }
+        return incoming.map { fresh ->
+            val cached = currentById[fresh.id] ?: return@map fresh
+            val shouldKeepCachedIdentity = cached.name.isNotBlank() && fresh.photoUrl.isBlank()
+            val shouldKeepCachedUnread = fresh.unreadCount == 0 &&
+                cached.unreadCount > 0 &&
+                fresh.photoUrl.isBlank()
+            Chat(
+                id = fresh.id,
+                name = if (shouldKeepCachedIdentity) cached.name else fresh.name.ifBlank { cached.name },
+                users = if (fresh.users.isNotEmpty()) fresh.users else cached.users,
+                peerPlatform = fresh.peerPlatform.ifBlank { cached.peerPlatform },
+                participantsKey = fresh.participantsKey.ifBlank { cached.participantsKey },
+                photoUrl = fresh.photoUrl.ifBlank { cached.photoUrl },
+                lastMsgDate = fresh.lastMsgDate ?: cached.lastMsgDate,
+                unreadCount = if (shouldKeepCachedUnread) cached.unreadCount else fresh.unreadCount,
+                lastMessageText = fresh.lastMessageText.ifBlank { cached.lastMessageText }
+            )
+        }
+    }
 
-                    if (otherUid == currentUserId) {
-                        chat.name = "Mensajes guardados"
-                    }
-
-                    db.collection("chats")
-                        .document(chat.id)
-                        .collection("messages")
-                        .whereEqualTo("leido", false)
-                        .whereNotEqualTo("from", currentUserId)
-                        .get()
-                        .addOnSuccessListener { msgsSnap ->
-                            chat.unreadCount = msgsSnap.size()
-                        }
-
-                    db.collection("chats")
-                        .document(chat.id)
-                        .collection("messages")
-                        .orderBy("dob", Query.Direction.DESCENDING)
-                        .limit(1)
-                        .get()
-                        .addOnSuccessListener { lastSnap ->
-                            chat.lastMessageText = if (!lastSnap.isEmpty) {
-                                lastSnap.documents[0].getString("message") ?: ""
-                            } else {
-                                ""
+    private fun mostrarChatsCacheados() {
+        val raw = chatCachePrefs.getString(cacheKey(), null) ?: return
+        try {
+            val json = JSONArray(raw)
+            val cached = mutableListOf<Chat>()
+            for (i in 0 until json.length()) {
+                val item = json.optJSONObject(i) ?: continue
+                cached += Chat(
+                    id = item.optString("id"),
+                    name = item.optString("name"),
+                    users = item.optJSONArray("users")?.let { arr ->
+                        buildList {
+                            for (index in 0 until arr.length()) {
+                                add(arr.optString(index))
                             }
                         }
-                }
-
+                    } ?: emptyList(),
+                    peerPlatform = item.optString("peerPlatform", ChatPlatform.CRYSTAL.wireValue),
+                    participantsKey = item.optString("participantsKey"),
+                    photoUrl = item.optString("photoUrl"),
+                    unreadCount = item.optInt("unreadCount", 0),
+                    lastMessageText = item.optString("lastMessageText")
+                )
+            }
+            if (cached.isNotEmpty()) {
+                chatsActivos = cached.toMutableList()
                 (binding.rvChatList.adapter as ChatAdapter).setData(chatsActivos)
             }
+        } catch (e: Exception) {
+            Log.e("ListChat", "Error leyendo cache de chats", e)
+        }
     }
+
+    private fun guardarChatsEnCache(chats: List<Chat>) {
+        try {
+            val json = JSONArray()
+            chats.forEach { chat ->
+                json.put(JSONObject().apply {
+                    put("id", chat.id)
+                    put("name", chat.name)
+                    put("peerPlatform", chat.peerPlatform)
+                    put("participantsKey", chat.participantsKey)
+                    put("photoUrl", chat.photoUrl)
+                    put("unreadCount", chat.unreadCount)
+                    put("lastMessageText", chat.lastMessageText)
+                    put("users", JSONArray(chat.users))
+                })
+            }
+            chatCachePrefs.edit().putString(cacheKey(), json.toString()).apply()
+        } catch (e: Exception) {
+            Log.e("ListChat", "Error guardando cache de chats", e)
+        }
+    }
+
+    private fun cacheKey(): String = "user_$currentUserId"
 
     private fun verificarPermisoContactos() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
@@ -218,47 +399,28 @@ class ListChatActivity : AppCompatActivity() {
         Log.d("ListChat", "Contactos del teléfono: ${todosLosContactos.size}")
 
         // Ahora buscar cuáles tienen Crystal
-        buscarContactosEnFirebase()
-    }
-
-    private fun buscarContactosEnFirebase() {
-        if (todosLosContactos.isEmpty()) return
-
-        val emails = todosLosContactos.map { it.email }
-        contactosConCrystal.clear()
-
-        // Buscar en batches de 10
-        for (i in emails.indices step 10) {
-            val batch = emails.subList(i, minOf(i + 10, emails.size))
-
-            db.collection("usuarios")
-                .whereIn("email", batch)
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    snapshot.documents.forEach { doc ->
-                        val email = doc.getString("email")?.lowercase()?.trim()
-                        if (email != null) {
-                            contactosConCrystal.add(email)
-                        }
-                    }
-
-                    // Actualizar lista
-                    todosLosContactos.forEach { contacto ->
-                        contacto.tieneCrystal = contactosConCrystal.contains(contacto.email)
-                    }
-
-                    Log.d("ListChat", "Contactos con Crystal: ${contactosConCrystal.size}")
+        lifecycleScope.launch {
+            try {
+                todosLosContactos = chatDirectoryRepository.enrichPhoneContacts(todosLosContactos).toMutableList()
+                Log.d("ListChat", "Contactos enriquecidos: ${todosLosContactos.size}")
+                if (binding.tabLayout.selectedTabPosition == 1) {
+                    mostrarContactos()
                 }
+            } catch (e: Exception) {
+                Log.e("ListChat", "Error enriqueciendo contactos: ${e.message}", e)
+            }
         }
     }
 
     private fun mostrarChats() {
+        binding.linearLayout3.visibility = android.view.View.GONE
         binding.etNuevoMsm.visibility = android.view.View.GONE
         binding.btnEnviar.visibility = android.view.View.GONE
         (binding.rvChatList.adapter as ChatAdapter).setData(chatsActivos)
     }
 
     private fun mostrarContactos() {
+        binding.linearLayout3.visibility = android.view.View.GONE
         binding.etNuevoMsm.visibility = android.view.View.GONE
         binding.btnEnviar.visibility = android.view.View.GONE
 
@@ -270,6 +432,7 @@ class ListChatActivity : AppCompatActivity() {
                 id = if (contacto.tieneCrystal) "" else "invitar",
                 name = contacto.nombre,
                 users = listOf(currentUserId),
+                peerPlatform = contacto.platform,
                 lastMsgDate = null,
                 unreadCount = 0,
                 lastMessageText = if (contacto.tieneCrystal) {
@@ -284,68 +447,80 @@ class ListChatActivity : AppCompatActivity() {
     }
 
     private fun mostrarBusqueda() {
+        binding.linearLayout3.visibility = android.view.View.VISIBLE
         binding.etNuevoMsm.visibility = android.view.View.VISIBLE
         binding.btnEnviar.visibility = android.view.View.VISIBLE
-        binding.etNuevoMsm.hint = "Buscar por email"
+        binding.etNuevoMsm.hint = "Buscar por nombre o email"
     }
 
-    private fun buscarPorEmail() {
-        val email = binding.etNuevoMsm.text.toString().trim().lowercase()
-        if (email.isEmpty()) {
-            Toast.makeText(this, "Ingresa un email", Toast.LENGTH_SHORT).show()
+    private fun buscarUsuario() {
+        val termino = binding.etNuevoMsm.text.toString().trim()
+        if (termino.isEmpty()) {
+            Toast.makeText(this, "Ingresa un nombre o email", Toast.LENGTH_SHORT).show()
             return
         }
 
-        if (!email.contains("@")) {
+        if (!termino.contains("@")) {
+            buscarPorNombre(termino)
+            return
+        }
+
+        val email = termino.lowercase()
+
+        if (!termino.contains("@")) {
             Toast.makeText(this, "Email inválido", Toast.LENGTH_SHORT).show()
             return
         }
 
-        db.collection("usuarios")
-            .whereEqualTo("email", email)
-            .limit(1)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                if (snapshot.isEmpty) {
-                    Toast.makeText(this, "Usuario no encontrado", Toast.LENGTH_SHORT).show()
-                } else {
-                    val otherUid = snapshot.documents[0].id
-                    if (otherUid == currentUserId) {
-                        Toast.makeText(this, "No puedes chatear contigo mismo", Toast.LENGTH_SHORT).show()
-                        return@addOnSuccessListener
-                    }
-                    buscarOCrearChat(otherUid)
-                }
+        lifecycleScope.launch {
+            val user = chatDirectoryRepository.findByEmail(email)
+            if (user == null) {
+                Toast.makeText(this@ListChatActivity, "Usuario no encontrado", Toast.LENGTH_SHORT).show()
+            } else if (user.uid == currentUserId) {
+                Toast.makeText(this@ListChatActivity, "No puedes chatear contigo mismo", Toast.LENGTH_SHORT).show()
+            } else {
+                buscarOCrearChat(user.uid)
             }
+        }
+    }
+
+    private fun buscarPorNombre(termino: String) {
+        lifecycleScope.launch {
+            val usuarioEncontrado = chatDirectoryRepository.searchByNameOrEmail(
+                term = ChatIdentity.normalizeSearchText(termino),
+                excludeUid = currentUserId
+            )
+
+            if (usuarioEncontrado == null) {
+                Toast.makeText(this@ListChatActivity, "Usuario no encontrado", Toast.LENGTH_SHORT).show()
+            } else {
+                buscarOCrearChat(usuarioEncontrado.uid)
+            }
+        }
     }
 
     private fun buscarOCrearChat(otherUid: String) {
-        db.collection("chats")
-            .whereArrayContains("users", currentUserId)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                val chatExistente = snapshot.documents.firstOrNull { doc ->
-                    val users = doc.get("users") as? List<String> ?: emptyList()
-                    users.contains(otherUid)
+        val aliases = ChatIdentity.resolveChatIdentityAliases(this, auth, currentUserId)
+        val firestoreActorUid = ChatIdentity.resolveFirestoreChatActorUid(this, auth, currentUserId)
+        lifecycleScope.launch {
+            try {
+                val otherUser = chatDirectoryRepository.getUser(otherUid)
+                if (otherUser == null) {
+                    Toast.makeText(this@ListChatActivity, "Usuario no encontrado", Toast.LENGTH_SHORT).show()
+                    return@launch
                 }
 
-                if (chatExistente != null) {
-                    val chat = chatExistente.toObject(Chat::class.java)!!
-                    abrirChatActivity(chat.id)
-                } else {
-                    crearYAbrirChat(otherUid)
-                }
+                val chatId = chatConversationRepository.getOrCreateDirectChat(
+                    queryUserId = firestoreActorUid,
+                    currentUserId = currentUserId,
+                    aliases = aliases,
+                    otherUser = otherUser
+                )
+                abrirChatActivity(chatId)
+            } catch (e: Exception) {
+                Toast.makeText(this@ListChatActivity, "Error buscando chat: ${e.message}", Toast.LENGTH_SHORT).show()
             }
-    }
-
-    private fun crearYAbrirChat(otherUid: String) {
-        db.collection("usuarios")
-            .document(otherUid)
-            .get()
-            .addOnSuccessListener { doc ->
-                val nombre = doc.getString("nombre") ?: doc.getString("email") ?: otherUid
-                crearYAbrirChatNuevo(otherUid, nombre)
-            }
+        }
     }
 
     private fun abrirChat(chat: Chat) {
@@ -368,16 +543,11 @@ class ListChatActivity : AppCompatActivity() {
     }
 
     private fun buscarUsuarioPorEmailYAbrirChat(email: String) {
-        db.collection("usuarios")
-            .whereEqualTo("email", email)
-            .limit(1)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                if (!snapshot.isEmpty) {
-                    val otherUid = snapshot.documents[0].id
-                    buscarOCrearChat(otherUid)
-                }
+        lifecycleScope.launch {
+            chatDirectoryRepository.findByEmail(email)?.let { user ->
+                buscarOCrearChat(user.uid)
             }
+        }
     }
 
     private fun invitarContacto(email: String) {
@@ -397,38 +567,77 @@ class ListChatActivity : AppCompatActivity() {
         }
     }
 
-    private fun crearYAbrirChatNuevo(otherUid: String, nombre: String) {
-        val chatId = UUID.randomUUID().toString()
-        val nuevoChat = Chat(
-            id = chatId,
-            name = nombre,
-            users = listOf(currentUserId, otherUid),
-            lastMsgDate = Date(),
-            unreadCount = 0,
-            lastMessageText = ""
-        )
-
-        db.collection("chats")
-            .document(chatId)
-            .set(nuevoChat)
-            .addOnSuccessListener {
-                abrirChatActivity(chatId)
-            }
-    }
-
     private fun abrirChatActivity(chatId: String) {
         val intent = Intent(this, ChatActivity::class.java).apply {
             putExtra("chatId", chatId)
             putExtra("usuario", currentUserId)
-            presupuestoParaEnviar?.let { putExtra("enviar_presupuesto", it) }
-            nombrePresupuesto?.let { putExtra("nombre_presupuesto", it) }
+            presupuestoParaEnviar?.let { putExtra(ChatInteropIntents.EXTRA_SEND_BUDGET_URI, it) }
+            nombrePresupuesto?.let { putExtra(ChatInteropIntents.EXTRA_BUDGET_NAME, it) }
+            archivoCompartidoParaEnviar?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_URI, it) }
+            nombreArchivoCompartido?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME, it) }
+            mimeArchivoCompartido?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME, it) }
         }
         startActivity(intent)
+    }
+
+    private fun mostrarDialogoMigracionManual() {
+        val input = android.widget.EditText(this).apply {
+            hint = "UIDs antiguos separados por coma"
+        }
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Migrar chats antiguos")
+            .setMessage("Pega aquí los UIDs antiguos que quieres fusionar con esta cuenta.")
+            .setView(input)
+            .setPositiveButton("Migrar") { _, _ ->
+                val legacyUids = input.text.toString()
+                    .split(",")
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+
+                if (legacyUids.isEmpty()) {
+                    Toast.makeText(this, "No ingresaste ningún UID", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                lifecycleScope.launch {
+                    try {
+                        val aliases = ChatIdentity.resolveChatIdentityAliases(this@ListChatActivity, auth, currentUserId)
+                        val result = ChatMigrationManager.migrateChatsForUser(
+                            db = db,
+                            stableUid = currentUserId,
+                            knownAliases = aliases,
+                            explicitLegacyUids = legacyUids
+                        )
+                        Toast.makeText(
+                            this@ListChatActivity,
+                            "Chats actualizados: ${result.updatedChats}, mensajes: ${result.updatedMessages}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            this@ListChatActivity,
+                            "Error migrando: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } finally {
+                        cargarChats()
+                    }
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    override fun onDestroy() {
+        chatsListener?.remove()
+        super.onDestroy()
     }
 }
 
 data class ContactoTelefono(
     val nombre: String,
     val email: String,
-    var tieneCrystal: Boolean
+    var tieneCrystal: Boolean,
+    var platform: String = ChatPlatform.CRYSTAL.wireValue
 )

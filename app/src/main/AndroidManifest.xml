@@ -1,13 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="3"
-    android:versionName="3.0">
-
-    <uses-sdk
-        android:minSdkVersion="21"
-        android:targetSdkVersion="32"
-        tools:ignore="ExpiredTargetSdkVersion,GradleOverrides,OldTargetApi" />
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -61,6 +54,9 @@
             android:name=".registro.TerminalLoginActivity"
             android:exported="false" />
         <activity
+            android:name=".registro.UserProfileActivity"
+            android:exported="false" />
+        <activity
             android:name=".registro.GestionDispositivosActivity"
             android:exported="false" />
         <activity
@@ -106,7 +102,7 @@
         <activity
             android:name=".Diseno.vitroven.VitroActivity"
             android:exported="false"
-            android:label="Diseño Vitro" />
+            android:label="Diseo Vitro" />
         <activity
             android:name=".red.VisorArchivoActivity"
             android:exported="false" />
@@ -224,6 +220,18 @@
             android:launchMode="singleTop"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity,AppLinkUrlError">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="application/json" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 

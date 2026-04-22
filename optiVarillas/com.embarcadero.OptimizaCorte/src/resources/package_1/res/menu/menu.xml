@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:OptimizaCorte="http://schemas.android.com/apk/res-auto">
+  <item android:id="@id/menu_import"
+        android:title="@string/menu_import" />
+  <item android:id="@id/menu_abrir"
+        android:title="@string/menu_abrir" />
+  <item android:id="@id/menu_guardar"
+        android:title="@string/menu_guardar_title" />
+  <item android:id="@id/menu_retales"
+        android:title="@string/btn_retales" />
+  <item android:icon="@drawable/icon_share"
+        android:id="@id/menu_share"
+        android:title="@string/menu_share"
+        OptimizaCorte:showAsAction="ifRoom" />
+  <item android:id="@id/menu_slow"
+        android:title="@string/menu_slow"
+        android:checkable="true" />
+  <item android:id="@id/menu_reset"
+        android:title="@string/menu_reset" />
+  <item android:icon="@drawable/baseline_print_white_48dp"
+        android:id="@id/menu_export"
+        android:title="Export PDF"
+        OptimizaCorte:showAsAction="ifRoom" />
+  <item android:id="@id/menu_privacy"
+        android:title="@string/menu_privacy" />
+  <item android:id="@id/menu_privacy_url"
+        android:title="@string/menu_privacy_policy" />
+  <item android:id="@id/menu_manage_subs"
+        android:title="@string/menu_manage_subs" />
+  <item android:id="@id/menu_report"
+        android:title="@string/report_a_problem" />
+</menu>

@@ -17,6 +17,7 @@ import crystal.crystal.Listado
 import crystal.crystal.PresupuestoCompleto
 import crystal.crystal.databinding.ActivityMainBinding
 import crystal.crystal.red.ListChatActivity
+import crystal.crystal.red.interop.ChatInteropIntents
 import java.io.File
 import java.io.FileOutputStream
 import java.io.ObjectOutputStream
@@ -258,8 +259,8 @@ class PresupuestoManager(
 
             val intent = Intent(activity, ListChatActivity::class.java)
             intent.putExtra("usuario", obtenerCurrentUserId?.invoke() ?: "")
-            intent.putExtra("enviar_presupuesto", uri.toString())
-            intent.putExtra("nombre_presupuesto", fileName)
+            intent.putExtra(ChatInteropIntents.EXTRA_SEND_BUDGET_URI, uri.toString())
+            intent.putExtra(ChatInteropIntents.EXTRA_BUDGET_NAME, fileName)
             activity.startActivity(intent)
 
         } catch (e: Exception) {

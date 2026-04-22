@@ -144,9 +144,22 @@
                                 android:id="@+id/tvBadge"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:layout_marginTop="-1dp"
+                                android:layout_marginEnd="1dp"
+                                android:background="@drawable/bg_main_chat_badge"
+                                android:gravity="center"
+                                android:minWidth="18dp"
+                                android:minHeight="18dp"
+                                android:paddingStart="4dp"
+                                android:paddingTop="0dp"
+                                android:paddingEnd="4dp"
+                                android:paddingBottom="0dp"
                                 android:text="@string/_0"
-                                app:layout_constraintBottom_toBottomOf="parent"
-                                app:layout_constraintEnd_toEndOf="parent" />
+                                android:textColor="@color/blanco"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                app:layout_constraintEnd_toEndOf="@id/btnChat"
+                                app:layout_constraintTop_toTopOf="@id/btnChat" />
                         </androidx.constraintlayout.widget.ConstraintLayout>
 
                     </LinearLayout>

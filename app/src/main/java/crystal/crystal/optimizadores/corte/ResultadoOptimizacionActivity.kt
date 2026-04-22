@@ -62,7 +62,11 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
             Log.d("ResultadoOptimizacionDebug", "Varillas en resultado: ${resultado.varillasUsadas.size}")
 
             // Mostrar estadísticas en el header
-            tvBarrasUsadas.text = "Barras a cortar: ${resultado.totalBarrasUsadas}"
+            val nombreLista = intent.getStringExtra("nombre_lista").orEmpty()
+            tvBarrasUsadas.text = if (nombreLista.isNotBlank())
+                "Barras a cortar: ${resultado.totalBarrasUsadas} de $nombreLista"
+            else
+                "Barras a cortar: ${resultado.totalBarrasUsadas}"
             tvCantidadCortes.text = "Cantidad de cortes: ${resultado.totalCortes} (sin errores)"
 
             // NUEVO: Verificar si ya existe un adapter

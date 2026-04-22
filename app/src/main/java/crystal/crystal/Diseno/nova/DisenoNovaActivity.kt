@@ -13,6 +13,8 @@ import android.text.Spanned
 import android.text.style.StyleSpan
 import android.graphics.Typeface
 import android.view.View
+import android.graphics.Color
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -21,6 +23,7 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.databinding.ActivityDisenoNovaBinding
+import kotlin.math.abs
 import kotlin.math.max
 
 class DisenoNovaActivity : AppCompatActivity() {
@@ -31,6 +34,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         const val EXTRA_HEADLESS = "extra_headless"
         const val EXTRA_RET_PADDING_PX = "extra_ret_padding_px"
         const val EXTRA_OUTPUT_FORMAT = "extra_output_format" // "svg" | "png"
+        const val EXTRA_US_CM = "extra_us_cm"
         const val RESULT_URI = "resultado_uri_imagen"
         const val RESULT_PAQUETE = "resultado_paquete"
     }
@@ -41,6 +45,7 @@ class DisenoNovaActivity : AppCompatActivity() {
     private var anchoCm: Float = 150f
     private var altoCm: Float = 120f
     private var mochetaLateralCm: Float = 0f
+    private var usCm: Float = 1.5f
     private var corteVerticalCm: Float? = null
     private var paqueteOriginal: String = ""
     private var estructuraEditada: Boolean = false
@@ -49,6 +54,7 @@ class DisenoNovaActivity : AppCompatActivity() {
     private var indiceTramoActivo: Int = -1
     private var indiceModuloActivo: Int = -1
     private val anchoParanteCm = 2.5f
+    private val tramosBlockeados = mutableListOf<Boolean>()
 
     // ----------------- Binding -----------------
     private lateinit var binding: ActivityDisenoNovaBinding
@@ -64,13 +70,14 @@ class DisenoNovaActivity : AppCompatActivity() {
     )
 
     // =========================================================================================
-    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // ---- MODO HEADLESS (genera imagen y termina) ----
         val paqueteIntent = intent.getStringExtra(EXTRA_PAQUETE) ?: "{nova,ina,[150,120:s(f)]}"
         mochetaLateralCm = intent.getFloatExtra(EXTRA_MOCHETA_LATERAL_CM, 0f)
+        usCm = intent.getFloatExtra(EXTRA_US_CM, 1.5f)
         val paddingPx = intent.getIntExtra(EXTRA_RET_PADDING_PX, 0)
         val headless = intent.getBooleanExtra(EXTRA_HEADLESS, false)
         val formato = intent.getStringExtra(EXTRA_OUTPUT_FORMAT) ?: "png"
@@ -127,10 +134,15 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
         // Doble click en módulo para seleccionarlo
         binding.vistaDiseno.alDobleClicModulo = { franja, modulo ->
-            indiceFranjaActiva = franja
-            indiceModuloActivo = modulo
-            binding.vistaDiseno.resaltarModulo(franja, modulo)
-            actualizarInfoSeleccion()
+            if (indiceFranjaActiva == franja && indiceModuloActivo == modulo && indiceTramoActivo >= 0) {
+                // Mismo módulo pulsado de nuevo → editar ancho
+                dialogoEditarAnchoModulo()
+            } else {
+                indiceFranjaActiva = franja
+                indiceModuloActivo = modulo
+                binding.vistaDiseno.resaltarModulo(franja, modulo)
+                actualizarInfoSeleccion()
+            }
         }
 
         // Botones flotantes (columna)
@@ -348,7 +360,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun quitarFranja() {
         if (franjas.isNotEmpty()) {
             estructuraEditada = true
@@ -360,12 +372,143 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     private fun repetirModulo(fc: Char, cantidad: Int) {
         if (indiceFranjaActiva !in franjas.indices) return
-        estructuraEditada = true
         val fr = franjas[indiceFranjaActiva]
         val tipo = if (fc == 'c' || fc == 'C') TipoModulo.CORREDIZA else TipoModulo.FIJO
-        repeat(cantidad) { fr.modulos.add(tipo) }
+        var insertPos = finDelTramoActivo(fr)
+        repeat(cantidad) {
+            fr.modulos.add(insertPos, tipo)
+            for (i in fr.parantes.indices) { if (fr.parantes[i] >= insertPos) fr.parantes[i]++ }
+            insertPos++
+        }
         recalcularCorteVerticalProporcional()
+        aplicarModificacionModulosAlPaquete()
+    }
+
+    /**
+     * Parchea el bloque T<> del tramo activo con los módulos actuales de franjas[indiceFranjaActiva],
+     * preservando la estructura NS multi-tramo. Si no hay estructura NS, recae en aPaquete().
+     */
+    private fun aplicarModificacionModulosAlPaquete() {
+        val fr = franjas.getOrNull(indiceFranjaActiva) ?: run {
+            estructuraEditada = true; actualizarVista(); return
+        }
+        val bloques = parsearBloquesTramo()
+        if (bloques.isEmpty()) {
+            estructuraEditada = true; actualizarVista(); return
+        }
+        val tramoIdx = if (indiceTramoActivo in bloques.indices) indiceTramoActivo else 0
+        val bloque = bloques[tramoIdx]
+        val franjaPrefix = if (fr.esSistema) "s" else "m"
+
+        val franjaTokens = splitTopLevelSemicolon(bloque.contenido).toMutableList()
+        val franjaIdxInBloque = franjaTokens.indexOfFirst {
+            it.trim().startsWith(franjaPrefix, ignoreCase = true)
+        }
+        if (franjaIdxInBloque < 0) {
+            estructuraEditada = true; actualizarVista(); return
+        }
+
+        val franjaToken = franjaTokens[franjaIdxInBloque].trim()
+        val openP = franjaToken.indexOf('(')
+        if (openP < 0) { estructuraEditada = true; actualizarVista(); return }
+        val franjaHead = franjaToken.substring(0, openP)   // e.g. "s<100>" o "s"
+
+        // Reconstruir string de módulos a partir del estado actual de fr
+        val newModStr = if (bloques.size > 1) {
+            // Multi-T: solo los módulos del tramo activo (sin ;P;)
+            val parantes = fr.parantes.sorted()
+            val start = if (tramoIdx == 0) 0 else parantes.getOrElse(tramoIdx - 1) { 0 }
+            val end   = parantes.getOrElse(tramoIdx) { fr.modulos.size }
+            fr.modulos.subList(start.coerceIn(0, fr.modulos.size), end.coerceIn(0, fr.modulos.size))
+                .joinToString("") { if (it == TipoModulo.CORREDIZA) "c" else "f" }
+                .ifEmpty { "f" }
+        } else {
+            val parantesSet = fr.parantes.toSet()
+            buildString {
+                fr.modulos.forEachIndexed { idx, mod ->
+                    if (idx in parantesSet) append(";P;")
+                    append(if (mod == TipoModulo.CORREDIZA) "c" else "f")
+                }
+            }.ifEmpty { "f" }
+        }
+
+        franjaTokens[franjaIdxInBloque] = "${franjaHead}(${newModStr})"
+        val newContenido = franjaTokens.joinToString(";")
+        val newBloques = bloques.toMutableList()
+        newBloques[tramoIdx] = BloqueTramo(bloque.letra, bloque.ancho, newContenido)
+
+        // Redistribuir anchos proporcionalmente al conteo de módulos de cada tramo.
+        // Si ningún tramo está bloqueado se ajustan todos; si hay bloqueados solo
+        // se redistribuye entre los libres absorbiendo el cambio.
+        if (bloques.size > 1) {
+            val conteosMods = newBloques.map { bt ->
+                val tokens = splitTopLevelSemicolon(bt.contenido)
+                val sTok = tokens.firstOrNull { it.trim().startsWith("s", ignoreCase = true) }
+                val modStr = sTok?.let { extraerBloqueModulosFranja(it) } ?: ""
+                parsearModsSegmento(modStr).size.coerceAtLeast(1)
+            }
+            val nParantes = bloques.size - 1
+            val anchoUtil = (anchoCm - nParantes * anchoParanteCm).coerceAtLeast(1f)
+            val bloqueados = (0 until bloques.size).filter { tramosBlockeados.getOrElse(it) { false } }
+            if (bloqueados.isEmpty()) {
+                // Todos libres: ancho proporcional al nº de módulos
+                val totalMods = conteosMods.sum().coerceAtLeast(1)
+                val anchoPorMod = anchoUtil / totalMods
+                for (t in newBloques.indices) {
+                    newBloques[t] = newBloques[t].copy(ancho = (anchoPorMod * conteosMods[t]).coerceAtLeast(1f))
+                }
+            } else {
+                // Solo redistribuir entre los tramos libres
+                val anchoFijo = bloqueados.sumOf { newBloques[it].ancho.toDouble() }.toFloat()
+                val anchoLibre = (anchoUtil - anchoFijo).coerceAtLeast(0f)
+                val libres = (0 until bloques.size).filter { it !in bloqueados }
+                val totalModsLibres = libres.sumOf { conteosMods[it] }.coerceAtLeast(1)
+                val anchoPorMod = anchoLibre / totalModsLibres
+                for (t in libres) {
+                    newBloques[t] = newBloques[t].copy(ancho = (anchoPorMod * conteosMods[t]).coerceAtLeast(1f))
+                }
+            }
+        }
+
+        // Escalar anotaciones <w> de módulos en los tramos cuyo ancho cambió,
+        // para que las medidas sigan siendo coherentes con el nuevo ancho del tramo.
+        for (t in newBloques.indices) {
+            val oldAncho = bloques[t].ancho
+            val newAncho = newBloques[t].ancho
+            if (kotlin.math.abs(oldAncho - newAncho) > 0.05f && oldAncho > 0.001f) {
+                newBloques[t] = escalarAnchosModulosEnBloque(newBloques[t], newAncho / oldAncho)
+            }
+        }
+
+        cargarDesdePaquete(reconstruirPaqueteConBloques(newBloques))
         actualizarVista()
+    }
+
+    /**
+     * Escala todas las anotaciones <w> de los módulos de un bloque por [factor].
+     * Si ningún módulo tiene anotación, el bloque se devuelve sin cambios.
+     */
+    private fun escalarAnchosModulosEnBloque(bloque: BloqueTramo, factor: Float): BloqueTramo {
+        val tokens = splitTopLevelSemicolon(bloque.contenido).toMutableList()
+        var changed = false
+        tokens.forEachIndexed { idx, token ->
+            val trimmed = token.trim()
+            val openP = trimmed.indexOf('('); if (openP < 0) return@forEachIndexed
+            val franjaHead = trimmed.substring(0, openP)
+            val modStr = extraerBloqueModulosFranja(trimmed) ?: return@forEachIndexed
+            val mods = parsearModsSegmento(modStr)
+            if (mods.none { it.medida != null && it.medida > 0f }) return@forEachIndexed
+            val newModStr = buildString {
+                mods.forEach { mod ->
+                    append(if (mod.tipo == 'c') "c" else "f")
+                    val w = if (mod.medida != null && mod.medida > 0f) mod.medida * factor else 0f
+                    if (w > 0.05f) append("<${df1(w)}>")
+                }
+            }.ifEmpty { "f" }
+            tokens[idx] = "${franjaHead}(${newModStr})"
+            changed = true
+        }
+        return if (changed) bloque.copy(contenido = tokens.joinToString(";")) else bloque
     }
 
     private fun agregarModuloDirecto(tipo: TipoModulo) {
@@ -373,17 +516,23 @@ class DisenoNovaActivity : AppCompatActivity() {
             Toast.makeText(this, "Primero agrega/selecciona una franja.", Toast.LENGTH_SHORT).show()
             return
         }
-        estructuraEditada = true
         val fr = franjas[indiceFranjaActiva]
-        val insertIdx = if (indiceModuloActivo in fr.modulos.indices) indiceModuloActivo + 1
-                        else fr.modulos.size
+        val tramoStart = inicioDelTramoActivo(fr)
+        val tramoEnd   = finDelTramoActivo(fr)
+        val tramoSize  = (tramoEnd - tramoStart).coerceAtLeast(0)
+        // indiceModuloActivo es visual (relativo al tramo); convertir a absoluto
+        val insertIdx = if (indiceModuloActivo in 0 until tramoSize) {
+            tramoStart + indiceModuloActivo + 1
+        } else {
+            tramoEnd
+        }
         fr.modulos.add(insertIdx, tipo)
-        // ajustar parantes: los que estaban a partir del punto de inserción se corren uno a la derecha
         fr.parantes.replaceAll { p -> if (p >= insertIdx) p + 1 else p }
-        indiceModuloActivo = insertIdx
-        binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, insertIdx)
+        val visualIdx = insertIdx - tramoStart
+        indiceModuloActivo = visualIdx
+        binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, visualIdx)
         recalcularCorteVerticalProporcional()
-        actualizarVista()
+        aplicarModificacionModulosAlPaquete()
     }
 
     private fun quitarModulo() {
@@ -393,18 +542,23 @@ class DisenoNovaActivity : AppCompatActivity() {
             Toast.makeText(this, "Debe quedar al menos un módulo.", Toast.LENGTH_SHORT).show()
             return
         }
-        estructuraEditada = true
-        val idx = if (indiceModuloActivo in fr.modulos.indices) indiceModuloActivo
-                  else fr.modulos.lastIndex
+        val tramoStart = inicioDelTramoActivo(fr)
+        val tramoEnd   = finDelTramoActivo(fr)
+        val tramoSize  = (tramoEnd - tramoStart).coerceAtLeast(0)
+        if (tramoSize <= 0) return
+        // indiceModuloActivo es visual (relativo al tramo); convertir a absoluto
+        val idx = if (indiceModuloActivo in 0 until tramoSize) {
+            tramoStart + indiceModuloActivo
+        } else {
+            tramoEnd - 1
+        }
         fr.modulos.removeAt(idx)
-        // ajustar parantes: si estaban después del módulo eliminado, correr uno a la izquierda
         fr.parantes.replaceAll { p -> if (p > idx) p - 1 else p }
-        // eliminar parantes que quedaron sin módulos a un lado
         fr.parantes.removeAll { p -> p <= 0 || p >= fr.modulos.size }
         indiceModuloActivo = -1
         binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
         recalcularCorteVerticalProporcional()
-        actualizarVista()
+        aplicarModificacionModulosAlPaquete()
     }
 
     /**
@@ -424,12 +578,17 @@ class DisenoNovaActivity : AppCompatActivity() {
             corteVerticalCm = null
             return
         }
+        // Si el paquete ya define varios bloques T<> independientes, los tramos
+        // están en la estructura del paquete, no en corteVerticalCm.
+        // Poner corteVerticalCm=null evita el parante duplicado visual.
+        if (parsearBloquesTramo().size > 1) { corteVerticalCm = null; return }
+
         if (parantes.size > 1) {
             // Más de 2 tramos: VistaDiseno distribuye igualmente desde posición de parante
             corteVerticalCm = null
             return
         }
-        // Exactamente 1 parante → 2 tramos
+        // Exactamente 1 parante → 2 tramos en formato bloque único
         val n1 = parantes[0]                    // módulos en tramo 1
         val n2 = fr.modulos.size - parantes[0]  // módulos en tramo 2
         val total = n1 + n2
@@ -545,6 +704,104 @@ class DisenoNovaActivity : AppCompatActivity() {
                 }
                 estructuraEditada = true
                 recalcularCorteVerticalProporcional()
+                actualizarVista()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    // =========================== EDITAR ANCHO DE MÓDULO ===========================
+
+    /**
+     * Abre un diálogo para editar el ancho del módulo actualmente seleccionado.
+     * El módulo editado recibe el nuevo ancho; los demás módulos del mismo tramo
+     * se reparten el ancho restante de forma equitativa.
+     * Solo modifica el tramo activo (el parante no se mueve).
+     */
+    private fun dialogoEditarAnchoModulo() {
+        val fr = franjas.getOrNull(indiceFranjaActiva) ?: return
+        val bloques = parsearBloquesTramo()
+        if (bloques.isEmpty()) return
+        val tramoIdx = if (indiceTramoActivo in bloques.indices) indiceTramoActivo else 0
+        val bloque = bloques[tramoIdx]
+        val prefix = if (fr.esSistema) "s" else "m"
+
+        val franjaTokens = splitTopLevelSemicolon(bloque.contenido).toMutableList()
+        val franjaIdxInBloque = franjaTokens.indexOfFirst { it.trim().startsWith(prefix, ignoreCase = true) }
+        if (franjaIdxInBloque < 0) return
+        val franjaToken = franjaTokens[franjaIdxInBloque].trim()
+        val openP = franjaToken.indexOf('(')
+        if (openP < 0) return
+        val franjaHead = franjaToken.substring(0, openP)
+        val modStr = extraerBloqueModulosFranja(franjaToken) ?: return
+        val mods = parsearModsSegmento(modStr)
+        if (indiceModuloActivo !in mods.indices) return
+
+        val tramoAncho = bloque.ancho
+        val modActual = mods[indiceModuloActivo]
+        val anchoActual = modActual.medida ?: (tramoAncho / mods.size.coerceAtLeast(1))
+
+        // Altura del vidrio (informativo)
+        val infoTramos = extraerInfoTramos()
+        val info = infoTramos.getOrNull(tramoIdx)
+        val franjaAltura = when {
+            info != null && fr.esSistema  -> info.sistemaAltura
+            info != null && !fr.esSistema -> info.mochetaAltura
+            fr.alturaCm > 0f              -> fr.alturaCm
+            else                          -> altoCm
+        }
+        val altoVidrio = if (fr.esSistema) (franjaAltura - usCm - 0.2f).coerceAtLeast(0f)
+                         else franjaAltura
+
+        val cont = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 24, 32, 8)
+        }
+        val etAncho = EditText(this).apply {
+            hint = "Ancho del módulo (cm)"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(df1(anchoActual))
+        }
+        cont.addView(etAncho)
+        cont.addView(TextView(this).apply {
+            text = "Alto vidrio: ${df1(altoVidrio)} cm · Tramo: ${df1(tramoAncho)} cm"
+            textSize = 11f
+            setPadding(0, 8, 0, 0)
+        })
+
+        val nMod = indiceModuloActivo
+        AlertDialog.Builder(this)
+            .setTitle("Módulo ${nMod + 1}/${mods.size} · ${if (modActual.tipo == 'c') "Corrediza" else "Fijo"}")
+            .setView(cont)
+            .setPositiveButton("Aplicar") { _, _ ->
+                val nuevoAncho = etAncho.text.toString().aNumeroSeguro()
+                if (nuevoAncho <= 0f || nuevoAncho >= tramoAncho) {
+                    Toast.makeText(
+                        this,
+                        "El ancho debe ser mayor que 0 y menor que el tramo (${df1(tramoAncho)} cm).",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@setPositiveButton
+                }
+                // Módulo editado recibe nuevoAncho; el resto se reparte equitativamente
+                val nMods = mods.size
+                val anchoRestante = (tramoAncho - nuevoAncho).coerceAtLeast(0f)
+                val anchoOtros = if (nMods > 1) anchoRestante / (nMods - 1) else 0f
+
+                val newModStr = buildString {
+                    mods.forEachIndexed { idx, mod ->
+                        append(if (mod.tipo == 'c') "c" else "f")
+                        val w = if (idx == nMod) nuevoAncho else anchoOtros
+                        if (w > 0.05f) append("<${df1(w)}>")
+                    }
+                }.ifEmpty { "f" }
+
+                franjaTokens[franjaIdxInBloque] = "${franjaHead}(${newModStr})"
+                val newBloques = bloques.toMutableList()
+                newBloques[tramoIdx] = BloqueTramo(bloque.letra, bloque.ancho, franjaTokens.joinToString(";"))
+                indiceModuloActivo = -1
+                binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
+                cargarDesdePaquete(reconstruirPaqueteConBloques(newBloques))
                 actualizarVista()
             }
             .setNegativeButton("Cancelar", null)
@@ -891,50 +1148,142 @@ class DisenoNovaActivity : AppCompatActivity() {
         return conteos.map { anchoUtil * it / totalMods }
     }
 
+    // ---- Datos de tramo extraídos del paquete ----
+    private data class InfoTramo(val ancho: Float, val sistemaAltura: Float, val mochetaAltura: Float)
+
+    private fun extraerInfoTramos(): List<InfoTramo> {
+        val paquete = paqueteActualLectura()
+        val t = paquete.replace(" ", "")
+        val idxColon = t.indexOf(':')
+        val idxClose = t.lastIndexOf(']')
+        if (idxColon < 0 || idxClose <= idxColon) return emptyList()
+        val cuerpo = t.substring(idxColon + 1, idxClose)
+        val reT = Regex("""(?i)t[a-z]?<\s*(-?\d+(?:[.,]\d+)?)\s*>""")
+        val reSis = Regex("""(?i)s<\s*(-?\d+(?:[.,]\d+)?)\s*>""")
+        val reMoch = Regex("""(?i)m<\s*(-?\d+(?:[.,]\d+)?)\s*>""")
+        val result = mutableListOf<InfoTramo>()
+        var searchFrom = 0
+        while (searchFrom < cuerpo.length) {
+            val tMatch = reT.find(cuerpo, searchFrom) ?: break
+            val ancho = tMatch.groupValues[1].aNumeroSeguro()
+            val openParen = cuerpo.indexOf('(', tMatch.range.last + 1)
+            if (openParen < 0) break
+            var depth = 0; var closeParen = openParen
+            for (j in openParen until cuerpo.length) {
+                when (cuerpo[j]) {
+                    '(' -> depth++
+                    ')' -> { depth--; if (depth == 0) { closeParen = j; break } }
+                }
+            }
+            val contenido = cuerpo.substring(openParen + 1, closeParen)
+            val sistemaAltura = reSis.find(contenido)?.groupValues?.get(1)?.aNumeroSeguro() ?: 0f
+            val mochetaAltura = reMoch.find(contenido)?.groupValues?.get(1)?.aNumeroSeguro() ?: 0f
+            if (ancho > 0f) result.add(InfoTramo(ancho, sistemaAltura, mochetaAltura))
+            searchFrom = closeParen + 1
+        }
+        return result
+    }
+
+    private fun obtenerAnchoModuloDelPaquete(tramoIdx: Int, esSistema: Boolean, moduloIdx: Int): ConteoMod? {
+        val t = paqueteActualLectura().replace(" ", "")
+        val idxColon = t.indexOf(':')
+        val idxClose = t.lastIndexOf(']')
+        if (idxColon < 0 || idxClose <= idxColon) return null
+        val cuerpo = t.substring(idxColon + 1, idxClose)
+        val reT = Regex("""(?i)t[a-z]?<\s*-?\d+(?:[.,]\d+)?\s*>""")
+        var searchFrom = 0; var tramoCount = 0; var contenidoTramo: String? = null
+        while (searchFrom < cuerpo.length) {
+            val tMatch = reT.find(cuerpo, searchFrom) ?: break
+            val openParen = cuerpo.indexOf('(', tMatch.range.last + 1)
+            if (openParen < 0) break
+            var depth = 0; var closeParen = openParen
+            for (j in openParen until cuerpo.length) {
+                when (cuerpo[j]) {
+                    '(' -> depth++
+                    ')' -> { depth--; if (depth == 0) { closeParen = j; break } }
+                }
+            }
+            if (tramoCount == tramoIdx) { contenidoTramo = cuerpo.substring(openParen + 1, closeParen); break }
+            tramoCount++; searchFrom = closeParen + 1
+        }
+        val contenido = contenidoTramo ?: return null
+        val prefix = if (esSistema) "s" else "m"
+        val franjaToken = splitTopLevelSemicolon(contenido)
+            .firstOrNull { it.trimStart().startsWith(prefix, ignoreCase = true) } ?: return null
+        val bloque = extraerBloqueModulosFranja(franjaToken) ?: return null
+        return parsearModsSegmento(bloque).getOrNull(moduloIdx)
+    }
+
     private fun actualizarInfoSeleccion() {
-        if (indiceFranjaActiva !in franjas.indices) {
-            binding.tvInfoSeleccion.text = "Selecciona una franja en un tramo"
-            return
+        val tramoInfo = extraerInfoTramos()
+        val ssb = SpannableStringBuilder()
+
+        // Línea ventana (siempre, sin negrita)
+        ssb.append("ventana = ${df1(anchoCm)} × ${df1(altoCm)}")
+
+        // tramoSel: índice del tramo seleccionado (no depende de indiceFranjaActiva)
+        val tramoSel = if (indiceTramoActivo in tramoInfo.indices) indiceTramoActivo else -1
+
+        if (tramoInfo.isNotEmpty()) {
+            // Líneas de tramos — negrita el seleccionado
+            for (i in tramoInfo.indices) {
+                ssb.append("\n")
+                val start = ssb.length
+                ssb.append("tramo${i + 1} = ${df1(tramoInfo[i].ancho)} × ${df1(altoCm)}")
+                if (i == tramoSel) {
+                    ssb.setSpan(StyleSpan(Typeface.BOLD), start, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
         }
-        runCatching {
+
+        // Línea de franja — siempre que haya una franja seleccionada, sin importar si hay tramo
+        if (indiceFranjaActiva in franjas.indices) {
             val fr = franjas[indiceFranjaActiva]
-            val anchosTramo = if (estructuraEditada) {
-                anchosTramoDesdeModulos(fr)
-            } else {
-                obtenerAnchosTramo(paqueteActualLectura())
+            val esSis = fr.esSistema
+            val franjaLabel = if (esSis) "sistema" else "mocheta"
+            val franjaAncho = if (tramoSel >= 0) tramoInfo[tramoSel].ancho else anchoCm
+            val franjaAltura = when {
+                tramoSel >= 0 && esSis  -> tramoInfo[tramoSel].sistemaAltura
+                tramoSel >= 0 && !esSis -> tramoInfo[tramoSel].mochetaAltura
+                fr.alturaCm > 0f        -> fr.alturaCm
+                else                    -> altoCm
             }
-            val tramo = indiceTramoActivo.coerceAtLeast(0).coerceAtMost(anchosTramo.lastIndex)
-            val anchoTramo = anchosTramo.getOrNull(tramo) ?: anchoCm
-            val linea1 = "Tramo ${tramo + 1}  ·  Ancho ${df1(anchoTramo)} cm  ·  Alto ${df1(altoCm)} cm"
+            ssb.append("\n")
+            val franjaStart = ssb.length
+            ssb.append("$franjaLabel ${df1(franjaAncho)} × ${df1(franjaAltura)}")
+            ssb.setSpan(StyleSpan(Typeface.BOLD), franjaStart, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 
-            // resumen de módulos del tramo seleccionado
-            val parantes = fr.parantes.sorted()
-            val limites = listOf(0) + parantes + listOf(fr.modulos.size)
-            val inicioTramo = limites.getOrElse(tramo) { 0 }
-            val finTramo = limites.getOrElse(tramo + 1) { fr.modulos.size }
-            val modsTramo = fr.modulos.subList(inicioTramo, finTramo)
-            val nF = modsTramo.count { it == TipoModulo.FIJO }
-            val nC = modsTramo.count { it == TipoModulo.CORREDIZA }
-            val linea2 = buildString {
-                if (nF > 0) append("$nF fijo${if (nF > 1) "s" else ""}")
-                if (nF > 0 && nC > 0) append("  ·  ")
-                if (nC > 0) append("$nC corrediza${if (nC > 1) "s" else ""}")
+            // Línea de módulo — misma tarjeta, una línea más
+            if (indiceModuloActivo >= 0) {
+                runCatching {
+                    val tramoIdx = tramoSel.coerceAtLeast(0)
+                    val mod = obtenerAnchoModuloDelPaquete(tramoIdx, esSis, indiceModuloActivo)
+                    if (mod != null) {
+                        // Si no hay anotación <w> (tras add/remove), calcular desde tramoAncho / nMódulos
+                        val anchoMod = mod.medida ?: run {
+                            val prefix = if (esSis) "s" else "m"
+                            val blq = parsearBloquesTramo().getOrNull(tramoIdx)
+                            val ftok = blq?.let { splitTopLevelSemicolon(it.contenido)
+                                .firstOrNull { tk -> tk.trim().startsWith(prefix, ignoreCase = true) } }
+                            val n = ftok?.let { extraerBloqueModulosFranja(it) }
+                                ?.let { parsearModsSegmento(it).size }?.coerceAtLeast(1) ?: 1
+                            franjaAncho / n
+                        }
+                        val altoVidrio = if (esSis) {
+                            (franjaAltura - usCm - 0.2f).coerceAtLeast(0f)
+                        } else {
+                            franjaAltura
+                        }
+                        ssb.append("\n")
+                        val modStart = ssb.length
+                        ssb.append("vidrio ${df1(anchoMod)} × ${df1(altoVidrio)}")
+                        ssb.setSpan(StyleSpan(Typeface.BOLD), modStart, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                }
             }
-
-            val full = if (linea2.isBlank()) linea1 else "$linea1\n$linea2"
-            val ssb = SpannableStringBuilder(full)
-            if (linea2.isNotBlank()) {
-                ssb.setSpan(
-                    StyleSpan(Typeface.BOLD),
-                    linea1.length + 1,
-                    full.length,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-            }
-            binding.tvInfoSeleccion.text = ssb
-        }.onFailure {
-            binding.tvInfoSeleccion.text = "Selecciona una franja en un tramo"
         }
+
+        binding.tvInfoSeleccion.text = ssb
     }
 
     private fun splitTopLevelSemicolon(texto: String): List<String> {
@@ -999,17 +1348,18 @@ class DisenoNovaActivity : AppCompatActivity() {
      * excepto cuando hay una única franja: en ese caso, si altura==0,
      * se fuerza a ocupar el 100% escribiendo <altoCm>. */
     private fun aPaquete(): String {
+        val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
         if (franjas.isEmpty()) {
-            val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
-            return "{${clase},${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:s(f)]}"
+            return "{${clase},${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
         }
         val sb = StringBuilder()
         sb.append("{")
             .append(clase).append(",")
-            .append(if (tipo == TipoEnsamble.APA) "apa" else "ina")
+            .append(tipoTxt)
             .append(",[")
             .append(df1(anchoCm)).append(",")
             .append(df1(altoCm)).append(":")
+            .append("Tl<").append(df1(anchoCm)).append(">(")
         val n = franjas.size
 
         franjas.forEachIndexed { i, f ->
@@ -1045,7 +1395,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             if (i < franjas.lastIndex) sb.append(";")
         }
 
-        sb.append("]}")
+        sb.append(")]}")
         return sb.toString()
     }
 
@@ -1096,7 +1446,29 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
 
             franjas.clear()
-            val cuerpo = t.substring(idxColon + 1, idxBracketClose)
+            val cuerpoRaw = t.substring(idxColon + 1, idxBracketClose)
+            // Nuevo formato T<>: fusiona todos los bloques T<>() con ;P; entre tramos
+            val cuerpo = if (cuerpoRaw.trimStart().lowercase().startsWith("t")) {
+                val s = cuerpoRaw.replace(" ", "")
+                val fusionado = fusionarBloquesTEnCuerpo(s)
+                if (fusionado != null) {
+                    fusionado
+                } else {
+                    // Bloque T único: extraer contenido interior
+                    val openParen = s.indexOf('(')
+                    if (openParen >= 0) {
+                        var depth = 0
+                        var result = s
+                        for (j in openParen until s.length) {
+                            when (s[j]) {
+                                '(' -> depth++
+                                ')' -> { depth--; if (depth == 0) { result = s.substring(openParen + 1, j); break } }
+                            }
+                        }
+                        result
+                    } else s
+                }
+            } else cuerpoRaw
             if (cuerpo.isNotEmpty()) {
                 val reAltura = Regex("""^[ms]\s*<\s*(-?\d+(?:[.,]\d+)?)\s*>""", RegexOption.IGNORE_CASE)
                 splitTopLevelSemicolon(cuerpo).forEach { token ->
@@ -1127,7 +1499,8 @@ class DisenoNovaActivity : AppCompatActivity() {
                     )
                 )
             }
-            indiceFranjaActiva = franjas.lastIndex
+            // Mantener la franja activa si sigue siendo válida tras el reload
+            if (indiceFranjaActiva !in franjas.indices) indiceFranjaActiva = franjas.lastIndex
         } catch (_: Exception) {
             // si falla el parseo, se mantiene el estado anterior
             if (franjas.isEmpty()) {
@@ -1196,18 +1569,295 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.vistaDiseno.invalidate()
     }
 
-    private fun actualizarPanelCotas() {
-        binding.tvTituloCotas.text = "Cotas"
-        binding.contenedorCotas.removeAllViews()
-        if (franjas.isEmpty()) return
-        val fr = franjas.getOrNull(indiceFranjaActiva) ?: franjas.first()
-        val label = TextView(this).apply {
-            text = "Módulos: ${fr.modulos.size}"
+    // ==================== PANEL COTAS / TRAMOS ====================
+
+    private data class BloqueTramo(val letra: String, val ancho: Float, val contenido: String)
+
+    private fun parsearBloquesTramo(): List<BloqueTramo> {
+        val paquete = paqueteActualLectura()
+        val t = paquete.replace(" ", "")
+        val idxColon = t.indexOf(':')
+        val idxClose = t.lastIndexOf(']')
+        if (idxColon < 0 || idxClose <= idxColon) return emptyList()
+        val cuerpo = t.substring(idxColon + 1, idxClose)
+        val result = mutableListOf<BloqueTramo>()
+        var i = 0
+        while (i < cuerpo.length) {
+            if (cuerpo[i].lowercaseChar() == 't') {
+                i++
+                val letra = if (i < cuerpo.length && cuerpo[i].lowercaseChar() in 'a'..'z' && cuerpo[i] != '<') {
+                    val l = cuerpo[i].toString(); i++; l
+                } else ""
+                if (i >= cuerpo.length || cuerpo[i] != '<') continue
+                val ltIdx = i
+                val gtIdx = cuerpo.indexOf('>', ltIdx + 1)
+                if (gtIdx < 0) break
+                val ancho = cuerpo.substring(ltIdx + 1, gtIdx).replace(',', '.').toFloatOrNull() ?: 0f
+                i = gtIdx + 1
+                if (i >= cuerpo.length || cuerpo[i] != '(') continue
+                val openParen = i; var depth = 0; var closeParen = openParen
+                for (j in openParen until cuerpo.length) {
+                    when (cuerpo[j]) {
+                        '(' -> depth++
+                        ')' -> { depth--; if (depth == 0) { closeParen = j; break } }
+                    }
+                }
+                result.add(BloqueTramo("T$letra", ancho, cuerpo.substring(openParen + 1, closeParen)))
+                i = closeParen + 1
+            } else {
+                i++
+            }
         }
-        binding.contenedorCotas.addView(label)
+        return result
+    }
+
+    private fun reconstruirPaqueteConBloques(bloques: List<BloqueTramo>): String {
+        val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
+        val nParantes = (bloques.size - 1).coerceAtLeast(0)
+        val totalAncho = bloques.sumOf { it.ancho.toDouble() }.toFloat() + nParantes * anchoParanteCm
+        anchoCm = totalAncho
+        val sb = StringBuilder()
+        sb.append("{${clase},${tipoTxt},[${df1(totalAncho)},${df1(altoCm)}:")
+        bloques.forEachIndexed { idx, bloque ->
+            sb.append("${bloque.letra}<${df1(bloque.ancho)}>(${bloque.contenido})")
+            if (idx < bloques.lastIndex) sb.append("P<${df1(anchoParanteCm)}>")
+        }
+        sb.append("]}")
+        return sb.toString()
+    }
+
+    private fun actualizarAltoPuenteEnContenido(contenido: String, nuevoAlto: Float): String =
+        contenido.replace(Regex("""(?i)s<[^>]+>"""), "s<${df1(nuevoAlto)}>")
+
+    private fun aplicarCambiosCotas(
+        bloques: List<BloqueTramo>,
+        nuevosAnchos: List<Float>,
+        nuevoAlto: Float,
+        nuevasPuentes: List<Float?>
+    ) {
+        if (bloques.isEmpty()) return
+        val n = bloques.size
+        val nParantes = (n - 1).coerceAtLeast(0)
+        val totalUtil = anchoCm - nParantes * anchoParanteCm
+
+        // Identificar tramos que el usuario cambió explícitamente
+        val changedIdx = (0 until n).filter { abs(nuevosAnchos.getOrElse(it) { bloques[it].ancho } - bloques[it].ancho) > 0.1f }
+        val lockedNoChangedIdx = (0 until n).filter { tramosBlockeados.getOrElse(it) { false } && it !in changedIdx }
+        val absorbIdx = (0 until n).filter { it !in changedIdx && it !in lockedNoChangedIdx }
+
+        val sumChanged = changedIdx.sumOf { nuevosAnchos.getOrElse(it) { bloques[it].ancho }.toDouble() }.toFloat().coerceAtLeast(0f)
+        val sumLockedNoChanged = lockedNoChangedIdx.sumOf { bloques[it].ancho.toDouble() }.toFloat()
+        val remainingForAbsorb = (totalUtil - sumChanged - sumLockedNoChanged).coerceAtLeast(0f)
+        val totalAbsorb = absorbIdx.sumOf { bloques[it].ancho.toDouble() }.toFloat()
+
+        val anchosFinal = (0 until n).map { i ->
+            when {
+                i in lockedNoChangedIdx -> bloques[i].ancho
+                i in changedIdx -> nuevosAnchos.getOrElse(i) { bloques[i].ancho }.coerceAtLeast(5f)
+                totalAbsorb > 0f -> (bloques[i].ancho / totalAbsorb * remainingForAbsorb).coerceAtLeast(5f)
+                else -> bloques[i].ancho
+            }
+        }
+
+        if (nuevoAlto > 0f) altoCm = nuevoAlto
+
+        val bloquesFinal = bloques.mapIndexed { i, bloque ->
+            val nuevoPuente = nuevasPuentes.getOrElse(i) { null }
+            val contenidoFinal = if (nuevoPuente != null && nuevoPuente > 0f) {
+                actualizarAltoPuenteEnContenido(bloque.contenido, nuevoPuente)
+            } else bloque.contenido
+            BloqueTramo(bloque.letra, anchosFinal[i], contenidoFinal)
+        }
+
+        cargarDesdePaquete(reconstruirPaqueteConBloques(bloquesFinal))
+        actualizarVista()
+        actualizarPanelCotas()
+    }
+
+    private fun actualizarPanelCotas() {
+        val bloques = parsearBloquesTramo()
+        val tramoInfo = extraerInfoTramos()
+        binding.tvTituloCotas.text = "Tramos"
+        binding.contenedorCotas.removeAllViews()
+
+        if (bloques.isEmpty()) {
+            binding.contenedorCotas.addView(TextView(this).apply {
+                text = "Sin tramos"; textSize = 11f
+            })
+            return
+        }
+
+        // Sync tramosBlockeados
+        while (tramosBlockeados.size < bloques.size) tramosBlockeados.add(false)
+        while (tramosBlockeados.size > bloques.size) tramosBlockeados.removeAt(tramosBlockeados.lastIndex)
+
+        val dp = resources.displayMetrics.density
+        val dp4 = (4 * dp).toInt()
+        val dp8 = (8 * dp).toInt()
+
+        val etAnchos = mutableListOf<EditText>()
+        val etAltos = mutableListOf<EditText>()
+        val etPuentes = mutableListOf<EditText>()
+        val capturedBloques = bloques.toList()
+
+        bloques.forEachIndexed { i, bloque ->
+            val info = tramoInfo.getOrNull(i)
+            if (i > 0) {
+                binding.contenedorCotas.addView(View(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).also {
+                        it.setMargins(0, dp4, 0, dp4)
+                    }
+                    setBackgroundColor(Color.parseColor("#33000000"))
+                })
+            }
+
+            // Fila: label + botón bloqueo
+            val rowHead = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+            rowHead.addView(TextView(this).apply {
+                text = "tramo ${i + 1}"
+                textSize = 11f
+                setTypeface(null, Typeface.BOLD)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setPadding(0, dp4, 0, dp4)
+            })
+            val locked = tramosBlockeados[i]
+            rowHead.addView(Button(this).apply {
+                text = if (locked) "Bloq." else "Libre"
+                textSize = 9f
+                isAllCaps = false
+                setPadding(dp4, 0, dp4, 0)
+                setBackgroundColor(if (locked) Color.parseColor("#E53935") else Color.parseColor("#78909C"))
+                setTextColor(Color.WHITE)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, (22 * dp).toInt()).also {
+                    it.marginStart = dp4
+                }
+                setOnClickListener {
+                    tramosBlockeados[i] = !tramosBlockeados[i]
+                    actualizarPanelCotas()
+                }
+            })
+            binding.contenedorCotas.addView(rowHead)
+
+            // Helper para añadir fila label+edittext
+            fun addRow(label: String, value: String): EditText {
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
+                        it.setMargins(0, 1, 0, 1)
+                    }
+                }
+                row.addView(TextView(this).apply {
+                    text = label; textSize = 10f
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.42f)
+                    setPadding(0, dp4, dp4, dp4)
+                })
+                val et = EditText(this).apply {
+                    setText(value); textSize = 10f; setSingleLine(true)
+                    inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.58f)
+                    setPadding(dp4, 2, dp4, 2)
+                }
+                row.addView(et)
+                binding.contenedorCotas.addView(row)
+                return et
+            }
+
+            etAnchos.add(addRow("Ancho:", df1(bloque.ancho)))
+            etAltos.add(addRow("Alto:", df1(altoCm)))
+            etPuentes.add(addRow("Puente:", df1(info?.sistemaAltura ?: 0f)))
+        }
+
+        // Botón Aplicar
+        binding.contenedorCotas.addView(Button(this).apply {
+            text = "Aplicar"
+            textSize = 11f; isAllCaps = false
+            setBackgroundColor(Color.parseColor("#1976D2"))
+            setTextColor(Color.WHITE)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
+                it.setMargins(0, dp8, 0, 0)
+            }
+            setOnClickListener {
+                val nuevosAnchos = etAnchos.map { it.text.toString().aNumeroSeguro() }
+                val nuevoAlto = etAltos.firstOrNull()?.text?.toString()?.aNumeroSeguro() ?: altoCm
+                val nuevasPuentes = etPuentes.map { e ->
+                    e.text.toString().aNumeroSeguro().takeIf { it > 0f }
+                }
+                aplicarCambiosCotas(capturedBloques, nuevosAnchos, nuevoAlto, nuevasPuentes)
+            }
+        })
     }
 
     // =========================== UTILIDADES ===========================
+
+    /**
+     * Primer índice (absoluto en fr.modulos) del tramo activo.
+     * Tramo 0 siempre empieza en 0. Tramo N empieza donde termina el parante N-1.
+     */
+    private fun inicioDelTramoActivo(fr: Franja): Int {
+        if (fr.parantes.isEmpty() || indiceTramoActivo <= 0) return 0
+        val parantes = fr.parantes.sorted()
+        return parantes.getOrElse(indiceTramoActivo - 1) { 0 }
+    }
+
+    /**
+     * Índice de inserción al final del tramo activo dentro de fr.modulos.
+     * En diseño de un solo tramo (sin parantes) devuelve fr.modulos.size.
+     * En multi-tramo devuelve la posición justo ANTES del parante siguiente,
+     * que corresponde al límite derecho del tramo [indiceTramoActivo].
+     */
+    private fun finDelTramoActivo(fr: Franja): Int {
+        if (fr.parantes.isEmpty() || indiceTramoActivo < 0) return fr.modulos.size
+        val parantes = fr.parantes.sorted()
+        return parantes.getOrElse(indiceTramoActivo) { fr.modulos.size }
+    }
+
+    /**
+     * Si el cuerpo contiene múltiples bloques T<>(...), los fusiona en un único
+     * cuerpo de franjas con ;P; entre tramos (igual que el formato de bloque único).
+     * Retorna null cuando solo hay un bloque T (el llamador usa su lógica habitual).
+     */
+    private fun fusionarBloquesTEnCuerpo(s: String): String? {
+        data class BloqueT(val contenido: String)
+        val bloques = mutableListOf<BloqueT>()
+        var i = 0
+        while (i < s.length) {
+            if (s[i].lowercaseChar() == 't') {
+                val iT = i; i++
+                if (i < s.length && s[i].lowercaseChar() in 'a'..'z' && s[i] != '<') i++
+                if (i >= s.length || s[i] != '<') { i = iT + 1; continue }
+                val gtIdx = s.indexOf('>', i); if (gtIdx < 0) break
+                i = gtIdx + 1
+                if (i >= s.length || s[i] != '(') continue
+                val openParen = i; var depth = 0; var closeParen = openParen
+                for (j in openParen until s.length) {
+                    when (s[j]) { '(' -> depth++; ')' -> { depth--; if (depth == 0) { closeParen = j; break } } }
+                }
+                bloques.add(BloqueT(s.substring(openParen + 1, closeParen)))
+                i = closeParen + 1
+            } else { i++ }
+        }
+        if (bloques.size <= 1) return null
+
+        // Por cada tipo de franja del primer bloque, concatenar los módulos de todos los bloques con ;P;
+        val primerasFranjas = splitTopLevelSemicolon(bloques[0].contenido)
+        return primerasFranjas.map { primerToken ->
+            val trimmed = primerToken.trim()
+            val prefix = trimmed.firstOrNull()?.lowercaseChar()?.toString() ?: return@map primerToken
+            val reAltura = Regex("""^[ms]\s*<\s*(-?\d+(?:[.,]\d+)?)\s*>""", RegexOption.IGNORE_CASE)
+            val alt = reAltura.find(trimmed)?.groupValues?.get(1)
+            val heightTag = if (alt != null) "<$alt>" else ""
+            val modsTramos = bloques.mapNotNull { bloque ->
+                val tokens = splitTopLevelSemicolon(bloque.contenido)
+                val tk = tokens.firstOrNull { it.trim().startsWith(prefix, ignoreCase = true) }
+                tk?.let { extraerBloqueModulosFranja(it) }
+            }
+            if (modsTramos.isEmpty()) primerToken
+            else "$prefix$heightTag(${modsTramos.joinToString(";P;")})"
+        }.joinToString(";")
+    }
 
     private fun String.aNumeroSeguro(): Float {
         val s = trim().replace(',', '.')

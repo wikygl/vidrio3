@@ -8,8 +8,9 @@ object CalculosPuerta {
 
     // --------- Formateo ---------
     fun df1(valor: Float): String {
-        val s = if ("$valor".endsWith(".0")) "$valor".replace(".0", "") else "%.1f".format(valor)
-        return s.replace(",", ".")
+        val floored = kotlin.math.floor(valor * 10).toInt() / 10f
+        return if (floored == floored.toLong().toFloat()) floored.toLong().toString()
+        else "%.1f".format(floored).replace(",", ".")
     }
 
     // --------- Cálculos base ---------
@@ -20,7 +21,6 @@ object CalculosPuerta {
 
     fun paflon(ancho: Float, marco: Float, bastidor: Float, holgura: Float = 1f): Float =
         ((ancho - (2 * marco)) - holgura) - (2 * bastidor)
-
     fun parante(hPuente: Float, piso: Float, holgura: Float = 1f): Float =
         if (piso == 0f) hPuente - holgura else (hPuente - (holgura / 2)) - piso
 

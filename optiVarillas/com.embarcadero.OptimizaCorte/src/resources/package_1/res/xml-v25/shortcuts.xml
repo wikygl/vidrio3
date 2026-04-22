@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <shortcut android:icon="@drawable/baseline_list_black_48dp"
+            android:enabled="true"
+            android:shortcutId="open"
+            android:shortcutShortLabel="@string/shortcut_list"
+            android:shortcutLongLabel="@string/shortcut_list">
+    <intent android:targetPackage="com.embarcadero.OptimizaCorte"
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.embarcadero.OptimizaCorte.Activities.ActivityInicio" />
+    <intent android:targetPackage="com.embarcadero.OptimizaCorte"
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.embarcadero.OptimizaCorte.Activities.ActivityListasGuardadas" />
+  </shortcut>
+</shortcuts>

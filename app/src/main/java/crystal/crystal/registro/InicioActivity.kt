@@ -117,11 +117,13 @@ class InicioActivity : AppCompatActivity() {
                             manejarIngresoPostLogin(account)
                         }
                     } else {
-                        Toast.makeText(this, "Firebase auth falló", Toast.LENGTH_LONG).show()
+                        Log.e(TAG, "Firebase signInWithCredential falló", t.exception)
+                        Toast.makeText(this, "Firebase auth falló: ${t.exception?.message}", Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: ApiException) {
-                Toast.makeText(this, "Error al iniciar sesión con Google", Toast.LENGTH_LONG).show()
+                Log.e(TAG, "Google SignIn ApiException statusCode=${e.statusCode}", e)
+                Toast.makeText(this, "Error Google (${e.statusCode})", Toast.LENGTH_LONG).show()
             }
         }
     }

@@ -1,33 +1,49 @@
 package crystal.crystal.red
-
-import Message
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.text.format.DateFormat
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.MetadataChanges
-import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.storage.FirebaseStorage
 import com.iceteck.silicompressorr.SiliCompressor
 import crystal.crystal.R
+import crystal.crystal.MainActivity
 import crystal.crystal.databinding.ActivityChatBinding
+import crystal.crystal.red.ChatUserDocReader
+import crystal.crystal.red.data.ChatMessageRepository
+import crystal.crystal.red.data.ChatSendRepository
+import crystal.crystal.red.interop.ChatInteropDocumentFactory
+import crystal.crystal.red.interop.ChatInteropIntents
+import crystal.crystal.red.interop.ChatPlatform
+import crystal.crystal.red.interop.MeasuresMessageCodec
+import kotlinx.coroutines.launch
+import java.io.FileOutputStream
+import java.net.URL
 import java.io.ByteArrayOutputStream
 import java.io.File
+import androidx.core.content.FileProvider
 import java.util.Date
 
 class ChatActivity : AppCompatActivity() {
@@ -36,16 +52,25 @@ class ChatActivity : AppCompatActivity() {
     private val db = Firebase.firestore
     private val auth = FirebaseAuth.getInstance()
     private val storage = FirebaseStorage.getInstance().reference
+    private val chatMessageRepository = ChatMessageRepository(db)
+    private val chatSendRepository = ChatSendRepository(db)
 
     private lateinit var mensajesListener: ListenerRegistration
     private lateinit var presenciaListener: ListenerRegistration
 
     private var chatId = ""
     private var usuario = ""
+    private var messageActorUid = ""
+    private var userAliases: List<String> = emptyList()
+    private var peerPlatform: ChatPlatform = ChatPlatform.CRYSTAL
+    private var peerExternalUserId: String = ""
     private lateinit var adapter: MessageAdapter
 
     private var presupuestoParaEnviar: String? = null
     private var nombrePresupuesto: String? = null
+    private var archivoCompartidoParaEnviar: Uri? = null
+    private var nombreArchivoCompartido: String? = null
+    private var mimeArchivoCompartido: String? = null
 
     companion object {
         private const val PICK_FILE_REQ = 1001
@@ -57,22 +82,36 @@ class ChatActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         intent.getStringExtra("chatId")?.let { chatId = it }
-        intent.getStringExtra("usuario")?.let { usuario = it }
+        usuario = ChatIdentity.resolveChatIdentityUid(
+            context = this,
+            auth = auth,
+            preferredUid = intent.getStringExtra("usuario")
+        )
+        messageActorUid = auth.currentUser?.uid?.takeIf { it.isNotBlank() } ?: usuario
+        userAliases = ChatIdentity.resolveChatIdentityAliases(
+            context = this,
+            auth = auth,
+            preferredUid = intent.getStringExtra("usuario")
+        )
 
-        intent.getStringExtra("enviar_presupuesto")?.let { presupuestoParaEnviar = it }
-        intent.getStringExtra("nombre_presupuesto")?.let { nombrePresupuesto = it }
+        intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_BUDGET_URI)?.let { presupuestoParaEnviar = it }
+        intent.getStringExtra(ChatInteropIntents.EXTRA_BUDGET_NAME)?.let { nombrePresupuesto = it }
+        archivoCompartidoParaEnviar = ChatInteropIntents.consumeUriExtra(intent, ChatInteropIntents.EXTRA_SEND_SHARED_URI)
+        nombreArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME)
+        mimeArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME)
 
         if (chatId.isNotEmpty() && usuario.isNotEmpty()) {
             inicializarCabecera()
             configurarRecycler()
-            binding.btEnviar.setOnClickListener { onClickEnviarTexto() }
-            binding.btArchivo.setOnClickListener { seleccionarArchivo() }
-            binding.btPresupuesto.setOnClickListener { enviarPresupuesto() }
-            cargarChat()
+        binding.btEnviar.setOnClickListener { onClickEnviarTexto() }
+        binding.btArchivo.setOnClickListener { seleccionarArchivo() }
+        cargarChat()
 
             // Si hay un presupuesto para enviar, mostrarlo
             if (presupuestoParaEnviar != null) {
                 mostrarOpcionEnviarPresupuesto()
+            } else if (archivoCompartidoParaEnviar != null) {
+                mostrarOpcionEnviarArchivoCompartido()
             }
         }
     }
@@ -104,69 +143,85 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
-    private fun subirYEnviarPresupuesto(uri: Uri) {
-        val chatRef = db.collection("chats").document(chatId)
-        val mensajesRef = chatRef.collection("messages")
-        val nuevoMensajeRef = mensajesRef.document()
-        val ahora = Date()
-
-        // Crear mensaje placeholder
-        val placeholder = Message(
-            id = nuevoMensajeRef.id,
-            message = "ENVIANDO PRESUPUESTO...",
-            from = usuario,
-            dob = ahora,
-            leido = false,
-            entregado = false,
-            tipo = "presupuesto",
-            nombreArchivo = nombrePresupuesto ?: "presupuesto.json"
-        ).apply { hasPendingWrites = true }
-
-        adapter.addMensajeTemporal(placeholder)
-        binding.rvMensajes.scrollToPosition(adapter.itemCount - 1)
-
-        // Guardar en Firestore
-        nuevoMensajeRef.set(mapOf(
-            "id" to placeholder.id,
-            "message" to placeholder.message,
-            "from" to placeholder.from,
-            "dob" to placeholder.dob,
-            "leido" to false,
-            "entregado" to false,
-            "deletedFor" to placeholder.deletedFor,
-            "deletedForEveryone" to placeholder.deletedForEveryone,
-            "tipo" to "presupuesto",
-            "nombreArchivo" to placeholder.nombreArchivo
-        ))
-
-        // Subir archivo como bytes
-        try {
-            val inputStream = contentResolver.openInputStream(uri)
-            val bytes = inputStream?.readBytes()
-            inputStream?.close()
-
-            if (bytes != null) {
-                val refStorage = storage.child("chat_files/$chatId/${nuevoMensajeRef.id}")
-                refStorage.putBytes(bytes)
-                    .addOnSuccessListener {
-                        refStorage.downloadUrl.addOnSuccessListener { url ->
-                            nuevoMensajeRef.update("message", url.toString())
-                            chatRef.update("lastMsgDate", ahora)
-                            Toast.makeText(this, "Presupuesto enviado correctamente", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    .addOnFailureListener { e ->
-                        nuevoMensajeRef.update("message", "Error al enviar presupuesto")
-                        Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
-            } else {
-                nuevoMensajeRef.update("message", "Error al leer archivo")
-                Toast.makeText(this, "No se pudo leer el archivo", Toast.LENGTH_SHORT).show()
+    private fun mostrarOpcionEnviarArchivoCompartido() {
+        val nombre = nombreArchivoCompartido ?: "archivo"
+        AlertDialog.Builder(this)
+            .setTitle("Enviar archivo")
+            .setMessage("¿Deseas enviar '$nombre' en este chat?")
+            .setPositiveButton("Enviar") { _, _ ->
+                enviarArchivoCompartido()
             }
-        } catch (e: Exception) {
-            nuevoMensajeRef.update("message", "Error al procesar archivo")
-            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            .setNegativeButton("Cancelar") { _, _ ->
+                archivoCompartidoParaEnviar = null
+                nombreArchivoCompartido = null
+                mimeArchivoCompartido = null
+            }
+            .show()
+    }
+
+    private fun enviarArchivoCompartido() {
+        archivoCompartidoParaEnviar?.let { uri ->
+            subirYEnviar(uri)
+            archivoCompartidoParaEnviar = null
+            nombreArchivoCompartido = null
+            mimeArchivoCompartido = null
         }
+    }
+
+    private fun subirYEnviarPresupuesto(uri: Uri) {
+        val ahora = Date()
+        val budgetName = nombrePresupuesto ?: "presupuesto.json"
+        chatSendRepository.createPendingMessage(
+            chatId = chatId,
+            fromUid = messageActorUid,
+            placeholderText = "ENVIANDO PRESUPUESTO...",
+            legacyType = "presupuesto",
+            createdAt = ahora,
+            fileName = budgetName,
+            targetApp = peerPlatform,
+            targetExternalUserId = peerExternalUserId,
+            onSuccess = { messageRef, placeholder ->
+                adapter.addMensajeTemporal(placeholder)
+                binding.rvMensajes.scrollToPosition(adapter.itemCount - 1)
+
+                try {
+                    val inputStream = contentResolver.openInputStream(uri)
+                    val bytes = inputStream?.readBytes()
+                    inputStream?.close()
+
+                    if (bytes != null) {
+                        val refStorage = storage.child("chat_files/$chatId/${messageRef.id}")
+                        refStorage.putBytes(bytes)
+                            .addOnSuccessListener {
+                                refStorage.downloadUrl.addOnSuccessListener { url ->
+                                    chatSendRepository.completeUploadedMessage(
+                                        chatId = chatId,
+                                        messageRef = messageRef,
+                                        legacyType = "presupuesto",
+                                        previewValue = budgetName,
+                                        updatedAt = ahora,
+                                        url = url.toString()
+                                    )
+                                    Toast.makeText(this, "Presupuesto enviado correctamente", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .addOnFailureListener { e ->
+                                chatSendRepository.failMessage(messageRef, "Error al enviar presupuesto")
+                                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                    } else {
+                        chatSendRepository.failMessage(messageRef, "Error al leer archivo")
+                        Toast.makeText(this, "No se pudo leer el archivo", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    chatSendRepository.failMessage(messageRef, "Error al procesar archivo")
+                    Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onError = { e ->
+                Toast.makeText(this, "Error preparando mensaje: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
     // Agregar función para detectar formato medidas (igual que las otras clases)
@@ -214,6 +269,10 @@ class ChatActivity : AppCompatActivity() {
                         Toast.makeText(this, "Descargando presupuesto...", Toast.LENGTH_SHORT).show()
 
                         // Descargar el archivo JSON desde Firebase Storage
+                        if (!isFirebaseStorageUrl(mensaje.message)) {
+                            Toast.makeText(this, "El presupuesto aun no tiene una URL valida", Toast.LENGTH_SHORT).show()
+                            return@MessageAdapter
+                        }
                         val httpsReference = FirebaseStorage.getInstance().getReferenceFromUrl(mensaje.message)
                         httpsReference.getBytes(Long.MAX_VALUE)
                             .addOnSuccessListener { bytes ->
@@ -222,8 +281,8 @@ class ChatActivity : AppCompatActivity() {
 
                                     // Crear Intent para MainActivity
                                     val intent = Intent(this, crystal.crystal.MainActivity::class.java).apply {
-                                        putExtra("cargar_presupuesto_json", jsonContent)
-                                        putExtra("cargar_presupuesto_nombre", mensaje.nombreArchivo)
+                                        putExtra(ChatInteropIntents.EXTRA_LOAD_BUDGET_JSON, jsonContent)
+                                        putExtra(ChatInteropIntents.EXTRA_LOAD_BUDGET_NAME, mensaje.nombreArchivo)
                                         addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
                                     }
 
@@ -237,42 +296,13 @@ class ChatActivity : AppCompatActivity() {
                                 Toast.makeText(this, "Error al descargar: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
                     }
-                    "texto" -> {
-                        // **NUEVO: Manejar mensajes de texto con formato de medidas**
-                        if (esFormatoMedidas(mensaje.message)) {
-                            // Es un mensaje con formato de medidas
-                            val builder = androidx.appcompat.app.AlertDialog.Builder(this)
-                            builder.setTitle("📐 Lista de Medidas")
-
-                            val lineas = mensaje.message.trim().split("\n").filter { it.isNotBlank() }
-                            val producto = lineas[0].trim()
-                            val cantidadMedidas = lineas.size - 1
-
-                            builder.setMessage(
-                                "Producto: $producto\n" +
-                                        "Elementos detectados: $cantidadMedidas\n\n" +
-                                        "¿Deseas importar estas medidas a tu presupuesto?"
-                            )
-
-                            builder.setPositiveButton("📋 Importar") { _, _ ->
-                                // Enviar a MainActivity para procesar
-                                val intent = Intent(this, crystal.crystal.MainActivity::class.java).apply {
-                                    putExtra("importar_medidas_texto", mensaje.message)
-                                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                                }
-                                startActivity(intent)
-                                Toast.makeText(this, "Abriendo calculadora para importar...", Toast.LENGTH_SHORT).show()
-                            }
-
-                            builder.setNegativeButton("❌ Cancelar", null)
-                            builder.show()
-                        } else {
-                            // Mensaje de texto normal, no hacer nada especial
-                            Toast.makeText(this, "Mensaje de texto normal", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                    "texto", "medidas" -> mostrarDialogoImportarMedidas(mensaje)
                     "video" -> {
-                        // Código existente para videos...
+                        if (!isFirebaseStorageUrl(mensaje.message)) {
+                            VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
+                            return@MessageAdapter
+                        }
+
                         val ref = FirebaseStorage.getInstance().getReferenceFromUrl(mensaje.message)
                         ref.metadata
                             .addOnSuccessListener { meta ->
@@ -296,8 +326,12 @@ class ChatActivity : AppCompatActivity() {
                             }
                     }
                     else -> {
-                        // Imagen, audio o PDF → visor interno
-                        VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
+                        if (mensaje.tipo == "pdf") {
+                            abrirPdfExterno(uri)
+                        } else {
+                            // Imagen y audio -> visor interno
+                            VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
+                        }
                     }
                 }
             }
@@ -308,21 +342,39 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun inicializarCabecera() {
-        val header = binding.root.findViewById<ConstraintLayout>(R.id.headerChat)
-        val ivFoto = header.findViewById<android.widget.ImageView>(R.id.ivFoto)
-        val tvNombre = header.findViewById<android.widget.TextView>(R.id.chatNameText)
-        val tvEstado = header.findViewById<android.widget.TextView>(R.id.usersTextView)
+        val ivFoto = binding.root.findViewById<android.widget.ImageView?>(R.id.ivFoto) ?: return
+        val tvNombre = binding.root.findViewById<android.widget.TextView?>(R.id.chatNameText) ?: return
+        val tvEstado = binding.root.findViewById<android.widget.TextView?>(R.id.usersTextView) ?: return
+        val btGoMain = binding.root.findViewById<android.widget.ImageButton?>(R.id.btGoMain)
+
+        btGoMain?.setColorFilter(ContextCompat.getColor(this, R.color.azul))
+        btGoMain?.setOnClickListener {
+            startActivity(
+                Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+            )
+        }
 
         db.collection("chats").document(chatId)
             .get()
             .addOnSuccessListener { doc ->
-                val users = doc.get("users") as List<*>
-                val otroId = users.first { it != usuario }.toString()
+                peerPlatform = ChatPlatform.fromWireValue(doc.getString("peerPlatform"))
+                peerExternalUserId = doc.getString("peerExternalUserId").orEmpty()
+                val users = doc.get("users") as? List<*> ?: emptyList<Any>()
+                val otroId = users.firstOrNull { it != usuario }?.toString()
+                if (otroId == null) {
+                    tvNombre.text = "Mensajes guardados"
+                    tvEstado.text = ""
+                    ivFoto.setImageResource(R.drawable.ic_chckr)
+                    return@addOnSuccessListener
+                }
                 presenciaListener = db.collection("usuarios").document(otroId)
                     .addSnapshotListener { snap, e ->
                         if (e != null || snap == null || !snap.exists()) return@addSnapshotListener
                         tvNombre.text = snap.getString("nombre") ?: "—"
-                        snap.getString("imagenPerfil")?.let { url ->
+                        tvNombre.text = ChatUserDocReader.getName(snap) ?: tvNombre.text
+                        ChatUserDocReader.getPhotoUrl(snap)?.let { url: String ->
                             Glide.with(this).load(url).circleCrop().into(ivFoto)
                         }
                         val online = snap.getBoolean("online") ?: false
@@ -336,34 +388,28 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun cargarChat() {
-        mensajesListener = db.collection("chats").document(chatId)
-            .collection("messages")
-            .orderBy("dob", Query.Direction.ASCENDING)
-            .addSnapshotListener(MetadataChanges.INCLUDE) { snap, e ->
-                if (e != null || snap == null) return@addSnapshotListener
-                val lista = mutableListOf<Message>()
-                val batch = db.batch()
-                for (doc in snap.documents) {
-                    val m = doc.toObject(Message::class.java)?.apply { id = doc.id } ?: continue
-                    m.hasPendingWrites = doc.metadata.hasPendingWrites()
-                    m.entregado = doc.getBoolean("entregado") ?: m.entregado
-                    m.leido     = doc.getBoolean("leido")     ?: m.leido
-                    lista.add(m)
-                    if (!m.hasPendingWrites && m.from != usuario && !(doc.getBoolean("entregado") ?: false))
-                        batch.update(doc.reference, "entregado", true)
-                    if (m.from != usuario && !m.leido)
-                        batch.update(doc.reference, "leido", true)
+        mensajesListener = chatMessageRepository.observeMessages(
+            chatId = chatId,
+            currentUserId = messageActorUid,
+            aliases = userAliases,
+            onResult = { lista ->
+                runOnUiThread {
+                    adapter.setData(lista)
+                    if (lista.isNotEmpty()) binding.rvMensajes.scrollToPosition(lista.size - 1)
                 }
-                batch.commit()
-                adapter.setData(lista)
-                if (lista.isNotEmpty()) binding.rvMensajes.scrollToPosition(lista.size - 1)
+            },
+            onError = { e ->
+                runOnUiThread {
+                    Toast.makeText(this, "Error cargando mensajes: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
+        )
     }
 
     private fun onClickEnviarTexto() {
         val texto = binding.messageTextField.text.toString().trim()
         if (texto.isEmpty()) return
-        enviarMensaje(texto, "texto")
+        enviarMensaje(texto, if (MeasuresMessageCodec.isMeasuresFormat(texto)) "medidas" else "texto")
     }
 
     private fun seleccionarArchivo() {
@@ -397,7 +443,7 @@ class ChatActivity : AppCompatActivity() {
         val placeholder = Message(
             id = nuevoMensajeRef.id,
             message = if (tipo == "texto") "" else "CARGANDO... 0%",
-            from = usuario,
+            from = messageActorUid,
             dob = ahora,
             leido = false,
             entregado = false,
@@ -408,18 +454,24 @@ class ChatActivity : AppCompatActivity() {
         adapter.addMensajeTemporal(placeholder)
         binding.rvMensajes.scrollToPosition(adapter.itemCount - 1)
 
-        nuevoMensajeRef.set( mapOf(
-            "id" to placeholder.id,
-            "message" to placeholder.message,
-            "from" to placeholder.from,
-            "dob" to placeholder.dob,
-            "leido" to false,
-            "entregado" to false,
-            "deletedFor" to placeholder.deletedFor,
-            "deletedForEveryone" to placeholder.deletedForEveryone,
-            "tipo" to tipo,
-            "nombreArchivo" to nombreOriginal
-        ))
+        nuevoMensajeRef.set(
+                ChatInteropDocumentFactory.createMessage(
+                    id = placeholder.id,
+                    fromUid = messageActorUid,
+                    message = placeholder.message,
+                    legacyType = tipo,
+                    createdAt = placeholder.dob,
+                    targetApp = peerPlatform,
+                    targetExternalUserId = peerExternalUserId,
+                    syncStatus = if (peerPlatform == ChatPlatform.PUNTOS && peerExternalUserId.isNotBlank()) "pending_external" else "local",
+                    fileName = nombreOriginal
+                ) + mapOf(
+                "leido" to false,
+                "entregado" to false,
+                "deletedFor" to placeholder.deletedFor,
+                "deletedForEveryone" to placeholder.deletedForEveryone
+            )
+        )
 
         // 2) Prepara la subida
         val refStorage = storage.child("chat_files/$chatId/${nuevoMensajeRef.id}")
@@ -433,18 +485,23 @@ class ChatActivity : AppCompatActivity() {
                 val total = snap.totalByteCount
                 if (total > 0) {
                     val pct = (100 * bytes / total).toInt()
-                    // Actualiza el placeholder en Firestore y UI
-                    nuevoMensajeRef.update("message", "CARGANDO... $pct%")
+                    chatSendRepository.updateUploadProgress(nuevoMensajeRef, pct)
                 }
             }
             // al terminar
             uploadTask.addOnSuccessListener {
                 refStorage.downloadUrl.addOnSuccessListener { url ->
-                    nuevoMensajeRef.update("message", url.toString())
-                    chatRef.update("lastMsgDate", ahora)
+                    chatSendRepository.completeUploadedMessage(
+                        chatId = chatId,
+                        messageRef = nuevoMensajeRef,
+                        legacyType = tipo,
+                        previewValue = nombreOriginal,
+                        updatedAt = ahora,
+                        url = url.toString()
+                    )
                 }
             }.addOnFailureListener { e ->
-                nuevoMensajeRef.update("message", "Error al subir")
+                chatSendRepository.failMessage(nuevoMensajeRef, "Error al subir")
                 Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
@@ -457,25 +514,23 @@ class ChatActivity : AppCompatActivity() {
                 refStorage.putBytes(data)
                     .addOnSuccessListener {
                         refStorage.downloadUrl.addOnSuccessListener { url ->
-                            nuevoMensajeRef.update("message", url.toString())
-                            chatRef.update("lastMsgDate", ahora)
+                            chatSendRepository.completeUploadedMessage(
+                                chatId = chatId,
+                                messageRef = nuevoMensajeRef,
+                                legacyType = tipo,
+                                previewValue = nombreOriginal,
+                                updatedAt = ahora,
+                                url = url.toString()
+                            )
                         }
                     }
                     .addOnFailureListener { e ->
-                        nuevoMensajeRef.update("message", "Error al subir imagen")
+                        chatSendRepository.failMessage(nuevoMensajeRef, "Error al subir imagen")
                         Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
             }
             "video" -> {
-                // comprimir video primero
-                comprimirVideo(uri) { uriComprimido ->
-                    if (uriComprimido != null) {
-                        realizarSubida(uriComprimido)
-                    } else {
-                        nuevoMensajeRef.update("message", "Error al comprimir")
-                        Toast.makeText(this, "No se pudo comprimir video", Toast.LENGTH_SHORT).show()
-                    }
-                }
+                realizarSubida(uri)
             }
             else -> {
                 // audio, pdf u otros
@@ -526,39 +581,159 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun enviarMensaje(texto: String, tipo: String = "texto") {
-        val chatRef = db.collection("chats").document(chatId)
-        val msgRef  = chatRef.collection("messages").document()
         val ahora   = Date()
-
-        val msg = Message(
-            id = msgRef.id,
-            message = texto,
-            from = usuario,
-            dob = ahora,
-            leido = false,
-            entregado = false,
-            tipo = tipo
-        ).apply { hasPendingWrites = true }
-
-        adapter.addMensajeTemporal(msg)
-        binding.rvMensajes.scrollToPosition(adapter.itemCount - 1)
-
-        val data = mapOf(
-            "id"        to msg.id,
-            "message"   to msg.message,
-            "from"      to msg.from,
-            "dob"       to msg.dob,
-            "leido"     to false,
-            "entregado" to false,
-            "deletedFor" to msg.deletedFor,
-            "deletedForEveryone" to msg.deletedForEveryone,
-            "tipo"      to tipo
+        chatSendRepository.sendTextMessage(
+            chatId = chatId,
+            fromUid = messageActorUid,
+            text = texto,
+            legacyType = tipo,
+            createdAt = ahora,
+            targetApp = peerPlatform,
+            targetExternalUserId = peerExternalUserId,
+            onSuccess = { msg ->
+                adapter.addMensajeTemporal(msg)
+                binding.rvMensajes.scrollToPosition(adapter.itemCount - 1)
+                binding.messageTextField.setText("")
+            },
+            onError = { e ->
+                Toast.makeText(this, "Error enviando mensaje: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         )
-        val batch = db.batch()
-        batch.set(msgRef, data)
-        batch.update(chatRef, "lastMsgDate", ahora)
-        batch.commit()
-            .addOnSuccessListener { if (tipo == "texto") binding.messageTextField.setText("") }
+    }
+
+    private fun mostrarDialogoImportarMedidas(mensaje: Message) {
+        val parsedMeasures = MeasuresMessageCodec.parse(mensaje.message)
+        if (parsedMeasures == null) {
+            if (mensaje.tipo == "texto") {
+                Toast.makeText(this, "Mensaje de texto normal", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
+        val builder = androidx.appcompat.app.AlertDialog.Builder(this)
+        builder.setTitle("Lista de Medidas")
+        builder.setMessage(
+            "Producto: ${parsedMeasures.productName}\n" +
+                "Elementos detectados: ${parsedMeasures.items.size}\n\n" +
+                "Deseas importar estas medidas a tu presupuesto?"
+        )
+        builder.setPositiveButton("Importar") { _, _ ->
+            val intent = Intent(this, crystal.crystal.MainActivity::class.java).apply {
+                putExtra(ChatInteropIntents.EXTRA_IMPORT_MEASURES_TEXT, mensaje.message)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            startActivity(intent)
+            Toast.makeText(this, "Abriendo calculadora para importar...", Toast.LENGTH_SHORT).show()
+        }
+        builder.setNegativeButton("Cancelar", null)
+        builder.show()
+    }
+
+    private fun isFirebaseStorageUrl(value: String): Boolean {
+        return value.startsWith("gs://") || value.startsWith("https://")
+    }
+
+    private fun abrirPdfExterno(uri: Uri) {
+        if (uri.scheme == "http" || uri.scheme == "https") {
+            descargarYAbrirPdf(uri.toString())
+            return
+        }
+
+        abrirPdfLocal(uri)
+    }
+
+    private fun descargarYAbrirPdf(url: String) {
+        Toast.makeText(this, "Descargando PDF...", Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val localUri = guardarPdfEnDescargas(url)
+                runOnUiThread {
+                    abrirPdfLocal(localUri)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "No se pudo descargar el PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun guardarPdfEnDescargas(url: String): Uri {
+        val fileName = "chat_pdf_${System.currentTimeMillis()}.pdf"
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            guardarPdfConMediaStore(url, fileName)
+        } else {
+            guardarPdfEnDescargasLegacy(url, fileName)
+        }
+    }
+
+    private fun guardarPdfConMediaStore(url: String, fileName: String): Uri {
+        val resolver = contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+            put(
+                MediaStore.MediaColumns.RELATIVE_PATH,
+                "${Environment.DIRECTORY_DOWNLOADS}/Crystal/PDF"
+            )
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("No se pudo crear el archivo en Descargas")
+
+        try {
+            resolver.openOutputStream(uri)?.use { output ->
+                URL(url).openStream().use { input ->
+                    input.copyTo(output)
+                }
+            } ?: throw IllegalStateException("No se pudo abrir el archivo de destino")
+            return uri
+        } catch (e: Exception) {
+            resolver.delete(uri, null, null)
+            throw e
+        }
+    }
+
+    private fun guardarPdfEnDescargasLegacy(url: String, fileName: String): Uri {
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val crystalDir = File(downloadsDir, "Crystal/PDF").apply { mkdirs() }
+        val file = File(crystalDir, fileName)
+        URL(url).openStream().use { input ->
+            FileOutputStream(file).use { output ->
+                input.copyTo(output)
+            }
+        }
+        return FileProvider.getUriForFile(
+            this,
+            "${packageName}.fileprovider",
+            file
+        )
+    }
+
+    private fun abrirPdfLocal(uri: Uri) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/pdf")
+            clipData = ClipData.newUri(contentResolver, "pdf", uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+        }
+
+        try {
+            val handlers = packageManager.queryIntentActivities(intent, 0)
+            handlers.forEach { handler ->
+                grantUriPermission(
+                    handler.activityInfo.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            val chooser = Intent.createChooser(intent, "Abrir PDF con").apply {
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = ClipData.newUri(contentResolver, "pdf", uri)
+            }
+            startActivity(chooser)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "No hay visor PDF instalado", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun mostrarEditar(m: Message) {
@@ -576,10 +751,7 @@ class ChatActivity : AppCompatActivity() {
             .setPositiveButton("Guardar") { _, _ ->
                 val nuevo = input.text.toString().trim()
                 if (nuevo.isNotEmpty()) {
-                    db.collection("chats").document(chatId)
-                        .collection("messages")
-                        .document(m.id)
-                        .update("message", nuevo)
+                    chatMessageRepository.editTextMessage(chatId, m.id, nuevo)
                 }
             }
             .setNegativeButton("Cancelar", null)
@@ -592,17 +764,8 @@ class ChatActivity : AppCompatActivity() {
             .setTitle("¿Qué deseas hacer?")
             .setItems(opts) { _, idx ->
                 when (idx) {
-                    0 -> db.collection("chats").document(chatId)
-                        .collection("messages")
-                        .document(m.id)
-                        .update("deletedFor", FieldValue.arrayUnion(usuario))
-                    1 -> db.collection("chats").document(chatId)
-                        .collection("messages")
-                        .document(m.id)
-                        .update(mapOf(
-                            "message" to "mensaje borrado.",
-                            "deletedForEveryone" to true
-                        ))
+                    0 -> chatMessageRepository.deleteForMe(chatId, m.id, usuario)
+                    1 -> chatMessageRepository.deleteForEveryone(chatId, m.id)
                 }
             }
             .setNegativeButton("Cancelar", null)
@@ -635,7 +798,10 @@ class ChatActivity : AppCompatActivity() {
         if (::presenciaListener.isInitialized) presenciaListener.remove()
         super.onDestroy()
     }
+
 }
+
+
 
 
 

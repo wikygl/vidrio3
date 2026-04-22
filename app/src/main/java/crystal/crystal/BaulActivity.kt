@@ -60,7 +60,7 @@ class BaulActivity : AppCompatActivity() {
         aplicarFiltro()
         adapter = ArchivosAdapter(this, R.layout.lista_check, archivosGuardados)
 
-        val listView = findViewById<ListView>(R.id.list_view)
+        val listView = binding.listView
         listView.adapter = adapter
         listView.choiceMode = ListView.CHOICE_MODE_MULTIPLE
 

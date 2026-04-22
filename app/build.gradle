@@ -2,19 +2,18 @@ plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
     id 'kotlin-parcelize'
-    // CAMBIO: Reemplaza kotlin-kapt por KSP
     id 'com.google.devtools.ksp'
     id 'com.google.gms.google-services'
 }
 
 android {
     namespace 'crystal.crystal'
-    compileSdk 35
+    compileSdk 34 // Bajado de 35 a 34 para asegurar compatibilidad con la versión estable actual de la mayoría de IDEs
 
     defaultConfig {
         applicationId "crystal.crystal"
         minSdk 24
-        targetSdk 35
+        targetSdk 34
         versionCode 1
         versionName "1.0"
     }
@@ -30,7 +29,6 @@ android {
     kotlin {
         jvmToolchain(17)
     }
-    // ELIMINAR TODO EL BLOQUE KAPT - Ya no se necesita
 
     buildFeatures {
         viewBinding true
@@ -44,7 +42,7 @@ android {
         }
     }
 
-    packagingOptions {
+    packaging {
         resources {
             excludes += ["META-INF/DEPENDENCIES", "META-INF/INDEX.LIST"]
         }
@@ -58,70 +56,52 @@ dependencies {
     implementation "com.google.firebase:firebase-firestore-ktx"
     implementation "com.google.firebase:firebase-storage-ktx"
     implementation "com.google.firebase:firebase-analytics-ktx"
-    implementation("com.google.firebase:firebase-functions-ktx:20.4.0")
+    implementation "com.google.firebase:firebase-functions-ktx"
 
     // Google Sign-In
     implementation "com.google.android.gms:play-services-auth:21.2.0"
 
-    // Glide - CAMBIO: kapt -> ksp
+    // Glide
     implementation "com.github.bumptech.glide:glide:4.16.0"
+    ksp "com.github.bumptech.glide:compiler:4.16.0"
+
+    // AndroidX
     implementation "androidx.activity:activity:1.9.3"
     implementation "androidx.activity:activity-ktx:1.9.3"
     implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
-    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.2.0'
-    ksp "com.github.bumptech.glide:compiler:4.16.0"
+    implementation "androidx.appcompat:appcompat:1.7.0"
+    implementation "com.google.android.material:material:1.12.0"
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
 
-    // Gson
-    implementation "com.google.code.gson:gson:2.10.1"
-
-    // iText
-    implementation 'com.itextpdf:itext7-core:7.2.5'
-
-    // ExoPlayer
-    implementation "com.google.android.exoplayer:exoplayer:2.19.1"
-
-    // Lottie
-    implementation "com.airbnb.android:lottie:6.4.0"
-
-    // ML Kit OCR
-    implementation "com.google.mlkit:text-recognition:16.0.0"
-
-    // Room - CAMBIO: kapt -> ksp
+    // Room
     def room_version = "2.6.1"
     implementation "androidx.room:room-runtime:$room_version"
     implementation "androidx.room:room-ktx:$room_version"
     ksp "androidx.room:room-compiler:$room_version"
-
-    // Coroutines
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1'
-
-
-    // AndroidX básicos
-    implementation "androidx.appcompat:appcompat:1.7.0"
-    implementation "com.google.android.material:material:1.12.0"
-
-    implementation "com.iceteck.silicompressorr:silicompressor:2.2.3"
-    implementation "commons-io:commons-io:2.13.0"
-
-    implementation "com.caverock:androidsvg:1.4"
-
-    // SwipeRefreshLayout
-    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
 
     // Lifecycle
     def lifecycle_version = "2.7.0"
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:$lifecycle_version"
     implementation "androidx.lifecycle:lifecycle-livedata-ktx:$lifecycle_version"
 
-// ⭐ NUEVAS - Para QR Code
+    // WorkManager
+    implementation "androidx.work:work-runtime-ktx:2.9.0"
+
+    // Coroutines
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1'
+
+    // Otros
+    implementation "com.google.code.gson:gson:2.10.1"
+    implementation 'com.itextpdf:itext7-core:7.2.5'
+    implementation "com.google.android.exoplayer:exoplayer:2.19.1"
+    implementation "com.airbnb.android:lottie:6.4.0"
+    implementation "com.google.mlkit:text-recognition:16.0.0"
+    implementation "com.iceteck.silicompressorr:silicompressor:2.2.3"
+    implementation "commons-io:commons-io:2.13.0"
+    implementation "com.caverock:androidsvg:1.4"
     implementation 'com.google.zxing:core:3.5.2'
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
 
-    // WorkManager
-    def work_version = "2.9.0"
-    implementation "androidx.work:work-runtime-ktx:$work_version"
-
     testImplementation "junit:junit:4.13.2"
-
 }

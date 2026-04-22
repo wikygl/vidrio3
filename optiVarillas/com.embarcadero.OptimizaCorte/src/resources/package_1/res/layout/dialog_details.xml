@@ -1,0 +1,97 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<RelativeLayout android:layout_width="fill_parent"
+                android:layout_height="fill_parent" xmlns:android="http://schemas.android.com/apk/res/android">
+  <LinearLayout android:id="@id/linear_detalles_title"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content">
+    <TextView android:textSize="16.0sp"
+              android:textStyle="bold"
+              android:textColor="@color/cutter_colorAccent"
+              android:id="@id/tv_details_title"
+              android:layout_width="fill_parent"
+              android:layout_height="wrap_content"
+              android:layout_marginLeft="16.0dp"
+              android:layout_marginTop="16.0dp"
+              android:layout_marginRight="16.0dp"
+              android:layout_marginBottom="8.0dp"
+              android:text="@string/dialog_details_title"
+              android:textAlignment="center"
+              android:layout_marginStart="16.0dp"
+              android:layout_marginEnd="16.0dp" />
+  </LinearLayout>
+  <LinearLayout android:orientation="vertical"
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:weightSum="3.0"
+                android:layout_below="@id/linear_detalles_title">
+    <LinearLayout android:orientation="vertical"
+                  android:layout_width="fill_parent"
+                  android:layout_height="fill_parent"
+                  android:layout_weight="1.0">
+      <TextView android:textStyle="bold"
+                android:id="@id/tv_details_barras"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8.0dp"
+                android:layout_marginTop="8.0dp"
+                android:layout_marginRight="8.0dp"
+                android:text="@string/lbl_btotales"
+                android:layout_marginStart="8.0dp"
+                android:layout_marginEnd="8.0dp" />
+      <ListView android:id="@id/lv_details_barras"
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:layout_marginLeft="8.0dp"
+                android:layout_marginTop="8.0dp"
+                android:layout_marginRight="8.0dp"
+                android:layout_marginStart="8.0dp"
+                android:layout_marginEnd="8.0dp" />
+    </LinearLayout>
+    <LinearLayout android:orientation="vertical"
+                  android:layout_width="fill_parent"
+                  android:layout_height="fill_parent"
+                  android:layout_weight="1.0">
+      <TextView android:textStyle="bold"
+                android:id="@id/tv_details_piezas"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8.0dp"
+                android:layout_marginTop="8.0dp"
+                android:layout_marginRight="8.0dp"
+                android:text="@string/lbl_ptotales_a"
+                android:layout_marginStart="8.0dp"
+                android:layout_marginEnd="8.0dp" />
+      <ListView android:id="@id/lv_details_piezas"
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:layout_marginLeft="8.0dp"
+                android:layout_marginTop="8.0dp"
+                android:layout_marginRight="8.0dp"
+                android:layout_marginStart="8.0dp"
+                android:layout_marginEnd="8.0dp" />
+    </LinearLayout>
+    <LinearLayout android:orientation="vertical"
+                  android:layout_width="fill_parent"
+                  android:layout_height="fill_parent"
+                  android:layout_weight="1.0">
+      <TextView android:textStyle="bold"
+                android:id="@id/tv_details_piezas_errores"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8.0dp"
+                android:layout_marginTop="8.0dp"
+                android:layout_marginRight="8.0dp"
+                android:text="Errores:"
+                android:layout_marginStart="8.0dp"
+                android:layout_marginEnd="8.0dp" />
+      <ListView android:id="@id/lv_details_piezas_errores"
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:layout_marginLeft="8.0dp"
+                android:layout_marginTop="8.0dp"
+                android:layout_marginRight="8.0dp"
+                android:layout_marginStart="8.0dp"
+                android:layout_marginEnd="8.0dp" />
+    </LinearLayout>
+  </LinearLayout>
+</RelativeLayout>

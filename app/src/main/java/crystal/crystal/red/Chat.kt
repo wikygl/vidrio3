@@ -6,7 +6,10 @@ data class Chat(
     var id: String = "",
     var name: String = "",
     var users: List<String> = emptyList(),
+    var peerPlatform: String = "crystal",
+    var participantsKey: String = "",
+    var photoUrl: String = "",
     var lastMsgDate: Date? = null,
     var unreadCount: Int = 0,
-    var lastMessageText: String = ""    // <— nuevo campo
+    var lastMessageText: String = ""
 )

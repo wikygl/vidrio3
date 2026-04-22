@@ -30,7 +30,7 @@
             android:paddingTop="18dp"
             android:paddingEnd="3dp"
             android:paddingBottom="3dp"
-            android:visibility="visible">
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -292,6 +292,34 @@
                                 android:autofillHints="@string/todo"
                                 android:inputType="numberDecimal"
                                 android:text="@string/_0"
+                                tools:ignore="LabelFor" />
+
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyMarcoVar"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Marco"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etMarcoVar"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:hint="2.2"
+                                android:inputType="numberDecimal"
                                 tools:ignore="LabelFor" />
 
                         </LinearLayout>

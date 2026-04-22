@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -17,7 +18,9 @@ import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import crystal.crystal.R
 import crystal.crystal.databinding.ActivityRegistroBinding
+import crystal.crystal.red.ChatIdentity
 import java.util.concurrent.TimeUnit
 
 class Registro : AppCompatActivity() {
@@ -26,6 +29,10 @@ class Registro : AppCompatActivity() {
     private lateinit var binding: ActivityRegistroBinding
     private val GOOGLE_SIGN_IN_CODE = 100
     private val IMAGE_PICK_CODE = 101
+
+    companion object {
+        private const val TAG = "Registro"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,9 +81,12 @@ class Registro : AppCompatActivity() {
         val doc = db.collection("usuarios").document(uid)
         doc.get().addOnSuccessListener { snap ->
             if (!snap.exists()) {
+                val nombre = binding.nombre.text?.toString() ?: ""
+                val email = binding.emailUser.text?.toString() ?: ""
                 val data = hashMapOf(
-                    "nombre" to (binding.nombre.text?.toString() ?: ""),
-                    "email" to (binding.emailUser.text?.toString() ?: ""),
+                    "nombre" to nombre,
+                    "nombreNormalizado" to ChatIdentity.normalizeSearchText(nombre),
+                    "email" to email,
                     "wallet" to mapOf("saldo" to 0.0),
                     "plan" to mapOf("tipo" to "free", "estado" to "activo"),
                     "trial" to mapOf("creditos" to 5)
@@ -131,6 +141,7 @@ class Registro : AppCompatActivity() {
     private fun iniciarSesionConGoogle() {
         val opcionesInicioSesionGoogle =
             GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(getString(R.string.default_web_client_id))
                 .requestEmail()
                 .build()
         val clienteInicioSesionGoogle = GoogleSignIn.getClient(this, opcionesInicioSesionGoogle)

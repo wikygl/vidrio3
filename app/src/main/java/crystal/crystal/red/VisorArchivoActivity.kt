@@ -14,6 +14,7 @@ import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import crystal.crystal.databinding.ActivityVisorArchivoBinding
 import java.io.File
+import java.net.URL
 
 class VisorArchivoActivity : AppCompatActivity() {
 
@@ -32,12 +33,12 @@ class VisorArchivoActivity : AppCompatActivity() {
             finish()
             return
         }
-        val tipo = intent.getStringExtra("tipo_archivo") ?: ""
+        val tipo = intent.getStringExtra("tipo_archivo").orEmpty()
 
         when {
-            tipo.startsWith("image") -> mostrarImagen(uriArchivo)
-            tipo.startsWith("video") || tipo.startsWith("audio") -> reproducirMultimedia(uriArchivo)
-            tipo == "application/pdf" -> mostrarPdfNativo(uriArchivo)
+            tipo.startsWith("image") || tipo == "imagen" -> mostrarImagen(uriArchivo)
+            tipo.startsWith("video") || tipo == "video" || tipo.startsWith("audio") || tipo == "audio" -> reproducirMultimedia(uriArchivo)
+            tipo == "application/pdf" || tipo == "pdf" -> mostrarPdf(uriArchivo)
             else -> {
                 Toast.makeText(this, "Tipo no soportado", Toast.LENGTH_SHORT).show()
                 finish()
@@ -62,23 +63,44 @@ class VisorArchivoActivity : AppCompatActivity() {
         }
     }
 
-    private fun mostrarPdfNativo(uri: Uri) {
-        // Copiar el archivo PDF a cache
-        val filePdf = File(cacheDir, "temp.pdf")
-        contentResolver.openInputStream(uri)?.use { input ->
-            filePdf.outputStream().use { output ->
-                input.copyTo(output)
+    private fun mostrarPdf(uri: Uri) {
+        val filePdf = File(cacheDir, "temp_${System.currentTimeMillis()}.pdf")
+
+        Thread {
+            try {
+                if (uri.scheme == "http" || uri.scheme == "https") {
+                    URL(uri.toString()).openStream().use { input ->
+                        filePdf.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                } else {
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        filePdf.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    } ?: error("No se pudo abrir el PDF")
+                }
+
+                runOnUiThread {
+                    abrirPdfDesdeArchivo(filePdf)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "No se pudo abrir el PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
             }
-        }
-        // Abrir descriptor y renderer
+        }.start()
+    }
+
+    private fun abrirPdfDesdeArchivo(filePdf: File) {
         archivoDescriptor = ParcelFileDescriptor.open(filePdf, ParcelFileDescriptor.MODE_READ_ONLY)
         pdfRenderer = PdfRenderer(archivoDescriptor!!)
 
-        // Mostrar controles PDF
         binding.visorPdfImagen.visibility = View.VISIBLE
         binding.botoneraPdf.visibility = View.VISIBLE
 
-        // Configurar botones
         binding.btnAnteriorPdf.setOnClickListener {
             if (paginaActualIdx > 0) mostrarPagina(paginaActualIdx - 1)
         }
@@ -88,21 +110,18 @@ class VisorArchivoActivity : AppCompatActivity() {
             }
         }
 
-        // Mostrar primera página
         mostrarPagina(0)
     }
 
     private fun mostrarPagina(pos: Int) {
         pdfRenderer?.let { renderer ->
-            // Cerrar página anterior si existe
-            renderer.openPage(paginaActualIdx).close()
             paginaActualIdx = pos
             val page = renderer.openPage(pos)
             val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
             page.close()
             binding.visorPdfImagen.setImageBitmap(bitmap)
-            binding.txtPaginaPdf.text = "Página ${pos + 1}/${renderer.pageCount}"
+            binding.txtPaginaPdf.text = "Pagina ${pos + 1}/${renderer.pageCount}"
         }
     }
 
@@ -114,7 +133,6 @@ class VisorArchivoActivity : AppCompatActivity() {
     }
 
     companion object {
-        /** Lanza esta actividad desde otra Activity */
         fun abrir(activity: AppCompatActivity, uri: Uri, tipo: String) {
             val intent = Intent(activity, VisorArchivoActivity::class.java).apply {
                 putExtra("uri_archivo", uri)

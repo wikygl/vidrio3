@@ -26,6 +26,7 @@ import crystal.crystal.taller.ModoMasivoHelper
 import crystal.crystal.taller.nova.NovaUIHelper.esValido
 import crystal.crystal.taller.puerta.datos.PuertaRepositorio
 import crystal.crystal.taller.puerta.dibujo.DibujoPuerta
+import crystal.crystal.taller.puerta.logica.CalculosLina
 import crystal.crystal.taller.puerta.logica.CalculosPuerta
 import crystal.crystal.taller.puerta.logica.PlanoRotado
 import crystal.crystal.taller.puerta.modelos.Puerta
@@ -189,6 +190,7 @@ class PuertasActivity : AppCompatActivity() {
     private fun actualizarVisibilidades() {
         val nombre = puertaActual?.nombre ?: ""
         binding.lyAD.visibility = if (nombre == "Viky" || nombre == "Adel") View.VISIBLE else View.GONE
+        binding.lyMarcoVar.visibility = if (nombre == "Lina") View.VISIBLE else View.GONE
     }
 
     // ---------------------- Listeners de UI ----------------------
@@ -339,8 +341,60 @@ class PuertasActivity : AppCompatActivity() {
 
     // ---------------------- Calcular y renderizar ----------------------
     @SuppressLint("SetTextI18n")
+    private fun ejecutarCalculoLina() {
+        val ancho = binding.etMed1.text.toString().toFloat()
+        val alto  = binding.etMed2.text.toString().toFloat()
+        val hHoja = binding.etHoja.text.toString().toFloatOrNull() ?: 0f
+        val marcoVar = binding.etMarcoVar.text.toString().toFloatOrNull() ?: 2.2f
+
+        val esPlegado = varianteSeleccionada == "Lina p"
+        val hH = CalculosLina.hojaH(alto, hHoja, esPlegado)
+        val hV = CalculosLina.hojaV(ancho, marcoVar)
+        val refV = CalculosLina.panelRefV(hH)
+
+        when (varianteSeleccionada) {
+            "Lina h" -> {
+                val refH = CalculosLina.panelRefH_h(ancho)
+                binding.tvMarco.text  = CalculosLina.canal(ancho, alto)
+                binding.tvTubo.text   = CalculosLina.tuboPuente(ancho)
+                binding.tvPaflon.text = CalculosLina.tres(hH, ancho, refH)
+                binding.tvJunki.text  = "${CalculosLina.tresOcho(hH, refV)}\n${CalculosLina.tope(hH, ancho, alto)}"
+                val vid = CalculosLina.vidrioH(hH, ancho, alto)
+                binding.tvVidrios.text = "${CalculosLina.panelH(hH, refV, refH)}${if (vid.isNotEmpty()) "\n$vid" else ""}"
+                binding.lyTubo.visibility = View.VISIBLE
+            }
+            "Lina b" -> {
+                binding.tvMarco.text  = CalculosLina.canal(ancho, alto)
+                binding.tvTubo.text   = CalculosLina.tuboPuente(ancho)
+                binding.tvPaflon.text = "${CalculosLina.paflon(hH, ancho)}\n${CalculosLina.riel(hH, ancho)}"
+                binding.tvJunki.text  = "${CalculosLina.unoB(hH, ancho)}\n${CalculosLina.tope(hH, ancho, alto)}"
+                binding.tvVidrios.text = CalculosLina.vidrioB(hH, ancho, alto)
+                binding.lyTubo.visibility = View.VISIBLE
+            }
+            "Lina p" -> {
+                val refH = CalculosLina.panelRefH_p(hV)
+                binding.tvMarco.text  = "${CalculosLina.marcoPlegado(ancho, alto)}\n${CalculosLina.contraMarco(ancho, alto)}"
+                binding.tvTubo.text   = ""
+                binding.tvPaflon.text = "${CalculosLina.bandejas(hH, ancho, alto, marcoVar, hV)}\n${CalculosLina.fierroTresDos(hH, ancho, marcoVar, hV)}\n${CalculosLina.platina(hH)}"
+                binding.tvJunki.text  = ""
+                binding.tvVidrios.text = "${CalculosLina.panelP(hH, ancho, alto, refV, refH)}\n${CalculosLina.plancha(hH, ancho, alto, marcoVar, hV)}"
+                binding.lyTubo.visibility = View.GONE
+            }
+        }
+
+        binding.txRefe.text = "anch ${CalculosPuerta.df1(ancho)} x alt ${CalculosPuerta.df1(alto)}\nAlto hoja = ${CalculosPuerta.df1(hH)}"
+        binding.txCliente.text = clienteActual
+        binding.tvEnsayo.text  = ""
+        binding.tvEnsayo2.text = ""
+        renderizarModeloActual()
+    }
+
     private fun ejecutarCalculoCompleto() {
         try {
+            if (varianteSeleccionada.startsWith("Lina")) {
+                ejecutarCalculoLina()
+                return
+            }
             // Entradas
             val ancho = binding.etMed1.text.toString().toFloat()
             val alto = binding.etMed2.text.toString().toFloat()
@@ -398,13 +452,14 @@ class PuertasActivity : AppCompatActivity() {
                     var gapTaly = paflon
                     var paresTaly = 0
                     while (gapTaly > 20f && gapTaly >= bastidor * 2f) { paresTaly++; gapTaly -= 2f * bastidor }
-                    val altInterno = hPuente - 2f * bastidor
+                    val altInterno = paranteInt
                     val nDivisores = maxOf(0, nDiv - 1)
                     buildString {
                         append("${CalculosPuerta.df1(parante)} = 2\n")
                         append("${CalculosPuerta.df1(paflon)} = 2")
                         if (paresTaly > 0) append("\n${CalculosPuerta.df1(altInterno)} = ${paresTaly * 2}")
                         append("\n${CalculosPuerta.df1(gapTaly)} = 2")  // topInner + botInner
+                        if (nZ > 1) append("\n${CalculosPuerta.df1(gapTaly)} = ${nZ - 1}")  // zócalo extra
                         if (nDivisores > 0) {
                             val divLen = if (varianteSeleccionada == "Taly d" && angulo != 0f) {
                                 val rad = Math.toRadians(angulo.toDouble())
@@ -427,7 +482,7 @@ class PuertasActivity : AppCompatActivity() {
             binding.tvJunki.text = if (varianteSeleccionada == "Taly h" || varianteSeleccionada == "Taly d") {
                 var gapTalyJ = paflon
                 while (gapTalyJ > 20f && gapTalyJ >= bastidor * 2f) { gapTalyJ -= 2f * bastidor }
-                val zoneHcm = hPuente - 4f * bastidor
+                val zoneHcm = paranteInt - 2f * bastidor
                 val barrasJ = maxOf(0, nDiv - 1)
                 val gapSeccion = if (nDiv > 0) (zoneHcm - barrasJ * bastidor) / nDiv else zoneHcm
 
@@ -474,7 +529,7 @@ class PuertasActivity : AppCompatActivity() {
             binding.tvVidrios.text = if (varianteSeleccionada == "Taly h" || varianteSeleccionada == "Taly d") {
                 var gapTalyV = paflon
                 while (gapTalyV > 20f && gapTalyV >= bastidor * 2f) { gapTalyV -= 2f * bastidor }
-                val zoneHv = hPuente - 4f * bastidor
+                val zoneHv = paranteInt - 2f * bastidor
                 val barrasV = maxOf(0, nDiv - 1)
                 val gapSeccionV = if (nDiv > 0) (zoneHv - barrasV * bastidor) / nDiv else zoneHv
                 val holgura = 0.5f
@@ -523,7 +578,7 @@ class PuertasActivity : AppCompatActivity() {
     private fun renderizarModeloActual() {
         // Solo los modelos con renderizado implementado generan bitmap
         val nombreModelo = puertaActual?.nombre ?: return
-        if (nombreModelo != "Mari" && nombreModelo != "Taly") return
+        if (nombreModelo != "Mari" && nombreModelo != "Taly" && nombreModelo != "Lina" && nombreModelo != "Adel" && nombreModelo != "Mili" && nombreModelo != "jeny" && nombreModelo != "Dora" && nombreModelo != "Tere") return
         val anchoPuertaCm = binding.etMed1.text.toString().toFloatOrNull() ?: return
         val altoPuertaCm = binding.etMed2.text.toString().toFloatOrNull() ?: return
         val nZocalos = binding.etZocalo.text.toString().toIntOrNull() ?: 0
@@ -549,8 +604,88 @@ class PuertasActivity : AppCompatActivity() {
         val anchoContenedor = anchoPuertaCm * 3
         val altoContenedor = altoPuertaCm * 3
         val angulo = binding.etAngulo.text.toString().toFloatOrNull() ?: 0f
+        val pisoG = binding.etPiso.text.toString().toFloatOrNull() ?: 0f
+        // Gap visual = hPuente - parante (ya incluye la holgura correcta)
+        val gapPisoCm = altoHojaCm - CalculosPuerta.parante(altoHojaCm, pisoG)
 
-        val bmp: Bitmap = if (varianteSeleccionada.startsWith("Taly")) {
+        val bmp: Bitmap = if (nombreModelo == "Tere") {
+            DibujoPuerta.generarBitmapTere(
+                context = this,
+                anchoCm = anchoPuertaCm,
+                altoCm = altoPuertaCm,
+                altoHojaCm = altoHojaCm,
+                anchoContenedor = anchoContenedor,
+                altoContenedor = altoContenedor,
+                pisoCm = gapPisoCm,
+                nZocalo = CalculosPuerta.nZocalo(nZocalos)
+            )
+        } else if (nombreModelo == "Dora") {
+            DibujoPuerta.generarBitmapDora(
+                context = this,
+                anchoCm = anchoPuertaCm,
+                altoCm = altoPuertaCm,
+                altoHojaCm = altoHojaCm,
+                anchoContenedor = anchoContenedor,
+                altoContenedor = altoContenedor,
+                pisoCm = gapPisoCm,
+                nZocalo = CalculosPuerta.nZocalo(nZocalos)
+            )
+        } else if (nombreModelo == "jeny") {
+            val nCols = nDiv.takeIf { it >= 1 } ?: 3
+            DibujoPuerta.generarBitmapJeny(
+                context = this,
+                anchoCm = anchoPuertaCm,
+                altoCm = altoPuertaCm,
+                altoHojaCm = altoHojaCm,
+                nCols = nCols,
+                nRows = nCols,
+                anchoContenedor = anchoContenedor,
+                altoContenedor = altoContenedor,
+                pisoCm = gapPisoCm,
+                nZocalo = CalculosPuerta.nZocalo(nZocalos)
+            )
+        } else if (nombreModelo == "Mili") {
+            DibujoPuerta.generarBitmapMili(
+                context = this,
+                anchoCm = anchoPuertaCm,
+                altoCm = altoPuertaCm,
+                altoHojaCm = altoHojaCm,
+                anchoContenedor = anchoContenedor,
+                altoContenedor = altoContenedor,
+                pisoCm = gapPisoCm,
+                nZocalo = CalculosPuerta.nZocalo(nZocalos)
+            )
+        } else if (nombreModelo == "Adel") {
+            val hHojaAdel = CalculosLina.hojaH(altoPuertaCm, binding.etHoja.text.toString().toFloatOrNull() ?: 0f, false)
+            val nDivAdel  = nDiv.takeIf { it >= 1 } ?: 3        // divisiones de vidrio (columna derecha)
+            val nPafAdel  = binding.etAD.text.toString().toIntOrNull() ?: 3  // paflones (columna izquierda)
+            DibujoPuerta.generarBitmapAdel(
+                context = this,
+                anchoCm = anchoPuertaCm,
+                altoCm = altoPuertaCm,
+                altoHojaCm = hHojaAdel,
+                nDivisiones = nDivAdel,
+                variante = varianteSeleccionada,
+                nPaflones = nPafAdel,
+                anchoContenedor = anchoContenedor,
+                altoContenedor = altoContenedor,
+                pisoCm = gapPisoCm,
+                nZocalo = CalculosPuerta.nZocalo(nZocalos)
+            )
+        } else if (nombreModelo == "Lina") {
+            val hHojaLina = CalculosLina.hojaH(altoPuertaCm, binding.etHoja.text.toString().toFloatOrNull() ?: 0f, varianteSeleccionada == "Lina p")
+            val nPanelesLina = nDiv.takeIf { it >= 3 } ?: 5
+            DibujoPuerta.generarBitmapLinaH(
+                context = this,
+                anchoCm = anchoPuertaCm,
+                altoCm = altoPuertaCm,
+                altoHojaCm = hHojaLina,
+                nPaneles = nPanelesLina,
+                anchoContenedor = anchoContenedor,
+                altoContenedor = altoContenedor,
+                pisoCm = gapPisoCm
+            )
+        } else if (varianteSeleccionada.startsWith("Taly")) {
             DibujoPuerta.generarBitmapTaly(
                 context = this,
                 anchoPuertaCm = anchoPuertaCm,
@@ -562,7 +697,9 @@ class PuertasActivity : AppCompatActivity() {
                 numeroDivisiones = nDiv,
                 anguloGrados = if (varianteSeleccionada == "Taly d") angulo else 0f,
                 marcoCmIzq = marcoIzqRender,
-                marcoCmDer = marcoDerRender
+                marcoCmDer = marcoDerRender,
+                nZocalo = CalculosPuerta.nZocalo(nZocalos),
+                pisoCm = gapPisoCm
             )
         } else {
             DibujoPuerta.generarBitmapPuerta(
@@ -571,14 +708,15 @@ class PuertasActivity : AppCompatActivity() {
                 altoPuertaCm = altoPuertaCm,
                 anchoHojaCm = anchoHojaCm,
                 altoHojaCm = altoHojaCm,
-                numeroZocalos = nZocalos,
+                numeroZocalos = CalculosPuerta.nZocalo(nZocalos),
                 numeroDivisiones = nDiv,
                 anchoContenedor = anchoContenedor,
                 altoContenedor = altoContenedor,
                 tipoDivision = tipoDivision,
                 anguloGrados = angulo,
                 marcoCmIzq = marcoIzqRender,
-                marcoCmDer = marcoDerRender
+                marcoCmDer = marcoDerRender,
+                pisoCm = gapPisoCm
             )
         }
         binding.ivModelo.setImageBitmap(bmp)
@@ -615,7 +753,15 @@ class PuertasActivity : AppCompatActivity() {
             Variante("Taly h", R.drawable.pthalia),
             Variante("Taly d", R.drawable.ptalyd)
         )
-        "Mili" -> listOf(Variante("Variante Única", R.drawable.pvicky))
+        "Lina" -> listOf(
+            Variante("Lina h", R.drawable.ic_pp2),
+            Variante("Lina b", R.drawable.ic_pp2),
+            Variante("Lina p", R.drawable.ic_pp2)
+        )
+        "Mili" -> listOf(Variante("Mili", R.drawable.pmili))
+        "jeny" -> listOf(Variante("Jeny", R.drawable.pjenny))
+        "Dora" -> listOf(Variante("Dora", R.drawable.pdora))
+        "Tere" -> listOf(Variante("Tere", R.drawable.ptere))
         "Viky" -> listOf(Variante("Variante Única", R.drawable.pvicky))
         else -> emptyList()
     }

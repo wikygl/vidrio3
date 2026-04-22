@@ -70,28 +70,7 @@
   <path
       android:pathData="m1.783,0.412 l-1.371,6.863 17.408,3.479v37.1h7L24.82,5.013Z"
       android:strokeWidth="0.7"
-      android:fillType="evenOdd">
-    <aapt:attr name="android:fillColor">
-      <gradient
-          android:startX="0"
-          android:startY="24.102"
-          android:endX="25.17"
-          android:endY="24.102"
-          android:type="linear">
-        <item android:offset="0" android:color="#00000000"/>
-        <item android:offset="1" android:color="#00000000"/>
-      </gradient>
-    </aapt:attr>
-    <aapt:attr name="android:strokeColor">
-      <gradient
-          android:startX="0.412"
-          android:startY="24.132"
-          android:endX="24.82"
-          android:endY="24.132"
-          android:type="linear">
-        <item android:offset="0" android:color="#FF000000"/>
-        <item android:offset="1" android:color="#FF000000"/>
-      </gradient>
-    </aapt:attr>
-  </path>
+      android:fillColor="#00000000"
+      android:strokeColor="#FF000000"
+      android:fillType="evenOdd"/>
 </vector>

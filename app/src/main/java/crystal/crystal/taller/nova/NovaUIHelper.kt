@@ -219,6 +219,140 @@ object NovaUIHelper {
     }
 //{nova,apa,[150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)}]
 
+    /**
+     * Genera la cadena de tramos para una ventana: "Tb<w>(s<h>(mods);m<hm>(mods)) P<2.5> Tb<w2>(...)"
+     * Sin prefijo de dimensiones. Úsalo cuando necesitas solo el cuerpo de tramos.
+     */
+    fun generarTramos(
+        ancho: Float,
+        alto: Float,
+        altoHoja: Float,
+        divisiones: Int,
+        siNoMoch: Int,
+        texto: String
+    ): String {
+        val mo       = NovaCalculos.altoMocheta(alto, altoHoja, tubo = 2.5f)
+        val moDos    = (alto - altoHoja).coerceAtLeast(0f) / 2f
+        val altoPuente = if (siNoMoch == 1) NovaCalculos.df1(altoHoja) else ""
+        val altoSisTxt = NovaCalculos.df1(altoHoja)
+        val moTxt    = NovaCalculos.df1(mo)
+        val moDosT   = NovaCalculos.df1(moDos)
+
+        val grupos   = NovaCalculos.gruposDivisionesMochetaPorModelo(ancho, divisiones, texto)
+        val nTramos  = grupos.size
+        val anchoUtil   = if (nTramos > 1) ancho - (nTramos - 1) * 2.5f else ancho
+        val anchoPorDiv = if (divisiones > 0) anchoUtil / divisiones else ancho
+
+        val bloques = grupos.map { nDiv ->
+            val w    = anchoPorDiv * nDiv
+            val wTxt = NovaCalculos.df1(w)
+            val am   = NovaCalculos.anchMota(w)
+            val wMochTxt = NovaCalculos.df1(w / am)
+            val modsM = (1..am).joinToString("") { "f<$wMochTxt>" }
+
+            val modsS = when (texto) {
+                "ncc"  -> { val h = NovaCalculos.df1(w / 2); "c<$h>c<$h>" }
+                "n3c"  -> { val h = NovaCalculos.df1(w / 3); "c<$h>c<$h>c<$h>" }
+                "ncfc" -> { val h = NovaCalculos.df1(w / 3); "c<$h>f<$h>c<$h>" }
+                else   -> NovaCalculos.ordenDivis(nDiv, w)
+            }
+
+            val contenido = when (texto) {
+                "nr" -> {
+                    val s = "s<$altoSisTxt>($modsS)"
+                    if (siNoMoch == 1) "m<$moTxt>($modsM);$s" else s
+                }
+                "np", "nci" -> {
+                    val s = "s<$altoSisTxt>($modsS)"
+                    if (siNoMoch == 1) "m<$moDosT>($modsM);$s;m<$moDosT>($modsM)" else s
+                }
+                else -> {
+                    val s = "s<$altoPuente>($modsS)"
+                    if (siNoMoch == 1) "$s;m<$moTxt>($modsM)" else s
+                }
+            }
+            "Tl<$wTxt>($contenido)"
+        }
+        return bloques.joinToString(" P<2.5> ")
+    }
+
+    /**
+     * Como generarTramos pero siempre produce un único Tl<ancho>(...) con ;P; internos.
+     * Necesario para geometrías compuestas (nl/nu/ns/ncu/nci): evita que los separadores
+     * P<2.5> entre tramos se mezclen con los A<90> entre paneles en parsearConTramos.
+     */
+    fun generarTramosConsolidado(
+        ancho: Float,
+        alto: Float,
+        altoHoja: Float,
+        divisiones: Int,
+        siNoMoch: Int,
+        texto: String
+    ): String {
+        val mo       = NovaCalculos.altoMocheta(alto, altoHoja, tubo = 2.5f)
+        val moDos    = (alto - altoHoja).coerceAtLeast(0f) / 2f
+        val altoPuente = if (siNoMoch == 1) NovaCalculos.df1(altoHoja) else ""
+        val altoSisTxt = NovaCalculos.df1(altoHoja)
+        val moTxt    = NovaCalculos.df1(mo)
+        val moDosT   = NovaCalculos.df1(moDos)
+
+        val grupos   = NovaCalculos.gruposDivisionesMochetaPorModelo(ancho, divisiones, texto)
+        val nTramos  = grupos.size
+        val anchoUtil   = if (nTramos > 1) ancho - (nTramos - 1) * 2.5f else ancho
+        val anchoPorDiv = if (divisiones > 0) anchoUtil / divisiones else ancho
+
+        if (nTramos <= 1) {
+            return generarTramos(ancho, alto, altoHoja, divisiones, siNoMoch, texto)
+        }
+
+        val listaSistMods = mutableListOf<String>()
+        val listaMochMods = mutableListOf<String>()
+        for (nDiv in grupos) {
+            val w = anchoPorDiv * nDiv
+            val am = NovaCalculos.anchMota(w)
+            val wMochTxt = NovaCalculos.df1(w / am)
+            listaMochMods.add((1..am).joinToString("") { "f<$wMochTxt>" })
+            listaSistMods.add(when (texto) {
+                "ncc"  -> { val h = NovaCalculos.df1(w / 2); "c<$h>c<$h>" }
+                "n3c"  -> { val h = NovaCalculos.df1(w / 3); "c<$h>c<$h>c<$h>" }
+                "ncfc" -> { val h = NovaCalculos.df1(w / 3); "c<$h>f<$h>c<$h>" }
+                else   -> NovaCalculos.ordenDivis(nDiv, w)
+            })
+        }
+
+        val sistMods = listaSistMods.joinToString(";P;")
+        val mochMods = listaMochMods.joinToString(";P;")
+        val anchoTxt = NovaCalculos.df1(ancho)
+
+        val contenido = when (texto) {
+            "nr" -> {
+                val s = "s<$altoSisTxt>($sistMods)"
+                if (siNoMoch == 1) "m<$moTxt>($mochMods);$s" else s
+            }
+            "np", "nci" -> {
+                val s = "s<$altoSisTxt>($sistMods)"
+                if (siNoMoch == 1) "m<$moDosT>($mochMods);$s;m<$moDosT>($mochMods)" else s
+            }
+            else -> {
+                val s = "s<$altoPuente>($sistMods)"
+                if (siNoMoch == 1) "$s;m<$moTxt>($mochMods)" else s
+            }
+        }
+        return "Tl<$anchoTxt>($contenido)"
+    }
+
+    fun generarDisenoConsolidado(
+        ancho: Float,
+        alto: Float,
+        altoHoja: Float,
+        divisiones: Int,
+        siNoMoch: Int,
+        texto: String
+    ): String {
+        val encabezado = "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:"
+        return encabezado + generarTramosConsolidado(ancho, alto, altoHoja, divisiones, siNoMoch, texto)
+    }
+
     fun generarDiseno(
         ancho: Float,
         alto: Float,
@@ -227,48 +361,8 @@ object NovaUIHelper {
         siNoMoch: Int,
         texto: String
     ): String {
-        val presets = mapOf(
-            "nu" to "150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)",
-            "ns" to "150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)",
-            "ncu" to "150,120:m<30.6>(fccf);s<80>(fcf);m<9.4>(cfc)"
-        )
-        presets[texto]?.let { return it }
-
-        val mo = NovaCalculos.altoMocheta(alto, altoHoja, tubo = 2.5f)
-        val moDos = ((alto - altoHoja).coerceAtLeast(0f)) / 2f
-        val altoPuenteTexto = if (siNoMoch == 1) NovaCalculos.df1(altoHoja) else ""
-        val mochetasTxt = NovaCalculos.ordenMochetasConParantesModelo(divisiones, ancho, texto)
         val encabezado = "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:"
-
-        return when (texto) {
-            "nn" -> encabezado +
-                    "s<$altoPuenteTexto>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});" +
-                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
-            "nl" -> encabezado +
-                    "s<$altoPuenteTexto>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});" +
-                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
-            "nr" -> encabezado +
-                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt);" +
-                    "s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)})"
-            "np" -> encabezado +
-                    "m<${NovaCalculos.df1(moDos)}>($mochetasTxt);" +
-                    "s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});" +
-                    "m<${NovaCalculos.df1(moDos)}>($mochetasTxt)"
-            "nci" -> encabezado +
-                    "m<${NovaCalculos.df1(moDos)}>($mochetasTxt);" +
-                    "s<${NovaCalculos.df1(altoHoja)}>(${NovaCalculos.ordenDivisConParantes(divisiones, ancho)});" +
-                    "m<${NovaCalculos.df1(moDos)}>($mochetasTxt)"
-            "ncc" -> encabezado +
-                    "s<$altoPuenteTexto>(${NovaCalculos.ordenCorredizasConParantes(divisiones, ancho)});" +
-                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
-            "n3c" -> encabezado +
-                    "s<$altoPuenteTexto>(${NovaCalculos.ordenCorredizasConParantes(divisiones, ancho, 3)});" +
-                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
-            "ncfc" -> encabezado +
-                    "s<$altoPuenteTexto>(${NovaCalculos.ordenNcfcConParantes(divisiones, ancho)});" +
-                    "m<${NovaCalculos.df1(mo)}>($mochetasTxt)"
-            else -> ""
-        }
+        return encabezado + generarTramos(ancho, alto, altoHoja, divisiones, siNoMoch, texto)
     }
 
     fun generarPuntosU(

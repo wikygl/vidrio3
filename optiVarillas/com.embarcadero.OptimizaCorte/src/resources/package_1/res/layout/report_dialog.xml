@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<androidx.constraintlayout.widget.ConstraintLayout android:layout_width="fill_parent"
+                      android:layout_height="fill_parent" xmlns:android="http://schemas.android.com/apk/res/android" xmlns:OptimizaCorte="http://schemas.android.com/apk/res-auto">
+  <EditText android:gravity="center|start|top"
+            android:id="@id/et_comments_report"
+            android:layout_width="0.0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16.0dp"
+            android:hint="@string/report_comment"
+            android:ems="10"
+            android:inputType="textMultiLine"
+            android:layout_marginStart="16.0dp"
+            android:layout_marginEnd="16.0dp"
+            OptimizaCorte:layout_constraintEnd_toEndOf="parent"
+            OptimizaCorte:layout_constraintStart_toStartOf="parent"
+            OptimizaCorte:layout_constraintTop_toTopOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>

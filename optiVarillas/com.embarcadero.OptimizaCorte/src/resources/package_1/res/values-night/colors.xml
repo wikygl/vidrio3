@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<resources>
+  <color name="cardBackgroundColor">#212121</color>
+  <color name="contentBackgroundColor">#000000</color>
+  <color name="feedbackTextColor">#ffffff</color>
+  <color name="primaryTextColor">#ffffff</color>
+  <color name="textFieldColor">#0f0f0f</color>
+</resources>

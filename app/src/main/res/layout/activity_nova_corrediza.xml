@@ -205,12 +205,46 @@
                     android:id="@+id/fichaT_layout"
                     android:layout_width="match_parent"
                     android:layout_height="135dp"
-                    android:background="@drawable/cornere">
+                    android:background="@drawable/cornere"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/lySeleccion"
+                        android:layout_width="match_parent"
+                        android:layout_height="45dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="4dp">
+
+                        <TextView
+                            android:id="@+id/tvNombreModelo"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_margin="3dp"
+                            android:layout_weight="1.5"
+                            android:background="@drawable/cornerv"
+                            android:gravity="center"
+                            android:text="normal"
+                            android:textColor="@color/color"
+                            android:textSize="11sp"
+                            tools:ignore="SmallSp,TextContrastCheck" />
+
+                        <ImageView
+                            android:id="@+id/ivModeloEspecial"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:importantForAccessibility="no"
+                            android:scaleType="fitCenter"
+                            app:srcCompat="@drawable/vplano" />
+
+                    </LinearLayout>
 
                     <androidx.constraintlayout.widget.ConstraintLayout
                         android:id="@+id/cons"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent">
+                        android:layout_height="90dp">
 
                         <ImageView
                             android:id="@+id/ivDiseno"
@@ -293,37 +327,7 @@
                                     android:contentDescription="@string/todo"
                                     app:srcCompat="@drawable/ncfc" />
 
-                                <ImageView
-                                    android:id="@+id/btNoval"
-                                    android:layout_width="81dp"
-                                    android:layout_height="81dp"
-                                    android:layout_margin="3dp"
-                                    android:contentDescription="@string/todo"
-                                    android:src="@drawable/nel" />
-
-                                <ImageView
-                                    android:id="@+id/btNovau"
-                                    android:layout_width="81dp"
-                                    android:layout_height="81dp"
-                                    android:layout_margin="3dp"
-                                    android:background="@drawable/neu"
-                                    android:contentDescription="@string/todo" />
-
-                                <ImageView
-                                    android:id="@+id/btNovas"
-                                    android:layout_width="81dp"
-                                    android:layout_height="81dp"
-                                    android:layout_margin="3dp"
-                                    android:background="@drawable/nes"
-                                    android:contentDescription="@string/todo" />
-
-                                <ImageView
-                                    android:id="@+id/btNovacu"
-                                    android:layout_width="81dp"
-                                    android:layout_height="81dp"
-                                    android:layout_margin="3dp"
-                                    android:background="@drawable/ncu"
-                                    android:contentDescription="@string/todo" />
+                                <!-- btNoval, btNovau, btNovas, btNovacu migrados al panel de geometría -->
 
                                 <ImageView
                                     android:id="@+id/btNovaci"
@@ -1587,6 +1591,168 @@
 
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
+            </LinearLayout>
+
+            <!-- Panel derecho: selector de tipo de ventana (vplano/venl/venc/vcurvo/vserie) -->
+            <LinearLayout
+                android:id="@+id/lyPanelModelos"
+                android:layout_width="80dp"
+                android:layout_height="match_parent"
+                android:layout_marginTop="9dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/corner"
+                android:orientation="vertical"
+                android:visibility="gone"
+                tools:ignore="NestedWeights">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/corner2"
+                    android:backgroundTint="@color/color"
+                    android:gravity="center"
+                    android:padding="4dp"
+                    android:text="Geometría de ventana\nVista top"
+                    android:textColor="@color/blanco"
+                    android:textSize="8sp"
+                    tools:ignore="SmallSp,TextContrastCheck" />
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="4dp">
+
+                        <LinearLayout
+                            android:id="@+id/itemVplano"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:padding="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="@drawable/cornerv">
+                            <ImageView
+                                android:layout_width="52dp"
+                                android:layout_height="52dp"
+                                android:importantForAccessibility="no"
+                                app:srcCompat="@drawable/vplano" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Plano"
+                                android:textSize="9sp"
+                                android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/itemVenl"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:padding="4dp"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="@drawable/cornerv">
+                            <ImageView
+                                android:layout_width="52dp"
+                                android:layout_height="52dp"
+                                android:importantForAccessibility="no"
+                                app:srcCompat="@drawable/venl" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="En L"
+                                android:textSize="9sp"
+                                android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/itemVenc"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:padding="4dp"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="@drawable/cornerv">
+                            <ImageView
+                                android:layout_width="52dp"
+                                android:layout_height="52dp"
+                                android:importantForAccessibility="no"
+                                app:srcCompat="@drawable/venc" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="En C"
+                                android:textSize="9sp"
+                                android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/itemVcurvo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:padding="4dp"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="@drawable/cornerv">
+                            <ImageView
+                                android:layout_width="52dp"
+                                android:layout_height="52dp"
+                                android:importantForAccessibility="no"
+                                app:srcCompat="@drawable/vcurvo" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Curvo"
+                                android:textSize="9sp"
+                                android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/itemVserie"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:padding="4dp"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="@drawable/cornerv">
+                            <ImageView
+                                android:layout_width="52dp"
+                                android:layout_height="52dp"
+                                android:importantForAccessibility="no"
+                                app:srcCompat="@drawable/vserie" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Serie"
+                                android:textSize="9sp"
+                                android:gravity="center"
+                                tools:ignore="SmallSp" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+                </ScrollView>
             </LinearLayout>
 
         </LinearLayout>

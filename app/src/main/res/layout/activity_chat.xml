@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="387dp"
+    android:layout_height="match_parent"
     tools:context=".red.ChatActivity">
 
     <LinearLayout
@@ -18,7 +18,7 @@
 
         <include
             android:id="@+id/headerChat"
-            layout="@layout/item_chat"
+            layout="@layout/item_chat_header"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:layout_constraintEnd_toEndOf="parent"
@@ -52,44 +52,51 @@
         <LinearLayout
             android:id="@+id/ly1"
             android:layout_width="match_parent"
-            android:layout_height="135dp"
-            android:layout_weight="1"
+            android:layout_height="wrap_content"
             android:background="@drawable/cornere"
+            android:gravity="bottom"
             android:orientation="horizontal"
             android:padding="9dp">
 
             <EditText
                 android:id="@+id/messageTextField"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="0.63"
+                android:layout_gravity="bottom"
+                android:layout_weight="1"
+                android:gravity="top|start"
                 android:hint="Escribe Mensaje"
                 android:inputType="textMultiLine"
+                android:maxLines="6"
+                android:minLines="1"
+                android:overScrollMode="ifContentScrolls"
+                android:scrollbars="vertical"
+                android:singleLine="false"
+                android:verticalScrollbarPosition="right"
                 tools:ignore="NestedWeights,TextContrastCheck,TouchTargetSizeCheck,TouchTargetSizeCheck,TouchTargetSizeCheck" />
 
-            <Button
+            <ImageButton
                 android:id="@+id/btArchivo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_weight="1.8"
-                android:text="archivo" />
-
-            <Button
-                android:id="@+id/btEnviar"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_weight="1.8"
-                android:text="Enviar"
-                tools:ignore="TouchTargetSizeCheck" />
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="bottom"
+                android:layout_marginStart="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Adjuntar archivo"
+                android:padding="8dp"
+                android:src="@drawable/ic_attach_clip" />
 
             <ImageButton
-                android:id="@+id/btPresupuesto"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:id="@+id/btEnviar"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="bottom"
+                android:layout_marginStart="4dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/presupuesto"
-                android:contentDescription="Enviar presupuesto"
-                android:layout_marginEnd="8dp" />
+                android:contentDescription="Enviar mensaje"
+                android:padding="8dp"
+                android:src="@drawable/ic_send_compact"
+                tools:ignore="TouchTargetSizeCheck" />
 
         </LinearLayout>
 

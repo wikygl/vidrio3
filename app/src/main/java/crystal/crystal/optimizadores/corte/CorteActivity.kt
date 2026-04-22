@@ -1,5 +1,6 @@
 package crystal.crystal.optimizadores.corte
 
+import android.app.AlertDialog
 import android.app.Dialog
 import android.content.Context
 import android.content.Intent
@@ -34,8 +35,8 @@ class CorteActivity: AppCompatActivity() {
     private lateinit var listManager: CorteListManager
     private lateinit var formatter: CorteFormatter
 
-    // NUEVO: Variable para almacenar estadísticas anteriores
     private var ultimasEstadisticas: AnalisisMejoras.EstadisticasOptimizacion? = null
+    private var nombreListaActual: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -152,9 +153,42 @@ class CorteActivity: AppCompatActivity() {
                 cargarListaSeleccionada(nombreSeleccionado)
             }
 
-            override fun onNothingSelected(parent: AdapterView<*>) {
-                // Opcional: Manejar el caso en que no se selecciona nada
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+
+        binding.spCortes.setOnLongClickListener {
+            val adapter = binding.spCortes.adapter ?: return@setOnLongClickListener true
+            val count = adapter.count
+            if (count == 0) {
+                Toast.makeText(this, "Primero carga las listas disponibles", Toast.LENGTH_SHORT).show()
+                return@setOnLongClickListener true
             }
+            val nombres = (0 until count).map { adapter.getItem(it).toString() }
+            val seleccionados = BooleanArray(count) { false }
+            AlertDialog.Builder(this)
+                .setTitle("Unir listas")
+                .setMultiChoiceItems(nombres.toTypedArray(), seleccionados) { _, i, checked ->
+                    seleccionados[i] = checked
+                }
+                .setPositiveButton("Unir") { _, _ ->
+                    val elegidas = nombres.filterIndexed { i, _ -> seleccionados[i] }
+                    if (elegidas.size < 2) {
+                        Toast.makeText(this, "Selecciona al menos 2 listas para unir", Toast.LENGTH_SHORT).show()
+                        return@setPositiveButton
+                    }
+                    val combinadas = elegidas.flatMap { listManager.cargarLista(it) }.toMutableList()
+                    if (combinadas.isNotEmpty()) {
+                        lista.clear()
+                        lista.addAll(combinadas)
+                        nombreListaActual = elegidas.joinToString(" + ")
+                        actualizar()
+                        dataManager.guardarPiezas(lista)
+                        Toast.makeText(this, "${elegidas.size} listas unidas — ${combinadas.size} piezas", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+            true
         }
     }
 
@@ -385,6 +419,7 @@ class CorteActivity: AppCompatActivity() {
         // AHORA SÍ navegar a la nueva Activity con el resultado final
         val intent = Intent(this, ResultadoOptimizacionActivity::class.java)
         intent.putExtra("resultado_optimizacion", resultadoEstructurado)
+        intent.putExtra("nombre_lista", nombreListaActual)
         startActivity(intent)
 
         // También guardar como texto para mantener compatibilidad
@@ -598,6 +633,7 @@ class CorteActivity: AppCompatActivity() {
         if (listaSeleccionada.isNotEmpty()) {
             lista.clear()
             lista.addAll(listaSeleccionada)
+            nombreListaActual = nombreLista
             actualizar()
             dataManager.guardarPiezas(lista)
         }

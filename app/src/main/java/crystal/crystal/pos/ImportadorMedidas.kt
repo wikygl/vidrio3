@@ -1,19 +1,18 @@
 package crystal.crystal.pos
 
 import android.annotation.SuppressLint
-import android.widget.EditText
 import android.widget.Toast
-
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-
 import crystal.crystal.Listado
 import crystal.crystal.R
-import crystal.crystal.databinding.ActivityMainBinding
 import crystal.crystal.datos.DatabaseProvider
 import crystal.crystal.datos.Product
-
+import crystal.crystal.databinding.ActivityMainBinding
+import crystal.crystal.red.interop.ChatInteropIntents
+import crystal.crystal.red.interop.MeasuresMessageCodec
+import crystal.crystal.red.interop.ParsedMeasuresMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,216 +31,150 @@ class ImportadorMedidas(
 ) {
 
     fun manejarMensajeMedidas() {
-        val mensajeTexto = activity.intent.getStringExtra("importar_medidas_texto")
+        val mensajeTexto = ChatInteropIntents.consumeStringExtra(
+            intent = activity.intent,
+            key = ChatInteropIntents.EXTRA_IMPORT_MEASURES_TEXT
+        )
 
         if (mensajeTexto != null) {
-            val resultado = parsearMensajeMedidas(mensajeTexto)
-
-            if (resultado != null) {
-                val (producto, medidas) = resultado
-                importarMedidasParseadas(producto, medidas)
+            val parsedMeasures = MeasuresMessageCodec.parse(mensajeTexto)
+            if (parsedMeasures != null) {
+                importarMedidasParseadas(parsedMeasures)
             } else {
                 Toast.makeText(activity, "No se pudo parsear el mensaje de medidas", Toast.LENGTH_SHORT).show()
             }
-
-            activity.intent.removeExtra("importar_medidas_texto")
-        }
-    }
-
-    private fun esFormatoMedidas(mensaje: String): Boolean {
-        val lineas = mensaje.trim().split("\n").filter { it.isNotBlank() }
-
-        if (lineas.size < 2) return false
-
-        val regexMedida = Regex("""^\s*\d+(\.\d+)?\s*[xX]\s*\d+(\.\d+)?\s*=\s*\d+(\.\d+)?\s*$""")
-
-        var primeraMedida = -1
-        for (i in lineas.indices) {
-            if (regexMedida.matches(lineas[i].trim())) {
-                primeraMedida = i
-                break
-            }
-        }
-
-        if (primeraMedida <= 0) return false
-
-        for (i in primeraMedida until lineas.size) {
-            if (!regexMedida.matches(lineas[i].trim())) {
-                return false
-            }
-        }
-
-        return true
-    }
-
-    private fun parsearMensajeMedidas(mensaje: String): Pair<String, List<Triple<Float, Float, Float>>>? {
-        try {
-            val lineas = mensaje.trim().split("\n").filter { it.isNotBlank() }
-
-            if (!esFormatoMedidas(mensaje)) return null
-
-            val regexMedida = Regex("""^\s*\d+(\.\d+)?\s*[xX]\s*\d+(\.\d+)?\s*=\s*\d+(\.\d+)?\s*$""")
-
-            var inicieMedidas = -1
-            for (i in lineas.indices) {
-                if (regexMedida.matches(lineas[i].trim())) {
-                    inicieMedidas = i
-                    break
-                }
-            }
-
-            val producto = lineas.take(inicieMedidas).joinToString(" ").trim()
-            val medidas = mutableListOf<Triple<Float, Float, Float>>()
-
-            for (i in inicieMedidas until lineas.size) {
-                val linea = lineas[i].trim()
-
-                val partes = linea.split("=")
-                if (partes.size == 2) {
-                    val cantidad = partes[1].trim().toFloatOrNull()
-                    val medidaParte = partes[0].trim()
-                    val medidasSplit = medidaParte.split(Regex("[xX]"))
-
-                    if (medidasSplit.size == 2 && cantidad != null) {
-                        val med1 = medidasSplit[0].trim().toFloatOrNull()
-                        val med2 = medidasSplit[1].trim().toFloatOrNull()
-
-                        if (med1 != null && med2 != null) {
-                            medidas.add(Triple(med1, med2, cantidad))
-                        }
-                    }
-                }
-            }
-
-            return if (medidas.isNotEmpty()) Pair(producto, medidas) else null
-
-        } catch (e: Exception) {
-            return null
         }
     }
 
     @SuppressLint("NewApi")
-    private fun importarMedidasParseadas(producto: String, medidas: List<Triple<Float, Float, Float>>) {
-        if (medidas.isEmpty()) {
-            Toast.makeText(activity, "No se encontraron medidas válidas", Toast.LENGTH_SHORT).show()
+    private fun importarMedidasParseadas(parsedMeasures: ParsedMeasuresMessage) {
+        if (parsedMeasures.items.isEmpty()) {
+            Toast.makeText(activity, "No se encontraron medidas validas", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val builder = AlertDialog.Builder(activity)
-        builder.setTitle("Importar Medidas")
-        builder.setMessage(
-            "Producto: $producto\n" +
-                    "Elementos encontrados: ${medidas.size}\n" +
+        AlertDialog.Builder(activity)
+            .setTitle("Importar Medidas")
+            .setMessage(
+                "Producto: ${parsedMeasures.productName}\n" +
+                    "Elementos encontrados: ${parsedMeasures.items.size}\n" +
                     "Unidad: Pies cuadrados (p2)\n\n" +
                     "Ejemplos:\n" +
-                    medidas.take(3).joinToString("\n") { "${it.first} x ${it.second} = ${it.third}" } +
-                    if (medidas.size > 3) "\n..." else "" +
-                            "\n\nDeseas buscar el precio en la base de datos?"
-        )
-
-        builder.setPositiveButton("Buscar precio") { _, _ ->
-            buscarPrecioEnBaseDatos(producto, medidas)
-        }
-
-        builder.setNegativeButton("Sin precio") { _, _ ->
-            importarMedidasConPrecio(producto, medidas, 0.0)
-        }
-
-        builder.setNeutralButton("Cancelar", null)
-        builder.show()
+                    parsedMeasures.items.take(3).joinToString("\n") {
+                        "${it.productName}: ${it.width} x ${it.height} = ${it.quantity}"
+                    } +
+                    if (parsedMeasures.items.size > 3) "\n..." else "" +
+                    "\n\nDeseas buscar el precio en la base de datos?"
+            )
+            .setPositiveButton("Buscar precio") { _, _ ->
+                buscarPrecioEnBaseDatos(parsedMeasures)
+            }
+            .setNegativeButton("Sin precio") { _, _ ->
+                importarMedidasConPrecio(parsedMeasures, 0.0)
+            }
+            .setNeutralButton("Cancelar", null)
+            .show()
     }
 
-    private fun buscarPrecioEnBaseDatos(producto: String, medidas: List<Triple<Float, Float, Float>>) {
+    private fun buscarPrecioEnBaseDatos(parsedMeasures: ParsedMeasuresMessage) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val db = DatabaseProvider.getInstance(activity)
-                val productosEncontrados = db.productDao().searchProductsByDescription("%$producto%")
+                val productosEncontrados = db.productDao()
+                    .searchProductsByDescription("%${parsedMeasures.productName}%")
 
                 withContext(Dispatchers.Main) {
                     if (productosEncontrados.isNotEmpty()) {
-                        mostrarOpcionesProductos(productosEncontrados, producto, medidas)
+                        mostrarOpcionesProductos(productosEncontrados, parsedMeasures)
                     } else {
-                        Toast.makeText(activity, "No se encontraron productos similares en la base de datos", Toast.LENGTH_SHORT).show()
-                        importarMedidasConPrecio(producto, medidas, 0.0)
+                        Toast.makeText(
+                            activity,
+                            "No se encontraron productos similares en la base de datos",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        importarMedidasConPrecio(parsedMeasures, 0.0)
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(activity, "Error al buscar en BD: ${e.message}", Toast.LENGTH_SHORT).show()
-                    importarMedidasConPrecio(producto, medidas, 0.0)
+                    importarMedidasConPrecio(parsedMeasures, 0.0)
                 }
             }
         }
     }
 
     @SuppressLint("DefaultLocale")
-    private fun mostrarOpcionesProductos(productos: List<Product>, productoOriginal: String, medidas: List<Triple<Float, Float, Float>>) {
-        val opcionesLista = mutableListOf<String>()
-
+    private fun mostrarOpcionesProductos(
+        productos: List<Product>,
+        parsedMeasures: ParsedMeasuresMessage
+    ) {
+        val opciones = mutableListOf<String>()
         productos.forEach { producto ->
-            opcionesLista.add("${producto.description}\n   Precio: S/ ${String.format("%.2f", producto.price)}")
+            opciones += "${producto.description}\n   Precio: S/ ${String.format("%.2f", producto.price)}"
         }
+        opciones += "Sin precio (S/ 0.00)"
+        opciones += "Cancelar"
 
-        opcionesLista.add("Sin precio (S/ 0.00)")
-        opcionesLista.add("Cancelar")
-
-        val builder = AlertDialog.Builder(activity)
-        builder.setTitle("Seleccionar Producto (${productos.size} encontrados)")
-
-        builder.setItems(opcionesLista.toTypedArray()) { _, which ->
-            when {
-                which < productos.size -> {
-                    val productoSeleccionado = productos[which]
-                    Toast.makeText(activity, "Seleccionado: ${productoSeleccionado.description}", Toast.LENGTH_SHORT).show()
-                    importarMedidasConPrecio(productoOriginal, medidas, productoSeleccionado.price)
-                }
-                which == productos.size -> {
-                    Toast.makeText(activity, "Sin precio", Toast.LENGTH_SHORT).show()
-                    importarMedidasConPrecio(productoOriginal, medidas, 0.0)
-                }
-                else -> {
-                    Toast.makeText(activity, "Cancelado", Toast.LENGTH_SHORT).show()
+        AlertDialog.Builder(activity)
+            .setTitle("Seleccionar Producto (${productos.size} encontrados)")
+            .setItems(opciones.toTypedArray()) { _, which ->
+                when {
+                    which < productos.size -> {
+                        val productoSeleccionado = productos[which]
+                        Toast.makeText(
+                            activity,
+                            "Seleccionado: ${productoSeleccionado.description}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        importarMedidasConPrecio(parsedMeasures, productoSeleccionado.price)
+                    }
+                    which == productos.size -> {
+                        Toast.makeText(activity, "Sin precio", Toast.LENGTH_SHORT).show()
+                        importarMedidasConPrecio(parsedMeasures, 0.0)
+                    }
+                    else -> {
+                        Toast.makeText(activity, "Cancelado", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-        }
-
-        builder.show()
+            .show()
     }
 
     @SuppressLint("SetTextI18n", "DefaultLocale")
-    private fun importarMedidasConPrecio(producto: String, medidas: List<Triple<Float, Float, Float>>, precio: Double) {
+    private fun importarMedidasConPrecio(parsedMeasures: ParsedMeasuresMessage, precio: Double) {
         val lista = obtenerLista()
         var elementosAgregados = 0
 
-        for ((med1, med2, cantidad) in medidas) {
+        for (item in parsedMeasures.items) {
             try {
                 val unidadOriginal = binding.prTxt.text.toString()
-                binding.prTxt.text = "Centímetros"
+                binding.prTxt.text = "Cent\u00edmetros"
 
-                val piescua = calcPies(med1, med2)
-                val metroscua = calcMetroCua(med1, med2)
-                val ml = calcMLineales(med1, med2)
-                val cub = calcMCubicos(med1, med2, 1f)
-                val peri = ((conversor(med1) * 2) + (conversor(med2) * 2))
+                val piescua = calcPies(item.width, item.height)
+                val metroscua = calcMetroCua(item.width, item.height)
+                val ml = calcMLineales(item.width, item.height)
+                val cub = calcMCubicos(item.width, item.height, 1f)
+                val peri = ((conversor(item.width) * 2) + (conversor(item.height) * 2))
 
                 binding.prTxt.text = unidadOriginal
 
-                val costoTotal = (piescua * cantidad) * precio.toFloat()
+                val costoTotal = (piescua * item.quantity) * precio.toFloat()
 
                 val elemento = Listado(
                     escala = "p2",
-                    uni = "Centímetros",
-                    medi1 = med1,
-                    medi2 = med2,
+                    uni = "Cent\u00edmetros",
+                    medi1 = item.width,
+                    medi2 = item.height,
                     medi3 = 1f,
-                    canti = cantidad,
-                    piescua = piescua * cantidad,
+                    canti = item.quantity,
+                    piescua = piescua * item.quantity,
                     precio = precio.toFloat(),
                     costo = costoTotal,
-                    producto = producto,
+                    producto = item.productName,
                     peri = peri,
                     metcua = metroscua,
-                    metli = ml * cantidad,
+                    metli = ml * item.quantity,
                     metcub = cub,
                     color = ContextCompat.getColor(activity, R.color.color),
                     uri = ""
@@ -249,9 +182,7 @@ class ImportadorMedidas(
 
                 lista.add(elemento)
                 elementosAgregados++
-
-            } catch (e: Exception) {
-                continue
+            } catch (_: Exception) {
             }
         }
 
@@ -268,7 +199,7 @@ class ImportadorMedidas(
                 binding.precioEditxt.requestFocus()
             }
         } else {
-            Toast.makeText(activity, "No se pudo importar ningún elemento", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, "No se pudo importar ningun elemento", Toast.LENGTH_SHORT).show()
         }
     }
 }

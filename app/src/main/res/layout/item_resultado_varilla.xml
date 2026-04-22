@@ -40,7 +40,7 @@
             android:id="@+id/layoutCortes"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:layout_marginBottom="16dp">
             <!-- Los cortes se agregarán dinámicamente aquí -->
         </LinearLayout>

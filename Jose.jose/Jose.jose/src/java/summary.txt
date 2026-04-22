@@ -1,0 +1,9 @@
+Summary for /storage/emulated/0/Documents/jadec/sources/Jose.jose/jar-files/0.jar
+Decompiled with CFR 0.152
+
+
+Jose.jose.MainActivity
+----------------------------
+
+exportarDatos()
+  Unable to fully structure code

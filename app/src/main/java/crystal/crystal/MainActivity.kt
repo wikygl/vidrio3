@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.text.Editable
@@ -21,6 +22,7 @@ import android.text.SpannableString
 import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
@@ -42,6 +44,7 @@ import androidx.lifecycle.lifecycleScope
 // Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.storage.FirebaseStorage
@@ -99,13 +102,17 @@ import crystal.crystal.dictado.DictadoMedidas
 import crystal.crystal.pos.EdicionMasivaManager
 import crystal.crystal.pos.ImportadorMedidas
 import crystal.crystal.pos.PosManager
+import crystal.crystal.pos.PresupuestoManager
 import crystal.crystal.pos.RoleConfigManager
 
 // Módulos del proyecto - Red, registro y taller
 import crystal.crystal.red.ListChatActivity
+import crystal.crystal.red.ChatIdentity
+import crystal.crystal.red.interop.ChatInteropIntents
 import crystal.crystal.registro.AyudaActivity
 import crystal.crystal.registro.GestionDispositivosActivity
 import crystal.crystal.registro.InicioActivity
+import crystal.crystal.registro.UserProfileActivity
 import crystal.crystal.registro.PinAuthActivity
 import crystal.crystal.registro.Registro
 import crystal.crystal.taller.Taller
@@ -186,6 +193,7 @@ class MainActivity : AppCompatActivity() {
 
     // ─── Importador de medidas ───
     private lateinit var importadorMedidas: ImportadorMedidas
+    private lateinit var presupuestoManager: PresupuestoManager
 
     // ─── Dictado por voz ───
     private var dictadoMedidas: DictadoMedidas? = null
@@ -194,6 +202,7 @@ class MainActivity : AppCompatActivity() {
 
     // ─── Chat ───
     private val unreadCountByChat = mutableMapOf<String, Int>()
+    private var unreadChatsListener: ListenerRegistration? = null
     private var ultimaSincronizacion: Long = 0L
 
     @SuppressLint("NewApi", "SetTextI18n")
@@ -235,13 +244,23 @@ class MainActivity : AppCompatActivity() {
             calcMLineales = { m1, m2 -> mLineales(m1, m2) },
             calcMCubicos = { m1, m2, m3 -> mCubicos(m1, m2, m3) }
         )
-        manejarPresupuestoRecibido()
         posManager = PosManager(this, binding, sharedPreferences)
         posManager.setCallback(posCallback)
         posManager.inicializarControlesPOS()
 
         edicionMasivaManager = EdicionMasivaManager(this, lista)
         edicionMasivaManager.onListaModificada = { actualizar() }
+        presupuestoManager = PresupuestoManager(
+            activity = this,
+            binding = binding,
+            sharedPreferences = sharedPreferences,
+            lista = lista
+        ).also {
+            it.onListaModificada = { actualizar() }
+            it.obtenerCurrentUserId = { currentUserId }
+            it.edicionMasivaManager = edicionMasivaManager
+        }
+        manejarPresupuestoRecibido()
         roleConfigManager.verificarAutorizacionTerminal()
         inicializarClientes()
         inicializarProductos()
@@ -296,6 +315,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, Registro::class.java))
         }
 
+        binding.txUser.setOnClickListener {
+            startActivity(Intent(this, Registro::class.java))
+        }
+
         binding.precioTotal.setOnClickListener {
             startActivity(Intent(this, VendePapa::class.java).putExtra(
                 "monto", binding.precioTotal.text.toString()))}
@@ -320,6 +343,7 @@ class MainActivity : AppCompatActivity() {
         currentUserId = roleConfigManager.obtenerIdUsuarioActual()
 
         setupUnreadMessagesListener()
+        manejarIntentCompartido(intent)
 
         // Al presionar btnChat, se redirige a la ListChatActivity
         binding.btnChat.setOnClickListener {
@@ -486,6 +510,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        fotoUsuario()
 
         val estadoUsuario = roleConfigManager.obtenerEstadoUsuario()
         if (estadoUsuario == "VENTAS") {
@@ -1713,15 +1738,15 @@ class MainActivity : AppCompatActivity() {
     private fun manejarPresupuestoRecibido() {
         importadorMedidas.manejarMensajeMedidas()
         // Manejar contenido JSON directo (nuevo método)
-        val jsonContent = intent.getStringExtra("cargar_presupuesto_json")
-        val nombreArchivo = intent.getStringExtra("cargar_presupuesto_nombre")
+        val jsonContent = ChatInteropIntents.consumeStringExtra(intent, ChatInteropIntents.EXTRA_LOAD_BUDGET_JSON)
+        val nombreArchivo = intent.getStringExtra(ChatInteropIntents.EXTRA_LOAD_BUDGET_NAME)
 
         if (jsonContent != null) {
             val builder = AlertDialog.Builder(this)
             builder.setTitle("Presupuesto Recibido")
             builder.setMessage("Has recibido el presupuesto: $nombreArchivo\n¿Deseas cargarlo?")
             builder.setPositiveButton("Cargar") { _, _ ->
-                cargarPresupuestoDesdeJson(jsonContent)
+                  presupuestoManager.cargarPresupuestoDesdeJson(jsonContent)
             }
             builder.setNegativeButton("Cancelar", null)
             builder.show()
@@ -1729,8 +1754,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Método anterior para URIs locales (mantener por compatibilidad)
-        val presupuestoUri = intent.getStringExtra("cargar_presupuesto_uri")
-        val nombreArchivoUri = intent.getStringExtra("cargar_presupuesto_nombre")
+        val presupuestoUri = ChatInteropIntents.consumeStringExtra(intent, ChatInteropIntents.EXTRA_LOAD_BUDGET_URI)
+        val nombreArchivoUri = intent.getStringExtra(ChatInteropIntents.EXTRA_LOAD_BUDGET_NAME)
 
         if (presupuestoUri != null) {
             val builder = AlertDialog.Builder(this)
@@ -1738,7 +1763,7 @@ class MainActivity : AppCompatActivity() {
             builder.setMessage("Has recibido el presupuesto: $nombreArchivoUri\n¿Deseas cargarlo?")
             builder.setPositiveButton("Cargar") { _, _ ->
                 val uri = Uri.parse(presupuestoUri)
-                manejarArchivoPresupuesto(uri)
+                  presupuestoManager.manejarArchivoPresupuesto(uri)
             }
             builder.setNegativeButton("Cancelar", null)
             builder.show()
@@ -1748,6 +1773,71 @@ class MainActivity : AppCompatActivity() {
         intent.let { super.onNewIntent(it) }
         setIntent(intent)
         manejarPresupuestoRecibido()
+        manejarIntentCompartido(intent)
+    }
+
+    private fun manejarIntentCompartido(intent: Intent) {
+        if (intent.action != Intent.ACTION_SEND) return
+
+        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        } ?: return
+
+        val mimeType = intent.type ?: contentResolver.getType(uri).orEmpty()
+        val fileName = obtenerNombreCompartido(uri)
+
+        if (mimeType == "application/json" || fileName.startsWith("presupuesto_")) {
+            mostrarOpcionesArchivoCompartido(uri, fileName, mimeType, isBudget = true)
+        } else {
+            abrirSelectorChatParaArchivo(uri, fileName, mimeType)
+        }
+
+        intent.action = null
+        intent.removeExtra(Intent.EXTRA_STREAM)
+    }
+
+    private fun mostrarOpcionesArchivoCompartido(uri: Uri, fileName: String, mimeType: String, isBudget: Boolean) {
+        val opciones = if (isBudget) {
+            arrayOf("Cargar presupuesto", "Enviar por chat")
+        } else {
+            arrayOf("Enviar por chat")
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Archivo compartido")
+            .setMessage(fileName)
+            .setItems(opciones) { _, which ->
+                when {
+                    isBudget && which == 0 -> presupuestoManager.manejarArchivoPresupuesto(uri)
+                    else -> abrirSelectorChatParaArchivo(uri, fileName, mimeType)
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun abrirSelectorChatParaArchivo(uri: Uri, fileName: String, mimeType: String) {
+        startActivity(Intent(this, ListChatActivity::class.java).apply {
+            putExtra("usuario", currentUserId)
+            putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_URI, uri.toString())
+            putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME, fileName)
+            putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        })
+    }
+
+    private fun obtenerNombreCompartido(uri: Uri): String {
+        val cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        cursor?.use {
+            val index = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && it.moveToFirst()) {
+                return it.getString(index) ?: "archivo"
+            }
+        }
+        return uri.lastPathSegment?.substringAfterLast('/') ?: "archivo"
     }
     private fun mostrarMenuPresupuesto() {
         val opciones = if (lista.isEmpty()) {
@@ -1993,8 +2083,8 @@ class MainActivity : AppCompatActivity() {
             // Abrir ListChatActivity con el archivo
             val intent = Intent(this, ListChatActivity::class.java)
             intent.putExtra("usuario", currentUserId)
-            intent.putExtra("enviar_presupuesto", uri.toString())
-            intent.putExtra("nombre_presupuesto", fileName)
+            intent.putExtra(ChatInteropIntents.EXTRA_SEND_BUDGET_URI, uri.toString())
+            intent.putExtra(ChatInteropIntents.EXTRA_BUDGET_NAME, fileName)
             startActivity(intent)
 
         } catch (e: Exception) {
@@ -2031,40 +2121,54 @@ class MainActivity : AppCompatActivity() {
     // setupUnreadMessagesListener, actualizarBadgeChat
     // ═══════════════════════════════════════════════════
     private fun setupUnreadMessagesListener() {
-        // Escuchar los chats de la colección personal del usuario
-        val userChatsRef = db.collection("usuarios").document(currentUserId).collection("chats")
-        userChatsRef.addSnapshotListener { snapshot, error ->
-            if (error == null && snapshot != null) {
-                // Para cada chat, establecer listener a la subcolección de mensajes para contar los no leídos
-                for (chatDoc in snapshot.documents) {
-                    val chatId = chatDoc.id
-                    val chatRef = db.collection("chats").document(chatId)
-                    chatRef.collection("messages")
-                        .whereEqualTo("leido", false)
-                        .whereNotEqualTo("from", currentUserId)
-                        .addSnapshotListener { msgsSnap, _ ->
-                            if (msgsSnap != null) {
-                                val count = msgsSnap.size()
-                                unreadCountByChat[chatId] = count
-                                actualizarBadgeChat()
-                            }
-                        }
+        unreadChatsListener?.remove()
+        unreadCountByChat.clear()
+        actualizarBadgeChat()
+
+        val firestoreActorUid = ChatIdentity.resolveFirestoreChatActorUid(this, FirebaseAuth.getInstance(), currentUserId)
+        val ownAliases = ChatIdentity.resolveChatIdentityAliases(this, FirebaseAuth.getInstance(), currentUserId).toSet()
+
+        unreadChatsListener = db.collection("chats")
+            .whereArrayContains("users", firestoreActorUid)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    return@addSnapshotListener
                 }
+
+                unreadCountByChat.clear()
+
+                snapshot.documents.forEach { chatDoc ->
+                    val users = (chatDoc.get("users") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                    if (users.none { it in ownAliases }) return@forEach
+
+                    val chatId = chatDoc.id
+                    val unreadBy = chatDoc.get("unreadBy") as? Map<*, *> ?: emptyMap<Any, Any>()
+                    val count = ownAliases
+                        .mapNotNull { alias -> unreadBy[alias]?.toString()?.toIntOrNull() }
+                        .firstOrNull()
+                        ?: unreadBy[firestoreActorUid]?.toString()?.toIntOrNull()
+                        ?: 0
+                    unreadCountByChat[chatId] = count
+                }
+
+                actualizarBadgeChat()
             }
-        }
     }
     @SuppressLint("SetTextI18n")
     private fun actualizarBadgeChat() {
         val totalUnread = unreadCountByChat.values.sum()
+        binding.btnChat.setImageResource(R.drawable.ic_mensajes)
         if (totalUnread > 0) {
-            // Cambiar el ícono a la versión roja y mostrar el badge
-            binding.btnChat.setImageResource(R.drawable.ic_mensajesno) // Reemplaza por tu recurso de ícono rojo
             binding.tvBadge.text = totalUnread.toString()
             binding.tvBadge.visibility = View.VISIBLE
         } else {
-            binding.btnChat.setImageResource(R.drawable.ic_mensajes) // Versión blanca por defecto
             binding.tvBadge.visibility = View.GONE
         }
+    }
+
+    override fun onDestroy() {
+        unreadChatsListener?.remove()
+        super.onDestroy()
     }
     //FUNCIONES GENERALES
     // ═══════════════════════════════════════════════════
@@ -2096,24 +2200,33 @@ class MainActivity : AppCompatActivity() {
         val listaUsados = arrayOf("p2", "m2", "ml", "m3", "uni")
         val colores = arrayOf(R.color.color, R.color.fucsia, R.color.verde, R.color.violeta, R.color.naranja)
         val adaptadorU = object : ArrayAdapter<String>(
-            this,
-            R.layout.lista_spinner, listaUsados) {
+              this,
+              android.R.layout.simple_spinner_item, listaUsados) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val view = super.getView(position, convertView, parent) as TextView
+                val view = layoutInflater.inflate(R.layout.lista_spinner, parent, false) as TextView
+                view.text = getItem(position)
                 view.setTextColor(getColor(position))
+                view.gravity = Gravity.CENTER
+                view.setPadding(24, 18, 24, 18)
+                view.minHeight = 96
                 return view
             }
 
             override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val view = super.getDropDownView(position, convertView, parent) as TextView
+                val view = layoutInflater.inflate(R.layout.lista_spinner, parent, false) as TextView
+                view.text = getItem(position)
                 view.setTextColor(getColor(position))
+                view.gravity = Gravity.CENTER
+                view.setPadding(24, 18, 24, 18)
+                view.minHeight = 96
                 return view
             }
 
-            fun getColor(position: Int): Int {
-                return ContextCompat.getColor(this@MainActivity, colores[position])
-            }
-        }
+              fun getColor(position: Int): Int {
+                  return ContextCompat.getColor(this@MainActivity, colores[position])
+              }
+          }
+        adaptadorU.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         usados.adapter = adaptadorU
         usados.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?,view: View?,position: Int, p3: Long) {
@@ -2176,8 +2289,31 @@ class MainActivity : AppCompatActivity() {
         }
         unidades = spinnerUni
         val listaUnidades = arrayOf("Centímetros", "Metros", "Milímetros", "Pulgadas")
-        val adaptador: ArrayAdapter<String> = ArrayAdapter(
-            this, R.layout.lista_spinner, listaUnidades)
+        val adaptador = object : ArrayAdapter<String>(
+            this,
+            android.R.layout.simple_spinner_item,
+            listaUnidades
+        ) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val view = layoutInflater.inflate(R.layout.lista_spinner, parent, false) as TextView
+                view.text = getItem(position)
+                view.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.color))
+                view.gravity = Gravity.CENTER
+                view.setPadding(24, 18, 24, 18)
+                view.minHeight = 96
+                return view
+            }
+
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val view = layoutInflater.inflate(R.layout.lista_spinner, parent, false) as TextView
+                view.text = getItem(position)
+                view.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.color))
+                view.gravity = Gravity.CENTER
+                view.setPadding(24, 18, 24, 18)
+                view.minHeight = 96
+                return view
+            }
+        }
         unidades.adapter = adaptador
         unidades.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(

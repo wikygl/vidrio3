@@ -7,6 +7,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import crystal.crystal.red.ChatIdentity
 import kotlinx.coroutines.tasks.await
 
 object UsuarioBootstrap {
@@ -20,12 +21,18 @@ object UsuarioBootstrap {
         val nombre = account?.displayName ?: (current.displayName ?: "")
         val email = account?.email ?: (current.email ?: "")
         val foto = account?.photoUrl?.toString() ?: (current.photoUrl?.toString() ?: "")
+        val nombreNormalizado = ChatIdentity.normalizeSearchText(nombre)
 
         val base = hashMapOf(
             "uid" to uid,                  // <- para reglas
             "ownerUid" to uid,             // <- para reglas
+            "nombre" to nombre,
+            "nombreNormalizado" to nombreNormalizado,
+            "email" to email,
+            "imagenPerfil" to foto,
             "perfil" to hashMapOf(
                 "nombre" to nombre,
+                "nombreNormalizado" to nombreNormalizado,
                 "email" to email,
                 "imagenPerfil" to foto,
                 "actualizadoEn" to FieldValue.serverTimestamp()

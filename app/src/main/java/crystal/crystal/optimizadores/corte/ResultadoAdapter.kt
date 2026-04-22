@@ -111,155 +111,34 @@ class ResultadoAdapter(
         }
 
         /**
-         * CORREGIDA: Crea layout de cortes SIN estiramiento vertical
+         * Crea un ítem por corte en layout vertical — texto completo, sin truncamiento
          */
         private fun crearLayoutCortesConSaltosDeLinea(cortesConRefs: List<CorteConReferencia>) {
-            // Agrupar cortes con referencias
             val cortesAgrupados = agruparCortesConReferencias(cortesConRefs)
-
-            // Configurar layout principal como vertical
             layoutCortes.orientation = LinearLayout.VERTICAL
 
-            // Variables para manejar las líneas
-            var lineaActual: LinearLayout? = null
-            var elementosEnLineaActual = 0
-            val maxElementosPorLinea = 4 // FIJO: máximo 4 elementos por línea
+            cortesAgrupados.forEach { textoCorte ->
+                val tv = TextView(context).apply {
+                    text = textoCorte
+                    textSize = 14f
+                    setSingleLine(false)
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { setMargins(0, 0, 0, 6) }
 
-            cortesAgrupados.forEachIndexed { indice, textoCorte ->
-                // Si es el primer elemento o si ya tenemos el máximo por línea, crear nueva línea
-                if (lineaActual == null || elementosEnLineaActual >= maxElementosPorLinea) {
-                    // Crear nueva línea horizontal
-                    lineaActual = LinearLayout(context).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT // CRÍTICO: Solo el contenido necesario
-                        ).apply {
-                            setMargins(0, 0, 0, 8) // Margen entre líneas
-                        }
-                        gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL // CRÍTICO: Centro vertical
-                        setBaselineAligned(false) // CORREGIDO: Función correcta para no alinear por baseline
+                    if (textoCorte.contains("CE")) {
+                        setTextColor(ContextCompat.getColor(context, android.R.color.white))
+                        setBackgroundColor(ContextCompat.getColor(context, R.color.naranja))
+                        setTypeface(null, android.graphics.Typeface.BOLD)
+                    } else {
+                        setTextColor(ContextCompat.getColor(context, android.R.color.black))
+                        background = ContextCompat.getDrawable(context, R.drawable.bg_corte_chip)
                     }
-                    layoutCortes.addView(lineaActual)
-                    elementosEnLineaActual = 0
+                    setPadding(12, 8, 12, 8)
                 }
-
-                // Crear TextView para el corte
-                val vistaCorte = crearTextViewCorte(textoCorte)
-
-                // Agregar el corte a la línea actual
-                lineaActual?.addView(vistaCorte)
-                elementosEnLineaActual++
-
-                // Agregar separador si no es el último elemento Y no es el último de la línea
-                val esUltimoElemento = indice == cortesAgrupados.size - 1
-                val esUltimoDeLinea = elementosEnLineaActual >= maxElementosPorLinea
-
-                if (!esUltimoElemento && !esUltimoDeLinea) {
-                    val separador = crearTextViewSeparador()
-                    lineaActual?.addView(separador)
-                }
+                layoutCortes.addView(tv)
             }
-        }
-
-        /**
-         * CORREGIDA: TextView que NO se estira verticalmente
-         */
-        private fun crearTextViewCorte(textoCorte: String): TextView {
-            return TextView(context).apply {
-                text = textoCorte
-                textSize = 14f
-
-                // NUEVO: Detectar referencias especiales y aplicar estilo diferente
-                if (textoCorte.contains("(CE") || textoCorte.contains("CE")) {
-                    // Estilo especial para cortes largos divididos
-                    setTextColor(ContextCompat.getColor(context, android.R.color.white))
-                    setBackgroundColor(ContextCompat.getColor(context, R.color.naranja)) // Fondo naranja para destacar
-                    setTypeface(null, android.graphics.Typeface.BOLD) // Negrita para destacar
-                } else {
-                    // Estilo normal
-                    setTextColor(ContextCompat.getColor(context, android.R.color.black))
-                    background = ContextCompat.getDrawable(context, R.drawable.bg_corte_chip)
-                }
-
-                setPadding(12, 8, 12, 8)
-
-                // CRÍTICO: LayoutParams que NO permiten estiramiento vertical
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, // Ancho natural
-                    LinearLayout.LayoutParams.WRAP_CONTENT  // ALTURA NATURAL - No se estira
-                ).apply {
-                    setMargins(0, 0, 8, 4)
-                    weight = 0f // Sin peso para evitar cualquier estiramiento
-                    gravity = android.view.Gravity.CENTER_VERTICAL // Centrado vertical pero sin estirarse
-                }
-
-                // IMPORTANTE: Configuraciones para evitar estiramiento vertical
-                maxLines = 1 // Solo una línea de altura
-                isSingleLine = true // Confirmar una sola línea
-                gravity = android.view.Gravity.CENTER // Texto centrado dentro del TextView
-
-                // Altura mínima y máxima para evitar estiramientos
-                minimumHeight = 0
-                val densidad = context.resources.displayMetrics.density
-                maxHeight = (40 * densidad).toInt() // Máximo 40dp
-            }
-        }
-
-        /**
-         * CORREGIDA: Separador que NO se estira verticalmente
-         */
-        private fun crearTextViewSeparador(): TextView {
-            return TextView(context).apply {
-                text = "+"
-                textSize = 12f
-                setTextColor(ContextCompat.getColor(context, R.color.gris))
-
-                // CRÍTICO: LayoutParams sin estiramiento vertical
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT // ALTURA NATURAL
-                ).apply {
-                    setMargins(4, 0, 4, 4)
-                    weight = 0f // Sin peso
-                    gravity = android.view.Gravity.CENTER_VERTICAL // Centrado pero sin estirarse
-                }
-
-                // Configuraciones adicionales para evitar estiramiento
-                gravity = android.view.Gravity.CENTER
-                maxLines = 1
-                isSingleLine = true
-                val densidad = context.resources.displayMetrics.density
-                maxHeight = (30 * densidad).toInt() // Máximo 30dp
-            }
-        }
-
-        /**
-         * Estima el ancho aproximado del texto en píxeles
-         */
-        private fun estimarAnchoTexto(texto: String): Int {
-            // Estimación aproximada: 8-10 píxeles por carácter + padding + margins
-            val caracteresPromedio = texto.length
-            val anchoCaracter = 10 // píxeles aproximados por carácter
-            val paddingHorizontal = 24 // 12 left + 12 right
-            val marginHorizontal = 8 // margin right
-
-            return (caracteresPromedio * anchoCaracter) + paddingHorizontal + marginHorizontal
-        }
-
-        /**
-         * Obtiene el ancho máximo disponible por línea
-         */
-        private fun obtenerAnchoMaximoPorLinea(): Int {
-            // Obtener ancho de la pantalla menos márgenes del layout padre
-            val displayMetrics = context.resources.displayMetrics
-            val anchoPantalla = displayMetrics.widthPixels
-
-            // Restar márgenes típicos del RecyclerView y CardView (aproximado)
-            val margenesLaterales = 32 * displayMetrics.density // 16dp left + 16dp right
-            val paddingInterno = 32 * displayMetrics.density // padding interno del item
-
-            return (anchoPantalla - margenesLaterales - paddingInterno).toInt()
         }
 
         private fun configurarGraficoBarra(varilla: VarillaResultado) {

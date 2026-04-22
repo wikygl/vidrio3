@@ -85,6 +85,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:contentDescription="Nuevo chat"
+            android:padding="6dp"
             app:srcCompat="@drawable/agregar" />
 
         <ImageView
@@ -92,6 +94,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:contentDescription="Actualizar"
+            android:padding="6dp"
             app:srcCompat="@drawable/eliminar" />
 
         <ImageView
@@ -99,6 +103,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:contentDescription="Editar perfil"
+            android:padding="6dp"
             app:srcCompat="@drawable/tres_puntos" />
     </LinearLayout>
 

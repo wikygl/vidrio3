@@ -6,10 +6,9 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import crystal.crystal.R
 import crystal.crystal.databinding.ItemChatBinding
+import crystal.crystal.red.interop.ChatPlatform
 
 class ChatAdapter(
     private val currentUserId: String,
@@ -17,9 +16,15 @@ class ChatAdapter(
 ) : RecyclerView.Adapter<ChatAdapter.ChatViewHolder>() {
 
     private var chats: List<Chat> = emptyList()
+    private val photoCacheByChatId = mutableMapOf<String, String>()
 
     @SuppressLint("NotifyDataSetChanged")
     fun setData(list: List<Chat>) {
+        list.forEach { chat ->
+            if (chat.id.isNotBlank() && chat.photoUrl.isNotBlank()) {
+                photoCacheByChatId[chat.id] = chat.photoUrl
+            }
+        }
         chats = list
         notifyDataSetChanged()
     }
@@ -36,51 +41,50 @@ class ChatAdapter(
     @SuppressLint("SetTextI18n")
     override fun onBindViewHolder(holder: ChatViewHolder, position: Int) {
         val chat = chats[position]
-
-        // ✅ USAR EL NOMBRE QUE YA VIENE DE FIREBASE
-        holder.binding.chatNameText.text = chat.name
-
-        // Mostrar último mensaje o placeholder
-        holder.binding.usersTextView.text = if (chat.lastMessageText.isNotBlank()) {
-            chat.lastMessageText
-        } else {
-            "Sin mensajes aún"
+        val platform = ChatPlatform.fromWireValue(chat.peerPlatform)
+        val platformSuffix = when (platform) {
+            ChatPlatform.PUNTOS -> " · Puntos"
+            else -> ""
+        }
+        val platformLabel = when (platform) {
+            ChatPlatform.PUNTOS -> "Puntos"
+            else -> "Crystal"
         }
 
-        // Cargar foto de perfil del otro usuario
-        val otherUserId = chat.users.firstOrNull { it != currentUserId }
-
-        if (otherUserId != null && otherUserId != currentUserId) {
-            // Es un chat con otra persona, cargar su foto
-            Firebase.firestore
-                .collection("usuarios")
-                .document(otherUserId)
-                .get()
-                .addOnSuccessListener { doc ->
-                    val url = doc.getString("imagenPerfil")
-                    Glide.with(holder.itemView.context)
-                        .load(url.takeUnless { it.isNullOrBlank() } ?: R.drawable.ic_mensajesno)
-                        .circleCrop()
-                        .placeholder(R.drawable.ic_dormido)
-                        .error(R.drawable.ic_mensajesno)
-                        .into(holder.binding.ivFoto)
-                }
-                .addOnFailureListener {
-                    // Si falla cargar foto, usar imagen por defecto
-                    Glide.with(holder.itemView.context)
-                        .load(R.drawable.ic_mensajesno)
-                        .circleCrop()
-                        .into(holder.binding.ivFoto)
-                }
+        holder.binding.chatNameText.text = chat.name + platformSuffix
+        holder.binding.usersTextView.text = if (chat.unreadCount > 0) {
+            "$platformLabel · ${chat.unreadCount} sin leer"
         } else {
-            // Es "Mensajes guardados" (self-chat), usar icono especial
+            "$platformLabel · Al día"
+        }
+
+        val otherUserId = chat.users.firstOrNull { it != currentUserId }
+        if (otherUserId != null && otherUserId != currentUserId) {
+            val effectivePhotoUrl = when {
+                chat.photoUrl.isNotBlank() -> chat.photoUrl
+                chat.id.isNotBlank() -> photoCacheByChatId[chat.id].orEmpty()
+                else -> ""
+            }
+
+            if (effectivePhotoUrl.isNotBlank()) {
+                Glide.with(holder.itemView.context)
+                    .load(effectivePhotoUrl)
+                    .circleCrop()
+                    .dontAnimate()
+                    .into(holder.binding.ivFoto)
+            } else {
+                Glide.with(holder.itemView.context)
+                    .load(R.drawable.ic_mensajesno)
+                    .circleCrop()
+                    .into(holder.binding.ivFoto)
+            }
+        } else {
             Glide.with(holder.itemView.context)
                 .load(R.drawable.ic_chckr)
                 .circleCrop()
                 .into(holder.binding.ivFoto)
         }
 
-        // Badge de mensajes no leídos
         if (chat.unreadCount > 0) {
             holder.binding.tvUnreadCount.apply {
                 text = chat.unreadCount.toString()
@@ -90,7 +94,6 @@ class ChatAdapter(
             holder.binding.tvUnreadCount.visibility = View.GONE
         }
 
-        // Click handler
         holder.binding.root.setOnClickListener {
             chatClick(chat)
         }
