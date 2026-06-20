@@ -7,9 +7,12 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.casilla.DialogosProyecto
 import crystal.crystal.casilla.ListaCasilla
@@ -18,7 +21,7 @@ import crystal.crystal.casilla.ProyectoManager
 import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityMuroBinding
 
-class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
+class Muro : AppCompatActivity() {
 
     private lateinit var binding : ActivityMuroBinding
 
@@ -33,6 +36,43 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
 
     // Evitar “spam” de actualizaciones cuando el usuario escribe
     private var runnableActualizacion: Runnable? = null
+    private var formaEditada: String = ""
+    private var aplicandoResultadoEdicion = false
+    private var metaColorAluminio: String = ""
+    private var metaTipoVidrio: String = ""
+    private var metaAcabadoSuperficial: String = ""
+    private var metaObservaciones: String = ""
+
+    private val editarGridLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
+        val data = result.data ?: return@registerForActivityResult
+        runnableActualizacion?.let { binding.rectanguloView.removeCallbacks(it) }
+        runnableActualizacion = null
+        val anchos = data.getFloatArrayExtra(EditGridActivity.RESULT_ANCHOS_COLUMNAS)
+            ?.toMutableList()
+            ?: return@registerForActivityResult
+        val alturas = data.getStringExtra(EditGridActivity.RESULT_ALTURAS_FILAS)
+            ?.split("|")
+            ?.map { columna -> columna.split(",").mapNotNull { it.toFloatOrNull() }.toMutableList() }
+            ?.filter { it.isNotEmpty() }
+            ?.toMutableList()
+            ?: return@registerForActivityResult
+        data.getFloatExtra(EditGridActivity.RESULT_MARCO, Float.NaN)
+            .takeIf { !it.isNaN() }
+            ?.let { binding.etMarco.setText(df(it)) }
+        data.getFloatExtra(EditGridActivity.RESULT_TUBO, Float.NaN)
+            .takeIf { !it.isNaN() }
+            ?.let { binding.etTubo.setText(df(it)) }
+        data.getFloatExtra(EditGridActivity.RESULT_GRUNA, Float.NaN)
+            .takeIf { !it.isNaN() }
+            ?.let { binding.etGruna.setText(df(it)) }
+        data.getStringExtra(EditGridActivity.RESULT_NAVES)
+            ?.let { binding.etNaves.setText(it) }
+        formaEditada = data.getStringExtra(EditGridActivity.RESULT_FORMA).orEmpty()
+        actualizarGridDesdeDiseno(anchos, alturas)
+    }
 
     @RequiresApi(Build.VERSION_CODES.N)
     @SuppressLint("SetTextI18n")
@@ -50,6 +90,7 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
             textViewProyecto = binding.tvProyectoActivo,
             activity = this
         )
+        ProyectoUIHelper.configurarVisorProyectoActivo(this, binding.tvProyectoActivo)
 
         if (!ProyectoManager.hayProyectoActivo()) {
             DialogosProyecto.mostrarDialogoGestionProyectos(this, proyectoCallback)
@@ -67,6 +108,7 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
 
         binding.btnCalcular.setOnClickListener {
             if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) return@setOnClickListener
+            actualizarReferenciasYDatosEntrada()
             vidrios()
             marcos()
             tubos()
@@ -81,7 +123,9 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
 
         binding.btArchivar.setOnClickListener {
             if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) return@setOnClickListener
-            archivarMapas()
+            mostrarDialogoMetadatosProduccion {
+                archivarMapas()
+            }
         }
 
         binding.btArchivar.setOnLongClickListener {
@@ -161,6 +205,7 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
+                if (aplicandoResultadoEdicion) return
                 // Cancelar runnable previo para no encolar muchas actualizaciones
                 runnableActualizacion?.let { binding.rectanguloView.removeCallbacks(it) }
                 runnableActualizacion = Runnable { actualizarDisenoAutomaticamente() }
@@ -197,6 +242,7 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
                 anchosColumnas,
                 alturasFilasPorColumna
             )
+            formaEditada = ""
 
         } catch (_: Exception) {
             // evitar crash silenciosamente
@@ -218,9 +264,10 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
             anchosColumnas,
             alturasFilasPorColumna
         )
+        formaEditada = ""
     }
 
-    override fun onGridUpdated(
+    private fun actualizarGridDesdeDiseno(
         anchosColumnas: List<Float>,
         alturasFilasPorColumna: List<List<Float>>
     ) {
@@ -230,12 +277,18 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
         val anchoTotal = binding.rectanguloView.getAnchoTotal()
         val altoTotal = binding.rectanguloView.getAltoTotal()
 
-        binding.rectanguloView.configurarParametros(
-            anchoTotal,
-            altoTotal,
-            this.anchosColumnas,
-            this.alturasFilasPorColumna
-        )
+        aplicandoResultadoEdicion = true
+        try {
+            binding.rectanguloView.configurarParametros(
+                anchoTotal,
+                altoTotal,
+                this.anchosColumnas,
+                this.alturasFilasPorColumna
+            )
+            binding.rectanguloView.importarForma(formaEditada)
+        } finally {
+            aplicandoResultadoEdicion = false
+        }
     }
 
     private fun df(defo: Float): String {
@@ -249,87 +302,178 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
 
     private fun mostrarEditGridFragment() {
         val gridDrawingView = binding.rectanguloView
-        val anchoTotal = gridDrawingView.getAnchoTotal()
-        val altoTotal = gridDrawingView.getAltoTotal()
-        val anchosColumnas = gridDrawingView.getAnchosColumnas()
-        val alturasFilasPorColumna = gridDrawingView.getAlturasFilasPorColumna()
-
-        val fragment = EditGridFragment.newInstance(
-            anchoTotal,
-            altoTotal,
-            anchosColumnas,
-            alturasFilasPorColumna
-        )
-        fragment.show(supportFragmentManager, "EditGridFragment")
+        val intent = Intent(this, EditGridActivity::class.java).apply {
+            putExtra(EditGridActivity.EXTRA_ANCHO_TOTAL, gridDrawingView.getAnchoTotal())
+            putExtra(EditGridActivity.EXTRA_ALTO_TOTAL, gridDrawingView.getAltoTotal())
+            putExtra(EditGridActivity.EXTRA_ANCHOS_COLUMNAS, gridDrawingView.getAnchosColumnas().toFloatArray())
+            putExtra(EditGridActivity.EXTRA_MARCO, binding.etMarco.text.toString().toFloatOrNull() ?: 2.5f)
+            putExtra(EditGridActivity.EXTRA_TUBO, binding.etTubo.text.toString().toFloatOrNull() ?: 3.8f)
+            putExtra(EditGridActivity.EXTRA_GRUNA, binding.etGruna.text.toString().toFloatOrNull() ?: 0f)
+            putExtra(EditGridActivity.EXTRA_NAVES, binding.etNaves.text.toString())
+            putExtra(EditGridActivity.EXTRA_FORMA, formaEditada)
+            putExtra(
+                EditGridActivity.EXTRA_ALTURAS_FILAS,
+                gridDrawingView.getAlturasFilasPorColumna().joinToString("|") { columna ->
+                    columna.joinToString(",")
+                }
+            )
+        }
+        editarGridLauncher.launch(intent)
     }
 
     private fun diseno() {
         actualizarDisenoAutomaticamente()
     }
 
+    private fun obtenerPrefijo(): String = "MC"
+
+    private fun etiquetaPaquete(prefijo: String, numero: Int): String {
+        val cliente = binding.txC.text.toString().trim()
+        return if (cliente.isNotBlank()) "$prefijo$numero, $cliente" else "$prefijo$numero"
+    }
+
+    private fun mostrarDialogoMetadatosProduccion(onContinuar: () -> Unit) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val contenedor = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, 0)
+        }
+        val etColor = EditText(this).apply {
+            hint = "Color aluminio (ej: negro)"
+            setText(metaColorAluminio)
+        }
+        val etVidrio = EditText(this).apply {
+            hint = "Tipo vidrio (ej: incoloro 6mm)"
+            setText(metaTipoVidrio)
+        }
+        val etAcabadoSup = EditText(this).apply {
+            hint = "Acabado superficial (opcional)"
+            setText(metaAcabadoSuperficial)
+        }
+        val etObs = EditText(this).apply {
+            hint = "Observaciones (opcional)"
+            setText(metaObservaciones)
+        }
+        contenedor.addView(etColor)
+        contenedor.addView(etVidrio)
+        contenedor.addView(etAcabadoSup)
+        contenedor.addView(etObs)
+
+        AlertDialog.Builder(this)
+            .setTitle("Metadatos de produccion")
+            .setView(contenedor)
+            .setPositiveButton("Guardar y archivar") { _, _ ->
+                metaColorAluminio = etColor.text?.toString()?.trim().orEmpty()
+                metaTipoVidrio = etVidrio.text?.toString()?.trim().orEmpty()
+                metaAcabadoSuperficial = etAcabadoSup.text?.toString()?.trim().orEmpty()
+                metaObservaciones = etObs.text?.toString()?.trim().orEmpty()
+                onContinuar()
+            }
+            .setNeutralButton("Omitir") { _, _ -> onContinuar() }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun sufijoMetadatosProduccion(): String {
+        return "-MAT<alu:${metaColorAluminio.ifBlank { "null" }};" +
+            "vid:${metaTipoVidrio.ifBlank { "null" }};" +
+            "acabado_sup:${metaAcabadoSuperficial.ifBlank { "null" }};" +
+            "obs:${metaObservaciones.ifBlank { "null" }}>"
+    }
+
     // ==================== ARCHIVAR MAPAS (PROYECTOS) ====================
+    @RequiresApi(Build.VERSION_CODES.N)
     private fun archivarMapas() {
-        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
-
-        for (u in 1..cant) {
-            ListaCasilla.incrementarContadorVentanas(this)
-
-            if (esValido(binding.lyReferencias)) {
-                ListaCasilla.procesarReferencias(this, binding.tvReferencias, binding.txReferencias, mapListas)
-            }
-            if (esValido(binding.ulayout)) {
-                ListaCasilla.procesarArchivar(this, binding.tvMarco, binding.txMarco, mapListas)
-            }
-            if (esValido(binding.lyAlnMarco)) {
-                ListaCasilla.procesarArchivar(this, binding.tvAlnMarco, binding.txAlnMarco, mapListas)
-            }
-            if (esValido(binding.lyAlnTubo)) {
-                ListaCasilla.procesarArchivar(this, binding.tvAlnTubo, binding.txAlnTubo, mapListas)
-            }
-            if (esValido(binding.tuboLayout)) {
-                ListaCasilla.procesarArchivar(this, binding.tvTubo, binding.txTubo, mapListas)
-            }
-            if (esValido(binding.lyVidrios)) {
-                ListaCasilla.procesarArchivar(this, binding.tvVidrios, binding.txVidrios, mapListas)
-            }
-            if (esValido(binding.lyClient)) {
-                ListaCasilla.procesarArchivar(this, binding.tvC, binding.txC, mapListas)
-            }
-            if (esValido(binding.lyAncho)) {
-                ListaCasilla.procesarArchivar(this, binding.tvAncho, binding.txAncho, mapListas)
-            }
-            if (esValido(binding.lyAlto)) {
-                ListaCasilla.procesarArchivar(this, binding.tvAlto, binding.txAlto, mapListas)
-            }
-            if (esValido(binding.lyPuente)) {
-                ListaCasilla.procesarArchivar(this, binding.tvPuente, binding.txPuente, mapListas)
-            }
-            if (esValido(binding.lyDivisiones)) {
-                ListaCasilla.procesarArchivar(this, binding.tvDivisiones, binding.txDivisiones, mapListas)
-            }
-            if (esValido(binding.lyFijos)) {
-                ListaCasilla.procesarArchivar(this, binding.tvFijos, binding.txFijos, mapListas)
-            }
-            if (esValido(binding.lyCorredizas)) {
-                ListaCasilla.procesarArchivar(this, binding.tvCorredizas, binding.txCorredizas, mapListas)
-            }
-            if (esValido(binding.lyDiseno)) {
-                ListaCasilla.procesarArchivar(this, binding.tvDiseno, binding.txDiseno, mapListas)
-            }
-            if (esValido(binding.lyGrados)) {
-                ListaCasilla.procesarArchivar(this, binding.tvGrados, binding.txGrados, mapListas)
-            }
-            if (esValido(binding.lyTipo)) {
-                ListaCasilla.procesarArchivar(this, binding.tvTipo, binding.txTipo, mapListas)
-            }
+        actualizarReferenciasYDatosEntrada()
+        vidrios()
+        marcos()
+        tubos()
+        if (binding.etNaves.text.toString().isNotBlank()) {
+            calcularAluminioNaves()
         }
 
+        val proyectoActivo = ProyectoManager.getProyectoActivo()
+        if (proyectoActivo != null) {
+            val mapExistente = MapStorage.cargarProyecto(this, proyectoActivo)
+            mapListas.clear()
+            if (mapExistente != null) mapListas.putAll(mapExistente)
+        }
+
+        val prefijo = obtenerPrefijo()
+        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        var ultimoID = ""
+
+        for (u in 1..cant) {
+            val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
+            val identificadorPaquete = etiquetaPaquete(prefijo, siguienteNumero)
+            ultimoID = identificadorPaquete
+
+            if (esValido(binding.lyReferencias)) {
+                ListaCasilla.procesarReferenciasConPrefijo(this, binding.tvReferencias, binding.txReferencias, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.ulayout)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txMarco, binding.tvMarco, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyAlnMarco)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txAlnMarco, binding.tvAlnMarco, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyAlnTubo)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txAlnTubo, binding.tvAlnTubo, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.tuboLayout)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txTubo, binding.tvTubo, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyVidrios)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txVidrios, binding.tvVidrios, mapListas, identificadorPaquete)
+            }
+            val clienteTexto = binding.txC.text.toString().trim()
+            if (clienteTexto.isNotBlank()) {
+                mapListas.getOrPut("Cliente") { mutableListOf() }
+                    .add(mutableListOf(clienteTexto, "", identificadorPaquete))
+            }
+            if (esValido(binding.lyAncho)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvAncho, binding.txAncho, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyAlto)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvAlto, binding.txAlto, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyPuente)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvPuente, binding.txPuente, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyDivisiones)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvDivisiones, binding.txDivisiones, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyFijos)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvFijos, binding.txFijos, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyCorredizas)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvCorredizas, binding.txCorredizas, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyDiseno)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvDiseno, binding.txDiseno, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyGrados)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvGrados, binding.txGrados, mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyTipo)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvTipo, binding.txTipo, mapListas, identificadorPaquete)
+            }
+            mapListas.getOrPut("MetadatosProduccion") { mutableListOf() }
+                .add(mutableListOf(sufijoMetadatosProduccion(), "", identificadorPaquete))
+
+            ProyectoManager.actualizarContadorPorPrefijo(this, prefijo, siguienteNumero)
+        }
+
+        MapStorage.guardarMap(this, mapListas)
         ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
 
         binding.tvPuntos.setText(mapListas.toString())
-        val msg = if (cant > 1) "Archivadas $cant unidades" else "Datos agregados al proyecto: ${ProyectoManager.getProyectoActivo()}"
-        println(msg)
-        println(mapListas)
+        val msg = if (cant > 1) {
+            "Archivadas $cant unidades en proyecto: ${ProyectoManager.getProyectoActivo()}"
+        } else {
+            "Datos archivados como $ultimoID en proyecto: ${ProyectoManager.getProyectoActivo()}"
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
     }
 
     private fun esValido(ly: LinearLayout): Boolean {
@@ -339,16 +483,28 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
     // ==================== CÁLCULOS ====================
 
     @RequiresApi(Build.VERSION_CODES.N)
+    private fun actualizarReferenciasYDatosEntrada() {
+        val ancho = binding.med1.text.toString().toFloatOrNull() ?: anchoTotal
+        val alto = binding.med2.text.toString().toFloatOrNull() ?: altoTotal
+        val columnas = anchosColumnas.size.takeIf { it > 0 } ?: (binding.nCol.text.toString().toIntOrNull() ?: 0)
+        val filas = alturasFilasPorColumna.maxOfOrNull { it.size } ?: (binding.nFilas.text.toString().toIntOrNull() ?: 0)
+        binding.txReferencias.text = "anch ${df(ancho)} x alt ${df(alto)}\nColumnas: $columnas\nFilas: $filas"
+        binding.txAncho.text = "${df(ancho)} = 1"
+        binding.txAlto.text = "${df(alto)} = 1"
+        binding.txDivisiones.text = "$columnas = 1"
+    }
+
     private fun vidrios() {
         val gruna = binding.etGruna.text.toString().toFloatOrNull() ?: 0f
-        val medidasCantidadMap = mutableMapOf<String, Int>()
+        val medidasCantidadMap = linkedMapOf<String, Int>()
 
         for (colIndex in anchosColumnas.indices) {
-            val anchoColumna = anchosColumnas[colIndex]
-            val alturasFilas = alturasFilasPorColumna[colIndex]
-            for (filaAltura in alturasFilas) {
-                val anchoVidrio = (anchoColumna - gruna).coerceAtLeast(0f)
-                val altoVidrio  = (filaAltura   - gruna).coerceAtLeast(0f)
+            val filas = alturasFilasPorColumna[colIndex]
+            for (filaIndex in filas.indices) {
+                val bounds = binding.rectanguloView.obtenerBoundsVisibleCm(colIndex, filaIndex) ?: continue
+                val anchoVidrio = (bounds.width() - gruna).coerceAtLeast(0f)
+                val altoVidrio = (bounds.height() - gruna).coerceAtLeast(0f)
+                if (anchoVidrio <= 0f || altoVidrio <= 0f) continue
                 val medida = "${df(anchoVidrio)} x ${df(altoVidrio)}"
                 medidasCantidadMap[medida] = medidasCantidadMap.getOrDefault(medida, 0) + 1
             }
@@ -368,18 +524,55 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
             return
         }
 
-        val medidasCantidadMap = mutableMapOf<String, Int>()
+        val medidasMap = linkedMapOf<String, Int>()
+        fun agregar(largo: Float) {
+            if (largo > 0f) {
+                val k = df(largo)
+                medidasMap[k] = medidasMap.getOrDefault(k, 0) + 1
+            }
+        }
 
-        val alturaMarco = altoTotal
-        val medidaVertical = df(alturaMarco)
-        medidasCantidadMap[medidaVertical] = 2 // izquierda y derecha
+        val cortes = binding.rectanguloView.obtenerCortesRectangulares()
 
-        val anchoMarco = anchoTotal - (2 * marco)
-        val medidaHorizontal = df(anchoMarco)
-        medidasCantidadMap[medidaHorizontal] = 2 // arriba y abajo
+        if (cortes.isEmpty()) {
+            // Sin recortes: 4 marcos perimetrales (regla 2: descuento horizontal).
+            agregar(altoTotal)
+            agregar(altoTotal)
+            agregar(anchoTotal - 2f * marco)
+            agregar(anchoTotal - 2f * marco)
+        } else {
+            // Caso con un recorte rectangular en esquina (CASO 1 y CASO 2).
+            // Reglas 1, 2 y 3:
+            //  - Vertical opuesto al corte: extremo a extremo.
+            //  - Vertical del lado del corte: truncado por el alto del corte.
+            //  - Horizontal interior del corte: largo = ancho del corte.
+            //  - Vertical interior del corte: largo = alto del corte + 1 marco.
+            //  - Horizontal del lado del corte: ancho ventana − ancho corte − 2·marco.
+            // El horizontal opuesto al corte se contabiliza como tubo (ver tubos()).
+            val corte = cortes.first()
+            val tocaIzq = corte.left <= 0.1f
+            val tocaDer = corte.right >= anchoTotal - 0.1f
+            val tocaArr = corte.top <= 0.1f
+            val tocaAbj = corte.bottom >= altoTotal - 0.1f
+            val anchoCorte = corte.width()
+            val altoCorte = corte.height()
+
+            val esEsquina = (tocaIzq || tocaDer) && (tocaArr || tocaAbj)
+            if (esEsquina) {
+                agregar(altoTotal)                              // vertical opuesto al corte
+                agregar(altoTotal - altoCorte)                  // vertical del lado del corte
+                agregar(anchoCorte)                             // horizontal interior del corte
+                agregar(altoCorte + marco)                      // vertical interior del corte (regla 3)
+                agregar(anchoTotal - anchoCorte - 2f * marco)   // horizontal del lado del corte
+            } else {
+                // Recorte no esquina: caemos al cálculo perimetral clásico.
+                agregar(altoTotal); agregar(altoTotal)
+                agregar(anchoTotal - 2f * marco); agregar(anchoTotal - 2f * marco)
+            }
+        }
 
         val builder = StringBuilder()
-        for ((medida, cantidad) in medidasCantidadMap) {
+        for ((medida, cantidad) in medidasMap) {
             builder.append("$medida = $cantidad\n")
         }
         binding.tvMarco.text = builder.toString()
@@ -395,31 +588,64 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
             return
         }
 
-        val medidasCantidadMap = mutableMapOf<String, Int>()
+        val medidasCantidadMap = linkedMapOf<String, Int>()
 
-        // Tubos verticales (entre columnas)
-        val alturaTuboVertical = altoTotal - (2 * marco)
-        val cantidadTubosVerticales = (anchosColumnas.size - 1).coerceAtLeast(0)
-        if (cantidadTubosVerticales > 0 && alturaTuboVertical > 0) {
-            val medidaVertical = df(alturaTuboVertical)
-            medidasCantidadMap[medidaVertical] = cantidadTubosVerticales
+        // Tubos verticales (parantes entre columnas): cada uno mide el largo
+        // visible de la línea x = límite-de-columna entre marcos. Cuando un
+        // recorte cruza la línea descontamos 1 marco por cada borde del
+        // recorte, ya que ese borde lleva su propio marco.
+        var xAcum = 0f
+        for (colIndex in 0 until anchosColumnas.size - 1) {
+            xAcum += anchosColumnas[colIndex]
+            val largo = binding.rectanguloView.longitudVerticalVisibleCm(
+                xAcum, marco, altoTotal - marco, marcoCorte = marco
+            )
+            if (largo > 0f) {
+                val medida = df(largo)
+                medidasCantidadMap[medida] = medidasCantidadMap.getOrDefault(medida, 0) + 1
+            }
         }
 
-        // Tubos horizontales por columna
+        // Tubos horizontales por columna: cada uno mide el largo visible de
+        // la línea y = límite-de-fila dentro del ancho útil de la columna.
+        var xLeft = 0f
         for (colIndex in anchosColumnas.indices) {
             val anchuraColumna = anchosColumnas[colIndex]
-            val filasEnColumna = alturasFilasPorColumna[colIndex]
+            val xRight = xLeft + anchuraColumna
+            val ajusteInicio = if (colIndex == 0) marco else tubo / 2f
+            val ajusteFin    = if (colIndex == anchosColumnas.size - 1) marco else tubo / 2f
+            val xMin = xLeft + ajusteInicio
+            val xMax = xRight - ajusteFin
+            val filas = alturasFilasPorColumna[colIndex]
+            var yAcum = 0f
+            for (filaIndex in 0 until filas.size - 1) {
+                yAcum += filas[filaIndex]
+                val largo = binding.rectanguloView.longitudHorizontalVisibleCm(
+                    yAcum, xMin, xMax, marcoCorte = marco
+                )
+                if (largo > 0f) {
+                    val medida = df(largo)
+                    medidasCantidadMap[medida] = medidasCantidadMap.getOrDefault(medida, 0) + 1
+                }
+            }
+            xLeft = xRight
+        }
 
-            val cantidadTubosHorizontales = (filasEnColumna.size - 1).coerceAtLeast(0)
-            if (cantidadTubosHorizontales > 0) {
-                val ajusteInicio = if (colIndex == 0) marco else tubo / 2f
-                val ajusteFin    = if (colIndex == anchosColumnas.size - 1) marco else tubo / 2f
-                val anchoTuboHorizontal = anchuraColumna - ajusteInicio - ajusteFin
-
-                if (anchoTuboHorizontal > 0f) {
-                    val medidaHorizontal = df(anchoTuboHorizontal)
-                    val cantidadExistente = medidasCantidadMap.getOrDefault(medidaHorizontal, 0)
-                    medidasCantidadMap[medidaHorizontal] = cantidadExistente + cantidadTubosHorizontales
+        // Si hay un recorte en esquina, el horizontal continuo del lado opuesto
+        // al corte se contabiliza como tubo (longitud ancho ventana − 2·marco).
+        val cortes = binding.rectanguloView.obtenerCortesRectangulares()
+        if (cortes.isNotEmpty()) {
+            val corte = cortes.first()
+            val tocaIzq = corte.left <= 0.1f
+            val tocaDer = corte.right >= anchoTotal - 0.1f
+            val tocaArr = corte.top <= 0.1f
+            val tocaAbj = corte.bottom >= altoTotal - 0.1f
+            val esEsquina = (tocaIzq || tocaDer) && (tocaArr || tocaAbj)
+            if (esEsquina) {
+                val largoTuboOpuesto = anchoTotal - 2f * marco
+                if (largoTuboOpuesto > 0f) {
+                    val medida = df(largoTuboOpuesto)
+                    medidasCantidadMap[medida] = medidasCantidadMap.getOrDefault(medida, 0) + 1
                 }
             }
         }
@@ -433,21 +659,13 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
 
     private fun parseNavesInput(input: String): List<Pair<Int, Int>> {
         val navesList = mutableListOf<Pair<Int, Int>>()
-        val entries = input.split(";")
-        for (entry in entries) {
-            val parts = entry.split(",")
-            if (parts.size == 2) {
-                val colPart = parts[0].trim()
-                val rowPart = parts[1].trim()
-                if (colPart.startsWith("c") && rowPart.startsWith("f")) {
-                    val colStr = colPart.substring(1)
-                    val rowStr = rowPart.substring(1)
-                    val colIndex = colStr.toIntOrNull()?.minus(1)
-                    val rowIndex = rowStr.toIntOrNull()?.minus(1)
-                    if (colIndex != null && rowIndex != null) {
-                        navesList.add(Pair(colIndex, rowIndex))
-                    }
-                }
+        val regex = Regex("""c(\d+)\s*,\s*f(\d+)(?:\s*=\s*[^;]+)?""", RegexOption.IGNORE_CASE)
+        for (entry in input.split(";")) {
+            val match = regex.matchEntire(entry.trim()) ?: continue
+            val colIndex = match.groupValues[1].toIntOrNull()?.minus(1)
+            val rowIndex = match.groupValues[2].toIntOrNull()?.minus(1)
+            if (colIndex != null && rowIndex != null) {
+                navesList.add(Pair(colIndex, rowIndex))
             }
         }
         return navesList
@@ -476,8 +694,13 @@ class Muro : AppCompatActivity(), EditGridFragment.OnGridUpdatedListener {
 
         for ((colIndex, rowIndex) in navesList) {
             if (colIndex in anchosColumnas.indices && rowIndex in alturasFilasPorColumna[colIndex].indices) {
-                val anchuraColumna = anchosColumnas[colIndex]
-                val alturaFila     = alturasFilasPorColumna[colIndex][rowIndex]
+                val bounds = binding.rectanguloView.obtenerBoundsVisibleCm(colIndex, rowIndex)
+                if (bounds == null) {
+                    Toast.makeText(this, "La nave c${colIndex + 1},f${rowIndex + 1} cae fuera de la forma", Toast.LENGTH_SHORT).show()
+                    continue
+                }
+                val anchuraColumna = bounds.width()
+                val alturaFila     = bounds.height()
 
                 // AlnMarco verticales (2)
                 val ajusteInicioV = if (rowIndex == 0) marco else tubo / 2f

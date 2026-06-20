@@ -11,7 +11,8 @@ data class ResultadoOptimizacion(
     val varillasUsadas: List<VarillaResultado>,
     val totalBarrasUsadas: Int,
     val totalCortes: Int,
-    val cortesErroneos: Int = 0
+    val cortesErroneos: Int = 0,
+    val cortesFaltantes: List<CorteFaltante> = emptyList()
 ) : Parcelable
 
 @Parcelize
@@ -42,4 +43,11 @@ data class VarillaResultado(
 data class CorteConReferencia(
     val longitud: Float,
     val referencia: String
+) : Parcelable
+
+@Parcelize
+data class CorteFaltante(
+    val longitud: Float,
+    val referencia: String,
+    val cantidad: Int
 ) : Parcelable

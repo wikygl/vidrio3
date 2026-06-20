@@ -82,12 +82,16 @@ class BaulActivity : AppCompatActivity() {
     private fun obtenerArchivos(): MutableList<ArchivoBaul> {
         val out = mutableListOf<ArchivoBaul>()
         val internos = File(filesDir.absolutePath).listFiles { file ->
-            file.extension == "dat"
+            file.isFile && (
+                file.extension.equals("dat", true) ||
+                    file.extension.equals("txt", true)
+                )
         }?.toList().orEmpty()
         internos.forEach { f ->
             val nombre = f.name
             val filtro = when {
                 nombre.contains("contrato", ignoreCase = true) -> FiltroBaul.CONTRATOS
+                nombre.contains("recibo", ignoreCase = true) -> FiltroBaul.CONTRATOS
                 nombre.contains("medida", ignoreCase = true) -> FiltroBaul.MEDIDAS
                 // Todo .dat legacy cae en Proformas para mantener comportamiento histórico.
                 else -> FiltroBaul.PROFORMAS

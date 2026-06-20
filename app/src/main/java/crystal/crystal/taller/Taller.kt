@@ -17,8 +17,9 @@ import crystal.crystal.MainActivity
 import crystal.crystal.casilla.MapStorage
 import crystal.crystal.casilla.ProyectoManager
 import crystal.crystal.databinding.ActivityTallerBinding
-import crystal.crystal.optimizadores.NcurvosActivity
+import crystal.crystal.optimizadores.VidrioCurvoActivity
 import crystal.crystal.optimizadores.corte.CorteActivity
+import crystal.crystal.optimizadores.planchas.OptimizacionPlanchasActivity
 import crystal.crystal.taller.nova.NovaCorrediza
 import crystal.crystal.taller.puerta.PuertasActivity
 
@@ -471,16 +472,18 @@ class Taller : AppCompatActivity() {
         binding.btnEstructura.setOnClickListener { lanzarCalculadora(VentanaAl::class.java) }
         binding.btnPivotE.setOnClickListener { lanzarCalculadora(PivotAl::class.java) }
         binding.btnMc.setOnClickListener { lanzarCalculadora(Muro::class.java) }
+        binding.btnRejas.setOnClickListener { lanzarCalculadora(RejasActivity::class.java) }
         binding.btMvidrio.setOnClickListener { lanzarCalculadora(MamparaVidrioActivity::class.java) }
         binding.btnA001.setOnClickListener { lanzarCalculadora(PDuchaActivity::class.java) }
-        binding.btCurvo.setOnClickListener { startActivity(Intent(this, NcurvosActivity::class.java)) }
+        binding.btCurvo.setOnClickListener { startActivity(Intent(this, VidrioCurvoActivity::class.java)) }
         binding.btOptiLineal.setOnClickListener { startActivity(Intent(this, CorteActivity::class.java)) }
         binding.tbX.setOnClickListener { startActivity(Intent(this, DisenoActivity::class.java)) }
         binding.btUnidades.setOnClickListener { lanzarCalculadora(RejasActivity::class.java) }
-        binding.btOpti.setOnClickListener { startActivity(Intent(this, BarandaActivity::class.java)) }
+        binding.btOpti.setOnClickListener { startActivity(Intent(this, OptimizacionPlanchasActivity::class.java)) }
         binding.btFichas.setOnClickListener { startActivity(Intent(this, FichaActivity::class.java)) }
         binding.btMedTecnica.setOnClickListener{startActivity(Intent(this,MedidaActivity::class.java))}
         binding.btDivisionBano.setOnClickListener { lanzarCalculadora(DivisionBanoActivity::class.java) }
+        binding.btBaranda.setOnClickListener { lanzarCalculadora(BarandaActivity::class.java) }
     }
 
     private fun lanzarCalculadora(clase: Class<out AppCompatActivity>) {

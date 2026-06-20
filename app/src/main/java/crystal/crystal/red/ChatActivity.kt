@@ -38,6 +38,9 @@ import crystal.crystal.red.interop.ChatInteropDocumentFactory
 import crystal.crystal.red.interop.ChatInteropIntents
 import crystal.crystal.red.interop.ChatPlatform
 import crystal.crystal.red.interop.MeasuresMessageCodec
+import crystal.crystal.optimizadores.corte.CorteActivity
+import crystal.crystal.optimizadores.planchas.OptimizacionPlanchasActivity
+import crystal.crystal.taller.MedidaActivity
 import kotlinx.coroutines.launch
 import java.io.FileOutputStream
 import java.net.URL
@@ -71,6 +74,7 @@ class ChatActivity : AppCompatActivity() {
     private var archivoCompartidoParaEnviar: Uri? = null
     private var nombreArchivoCompartido: String? = null
     private var mimeArchivoCompartido: String? = null
+    private var textoCompartidoParaEnviar: String? = null
 
     companion object {
         private const val PICK_FILE_REQ = 1001
@@ -99,6 +103,7 @@ class ChatActivity : AppCompatActivity() {
         archivoCompartidoParaEnviar = ChatInteropIntents.consumeUriExtra(intent, ChatInteropIntents.EXTRA_SEND_SHARED_URI)
         nombreArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME)
         mimeArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME)
+        textoCompartidoParaEnviar = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_TEXT)
 
         if (chatId.isNotEmpty() && usuario.isNotEmpty()) {
             inicializarCabecera()
@@ -112,6 +117,8 @@ class ChatActivity : AppCompatActivity() {
                 mostrarOpcionEnviarPresupuesto()
             } else if (archivoCompartidoParaEnviar != null) {
                 mostrarOpcionEnviarArchivoCompartido()
+            } else if (textoCompartidoParaEnviar != null) {
+                mostrarOpcionEnviarTextoCompartido()
             }
         }
     }
@@ -166,6 +173,29 @@ class ChatActivity : AppCompatActivity() {
             nombreArchivoCompartido = null
             mimeArchivoCompartido = null
         }
+    }
+
+    private fun mostrarOpcionEnviarTextoCompartido() {
+        val texto = textoCompartidoParaEnviar.orEmpty()
+        val vistaPrevia = texto.lineSequence().take(8).joinToString("\n")
+        AlertDialog.Builder(this)
+            .setTitle("Enviar medidas")
+            .setMessage("Deseas enviar estas medidas en este chat?\n\n$vistaPrevia")
+            .setPositiveButton("Enviar") { _, _ ->
+                enviarTextoCompartido()
+            }
+            .setNegativeButton("Cancelar") { _, _ ->
+                textoCompartidoParaEnviar = null
+            }
+            .show()
+    }
+
+    private fun enviarTextoCompartido() {
+        val texto = textoCompartidoParaEnviar?.trim().orEmpty()
+        if (texto.isNotEmpty()) {
+            enviarMensaje(texto, if (MeasuresMessageCodec.isMeasuresFormat(texto)) "medidas" else "texto")
+        }
+        textoCompartidoParaEnviar = null
     }
 
     private fun subirYEnviarPresupuesto(uri: Uri) {
@@ -297,6 +327,9 @@ class ChatActivity : AppCompatActivity() {
                             }
                     }
                     "texto", "medidas" -> mostrarDialogoImportarMedidas(mensaje)
+                    "medidas_crystal" -> abrirMedidasCrystalDesdeChat(mensaje)
+                    "corte_crystal" -> abrirCorteCrystalDesdeChat(mensaje)
+                    "plancha_crystal" -> abrirPlanchaCrystalDesdeChat(mensaje)
                     "video" -> {
                         if (!isFirebaseStorageUrl(mensaje.message)) {
                             VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
@@ -326,7 +359,13 @@ class ChatActivity : AppCompatActivity() {
                             }
                     }
                     else -> {
-                        if (mensaje.tipo == "pdf") {
+                        if (esMensajePlanchaCrystal(mensaje)) {
+                            abrirPlanchaCrystalDesdeChat(mensaje)
+                        } else if (esMensajeCorteCrystal(mensaje)) {
+                            abrirCorteCrystalDesdeChat(mensaje)
+                        } else if (esMensajeMedidasCrystal(mensaje)) {
+                            abrirMedidasCrystalDesdeChat(mensaje)
+                        } else if (mensaje.tipo == "pdf") {
                             abrirPdfExterno(uri)
                         } else {
                             // Imagen y audio -> visor interno
@@ -436,8 +475,8 @@ class ChatActivity : AppCompatActivity() {
         val nuevoMensajeRef = mensajesRef.document()
         val ahora = Date()
 
-        val tipo = detectarTipo(uri)
-        val nombreOriginal = extraerNombreArchivo(uri)
+        val nombreOriginal = nombreArchivoCompartido ?: extraerNombreArchivo(uri)
+        val tipo = detectarTipo(uri, mimeArchivoCompartido, nombreOriginal)
 
         // 1) Crear placeholder en Firestore
         val placeholder = Message(
@@ -565,11 +604,17 @@ class ChatActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun detectarTipo(uri: Uri): String {
-        val t = contentResolver.getType(uri) ?: ""
-        val fileName = extraerNombreArchivo(uri)
+    private fun detectarTipo(uri: Uri, forcedMime: String? = null, forcedFileName: String? = null): String {
+        val t = forcedMime ?: contentResolver.getType(uri).orEmpty()
+        val fileName = forcedFileName ?: extraerNombreArchivo(uri)
 
         return when {
+            t == OptimizacionPlanchasActivity.MIME_PLANCHA_CRYSTAL ||
+                fileName.endsWith(".${OptimizacionPlanchasActivity.EXTENSION_PLANCHA_CRYSTAL}", ignoreCase = true) -> "plancha_crystal"
+            t == CorteActivity.MIME_CORTE_CRYSTAL ||
+                fileName.endsWith(".${CorteActivity.EXTENSION_CORTE_CRYSTAL}", ignoreCase = true) -> "corte_crystal"
+            t == MedidaActivity.MIME_MEDIDAS_CRYSTAL ||
+                fileName.endsWith(".${MedidaActivity.EXTENSION_MEDIDAS_CRYSTAL}", ignoreCase = true) -> "medidas_crystal"
             fileName.startsWith("presupuesto_") && fileName.endsWith(".json") -> "presupuesto"
             t.startsWith("image")   -> "imagen"
             t.startsWith("video")   -> "video"
@@ -627,6 +672,133 @@ class ChatActivity : AppCompatActivity() {
         }
         builder.setNegativeButton("Cancelar", null)
         builder.show()
+    }
+
+    private fun esMensajeMedidasCrystal(mensaje: Message): Boolean {
+        return mensaje.tipo == "medidas_crystal" ||
+            mensaje.nombreArchivo.endsWith(".${MedidaActivity.EXTENSION_MEDIDAS_CRYSTAL}", ignoreCase = true)
+    }
+
+    private fun esMensajeCorteCrystal(mensaje: Message): Boolean {
+        return mensaje.tipo == "corte_crystal" ||
+            mensaje.nombreArchivo.endsWith(".${CorteActivity.EXTENSION_CORTE_CRYSTAL}", ignoreCase = true)
+    }
+
+    private fun esMensajePlanchaCrystal(mensaje: Message): Boolean {
+        return mensaje.tipo == "plancha_crystal" ||
+            mensaje.nombreArchivo.endsWith(".${OptimizacionPlanchasActivity.EXTENSION_PLANCHA_CRYSTAL}", ignoreCase = true)
+    }
+
+    private fun abrirMedidasCrystalDesdeChat(mensaje: Message) {
+        if (!isFirebaseStorageUrl(mensaje.message)) {
+            val uri = Uri.parse(mensaje.message)
+            abrirMedidasCrystalUri(uri)
+            return
+        }
+
+        Toast.makeText(this, "Descargando medidas...", Toast.LENGTH_SHORT).show()
+        FirebaseStorage.getInstance().getReferenceFromUrl(mensaje.message)
+            .getBytes(10L * 1024L * 1024L)
+            .addOnSuccessListener { bytes ->
+                runCatching {
+                    val nombre = mensaje.nombreArchivo
+                        .takeIf { it.endsWith(".${MedidaActivity.EXTENSION_MEDIDAS_CRYSTAL}", ignoreCase = true) }
+                        ?: "medidas_${System.currentTimeMillis()}.${MedidaActivity.EXTENSION_MEDIDAS_CRYSTAL}"
+                    val file = File(cacheDir, nombre)
+                    file.writeBytes(bytes)
+                    val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+                    abrirMedidasCrystalUri(uri)
+                }.onFailure {
+                    Toast.makeText(this, "No se pudo preparar medidas: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Error al descargar medidas: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun abrirMedidasCrystalUri(uri: Uri) {
+        val intent = Intent(this, MedidaActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            setDataAndType(uri, MedidaActivity.MIME_MEDIDAS_CRYSTAL)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            clipData = ClipData.newUri(contentResolver, "medidas_crystal", uri)
+        }
+        startActivity(intent)
+    }
+
+    private fun abrirCorteCrystalDesdeChat(mensaje: Message) {
+        if (!isFirebaseStorageUrl(mensaje.message)) {
+            abrirCorteCrystalUri(Uri.parse(mensaje.message))
+            return
+        }
+
+        Toast.makeText(this, "Descargando corte...", Toast.LENGTH_SHORT).show()
+        FirebaseStorage.getInstance().getReferenceFromUrl(mensaje.message)
+            .getBytes(10L * 1024L * 1024L)
+            .addOnSuccessListener { bytes ->
+                runCatching {
+                    val nombre = mensaje.nombreArchivo
+                        .takeIf { it.endsWith(".${CorteActivity.EXTENSION_CORTE_CRYSTAL}", ignoreCase = true) }
+                        ?: "corte_${System.currentTimeMillis()}.${CorteActivity.EXTENSION_CORTE_CRYSTAL}"
+                    val file = File(cacheDir, nombre)
+                    file.writeBytes(bytes)
+                    val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+                    abrirCorteCrystalUri(uri)
+                }.onFailure {
+                    Toast.makeText(this, "No se pudo preparar corte: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Error al descargar: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun abrirCorteCrystalUri(uri: Uri) {
+        val intent = Intent(this, CorteActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            setDataAndType(uri, CorteActivity.MIME_CORTE_CRYSTAL)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            clipData = ClipData.newUri(contentResolver, "corte_crystal", uri)
+        }
+        startActivity(intent)
+    }
+
+    private fun abrirPlanchaCrystalDesdeChat(mensaje: Message) {
+        if (!isFirebaseStorageUrl(mensaje.message)) {
+            abrirPlanchaCrystalUri(Uri.parse(mensaje.message))
+            return
+        }
+
+        Toast.makeText(this, "Descargando corte de planchas...", Toast.LENGTH_SHORT).show()
+        FirebaseStorage.getInstance().getReferenceFromUrl(mensaje.message)
+            .getBytes(10L * 1024L * 1024L)
+            .addOnSuccessListener { bytes ->
+                runCatching {
+                    val nombre = mensaje.nombreArchivo
+                        .takeIf { it.endsWith(".${OptimizacionPlanchasActivity.EXTENSION_PLANCHA_CRYSTAL}", ignoreCase = true) }
+                        ?: "planchas_${System.currentTimeMillis()}.${OptimizacionPlanchasActivity.EXTENSION_PLANCHA_CRYSTAL}"
+                    val file = File(cacheDir, nombre)
+                    file.writeBytes(bytes)
+                    val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+                    abrirPlanchaCrystalUri(uri)
+                }.onFailure {
+                    Toast.makeText(this, "No se pudo preparar corte de planchas: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Error al descargar: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun abrirPlanchaCrystalUri(uri: Uri) {
+        val intent = Intent(this, OptimizacionPlanchasActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            setDataAndType(uri, OptimizacionPlanchasActivity.MIME_PLANCHA_CRYSTAL)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            clipData = ClipData.newUri(contentResolver, "plancha_crystal", uri)
+        }
+        startActivity(intent)
     }
 
     private fun isFirebaseStorageUrl(value: String): Boolean {

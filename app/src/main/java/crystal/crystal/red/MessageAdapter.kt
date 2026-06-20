@@ -69,7 +69,7 @@ class MessageAdapter(
         contenedor.background = null
         contenedor.backgroundTintList = null
 
-        if (mensaje.tipo in listOf("imagen", "video", "audio", "pdf", "presupuesto")) {
+        if (mensaje.tipo in listOf("imagen", "video", "audio", "pdf", "presupuesto", "archivo", "medidas_crystal", "corte_crystal", "plancha_crystal")) {
             if (esMio) {
                 contenedor.setBackgroundResource(R.drawable.corner)
                 contenedor.backgroundTintList =
@@ -130,13 +130,25 @@ class MessageAdapter(
                         .into(imageView)
                     frameLayout.setOnClickListener { onMostrarArchivo(mensaje) }
                 }
-                "audio", "pdf" -> {
+                "audio", "pdf", "archivo", "medidas_crystal", "corte_crystal", "plancha_crystal" -> {
                     fileButton.visibility = View.VISIBLE
                     val nombreMostrar = mensaje.nombreArchivo.takeIf { it.isNotEmpty() }
                         ?: extraerNombreDesdeUrl(mensaje.message)
                     fileButton.text = when (mensaje.tipo) {
                         "audio" -> "Musica $nombreMostrar"
                         "pdf" -> "PDF $nombreMostrar"
+                        "medidas_crystal" -> "Medidas Crystal\n$nombreMostrar\nToca para abrir"
+                        "corte_crystal" -> "Corte Crystal\n$nombreMostrar\nToca para abrir"
+                        "plancha_crystal" -> "Corte Plancha Crystal\n$nombreMostrar\nToca para abrir"
+                        "archivo" -> if (nombreMostrar.endsWith(".crystalmedidas", ignoreCase = true)) {
+                            "Medidas Crystal\n$nombreMostrar\nToca para abrir"
+                        } else if (nombreMostrar.endsWith(".crystalcorte", ignoreCase = true)) {
+                            "Corte Crystal\n$nombreMostrar\nToca para abrir"
+                        } else if (nombreMostrar.endsWith(".crystalplancha", ignoreCase = true)) {
+                            "Corte Plancha Crystal\n$nombreMostrar\nToca para abrir"
+                        } else {
+                            "Archivo $nombreMostrar"
+                        }
                         else -> nombreMostrar
                     }
                     fileButton.setOnClickListener { onMostrarArchivo(mensaje) }

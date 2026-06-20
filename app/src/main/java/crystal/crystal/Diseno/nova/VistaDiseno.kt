@@ -47,6 +47,10 @@ class VistaDiseno @JvmOverloads constructor(
     private var altoCm: Float  = 120f
     private var mochetaLateralCm: Float = 0f
     private var mochetaLateralDerechaCm: Float = 0f
+    // Encuentro: lados que colindan con vacío (orden ARBL: 1=colinda, 0=vacío).
+    private var encuentroVacio: String = "1111"
+    // Dirección de la geometría compuesta (aleta): "adentro" (acercándose) | "afuera".
+    private var direccion: String = "adentro"
     private var corteVerticalCm: Float? = null
 
     // ------------ Estado según paquete ------------
@@ -58,6 +62,7 @@ class VistaDiseno @JvmOverloads constructor(
     // INA: módulos de la franja S + alturas de mocheta local (cm) arriba/abajo
     private var sistemaModulos: List<TipoModulo> = listOf(TipoModulo.CORREDIZA)
     private var sistemaParantes: List<Int> = emptyList()
+    private var sistemaAnchos: List<Float> = emptyList()  // cm por módulo; vacío = reparto igual
     private var alturaMochetaTopCm: Float = 0f
     private var alturaMochetaBottomCm: Float = 0f
     private var esquinaLConParante: Boolean = false
@@ -91,8 +96,11 @@ class VistaDiseno @JvmOverloads constructor(
     private val anchoLineaPx   = 4f   // resto de líneas
     private val anchoReflejoPx = 1.5f // rayas de "reflejo"
 
-    private val altoPuentePx = 12f    // banda en APA (junta m↔s)
+    private var altoPuentePx = 12f    // banda en APA (junta m↔s); proporcional, se fija en onDraw
     private val altoZocaloPx = 12f    // zócalo bajo cada ‘c’
+
+    // Encuentro vacío: recuadro punteado en el margen exterior del lado al vacío.
+    private val vacioGapPx = 4f
 
     private val colorNegro = ContextCompat.getColor(context, android.R.color.black)
 
@@ -102,6 +110,9 @@ class VistaDiseno @JvmOverloads constructor(
     private val pLinea = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = colorNegro; style = Paint.Style.STROKE; strokeWidth = anchoLineaPx
     }
+    private val pLineaIna = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorNegro; style = Paint.Style.STROKE; strokeWidth = 1.5f
+    }
     private val pReflejo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = colorNegro; style = Paint.Style.STROKE; strokeWidth = anchoReflejoPx
     }
@@ -110,6 +121,14 @@ class VistaDiseno @JvmOverloads constructor(
     }
     private val pRellenoNegro = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = colorNegro; style = Paint.Style.FILL
+    }
+    private val pVacioRelleno = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#33000000"); style = Paint.Style.FILL
+    }
+    private val pVacioBorde = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#CC000000"); style = Paint.Style.STROKE
+        strokeWidth = 3.5f
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(12f, 7f), 0f)
     }
     private val pAletaSombra2 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#C5D6EE")
@@ -181,13 +200,64 @@ class VistaDiseno @JvmOverloads constructor(
         invalidate()
     }
 
+    /** Lados que colindan con vacío (orden ARBL: 1=colinda, 0=vacío). */
+    fun setEncuentroVacio(v: String?) {
+        encuentroVacio = (v?.takeIf { it.isNotBlank() } ?: "1111").padEnd(4, '1')
+        invalidate()
+    }
+
+    /** Dirección de la geometría compuesta: "adentro" (aleta hacia el observador) | "afuera". */
+    fun setDireccion(v: String?) {
+        direccion = if (v.equals("afuera", ignoreCase = true)) "afuera" else "adentro"
+        invalidate()
+    }
+
+    /** Grosor del recuadro de vacío: proporcional a la ventana (perceptible a cualquier escala). */
+    private fun grosorVacioPx(x0: Float, y0: Float, x1: Float, y1: Float): Float =
+        (minOf(x1 - x0, y1 - y0) * 0.28f).coerceIn(40f, 160f)
+
+    /**
+     * Dibuja un recuadro punteado de "espacio vacío" en el margen exterior de cada lado
+     * marcado como vacío (encuentroVacio, orden Arriba-Derecha-Abajo-Izquierda).
+     * En exportación usa el grosor completo (el recorte reserva el espacio); en la vista
+     * interactiva lo limita al espacio disponible para no salirse de la pantalla.
+     */
+    private fun dibujarEncuentroVacio(canvas: Canvas, x0: Float, y0: Float, x1: Float, y1: Float) {
+        val v = encuentroVacio.padEnd(4, '1')
+        val g = vacioGapPx
+        val t0 = grosorVacioPx(x0, y0, x1, y1)
+        fun grosor(disponible: Float): Float =
+            if (omitirFondoAlExportar) t0 else minOf(t0, disponible - g).coerceAtLeast(8f)
+        fun caja(l: Float, top: Float, r: Float, b: Float) {
+            val rect = RectF(l, top, r, b)
+            canvas.drawRect(rect, pVacioRelleno)
+            canvas.drawRect(rect, pVacioBorde)
+        }
+        if (v[0] == '0') { val t = grosor(y0); caja(x0, y0 - g - t, x1, y0 - g) }                       // arriba
+        if (v[1] == '0') { val t = grosor(width - x1); caja(x1 + g, y0, x1 + g + t, y1) }               // derecha
+        if (v[2] == '0') { val t = grosor(height - y1); caja(x0, y1 + g, x1, y1 + g + t) }              // abajo
+        if (v[3] == '0') { val t = grosor(x0); caja(x0 - g - t, y0, x0 - g, y1) }                       // izquierda
+
+        // En el borde que colinda con el vacío se refuerza con parante (lados) o puente
+        // (arriba/abajo): una barra del grosor del perfil (≈2.5 cm), dibujada sobre la ventana.
+        val barra = altoPuentePx
+        if (v[0] == '0') canvas.drawRect(RectF(x0, y0, x1, y0 + barra), pRellenoNegro)            // puente arriba
+        if (v[2] == '0') canvas.drawRect(RectF(x0, y1 - barra, x1, y1), pRellenoNegro)            // puente abajo
+        if (v[3] == '0') canvas.drawRect(RectF(x0, y0, x0 + barra, y1), pRellenoNegro)            // parante izquierda
+        if (v[1] == '0') canvas.drawRect(RectF(x1 - barra, y0, x1, y1), pRellenoNegro)            // parante derecha
+    }
+
     // ================== API PRINCIPAL ==================
     fun actualizarDesdePaquete(
-        paquete: String,
+        paquete: String?,
         anchoCm: Float,
         altoCm: Float,
         mochetaLateralCm: Float = 0f
     ) {
+        val paqueteSeguro = paquete?.trim()
+            ?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+            ?: PAQUETE_NOVA_FALLBACK
+
         // 1) Medidas que llegan (pueden ser 0 si se tomarán del paquete)
         this.anchoCm = anchoCm
         this.altoCm = altoCm
@@ -195,7 +265,7 @@ class VistaDiseno @JvmOverloads constructor(
         this.mochetaLateralDerechaCm = 0f
 
         // 2) Parseo de cabecera
-        val (clase, tipo, modeloCrudo, dims) = parsearPaqueteConDimensiones(paquete)
+        val (clase, tipo, modeloCrudo, dims) = parsearPaqueteConDimensiones(paqueteSeguro)
         require(clase == "nova") { "Clase no soportada: $clase" }
         this.modo = if (tipo == "apa") ModoEnsamble.APA else ModoEnsamble.INA
 
@@ -225,6 +295,7 @@ class VistaDiseno @JvmOverloads constructor(
 
             sistemaModulos = franjas[idxS].modulos
             sistemaParantes = franjas[idxS].parantePosiciones
+            sistemaAnchos = franjas[idxS].anchosMod
 
             // Fallback para franjas con altura AUTO (sin <...>): mismo reparto que APA
             val alturasFallback = distribuirAlturas(franjas)
@@ -259,13 +330,19 @@ class VistaDiseno @JvmOverloads constructor(
         val resto = contenido.substringAfter("$tipo,").trim()
 
         return if (resto.startsWith("[")) {
-            val dentro = resto.removePrefix("[").substringBeforeLast("]")
+            val sinBracketInicial = resto.removePrefix("[")
+            val idxCierre = sinBracketInicial.lastIndexOf(']')
+            require(idxCierre >= 0) { "Paquete inválido: falta ']'" }
+            val dentro = sinBracketInicial.substring(0, idxCierre)
             val idx = dentro.indexOf(":")
             require(idx > 0) { "Falta ':' después de [ancho,alto]" }
             val dimsTxt = dentro.substring(0, idx)
             val modeloTxt = dentro.substring(idx + 1)
 
-            val (aw, ah) = dimsTxt.split(",").map { it.trim().replace(",", ".") }
+            val dims = dimsTxt.split(",").map { it.trim().replace(",", ".") }
+            require(dims.size >= 2) { "Paquete inválido: faltan ancho/alto" }
+            val aw = dims[0]
+            val ah = dims[1]
             Quadruple(clase, tipo, modeloTxt, Dimensiones(aw.toFloat(), ah.toFloat()))
         } else {
             val modeloTxt = partes.subList(2, partes.size).joinToString(",")
@@ -742,17 +819,36 @@ class VistaDiseno @JvmOverloads constructor(
         val y0 = (height - (altoCm * escala)) / 2f
         val x1 = x0 + anchoTotalCm * escala
         val y1 = y0 + altoCm * escala
+        // Reservar arriba SOLO lo que el arco realmente ocupa al dibujarse (mismo tope
+        // que flechaPx en dibujarCurvoNcu). Si no, una flecha grande deja una franja
+        // vacía enorme encima y la ventana se ve diminuta.
         val extraTopPx = if (modoArcoCurvo) {
-            (flechaArcoCm.coerceAtLeast(0f) * escala).coerceAtLeast(0f)
+            val altoVentanaPx = (y1 - y0).coerceAtLeast(1f)
+            (flechaArcoCm.coerceAtLeast(0f) * escala).coerceIn(0f, altoVentanaPx * 0.35f)
         } else 0f
 
-        val w = (x1 - x0 + 2 * paddingPx).toInt().coerceAtLeast(1)
-        val h = (y1 - y0 + extraTopPx + 2 * paddingPx).toInt().coerceAtLeast(1)
+        // Reservar margen para los recuadros de "vacío" en los lados que correspondan,
+        // si no quedarían recortados del bitmap exportado.
+        val ev = encuentroVacio.padEnd(4, '1')
+        val banda = vacioGapPx + grosorVacioPx(x0, y0, x1, y1)
+        val vacIzq = if (ev[3] == '0') banda else 0f
+        val vacDer = if (ev[1] == '0') banda else 0f
+        // En "adentro" la aleta diverge (sobresale arriba y abajo): reservar ese desborde
+        // para que no se recorte en el bitmap exportado. La aleta de L/C/serie viene por
+        // segmentosNs; la de mocheta lateral por mochetaL/RFranjas.
+        val tieneAleta = mochetaLFranjas.isNotEmpty() || mochetaRFranjas.isNotEmpty() ||
+            segmentosNs.isNotEmpty()
+        val overAleta = if (direccion != "afuera" && tieneAleta) (y1 - y0) * 0.12f else 0f
+        val vacAbajo = maxOf(if (ev[2] == '0') banda else 0f, overAleta)
+        val reservaTop = maxOf(extraTopPx, if (ev[0] == '0') banda else 0f, overAleta)
+
+        val w = (x1 - x0 + vacIzq + vacDer + 2 * paddingPx).toInt().coerceAtLeast(1)
+        val h = (y1 - y0 + reservaTop + vacAbajo + 2 * paddingPx).toInt().coerceAtLeast(1)
 
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         omitirFondoAlExportar = true
-        c.translate(-(x0 - paddingPx), -((y0 - extraTopPx) - paddingPx))
+        c.translate(-(x0 - paddingPx - vacIzq), -((y0 - reservaTop) - paddingPx))
         draw(c) // reutiliza onDraw (no pinta fondo por el flag)
         omitirFondoAlExportar = false
         return bmp
@@ -798,6 +894,8 @@ class VistaDiseno @JvmOverloads constructor(
         val altoDisp  = height - 2 * margenPx
         val anchoTotalCm = anchoEfectivoCm()
         val escala = min(anchoDisp / anchoTotalCm, altoDisp / altoCm)
+        // Puente proporcional (≈2.5 cm, como los parantes); evita que se vea como línea fina.
+        altoPuentePx = max(12f, 2.5f * escala)
 
         val x0 = (width  - anchoTotalCm * escala) / 2f
         val y0 = (height - altoCm * escala) / 2f
@@ -809,6 +907,7 @@ class VistaDiseno @JvmOverloads constructor(
             segmentosPlanoInfo.clear()
             dibujarNs(canvas, x0, y0, y1, escala)
             dibujarCorteVerticalGlobal(canvas, x0, y0, y1, escala, anchoTotalCm)
+            dibujarEncuentroVacio(canvas, x0, y0, x1, y1)
             if (!omitirFondoAlExportar) {
                 dibujarCotas(canvas, x0, y0, x1, y1, escala)
             }
@@ -819,6 +918,7 @@ class VistaDiseno @JvmOverloads constructor(
             rangosTramoX.add(Pair(x0, x1))
             dibujarCircularNci(canvas, x0, y0, x1, y1, escala)
             dibujarCorteVerticalGlobal(canvas, x0, y0, y1, escala, anchoTotalCm)
+            dibujarEncuentroVacio(canvas, x0, y0, x1, y1)
             if (!omitirFondoAlExportar) {
                 dibujarCotas(canvas, x0, y0, x1, y1, escala)
             }
@@ -829,6 +929,7 @@ class VistaDiseno @JvmOverloads constructor(
             rangosTramoX.add(Pair(x0, x1))
             dibujarCurvoNcu(canvas, x0, y0, x1, y1, escala)
             dibujarCorteVerticalGlobal(canvas, x0, y0, y1, escala, anchoTotalCm)
+            dibujarEncuentroVacio(canvas, x0, y0, x1, y1)
             if (!omitirFondoAlExportar) {
                 dibujarCotas(canvas, x0, y0, x1, y1, escala)
             }
@@ -957,6 +1058,7 @@ class VistaDiseno @JvmOverloads constructor(
             dibujarINA(canvas, xVentIni, y0, xVentFin, y1, anchoVentPx, escala)
         }
         dibujarCorteVerticalGlobal(canvas, x0, y0, y1, escala, anchoTotalCm)
+        dibujarEncuentroVacio(canvas, x0, y0, x1, y1)
 
         // Dibujar cotas exteriores (solo si no es exportación)
         if (!omitirFondoAlExportar) {
@@ -975,6 +1077,10 @@ class VistaDiseno @JvmOverloads constructor(
         val corte = corteVerticalCm ?: return
         if (corte <= 0f || corte >= anchoTotalCm) return
         val x = x0 + corte * escala
+        if (modo == ModoEnsamble.INA) {
+            canvas.drawLine(x, y0, x, y1, pLineaIna)
+            return
+        }
         val anchoParante = max(10f, 2.5f * escala)
         canvas.drawRect(RectF(x - anchoParante / 2f, y0, x + anchoParante / 2f, y1), pRellenoNegro)
     }
@@ -1291,10 +1397,14 @@ class VistaDiseno @JvmOverloads constructor(
             var xFin = xCursor + anchoNominalPx
             val anchoParante = max(10f, 2.5f * escalaLocal)
             if (idx > 0) {
-                canvas.drawRect(
-                    RectF(xIni - anchoParante / 2, yTopPlanoActual, xIni + anchoParante / 2, yBottomPlanoActual),
-                    pRellenoNegro
-                )
+                if (modo == ModoEnsamble.INA) {
+                    canvas.drawLine(xIni, yTopPlanoActual, xIni, yBottomPlanoActual, pLineaIna)
+                } else {
+                    canvas.drawRect(
+                        RectF(xIni - anchoParante / 2, yTopPlanoActual, xIni + anchoParante / 2, yBottomPlanoActual),
+                        pRellenoNegro
+                    )
+                }
             }
             when (segmento.tipo) {
                 TipoSegmentoNs.PLANO -> {
@@ -1766,7 +1876,8 @@ class VistaDiseno @JvmOverloads constructor(
                 xFin = xFin,
                 nModulos = n,
                 parantePosiciones = franja.parantePosiciones,
-                parantesXPx = parantesXPx
+                parantesXPx = parantesXPx,
+                anchosMod = franja.anchosMod
             )
             val parantesSet = franja.parantePosiciones.toSet()
             for (i in 1 until n) {
@@ -2104,9 +2215,12 @@ class VistaDiseno @JvmOverloads constructor(
     private fun proyectarPerspectiva(base: PointF, xVp: Float, yVp: Float, zPx: Float, focalPx: Float): PointF {
         val k = zPx / (zPx + focalPx.coerceAtLeast(80f))
         val kY = (k * 0.5f).coerceIn(0f, 1f)
+        // "afuera": el borde exterior converge al centro (se aleja). "adentro" (default):
+        // diverge (top sube, bottom baja) dando la sensación de acercarse al observador.
+        val signoY = if (direccion == "afuera") 1f else -1f
         return PointF(
             base.x + ((xVp - base.x) * k),
-            base.y + ((yVp - base.y) * kY)
+            base.y + ((yVp - base.y) * kY * signoY)
         )
     }
 
@@ -2309,14 +2423,14 @@ class VistaDiseno @JvmOverloads constructor(
         xFin: Float,
         nModulos: Int,
         parantePosiciones: List<Int>,
-        parantesXPx: List<Float>
+        parantesXPx: List<Float>,
+        anchosMod: List<Float> = emptyList()
     ): FloatArray {
         val xs = FloatArray(nModulos + 1)
         val cortes = parantePosiciones.filter { it in 1 until nModulos }.distinct().sorted()
         if (cortes.isEmpty() || parantesXPx.size < cortes.size) {
-            // sin parantes: distribución uniforme
-            for (i in 0..nModulos) xs[i] = xIni + i * ((xFin - xIni) / nModulos.toFloat())
-            return xs
+            // sin parantes: repartir por ancho de módulo (<w>); uniforme si no hay anchos.
+            return calcularPosicionesX(xIni, xFin - xIni, nModulos, anchosMod)
         }
         // límites de cada tramo en px
         val xLimites = listOf(xIni) + parantesXPx.take(cortes.size) + listOf(xFin)
@@ -2326,9 +2440,10 @@ class VistaDiseno @JvmOverloads constructor(
             val x0 = xLimites[t]; val x1 = xLimites[t + 1]
             val m0 = mLimites[t]; val m1 = mLimites[t + 1]
             val count = (m1 - m0).coerceAtLeast(1)
-            for (m in 0..count) {
-                xs[m0 + m] = x0 + m * ((x1 - x0) / count.toFloat())
-            }
+            // dentro de cada tramo, repartir por el ancho de sus propios módulos.
+            val anchosTramo = if (anchosMod.size == nModulos) anchosMod.subList(m0, m1) else emptyList()
+            val xsTramo = calcularPosicionesX(x0, x1 - x0, count, anchosTramo)
+            for (m in 0..count) xs[m0 + m] = xsTramo[m]
         }
         return xs
     }
@@ -2513,8 +2628,16 @@ class VistaDiseno @JvmOverloads constructor(
         // Repartir resto entre franjas sin altura explícita
         val resto = (altoCm - sumaExp).coerceAtLeast(0f)
         val ceros = (0 until n).filter { alturas[it] == 0f }
-        val cuota = if (ceros.isNotEmpty()) resto / ceros.size else 0f
-        ceros.forEach { alturas[it] = cuota }
+        if (ceros.isNotEmpty()) {
+            val cuota = resto / ceros.size
+            ceros.forEach { alturas[it] = cuota }
+        } else if (sumaExp > 0f && resto > 0.5f) {
+            // Todas las franjas tienen altura explícita pero no llenan el alto: el puente no
+            // es una franja, así que su espacio quedaba como hueco arriba. Escalamos para
+            // llenar y que la mocheta apoye sobre el puente (sin vacío superior).
+            val k = altoCm / sumaExp
+            for (i in 0 until n) alturas[i] *= k
+        }
         return alturas
     }
 
@@ -2541,8 +2664,8 @@ class VistaDiseno @JvmOverloads constructor(
 
         val n = sistemaModulos.size
         if (n <= 0) return
-        val anchoModulo = anchoVentPx / n
-        val xs = FloatArray(n + 1) { i -> xIni + i * anchoModulo }
+        // Respeta el ancho por módulo (<w>) en vez de repartir igual; vacío = reparto igual.
+        val xs = calcularPosicionesX(xIni, anchoVentPx, n, sistemaAnchos)
 
         val mTopPx    = max(0f, alturaMochetaTopCm)    * escalaPxPorCm
         val mBottomPx = max(0f, alturaMochetaBottomCm) * escalaPxPorCm
@@ -2556,7 +2679,7 @@ class VistaDiseno @JvmOverloads constructor(
             val derC = (sistemaModulos[i]     == TipoModulo.CORREDIZA)
             val yA = if (izqC && derC && mTopPx > 0f) yPanelTop else yTop
             val yB = if (izqC && derC && mBottomPx > 0f) yPanelBottom else yBottom
-            canvas.drawLine(xs[i], yA, xs[i], yB, pLinea)
+            canvas.drawLine(xs[i], yA, xs[i], yB, pLineaIna)
         }
 
         // Parantes en INA: solo línea (va por detrás del vidrio)
@@ -2708,8 +2831,9 @@ class VistaDiseno @JvmOverloads constructor(
 
     // ================= SVG: exporta solo el diseño (recortado) =================
     fun exportarSoloDisenoSVG(paddingPx: Int = 0): String {
-        // Multi-tramo o multi-cara: el SVG manual no cubre segmentosNs → usar bitmap embebido
-        if (segmentosNs.isNotEmpty()) {
+        // Multi-tramo o multi-cara: el SVG manual no cubre segmentosNs → usar bitmap embebido.
+        // También cuando hay lados al vacío (encuentro): el SVG vectorial no los dibuja.
+        if (segmentosNs.isNotEmpty() || encuentroVacio.padEnd(4, '1').contains('0')) {
             val bmp = exportarSoloDisenoBitmap(paddingPx)
             val stream = java.io.ByteArrayOutputStream()
             bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
@@ -2722,6 +2846,7 @@ class VistaDiseno @JvmOverloads constructor(
         val altoDisp  = height - 2 * margenPx
         val anchoTotalCm = anchoCm + mochetaLateralCm + mochetaLateralDerechaCm
         val escala = min(anchoDisp / anchoTotalCm, altoDisp / altoCm)
+        altoPuentePx = max(12f, 2.5f * escala)
 
         val x0 = (width  - (anchoTotalCm * escala)) / 2f
         val y0 = (height - (altoCm * escala)) / 2f
@@ -3081,7 +3206,7 @@ class VistaDiseno @JvmOverloads constructor(
                       val derC = (sistemaModulos[i]     == TipoModulo.CORREDIZA)
                       val yA = if (izqC && derC && mTopPx > 0f) yPanelTop else yTop
                       val yB = if (izqC && derC && mBottomPx > 0f) yPanelBottom else yBottom
-                      line(xs[i], yA, xs[i], yB, 3f)
+                      line(xs[i], yA, xs[i], yB, 1.5f)
                   }
 
                 val tramos = tramosContinuosC(sistemaModulos, sistemaParantes)
@@ -3237,6 +3362,10 @@ class VistaDiseno @JvmOverloads constructor(
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    companion object {
+        private const val PAQUETE_NOVA_FALLBACK = "{nova,ina,[150,120:s(f)]}"
     }
 }
 

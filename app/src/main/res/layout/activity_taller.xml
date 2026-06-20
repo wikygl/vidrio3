@@ -299,6 +299,41 @@
                     </androidx.cardview.widget.CardView>
 
                     <androidx.cardview.widget.CardView
+                        android:id="@+id/btnRejas"
+                        android:layout_width="150dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginEnd="8dp"
+                        app:cardBackgroundColor="@color/azul"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:paddingBottom="4dp"
+                                android:text="Rejas"
+                                android:textColor="@android:color/white"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
+
+                            <ImageView
+                                android:layout_width="match_parent"
+                                android:layout_height="0dp"
+                                android:layout_weight="1"
+                                android:contentDescription="@string/todo"
+                                android:scaleType="centerInside"
+                                android:src="@drawable/rejas" />
+                        </LinearLayout>
+                    </androidx.cardview.widget.CardView>
+
+                    <androidx.cardview.widget.CardView
                         android:id="@+id/btn_v"
                         android:layout_width="150dp"
                         android:layout_height="match_parent"
@@ -488,6 +523,7 @@
                         android:id="@+id/btDivisionBano"
                         android:layout_width="150dp"
                         android:layout_height="match_parent"
+                        android:layout_marginEnd="8dp"
                         app:cardCornerRadius="16dp"
                         app:cardElevation="2dp">
 
@@ -514,6 +550,42 @@
                                 android:contentDescription="@string/todo"
                                 android:scaleType="centerInside"
                                 android:src="@drawable/ic_mamparavfccf" />
+                        </LinearLayout>
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- Barandas -->
+                    <androidx.cardview.widget.CardView
+                        android:id="@+id/btBaranda"
+                        android:layout_width="150dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginEnd="8dp"
+                        app:cardBackgroundColor="@color/celeste"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:paddingBottom="4dp"
+                                android:text="Barandas"
+                                android:textColor="@android:color/black"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
+
+                            <ImageView
+                                android:layout_width="match_parent"
+                                android:layout_height="0dp"
+                                android:layout_weight="1"
+                                android:contentDescription="@string/todo"
+                                android:scaleType="centerInside"
+                                android:src="@drawable/baranda" />
                         </LinearLayout>
                     </androidx.cardview.widget.CardView>
 

@@ -183,7 +183,8 @@ class CorteListManager(private val context: Context) {
             val dato2 = dato2Str.toIntOrNull()
             if (dato1 != null && dato2 != null) {
                 val proyecto = subLista.getOrElse(3) { "" }.trim()
-                val referencia = if (proyecto.isNotBlank()) "$ventana $proyecto" else ventana
+                val referenciaBase = if (proyecto.isNotBlank()) "$ventana $proyecto" else ventana
+                val referencia = agregarListaAReferencia(referenciaBase, nombreBase)
                 listaResultado.add(PiezaCorte(dato1, dato2, referencia, true))
             } else {
                 errores++
@@ -200,6 +201,12 @@ class CorteListManager(private val context: Context) {
         return listaResultado
     }
 
+    private fun agregarListaAReferencia(referencia: String, nombreLista: String): String {
+        val lista = nombreLista.trim()
+        if (lista.isBlank()) return referencia
+        return "${referencia.trim()},$lista"
+    }
+
     /**
      * Verifica si hay listas disponibles
      */
@@ -207,4 +214,9 @@ class CorteListManager(private val context: Context) {
         val mapListas = MapStorage.cargarMap(context)
         return mapListas != null && mapListas.isNotEmpty()
     }
+
+    fun nombresListasDisponibles(): Set<String> =
+        cachedMergedMap.keys
+            .filter { it !in listasExcluidas }
+            .toSet()
 }

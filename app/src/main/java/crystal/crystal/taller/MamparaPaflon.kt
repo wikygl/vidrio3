@@ -4,13 +4,18 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import crystal.crystal.R
@@ -25,11 +30,16 @@ import kotlin.math.ceil
 
 class MamparaPaflon : AppCompatActivity() {
 
-  private val marco= 2.5f
+  private val marcoDefault = 2.5f
   private val pAnch= 8.25f
   private val pAlt=3.8f
   private val hoja = 199f
   private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
+  private var primerClickArchivarRealizado = false
+  private var metaColorAluminio: String = ""
+  private var metaTipoVidrio: String = ""
+  private var metaAcabadoSuperficial: String = ""
+  private var metaObservaciones: String = ""
 
   private var i = 0
   private var width = 0
@@ -38,7 +48,7 @@ class MamparaPaflon : AppCompatActivity() {
 
   private lateinit var binding: ActivityMamparaPaflonBinding
 
-  // ==================== NUEVAS VARIABLES PARA SISTEMA DE PROYECTOS ====================
+  // ==================== NUEVAS VARIABLES PARA SISTEMA DE PROYECTOS ====================R
   private lateinit var proyectoCallback: DialogosProyecto.ProyectoCallback
 
   @SuppressLint("SetTextI18n")
@@ -58,6 +68,7 @@ class MamparaPaflon : AppCompatActivity() {
       textViewProyecto = binding.tvProyectoActivo,
       activity = this
     )
+    ProyectoUIHelper.configurarVisorProyectoActivo(this, binding.tvProyectoActivo)
 
 
     // Verificar si hay proyecto activo al inicio
@@ -126,6 +137,68 @@ class MamparaPaflon : AppCompatActivity() {
       }
       binding.med1.setText("")
         binding.med2.setText("")
+    }
+
+    binding.btArchivar.setOnClickListener {
+      if (binding.med1.text.toString().isEmpty()) {
+        Toast.makeText(this, "Haz nuevo cÃ¡lculo", Toast.LENGTH_SHORT).show()
+        return@setOnClickListener
+      }
+
+      val anchoET = binding.med1.text.toString()
+      val altoET = binding.med2.text.toString()
+      val referencias = binding.tvReferencias.text.toString()
+      if (!referencias.contains(anchoET) || !referencias.contains(altoET)) {
+        Toast.makeText(this, "Las medidas no coinciden con las referencias. Recalcula.", Toast.LENGTH_SHORT).show()
+        return@setOnClickListener
+      }
+
+      if (!primerClickArchivarRealizado) {
+        DialogosProyecto.mostrarDialogoSeleccionarParaArchivar(this, object : DialogosProyecto.ProyectoCallback {
+          override fun onProyectoSeleccionado(nombreProyecto: String) {
+            primerClickArchivarRealizado = true
+            binding.txC.text = nombreProyecto
+            val mapExistente = MapStorage.cargarProyecto(this@MamparaPaflon, nombreProyecto)
+            mapListas.clear()
+            if (mapExistente != null) mapListas.putAll(mapExistente)
+            ejecutarArchivado()
+          }
+          override fun onProyectoCreado(nombreProyecto: String) {
+            primerClickArchivarRealizado = true
+            binding.txC.text = nombreProyecto
+            ejecutarArchivado()
+          }
+          override fun onProyectoEliminado(nombreProyecto: String) {
+            ProyectoUIHelper.actualizarVisorProyectoActivo(this@MamparaPaflon, binding.tvProyectoActivo)
+          }
+        })
+      } else {
+        if (!ProyectoManager.hayProyectoActivo()) {
+          primerClickArchivarRealizado = false
+          Toast.makeText(this, "No hay proyecto activo. Selecciona uno.", Toast.LENGTH_SHORT).show()
+          DialogosProyecto.mostrarDialogoSeleccionarParaArchivar(this, object : DialogosProyecto.ProyectoCallback {
+            override fun onProyectoSeleccionado(nombreProyecto: String) {
+              primerClickArchivarRealizado = true
+              binding.txC.text = nombreProyecto
+              val mapExistente = MapStorage.cargarProyecto(this@MamparaPaflon, nombreProyecto)
+              mapListas.clear()
+              if (mapExistente != null) mapListas.putAll(mapExistente)
+              ejecutarArchivado()
+            }
+            override fun onProyectoCreado(nombreProyecto: String) {
+              primerClickArchivarRealizado = true
+              binding.txC.text = nombreProyecto
+              ejecutarArchivado()
+            }
+            override fun onProyectoEliminado(nombreProyecto: String) {
+              ProyectoUIHelper.actualizarVisorProyectoActivo(this@MamparaPaflon, binding.tvProyectoActivo)
+            }
+          })
+          return@setOnClickListener
+        }
+        binding.txC.text = ProyectoManager.getProyectoActivo() ?: ""
+        ejecutarArchivado()
+      }
     }
 
     binding.btArchivar.setOnLongClickListener {
@@ -315,7 +388,7 @@ class MamparaPaflon : AppCompatActivity() {
     }
   }
   private fun zocaloCorrediza(): Float {
-    val anchoUtil=  ancho() - (2*marco)
+    val anchoUtil=  ancho() - (2*marco())
     return when(divisiones()){
       1->(anchoUtil-2*pAnch)
       2->((anchoUtil+pAnch)/2)-2*pAnch
@@ -333,7 +406,7 @@ class MamparaPaflon : AppCompatActivity() {
     return altoHoja()
   }
   private fun paranteMocheta():Float {
-    return (alto()- (altoHoja()+pAlt+marco))
+    return (alto()- (altoHoja()+pAlt+marco()))
   }
   private fun anchoMocheta():Float{
     val divis = diviMocheta(ancho())
@@ -342,7 +415,7 @@ class MamparaPaflon : AppCompatActivity() {
   }
   private fun altoMocheta(): Float {
     val alto = binding.med2.text.toString().toFloat()
-    return alto - (marco + altoHoja() + pAlt)
+    return alto - (marco() + altoHoja() + pAlt)
   }
   private fun nMocheta() {
   }
@@ -397,65 +470,195 @@ class MamparaPaflon : AppCompatActivity() {
   // ==================== FUNCIÓN ARCHIVAR MODIFICADA PARA SISTEMA DE PROYECTOS ====================
 
 
-  private fun archivarMapas() {
-    val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+  private fun obtenerPrefijo(): String = "MP"
 
-    for (u in 1..cant) {
-      ListaCasilla.incrementarContadorVentanas(this)
-
-      if (esValido(binding.lyMarco)) {
-        ListaCasilla.procesarArchivar(this, binding.tvMarco, binding.txMarco, mapListas)
-      }
-      if (esValido(binding.lyPaflon)) {
-        ListaCasilla.procesarArchivar(this, binding.tvPaflon, binding.txPaflon, mapListas)
-      }
-      if (esValido(binding.lyRiel)) {
-        ListaCasilla.procesarArchivar(this, binding.tvRiel, binding.txRiel, mapListas)
-      }
-      if (esValido(binding.lyJunki)) {
-        ListaCasilla.procesarArchivar(this, binding.tvJunki, binding.txJunki, mapListas)
-      }
-      if (esValido(binding.lyTope)) {
-        ListaCasilla.procesarArchivar(this, binding.tvTope, binding.txTope, mapListas)
-      }
-      if (esValido(binding.lyVidrio)) {
-        ListaCasilla.procesarArchivar(this, binding.tvVidrio, binding.txVidrio, mapListas)
-      }
-      if (esValido(binding.lyClient)) {
-        ListaCasilla.procesarArchivar(this, binding.tvC, binding.txC, mapListas)
-      }
-      if (esValido(binding.lyAncho)) {
-        ListaCasilla.procesarArchivar(this, binding.tvAncho, binding.txAncho, mapListas)
-      }
-      if (esValido(binding.lyAlto)) {
-        ListaCasilla.procesarArchivar(this, binding.tvAlto, binding.txAlto, mapListas)
-      }
-      if (esValido(binding.lyPuente)) {
-        ListaCasilla.procesarArchivar(this, binding.tvPuente, binding.txPuente, mapListas)
-      }
-      if (esValido(binding.lyDivisiones)) {
-        ListaCasilla.procesarArchivar(this, binding.tvDivisiones, binding.txDivisiones, mapListas)
-      }
-      if (esValido(binding.lyFijos)) {
-        ListaCasilla.procesarArchivar(this, binding.tvFijos, binding.txFijos, mapListas)
-      }
-      if (esValido(binding.lyCorredizas)) {
-        ListaCasilla.procesarArchivar(this, binding.tvCorredizas, binding.txCorredizas, mapListas)
-      }
-      if (esValido(binding.lyDiseno)) {
-        ListaCasilla.procesarArchivar(this, binding.tvDiseno, binding.txDiseno, mapListas)
-      }
-      if (esValido(binding.lyGrados)) {
-        ListaCasilla.procesarArchivar(this, binding.tvGrados, binding.txGrados, mapListas)
-      }
-      if (esValido(binding.lyTipo)) {
-        ListaCasilla.procesarArchivar(this, binding.tvTipo, binding.txTipo, mapListas)
-      }
+  private fun ejecutarArchivado() {
+    if (ModoMasivoHelper.esModoMasivo(this)) {
+      archivarMapas()
+      return
     }
 
+    mostrarDialogoMetadatosProduccion {
+      archivarMapas()
+      binding.med1.setText("")
+      binding.med2.setText("")
+    }
+  }
+
+  private fun marco(): Float {
+    return binding.etMarco.text?.toString()?.replace(",", ".")?.toFloatOrNull()
+      ?.takeIf { it > 0f }
+      ?: marcoDefault
+  }
+
+  private fun mostrarDialogoMetadatosProduccion(onContinuar: () -> Unit) {
+    val pad = (16 * resources.displayMetrics.density).toInt()
+    val contenedor = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      setPadding(pad, pad, pad, 0)
+    }
+    val etColor = EditText(this).apply {
+      hint = "Color aluminio (ej: negro)"
+      setText(metaColorAluminio)
+    }
+    val etVidrio = EditText(this).apply {
+      hint = "Tipo vidrio (ej: incoloro 6mm)"
+      setText(metaTipoVidrio)
+    }
+    val etAcabadoSup = EditText(this).apply {
+      hint = "Acabado superficial (opcional)"
+      setText(metaAcabadoSuperficial)
+    }
+    val etObs = EditText(this).apply {
+      hint = "Observaciones (opcional)"
+      setText(metaObservaciones)
+    }
+    contenedor.addView(etColor)
+    contenedor.addView(etVidrio)
+    contenedor.addView(etAcabadoSup)
+    contenedor.addView(etObs)
+
+    AlertDialog.Builder(this)
+      .setTitle("Metadatos de producciÃ³n")
+      .setView(contenedor)
+      .setPositiveButton("Guardar y archivar") { _, _ ->
+        metaColorAluminio = etColor.text?.toString()?.trim().orEmpty()
+        metaTipoVidrio = etVidrio.text?.toString()?.trim().orEmpty()
+        metaAcabadoSuperficial = etAcabadoSup.text?.toString()?.trim().orEmpty()
+        metaObservaciones = etObs.text?.toString()?.trim().orEmpty()
+        onContinuar()
+      }
+      .setNeutralButton("Omitir") { _, _ -> onContinuar() }
+      .setNegativeButton("Cancelar", null)
+      .show()
+  }
+
+  private fun sufijoMetadatosProduccion(): String {
+    return "-MAT<alu:${metaColorAluminio.ifBlank { "null" }};" +
+      "vid:${metaTipoVidrio.ifBlank { "null" }};" +
+      "acabado_sup:${metaAcabadoSuperficial.ifBlank { "null" }};" +
+      "obs:${metaObservaciones.ifBlank { "null" }}>"
+  }
+
+  private fun escaparCampoArchivo(raw: String): String {
+    return raw
+      .replace("\n", " / ")
+      .replace("\r", " ")
+      .replace("-", "_")
+      .replace("<", "(")
+      .replace(">", ")")
+      .trim()
+  }
+
+  private fun etiquetaPaquete(prefijo: String, numero: Int): String {
+    val cliente = binding.txC.text?.toString()?.trim()
+      ?.ifBlank { ProyectoManager.getProyectoActivo().orEmpty() }
+      ?.ifBlank { "sin cliente" }
+      ?: "sin cliente"
+    return "$prefijo$numero, $cliente"
+  }
+
+  private fun disenoSimbolicoV2(numeroProducto: Int): String {
+    val cliente = escaparCampoArchivo(
+      binding.txC.text?.toString()?.trim()
+        ?.ifBlank { ProyectoManager.getProyectoActivo().orEmpty() }
+        ?.ifBlank { "sin cliente" }
+        ?: "sin cliente"
+    )
+    return buildString {
+      append("C<").append(cliente).append(">")
+      append("-M<").append(df1(ancho())).append(",").append(df1(alto())).append(",").append(df1(altoHoja()))
+      append(",null,null,").append(intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)).append(">")
+      append("-P<M,p,a,c,").append(numeroProducto).append(">")
+      append("-G<p,r,m,p>")
+      append(sufijoMetadatosProduccion())
+    }
+  }
+
+  private fun archivarMapas() {
+    val proyectoActivo = ProyectoManager.getProyectoActivo()
+    if (proyectoActivo != null) {
+      val mapExistente = MapStorage.cargarProyecto(this, proyectoActivo)
+      mapListas.clear()
+      if (mapExistente != null) mapListas.putAll(mapExistente)
+    }
+
+    val prefijo = obtenerPrefijo()
+    val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+    var ultimoID = ""
+
+    for (u in 1..cant) {
+      val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
+      val identificadorPaquete = etiquetaPaquete(prefijo, siguienteNumero)
+      ultimoID = identificadorPaquete
+
+      if (esValido(binding.lyMarco)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvMarco, binding.txMarco, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyPaflon)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvPaflon, binding.txPaflon, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyRiel)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvRiel, binding.txRiel, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyJunki)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvJunki, binding.txJunki, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyTope)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvTope, binding.txTope, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyPorta)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvPorta, binding.txPorta, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyVidrio)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvVidrio, binding.txVidrio, mapListas, identificadorPaquete)
+      }
+      if (binding.tvReferencias.text.toString().isNotBlank()) {
+        ListaCasilla.procesarReferenciasConPrefijo(this, binding.textView28, binding.tvReferencias, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyClient)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvC, binding.txC, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyAncho)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvAncho, binding.txAncho, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyAlto)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvAlto, binding.txAlto, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyPuente)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvPuente, binding.txPuente, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyDivisiones)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvDivisiones, binding.txDivisiones, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyFijos)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvFijos, binding.txFijos, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyCorredizas)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvCorredizas, binding.txCorredizas, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyDiseno)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvDiseno, binding.txDiseno, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyGrados)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvGrados, binding.txGrados, mapListas, identificadorPaquete)
+      }
+      if (esValido(binding.lyTipo)) {
+        ListaCasilla.procesarArchivarConPrefijo(this, binding.tvTipo, binding.txTipo, mapListas, identificadorPaquete)
+      }
+
+      val paqueteV2 = disenoSimbolicoV2(siguienteNumero)
+      mapListas.getOrPut("DisenoSimbolicoV2") { mutableListOf() }
+        .add(mutableListOf(paqueteV2, "", identificadorPaquete))
+
+      ProyectoManager.actualizarContadorPorPrefijo(this, prefijo, siguienteNumero)
+    }
+
+    MapStorage.guardarMap(this, mapListas)
     ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
-    println("Datos agregados al proyecto: ${ProyectoManager.getProyectoActivo()}")
-    println(mapListas)
+    val msg = if (cant > 1) "Archivadas $cant unidades en proyecto: ${ProyectoManager.getProyectoActivo()}"
+              else "Datos archivados como $ultimoID en proyecto: ${ProyectoManager.getProyectoActivo()}"
+    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
   }
 
   // Función para verificar si un Layout es visible o tiene estado GONE
@@ -465,6 +668,107 @@ class MamparaPaflon : AppCompatActivity() {
 
   //FUNCIONES DE DISEÑO (SIN CAMBIOS)
   private fun diseno() {
+    val anchoCm = ancho()
+    val altoCm = alto()
+    val altoHojaCm = altoHoja()
+    val nPaneles = divisiones().coerceAtLeast(1)
+    val nMochetas = if (paranteMocheta() > 0f) diviMocheta(anchoCm).coerceAtLeast(1) else 0
+
+    val bmpW = (anchoCm * 3f).toInt().coerceAtLeast(600)
+    val bmpH = (altoCm * 3f).toInt().coerceAtLeast(600)
+    val escala = minOf(bmpW / anchoCm, bmpH / altoCm)
+    val w = anchoCm * escala
+    val h = altoCm * escala
+    val x0 = (bmpW - w) / 2f
+    val y0 = (bmpH - h) / 2f
+    val marcoPx = marco() * escala
+    val bastidorPx = (binding.etBasti.text.toString().toFloatOrNull() ?: pAnch) * escala
+    val rielPx = pAlt * escala
+    val altoHojaPx = altoHojaCm * escala
+
+    val bitmap = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
+    val c = Canvas(bitmap)
+    c.drawColor(Color.WHITE)
+
+    val pMarco = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      color = Color.rgb(120, 120, 120)
+      style = Paint.Style.FILL
+    }
+    val pPaflon = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      color = ContextCompat.getColor(this@MamparaPaflon, R.color.aluminio)
+      style = Paint.Style.FILL
+    }
+    val pVidrio = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      color = Color.rgb(235, 248, 255)
+      style = Paint.Style.FILL
+    }
+    val pLinea = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      color = Color.BLACK
+      style = Paint.Style.STROKE
+      strokeWidth = 2.5f
+    }
+    val pLineaFina = Paint(pLinea).apply { strokeWidth = 1.5f }
+
+    fun rect(r: RectF, paint: Paint) {
+      c.drawRect(r, paint)
+      c.drawRect(r, pLinea)
+    }
+
+    c.drawRect(RectF(x0, y0, x0 + w, y0 + h), pLinea)
+    rect(RectF(x0, y0, x0 + marcoPx, y0 + h), pMarco)
+    rect(RectF(x0 + w - marcoPx, y0, x0 + w, y0 + h), pMarco)
+    rect(RectF(x0 + marcoPx, y0, x0 + w - marcoPx, y0 + marcoPx), pMarco)
+
+    val hojaBottom = y0 + h
+    val hojaTop = (hojaBottom - altoHojaPx).coerceAtLeast(y0 + marcoPx + rielPx)
+    val vanoLeft = x0 + marcoPx
+    val vanoRight = x0 + w - marcoPx
+
+    if (nMochetas > 0 && hojaTop > y0 + marcoPx + rielPx) {
+      val mTop = y0 + marcoPx
+      val mBottom = hojaTop - rielPx
+      val mW = (vanoRight - vanoLeft - (nMochetas - 1) * rielPx) / nMochetas
+      var x = vanoLeft
+      repeat(nMochetas) { idx ->
+        val vidrio = RectF(x, mTop, x + mW, mBottom)
+        c.drawRect(vidrio, pVidrio)
+        c.drawRect(vidrio, pLineaFina)
+        if (idx < nMochetas - 1) {
+          rect(RectF(x + mW, mTop, x + mW + rielPx, mBottom), pPaflon)
+        }
+        x += mW + rielPx
+      }
+      rect(RectF(vanoLeft, mBottom, vanoRight, mBottom + rielPx), pPaflon)
+    }
+
+    rect(RectF(vanoLeft, hojaTop, vanoRight, hojaTop + rielPx), pPaflon)
+    rect(RectF(vanoLeft, hojaBottom - rielPx, vanoRight, hojaBottom), pPaflon)
+
+    val panelAreaTop = hojaTop + rielPx
+    val panelAreaBottom = hojaBottom - rielPx
+    val panelW = (vanoRight - vanoLeft) / nPaneles
+    for (idx in 0 until nPaneles) {
+      val left = vanoLeft + idx * panelW
+      val right = left + panelW
+      val offset = if (idx % 2 == 0) 0f else minOf(bastidorPx * 0.35f, panelW * 0.12f)
+      val panel = RectF(left + offset, panelAreaTop, (right + offset).coerceAtMost(vanoRight), panelAreaBottom)
+      if (panel.width() <= bastidorPx * 2f || panel.height() <= bastidorPx * 2f) continue
+
+      c.drawRect(panel, pVidrio)
+      rect(RectF(panel.left, panel.top, panel.left + bastidorPx, panel.bottom), pPaflon)
+      rect(RectF(panel.right - bastidorPx, panel.top, panel.right, panel.bottom), pPaflon)
+      rect(RectF(panel.left + bastidorPx, panel.top, panel.right - bastidorPx, panel.top + bastidorPx), pPaflon)
+      rect(RectF(panel.left + bastidorPx, panel.bottom - bastidorPx, panel.right - bastidorPx, panel.bottom), pPaflon)
+      c.drawRect(panel, pLinea)
+      if (idx % 2 == 1) {
+        c.drawLine(panel.left + bastidorPx * 0.5f, panel.top, panel.left + bastidorPx * 0.5f, panel.bottom, pLineaFina)
+      }
+    }
+
+    binding.imgV.setImageBitmap(bitmap)
+  }
+
+  private fun disenoAnterior() {
     val count = divisiones()
 
     val fijo = ContextCompat.getDrawable(this, R.drawable.mpfijo) ?: return
@@ -578,11 +882,11 @@ class MamparaPaflon : AppCompatActivity() {
       hHoja==0f -> when{
         alto()>210f && (hoja+piso)< alto()-5.3-> {hoja+piso}
         alto()<=210f&&alto()>hoja->{190f+piso}
-        alto()<=hoja -> {(alto()-marco)}
-        (hoja+piso)> alto()-5.3-> {(alto()-marco)}
-        else -> {(alto()-marco)+piso}}
+        alto()<=hoja -> {(alto()-marco())}
+        (hoja+piso)> alto()-5.3-> {(alto()-marco())}
+        else -> {(alto()-marco())+piso}}
 
-      alto()<=hHoja || (hHoja+piso)> alto()-5.3-> {(alto()-marco)}
+      alto()<=hHoja || (hHoja+piso)> alto()-5.3-> {(alto()-marco())}
       else -> {hHoja+piso}
     }
   }
@@ -681,7 +985,7 @@ class MamparaPaflon : AppCompatActivity() {
     return binding.med2.text.toString().toFloat()
   }
   private fun anchoUtil():Float{
-    return ancho()-(2*marco)
+    return ancho()-(2*marco())
   }
 
   @Deprecated("Deprecated in Java")

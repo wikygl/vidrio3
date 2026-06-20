@@ -61,16 +61,6 @@
         android:textSize="11sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toEndOf="@+id/btAbrir"
-        app:layout_constraintEnd_toStartOf="@+id/btDisenoV2" />
-
-    <Button
-        android:id="@+id/btDisenoV2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Diseño simbólico V2"
-        android:textSize="11sp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/btCliente"
         app:layout_constraintEnd_toStartOf="@+id/btMaterial" />
 
     <Button
@@ -82,6 +72,6 @@
         android:textSize="11sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/btDisenoV2" />
+        app:layout_constraintStart_toEndOf="@+id/btCliente" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -24,7 +24,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.caverock.androidsvg.SVG
-import crystal.crystal.Diseno.nova.DisenoNovaActivity
 import crystal.crystal.R
 import crystal.crystal.casilla.MapStorage
 import crystal.crystal.casilla.ProyectoManager
@@ -85,83 +84,14 @@ class FichaActivity : AppCompatActivity() {
         }
 
         binding.btMaterial.setOnClickListener {
-            val mapListas = MapStorage.cargarMap(this)
-
-            if (mapListas != null && mapListas.isNotEmpty()) {
-                val materialesFiltrados = mutableMapOf<String, MutableList<String>>()
-
-                // Construir lookup ventana → (colorAlu, tipoVidrio) desde DisenoSimbolicoV2
-                val ventanaColorMap = mutableMapOf<String, Pair<String, String>>()
-                mapListas["DisenoSimbolicoV2"]?.forEach { lista ->
-                    val paquete = lista.getOrNull(0)?.trim() ?: return@forEach
-                    val ventana = lista.getOrElse(2) { "" }.ifBlank { null } ?: return@forEach
-                    val colorAlu = extraerCampoMat(paquete, "alu")
-                    val tipoVidrio = extraerCampoMat(paquete, "vid")
-                    if (colorAlu.isNotBlank() || tipoVidrio.isNotBlank()) {
-                        ventanaColorMap[ventana] = Pair(colorAlu, tipoVidrio)
-                    }
+            mostrarSelectorProyectos { proyectosElegidos ->
+                val mapListas = mergearProyectos(proyectosElegidos)
+                if (mapListas.isEmpty()) {
+                    Toast.makeText(this, "No se encontraron datos para mostrar", Toast.LENGTH_SHORT).show()
+                    return@mostrarSelectorProyectos
                 }
-
-                mapListas.forEach { (nombreLista, listas) ->
-                    // Excluir listas internas que no son materiales
-                    if (nombreLista == "Diseño" || nombreLista == "DisenoPaquete"
-                        || nombreLista == "DisenoSimbolicoV2"
-                        || nombreLista == "Grados") return@forEach
-                    if (nombreLista == "Pedido" || nombreLista == "Referencias") {
-                        // Pedido/Referencias: texto descriptivo, no numérico
-                        val items = listas.filter { it.size >= 2 }.map { lista ->
-                            val ventana = lista.getOrElse(2) { "" }
-                            val cliente = lista.getOrElse(3) { "" }
-                            val partes = mutableListOf(lista[0])
-                            if (ventana.isNotBlank()) partes.add(ventana)
-                            if (cliente.isNotBlank()) partes.add(cliente)
-                            partes.joinToString(" -> ")
-                        }
-                        if (items.isNotEmpty()) {
-                            materialesFiltrados[nombreLista] = items.toMutableList()
-                        }
-                        return@forEach
-                    }
-                    val listasValidas = listas.filter { lista ->
-                        lista.size >= 3
-                    }.filter { lista ->
-                        val dato1 = lista[0].trim()
-                        val dato2 = lista[1].trim()
-                        if (dato2.matches(Regex(".*[a-zA-Z].*"))) return@filter false
-                        val cantidadNum = dato2.toIntOrNull()
-                        if (dato2.isBlank() || cantidadNum == null || cantidadNum == 0) return@filter false
-                        val valorNum = dato1.toFloatOrNull()
-                        if (valorNum != null && valorNum == 0f) return@filter false
-                        true
-                    }
-
-                    listasValidas.forEach { lista ->
-                        val dato1 = lista[0]
-                        val dato2 = lista[1]
-                        val ventana = lista[2]
-                        val cliente = lista.getOrElse(3) { "" }
-                            .ifBlank { ProyectoManager.getProyectoActivo() ?: "" }
-
-                        // Determinar clave compuesta: nombreLista + sufijo de color/tipo
-                        val (colorAlu, tipoVidrio) = ventanaColorMap[ventana] ?: Pair("", "")
-                        val esVidrio = nombreLista.startsWith("Vidrio", ignoreCase = true)
-                        val sufijo = if (esVidrio) tipoVidrio else colorAlu
-                        val clave = if (sufijo.isNotBlank() &&
-                            !nombreLista.contains(sufijo, ignoreCase = true)) {
-                            "$nombreLista [$sufijo]"
-                        } else {
-                            nombreLista
-                        }
-
-                        val linea = if (cliente.isNotBlank()) {
-                            "$dato1 = $dato2 -> $ventana, $cliente"
-                        } else {
-                            "$dato1 = $dato2 -> $ventana"
-                        }
-                        materialesFiltrados.getOrPut(clave) { mutableListOf() }.add(linea)
-                    }
-                }
-
+                @Suppress("UNCHECKED_CAST")
+                val materialesFiltrados = procesarMateriales(mapListas as Map<String, List<List<String>>>)
                 if (materialesFiltrados.isNotEmpty()) {
                     val ordenado = ordenarMateriales(materialesFiltrados)
                     val adapter = MaterialAdapter(ordenado, this)
@@ -170,8 +100,6 @@ class FichaActivity : AppCompatActivity() {
                 } else {
                     Toast.makeText(this, "No se encontraron materiales que coincidan", Toast.LENGTH_SHORT).show()
                 }
-            } else {
-                Toast.makeText(this, "No se encontraron datos para mostrar", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -191,34 +119,6 @@ class FichaActivity : AppCompatActivity() {
                     Toast.makeText(this, "No se encontraron datos por cliente", Toast.LENGTH_SHORT).show()
                 }
             }
-        }
-
-        binding.btDisenoV2.setOnClickListener {
-            val mapListas = MapStorage.cargarMap(this)
-            val listas = mapListas?.get("DisenoSimbolicoV2")
-            if (listas.isNullOrEmpty()) {
-                Toast.makeText(this, "No se encontró DisenoSimbolicoV2 archivado", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            val ventanasMap = mutableMapOf<String, MutableList<Pair<String, List<Pair<String, String>>>>>()
-            for (lista in listas) {
-                if (lista.isEmpty()) continue
-                val simbolicoV2 = lista[0].trim()
-                if (simbolicoV2.isBlank()) continue
-                val ventana = lista.getOrElse(2) { "" }.ifBlank { "sin_id" }
-                ventanasMap.getOrPut(ventana) { mutableListOf() }
-                    .add(Pair("DisenoSimbolicoV2", listOf(Pair(simbolicoV2, ""))))
-            }
-
-            if (ventanasMap.isEmpty()) {
-                Toast.makeText(this, "No hay contenido válido en DisenoSimbolicoV2", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            val adapter = VentanaAdapter(ventanasMap, this)
-            binding.rvModelo.layoutManager = LinearLayoutManager(this)
-            binding.rvModelo.adapter = adapter
         }
 
     }
@@ -327,6 +227,69 @@ class FichaActivity : AppCompatActivity() {
             clientesMap.getOrPut(cliente) { mutableMapOf() }
         }
         return Pair(clientesMap, pedidoPorCliente)
+    }
+
+    private fun procesarMateriales(
+        mapListas: Map<String, List<List<String>>>
+    ): MutableMap<String, MutableList<String>> {
+        val materialesFiltrados = mutableMapOf<String, MutableList<String>>()
+
+        val ventanaColorMap = mutableMapOf<String, Pair<String, String>>()
+        mapListas["DisenoSimbolicoV2"]?.forEach { lista ->
+            val paquete = lista.getOrNull(0)?.trim() ?: return@forEach
+            val ventana = lista.getOrElse(2) { "" }.ifBlank { null } ?: return@forEach
+            val colorAlu = extraerCampoMat(paquete, "alu")
+            val tipoVidrio = extraerCampoMat(paquete, "vid")
+            if (colorAlu.isNotBlank() || tipoVidrio.isNotBlank())
+                ventanaColorMap[ventana] = Pair(colorAlu, tipoVidrio)
+        }
+
+        mapListas.forEach { (nombreLista, listas) ->
+            if (nombreLista == "Diseño" || nombreLista == "DisenoPaquete"
+                || nombreLista == "DisenoSimbolicoV2" || nombreLista == "Grados") return@forEach
+
+            if (nombreLista == "Pedido" || nombreLista == "Referencias") {
+                val items = listas.filter { it.size >= 2 }.map { lista ->
+                    val ventana = lista.getOrElse(2) { "" }
+                    val cliente = lista.getOrElse(3) { "" }
+                    val partes = mutableListOf(lista[0])
+                    if (ventana.isNotBlank()) partes.add(ventana)
+                    if (cliente.isNotBlank()) partes.add(cliente)
+                    partes.joinToString(" -> ")
+                }
+                if (items.isNotEmpty()) materialesFiltrados[nombreLista] = items.toMutableList()
+                return@forEach
+            }
+
+            listas.filter { lista ->
+                if (lista.size < 3) return@filter false
+                val dato2 = lista[1].trim()
+                if (dato2.matches(Regex(".*[a-zA-Z].*"))) return@filter false
+                val cantNum = dato2.toIntOrNull()
+                if (dato2.isBlank() || cantNum == null || cantNum == 0) return@filter false
+                val valNum = lista[0].trim().toFloatOrNull()
+                if (valNum != null && valNum == 0f) return@filter false
+                true
+            }.forEach { lista ->
+                val dato1 = lista[0]
+                val dato2 = lista[1]
+                val ventana = lista[2]
+                val cliente = lista.getOrElse(3) { "" }
+                    .ifBlank { ProyectoManager.getProyectoActivo() ?: "" }
+
+                val (colorAlu, tipoVidrio) = ventanaColorMap[ventana] ?: Pair("", "")
+                val esVidrio = nombreLista.startsWith("Vidrio", ignoreCase = true)
+                val sufijo = if (esVidrio) tipoVidrio else colorAlu
+                val clave = if (sufijo.isNotBlank() && !nombreLista.contains(sufijo, ignoreCase = true))
+                    "$nombreLista [$sufijo]" else nombreLista
+
+                val linea = if (cliente.isNotBlank()) "$dato1 = $dato2 -> $ventana, $cliente"
+                            else "$dato1 = $dato2 -> $ventana"
+                materialesFiltrados.getOrPut(clave) { mutableListOf() }.add(linea)
+            }
+        }
+
+        return materialesFiltrados
     }
 
     /**

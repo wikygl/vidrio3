@@ -19,7 +19,7 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="360dp"
+            android:layout_height="480dp"
             android:baselineAligned="false"
             android:orientation="horizontal">
 
@@ -59,16 +59,6 @@
                         android:layout_weight="1"
                         app:srcCompat="@drawable/ic_vne"
                         tools:ignore="ContentDescription,ImageContrastCheck" />
-
-                    <Button
-                        android:id="@+id/btFicha"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center"
-                        android:layout_weight="1"
-                        android:backgroundTint="@color/sombra"
-                        android:text="@string/ficha_t_cnica"
-                        android:textSize="12sp" />
 
                 </LinearLayout>
 
@@ -162,8 +152,8 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
-                                android:text="2.2"
                                 android:inputType="numberDecimal"
+                                android:text="2.2"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck" />
                         </LinearLayout>
 
@@ -186,9 +176,9 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="@string/_0"
                                 android:autofillHints="@string/todo"
                                 android:inputType="numberDecimal"
+                                android:text="@string/_0"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck" />
                         </LinearLayout>
 
@@ -213,8 +203,8 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
-                                android:text="@string/_0"
                                 android:inputType="number"
+                                android:text="@string/_0"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck" />
                         </LinearLayout>
 
@@ -238,8 +228,8 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
-                                android:text="@string/_0"
                                 android:inputType="numberDecimal"
+                                android:text="@string/_0"
                                 tools:ignore="LabelFor" />
                         </LinearLayout>
 
@@ -263,8 +253,8 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
-                                android:text="@string/_0"
                                 android:inputType="numberDecimal"
+                                android:text="@string/_0"
                                 tools:ignore="LabelFor" />
                         </LinearLayout>
 
@@ -272,7 +262,7 @@
                 </ScrollView>
 
                 <TextView
-                    android:id="@+id/textView20"
+                    android:id="@+id/txC"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
@@ -727,6 +717,22 @@
 
 
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvProyectoActivo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4.5dp"
+                    android:layout_marginEnd="4.5dp"
+                    android:background="#F5F5F5"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:padding="7dp"
+                    android:text="⚠️ Sin proyecto activo"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    tools:ignore="HardcodedText" />
 
                 <LinearLayout
                     android:layout_width="match_parent"

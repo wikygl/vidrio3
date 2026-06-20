@@ -11,14 +11,14 @@
         android:id="@+id/gridDrawingView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="7"
-        android:layout_margin="9dp"/>
+        android:layout_weight="8"
+        android:layout_margin="4dp"/>
 
     <!-- ScrollView para contener los inputs si son muchos -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="3">
+        android:layout_weight="2.5">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -36,7 +36,7 @@
                     android:layout_height="wrap_content"
                     android:gravity="center"
                     android:orientation="horizontal"
-                    android:padding="8dp" />
+                    android:padding="2dp" />
             </HorizontalScrollView>
 
             <!-- Nuevo Layout para los inputs de filas por columna -->
@@ -54,7 +54,7 @@
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:gravity="center"
-                        android:padding="8dp" />
+                        android:padding="2dp" />
                 </HorizontalScrollView>
             </ScrollView>
 
@@ -62,10 +62,50 @@
     </ScrollView>
 
     <!-- Botón opcional para cerrar el fragmento -->
-    <Button
-        android:id="@+id/buttonClose"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Aprobar" />
+        android:layout_height="40dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/buttonClose"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:minHeight="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:text="Aprobar" />
+
+        <Button
+            android:id="@+id/buttonGrilla"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:minHeight="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:text="Grilla" />
+
+        <Button
+            android:id="@+id/buttonEstructura"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:minHeight="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:text="Estructura" />
+
+        <Button
+            android:id="@+id/buttonVidrio"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:minHeight="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:text="Vidrio" />
+    </LinearLayout>
 
 </LinearLayout>

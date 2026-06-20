@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="14dp"
+    android:height="64dp"
+    android:viewportWidth="14"
+    android:viewportHeight="64">
+    <path
+        android:fillColor="#B5651D"
+        android:pathData="M0,0 h14 v64 h-14 z" />
+    <!-- Hiladas horizontales + juntas verticales escalonadas (aparejo a soga) -->
+    <path
+        android:strokeColor="#EFE3D3"
+        android:strokeWidth="1"
+        android:pathData="M0,8 H14 M0,16 H14 M0,24 H14 M0,32 H14 M0,40 H14 M0,48 H14 M0,56 H14 M7,0 V8 M3.5,8 V16 M10.5,8 V16 M7,16 V24 M3.5,24 V32 M10.5,24 V32 M7,32 V40 M3.5,40 V48 M10.5,40 V48 M7,48 V56 M3.5,56 V64 M10.5,56 V64" />
+</vector>

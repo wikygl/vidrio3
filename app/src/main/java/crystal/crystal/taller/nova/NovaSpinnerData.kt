@@ -17,20 +17,21 @@ object NovaSpinnerData {
     data class SpinnerTubos(
         val imageResId: Int,
         val text: String,
-        val valor: Float
+        val valor: Float,
+        val valorEsquina: Float
     )
 
     fun obtenerOpcionesTubo(): List<SpinnerTubos> {
         return listOf(
-            SpinnerTubos(R.drawable.ma_multi, "M\u00FAltiple", 1.5f),
-            SpinnerTubos(R.drawable.ma_multi, "tubo 2 x 1", 2.5f),
-            SpinnerTubos(R.drawable.ma_multi, "tubo 2\u215C x 1", 2.5f),
-            SpinnerTubos(R.drawable.ma_multi, "tubo.c 1\u00BD", 3.8f),
-            SpinnerTubos(R.drawable.ma_multi, "tubo.c 1", 2.5f),
-            SpinnerTubos(R.drawable.ma_multi, "paflon 1\u00BD", 3.8f),
-            SpinnerTubos(R.drawable.ma_multi, "paflon 1", 2.5f),
-            SpinnerTubos(R.drawable.ma_multi, "tubo 2 x 2", 5.0f),
-            SpinnerTubos(R.drawable.ma_multi, "gorrito", 2.5f)
+            SpinnerTubos(R.drawable.ma_multi, "M\u00FAltiple", 1.5f, 5f),
+            SpinnerTubos(R.drawable.dosxuna, "tubo 2 x 1", 2.5f, 5f),
+            SpinnerTubos(R.drawable.dostresxuna, "tubo 2\u215C x 1", 2.5f, 6f),
+            SpinnerTubos(R.drawable.cuadunamedia, "tubo.c 1\u00BD", 3.8f, 3.8f),
+            SpinnerTubos(R.drawable.cuaduna, "tubo.c 1", 2.5f, 2.5f),
+            SpinnerTubos(R.drawable.paflontresxunamedia, "paflon 1\u00BD", 3.8f, 8.25f),
+            SpinnerTubos(R.drawable.paflontresxuna, "paflon 1", 2.5f, 8.25f),
+            SpinnerTubos(R.drawable.cuaddos, "tubo 2 x 2", 5.0f, 5f),
+            SpinnerTubos(R.drawable.gorruna, "gorrito", 2.5f, 2.5f)
         )
     }
 

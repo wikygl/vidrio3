@@ -64,6 +64,9 @@ fun DocumentSnapshot.toChatPreviewText(): String {
         "video" -> "Video: $fileName"
         "imagen" -> "Imagen"
         "medidas" -> "Lista de medidas"
+        "medidas_crystal" -> "Medidas Crystal: $fileName"
+        "corte_crystal" -> "Corte Crystal: $fileName"
+        "plancha_crystal" -> "Corte Plancha Crystal: $fileName"
         "cotizacion" -> "Cotizacion"
         else -> message
     }

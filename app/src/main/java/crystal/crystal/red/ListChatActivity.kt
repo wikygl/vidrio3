@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.util.Log
@@ -44,6 +45,8 @@ class ListChatActivity : AppCompatActivity() {
     private var chatsListener: ListenerRegistration? = null
     private var screenInitialized = false
     private var profileFlowOpened = false
+    private var notificationBaselineReady = false
+    private val notifiedMessageKeys = mutableSetOf<String>()
     private val chatCachePrefs by lazy { getSharedPreferences("chat_list_cache", MODE_PRIVATE) }
 
     private var presupuestoParaEnviar: String? = null
@@ -51,11 +54,13 @@ class ListChatActivity : AppCompatActivity() {
     private var archivoCompartidoParaEnviar: String? = null
     private var nombreArchivoCompartido: String? = null
     private var mimeArchivoCompartido: String? = null
+    private var textoCompartidoParaEnviar: String? = null
 
     // Listas
     private var chatsActivos = mutableListOf<Chat>()
     private var todosLosContactos = mutableListOf<ContactoTelefono>()
     private val CONTACTS_PERMISSION_CODE = 100
+    private val NOTIFICATIONS_PERMISSION_CODE = 101
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +73,7 @@ class ListChatActivity : AppCompatActivity() {
         archivoCompartidoParaEnviar = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_URI)
         nombreArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME)
         mimeArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME)
+        textoCompartidoParaEnviar = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_TEXT)
 
         if (presupuestoParaEnviar != null) {
             Toast.makeText(this, "Selecciona un chat para enviar: $nombrePresupuesto", Toast.LENGTH_LONG).show()
@@ -75,6 +81,9 @@ class ListChatActivity : AppCompatActivity() {
         } else if (archivoCompartidoParaEnviar != null) {
             Toast.makeText(this, "Selecciona un chat para enviar: $nombreArchivoCompartido", Toast.LENGTH_LONG).show()
             supportActionBar?.subtitle = "Enviando archivo: $nombreArchivoCompartido"
+        } else if (textoCompartidoParaEnviar != null) {
+            Toast.makeText(this, "Selecciona un chat para enviar las medidas", Toast.LENGTH_LONG).show()
+            supportActionBar?.subtitle = "Enviando medidas"
         }
 
         currentUserId = ChatIdentity.resolveChatIdentityUid(
@@ -148,6 +157,9 @@ class ListChatActivity : AppCompatActivity() {
         configurarMigracionManual()
         ejecutarMigracionAutomatica()
         binding.btnEnviar.setOnClickListener { buscarUsuario() }
+        verificarPermisoNotificaciones()
+        CrystalFcmTokenManager.registerCurrentDevice(this, currentUserId)
+        CrystalFcmTokenManager.flushPendingToken(this, currentUserId)
         verificarPermisoContactos()
     }
 
@@ -237,7 +249,9 @@ class ListChatActivity : AppCompatActivity() {
             aliases = aliases,
             onResult = { chats ->
                 runOnUiThread {
+                    val anteriores = chatsActivos.associateBy { it.id }
                     chatsActivos = mergeChatRows(chatsActivos, chats).toMutableList()
+                    notificarMensajesNuevos(anteriores, chatsActivos)
                     guardarChatsEnCache(chatsActivos)
                     (binding.rvChatList.adapter as ChatAdapter).setData(chatsActivos)
                 }
@@ -330,6 +344,54 @@ class ListChatActivity : AppCompatActivity() {
 
     private fun cacheKey(): String = "user_$currentUserId"
 
+    private fun verificarPermisoNotificaciones() {
+        CrystalMessageNotifier.ensureChannel(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                NOTIFICATIONS_PERMISSION_CODE
+            )
+        }
+    }
+
+    private fun notificarMensajesNuevos(anteriores: Map<String, Chat>, actuales: List<Chat>) {
+        if (!notificationBaselineReady) {
+            notificationBaselineReady = true
+            actuales.forEach { chat ->
+                val lastTime = chat.lastMsgDate?.time ?: return@forEach
+                notifiedMessageKeys.add("${chat.id}:$lastTime:${chat.unreadCount}")
+            }
+            return
+        }
+
+        actuales.forEach { chat ->
+            if (chat.unreadCount <= 0 || chat.id.isBlank()) return@forEach
+            val lastTime = chat.lastMsgDate?.time ?: return@forEach
+            val anterior = anteriores[chat.id]
+            val previousTime = anterior?.lastMsgDate?.time ?: 0L
+            val previousUnread = anterior?.unreadCount ?: 0
+            val isNewer = lastTime > previousTime
+            val unreadIncreased = chat.unreadCount > previousUnread
+            if (!isNewer && !unreadIncreased) return@forEach
+
+            val key = "${chat.id}:$lastTime:${chat.unreadCount}"
+            if (!notifiedMessageKeys.add(key)) return@forEach
+
+            CrystalMessageNotifier.notifyMessage(
+                context = this,
+                chatId = chat.id,
+                currentUserId = currentUserId,
+                senderName = chat.name,
+                preview = chat.lastMessageText,
+                unreadCount = chat.unreadCount
+            )
+        }
+    }
+
     private fun verificarPermisoContactos() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED) {
@@ -349,11 +411,18 @@ class ListChatActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == CONTACTS_PERMISSION_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                cargarContactosDelTelefono()
-            } else {
-                Toast.makeText(this, "Permiso de contactos denegado", Toast.LENGTH_SHORT).show()
+        when (requestCode) {
+            CONTACTS_PERMISSION_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    cargarContactosDelTelefono()
+                } else {
+                    Toast.makeText(this, "Permiso de contactos denegado", Toast.LENGTH_SHORT).show()
+                }
+            }
+            NOTIFICATIONS_PERMISSION_CODE -> {
+                if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(this, "Las notificaciones de Crystal estan desactivadas", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -576,6 +645,7 @@ class ListChatActivity : AppCompatActivity() {
             archivoCompartidoParaEnviar?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_URI, it) }
             nombreArchivoCompartido?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME, it) }
             mimeArchivoCompartido?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME, it) }
+            textoCompartidoParaEnviar?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_TEXT, it) }
         }
         startActivity(intent)
     }

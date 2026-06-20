@@ -35,103 +35,146 @@
             tools:ignore="SmallSp" />
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <Button
-                android:id="@+id/btnEnviarJson"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="9dp"
-                android:layout_marginTop="9dp"
-                android:layout_marginEnd="9dp"
-                android:layout_marginBottom="4.5dp"
-                android:layout_weight="1"
-                android:background="@drawable/botoncircular"
-                android:backgroundTint="@color/marron"
-                android:text="enviar"
-                android:textColor="@color/blanco"
-                tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/btnGuardar"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="9dp"
-                android:layout_marginTop="9dp"
-                android:layout_marginEnd="9dp"
-                android:layout_marginBottom="4.5dp"
-                android:layout_weight="1"
-                android:background="@drawable/botoncircular"
-                android:backgroundTint="@color/verde"
-                android:text="@string/guardar"
-                android:textColor="@color/blanco"
-                tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
+                <Button
+                    android:id="@+id/btnEnviarJson"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/marron"
+                    android:minWidth="96dp"
+                    android:text="enviar"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
 
-            <Button
-                android:id="@+id/btn_dialogo_editar"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="9dp"
-                android:layout_marginTop="4.5dp"
-                android:layout_marginEnd="9dp"
-                android:layout_marginBottom="4.5dp"
-                android:layout_weight="1"
-                android:background="@drawable/botoncircular"
-                android:backgroundTint="@color/color"
-                android:text="@string/editar"
-                android:textColor="@color/blanco"
-                android:textSize="14sp"
-                tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
+                <Button
+                    android:id="@+id/btnMedir"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/celeste"
+                    android:minWidth="96dp"
+                    android:text="medir"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
+            </LinearLayout>
 
-            <Button
-                android:id="@+id/btn_dialogo_eliminar"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="9dp"
-                android:layout_marginTop="4.5dp"
-                android:layout_marginEnd="9dp"
-                android:layout_marginBottom="9dp"
-                android:layout_weight="1"
-                android:background="@drawable/botoncircular"
-                android:backgroundTint="@color/fucsia"
-                android:text="@string/eliminar"
-                android:textColor="@color/blanco"
-                android:textSize="14sp"
-                tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/btAbrir"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="9dp"
-                android:layout_marginTop="4.5dp"
-                android:layout_marginEnd="9dp"
-                android:layout_marginBottom="9dp"
-                android:layout_weight="1"
-                android:background="@drawable/botoncircular"
-                android:backgroundTint="@color/gris"
-                android:text="@string/anexar"
-                android:textColor="@color/blanco"
-                tools:ignore="TouchTargetSizeCheck" />
+                <Button
+                    android:id="@+id/btnGuardar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/verde"
+                    android:minWidth="96dp"
+                    android:text="@string/guardar"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
 
-            <Button
-                android:id="@+id/btnDiaOk"
+                <Button
+                    android:id="@+id/btn_dialogo_editar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/color"
+                    android:minWidth="96dp"
+                    android:text="@string/editar"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="9dp"
-                android:layout_marginTop="4.5dp"
-                android:layout_marginEnd="9dp"
-                android:layout_marginBottom="9dp"
-                android:layout_weight="1"
-                android:background="@drawable/botoncircular"
-                android:backgroundTint="@color/naranja"
-                android:text="@string/ok"
-                android:textColor="@color/blanco"
-                android:textSize="14sp"
-                android:visibility="gone"
-                tools:ignore="ButtonStyle,TextContrastCheck" />
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_dialogo_eliminar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/fucsia"
+                    android:minWidth="96dp"
+                    android:text="@string/eliminar"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
+
+                <Button
+                    android:id="@+id/btAbrir"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/gris"
+                    android:minWidth="96dp"
+                    android:text="@string/anexar"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    tools:ignore="TouchTargetSizeCheck" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnContrato"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/violeta"
+                    android:minWidth="96dp"
+                    android:text="contrato"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
+
+                <Button
+                    android:id="@+id/btnDiaOk"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/naranja"
+                    android:minWidth="96dp"
+                    android:text="@string/ok"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    android:visibility="gone"
+                    tools:ignore="ButtonStyle,TextContrastCheck" />
+            </LinearLayout>
 
         </LinearLayout>
     </LinearLayout>

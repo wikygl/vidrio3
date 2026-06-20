@@ -51,6 +51,14 @@
           }
         },
         {
+          "client_id": "529436008604-in41j3kkdct1vacbq2oltkipbri4qrgf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "crystal.crystal",
+            "certificate_hash": "a8c6e8fc4b6a2b91eba7dc53fae4f167ba46e0ab"
+          }
+        },
+        {
           "client_id": "529436008604-ipg315ofsgprikmurikphf17melud12g.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
@@ -64,6 +72,14 @@
           "android_info": {
             "package_name": "crystal.crystal",
             "certificate_hash": "80ca8ee7b3463b71c1af61134f402fa156528a5a"
+          }
+        },
+        {
+          "client_id": "529436008604-lkrmb9qa23e9gp51ijo7vb4e02hpr3vm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "crystal.crystal",
+            "certificate_hash": "66f6e030dae044eb4a08c2c44dfb4a6ac9994769"
           }
         },
         {

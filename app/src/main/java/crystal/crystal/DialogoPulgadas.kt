@@ -13,6 +13,8 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.GridLayout
 import android.widget.TextView
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 class DialogoPulgadas(
     private val context: Context,
@@ -49,10 +51,24 @@ class DialogoPulgadas(
         gridFracciones.columnCount = 4
         gridFracciones.rowCount = 4
 
+        fun enteroActual(): Int {
+            return Regex("^-?\\d+")
+                .find(etEntero.text.toString().trim())
+                ?.value
+                ?.toIntOrNull() ?: 0
+        }
+
         fun actualizarResultado() {
-            val entero = etEntero.text.toString().toIntOrNull() ?: 0
+            val entero = enteroActual()
             val total = entero + fraccionSeleccionada
             tvResultado.text = "Resultado: $total\""
+        }
+
+        fun actualizarCampoEntrada() {
+            val entero = enteroActual()
+            val total = entero + fraccionSeleccionada
+            etEntero.setText(formatoPulgadaFraccion(total))
+            etEntero.setSelection(etEntero.text?.length ?: 0)
         }
 
         // Crear botones de fracciones
@@ -76,6 +92,7 @@ class DialogoPulgadas(
                     isSelected = true
                     alpha = 0.6f
                     botonSeleccionado = this
+                    actualizarCampoEntrada()
                     actualizarResultado()
                 }
             }
@@ -87,6 +104,7 @@ class DialogoPulgadas(
             }
             gridFracciones.addView(btn)
         }
+        actualizarResultado()
 
         etEntero.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -100,7 +118,7 @@ class DialogoPulgadas(
         val dialog = AlertDialog.Builder(context)
             .setView(view)
             .setPositiveButton("Aceptar") { _, _ ->
-                val entero = etEntero.text.toString().toIntOrNull() ?: 0
+                val entero = enteroActual()
                 val total = entero + fraccionSeleccionada
                 onResult(total)
             }
@@ -110,7 +128,7 @@ class DialogoPulgadas(
         etEntero.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_DONE ||
                 (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                val entero = etEntero.text.toString().toIntOrNull() ?: 0
+                val entero = enteroActual()
                 val total = entero + fraccionSeleccionada
                 onResult(total)
                 dialog.dismiss()
@@ -120,5 +138,28 @@ class DialogoPulgadas(
 
         dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
         dialog.show()
+    }
+
+    private fun formatoPulgadaFraccion(valor: Float): String {
+        var entero = floor(valor).toInt()
+        val fraccion = valor - entero
+        var dieciseisavos = (fraccion * 16f).roundToInt()
+
+        if (dieciseisavos == 16) {
+            entero += 1
+            dieciseisavos = 0
+        }
+        if (dieciseisavos == 0) return entero.toString()
+
+        val divisor = when {
+            dieciseisavos % 8 == 0 -> 2
+            dieciseisavos % 4 == 0 -> 4
+            dieciseisavos % 2 == 0 -> 8
+            else -> 16
+        }
+        val numerador = dieciseisavos / (16 / divisor)
+        val fraccionTexto = "$numerador/$divisor"
+
+        return if (entero == 0) fraccionTexto else "$entero $fraccionTexto"
     }
 }

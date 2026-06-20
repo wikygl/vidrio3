@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="14dp"
+    android:viewportWidth="64"
+    android:viewportHeight="14">
+    <path
+        android:fillColor="#B5651D"
+        android:pathData="M0,0 h64 v14 h-64 z" />
+    <!-- Junta horizontal central + verticales escalonadas (aparejo a soga) -->
+    <path
+        android:strokeColor="#EFE3D3"
+        android:strokeWidth="1"
+        android:pathData="M0,7 H64 M16,0 V7 M32,0 V7 M48,0 V7 M8,7 V14 M24,7 V14 M40,7 V14 M56,7 V14" />
+</vector>

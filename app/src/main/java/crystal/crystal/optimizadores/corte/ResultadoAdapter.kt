@@ -18,7 +18,8 @@ import crystal.crystal.R
  */
 class ResultadoAdapter(
     private val context: Context,
-    val resultados: MutableList<VarillaResultado> // Hacer público para acceso desde Activity
+    val resultados: MutableList<VarillaResultado>,
+    private val onResultadosCambiados: ((List<VarillaResultado>) -> Unit)? = null
 ) : RecyclerView.Adapter<ResultadoAdapter.ResultadoViewHolder>() {
 
     @SuppressLint("LongLogTag")
@@ -54,9 +55,10 @@ class ResultadoAdapter(
             // Configurar click listener para toda la varilla
             itemView.setOnClickListener {
                 // Toggle del estado cortada
-                val posicion = adapterPosition
+                val posicion = bindingAdapterPosition
                 if (posicion != RecyclerView.NO_POSITION) {
                     resultados[posicion] = resultados[posicion].copy(cortada = !resultados[posicion].cortada)
+                    onResultadosCambiados?.invoke(resultados)
                     notifyItemChanged(posicion)
                 }
             }

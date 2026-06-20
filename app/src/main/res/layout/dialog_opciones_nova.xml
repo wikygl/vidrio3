@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- ============ GEOMETRÍA (vista top) ============ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Geometría"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <ImageView android:id="@+id/dgGeoPlano" android:layout_width="60dp" android:layout_height="60dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Plano" android:src="@drawable/vplano" />
+                <ImageView android:id="@+id/dgGeoL" android:layout_width="60dp" android:layout_height="60dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="En L" android:src="@drawable/venl" />
+                <ImageView android:id="@+id/dgGeoC" android:layout_width="60dp" android:layout_height="60dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="En C" android:src="@drawable/venc" />
+                <ImageView android:id="@+id/dgGeoCurvo" android:layout_width="60dp" android:layout_height="60dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Curvo" android:src="@drawable/vcurvo" />
+                <ImageView android:id="@+id/dgGeoSerie" android:layout_width="60dp" android:layout_height="60dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Serie" android:src="@drawable/vserie" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+
+        <!-- ============ FORMA (vista frontal) ============ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Forma"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/dgRgForma"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <RadioButton android:id="@+id/dgRbFormaPlano" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Plano" />
+            <RadioButton android:id="@+id/dgRbFormaCircular" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Circular" />
+            <RadioButton android:id="@+id/dgRbFormaPoligonal" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Poligonal" />
+        </RadioGroup>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+
+        <!-- ============ ENCUENTRO / TRANSICIÓN ============ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Encuentro (muro en cada lado; desmarcar = vacío)"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="4dp"
+            android:orientation="vertical">
+
+            <CheckBox android:id="@+id/dgCbTop" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center_horizontal" android:checked="true" android:text="Arriba" />
+
+            <View android:id="@+id/dgMuroTop" android:layout_width="64dp" android:layout_height="14dp" android:layout_gravity="center_horizontal" android:background="@drawable/bg_muro_horizontal" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <CheckBox android:id="@+id/dgCbLeft" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:text="Izq" />
+
+                <View android:id="@+id/dgMuroLeft" android:layout_width="14dp" android:layout_height="64dp" android:background="@drawable/bg_muro_vertical" />
+
+                <View
+                    android:id="@+id/dgEncCentro"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_margin="2dp"
+                    android:background="@drawable/corner" />
+
+                <View android:id="@+id/dgMuroRight" android:layout_width="14dp" android:layout_height="64dp" android:background="@drawable/bg_muro_vertical" />
+
+                <CheckBox android:id="@+id/dgCbRight" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:text="Der" />
+            </LinearLayout>
+
+            <View android:id="@+id/dgMuroBottom" android:layout_width="64dp" android:layout_height="14dp" android:layout_gravity="center_horizontal" android:background="@drawable/bg_muro_horizontal" />
+
+            <CheckBox android:id="@+id/dgCbBottom" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center_horizontal" android:checked="true" android:text="Abajo" />
+        </LinearLayout>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+
+        <!-- ============ ACABADO ============ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Acabado"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/dgRgAcabado"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <RadioButton android:id="@+id/dgRbApa" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Aparente" />
+            <RadioButton android:id="@+id/dgRbIna" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Inaparente" />
+            <RadioButton android:id="@+id/dgRbPiv" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Pivotante" />
+        </RadioGroup>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+
+        <!-- ============ MODELO (remate) ============ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Modelo"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <ImageView android:id="@+id/dgModNormal" android:layout_width="90dp" android:layout_height="90dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Normal" android:src="@drawable/nn" />
+            <ImageView android:id="@+id/dgModInvertido" android:layout_width="90dp" android:layout_height="90dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Invertido" android:src="@drawable/nir" />
+            <ImageView android:id="@+id/dgModDoblePuente" android:layout_width="90dp" android:layout_height="90dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Doble puente" android:src="@drawable/n2p" />
+        </LinearLayout>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+
+        <!-- ============ MODULACIÓN (arreglo de hojas) ============ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Modulación"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <ImageView android:id="@+id/dgModulNormal" android:layout_width="90dp" android:layout_height="90dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Normal" android:src="@drawable/nn" />
+                <ImageView android:id="@+id/dgModulDoble" android:layout_width="90dp" android:layout_height="90dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Doble corrediza" android:src="@drawable/ncc" />
+                <ImageView android:id="@+id/dgModulTriple" android:layout_width="90dp" android:layout_height="90dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Triple corrediza" android:src="@drawable/n3c" />
+                <ImageView android:id="@+id/dgModulCfc" android:layout_width="90dp" android:layout_height="90dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Corrediza fijo corrediza" android:src="@drawable/ncfc" />
+                <ImageView android:id="@+id/dgModulFull" android:layout_width="90dp" android:layout_height="90dp" android:layout_margin="4dp" android:scaleType="fitCenter" android:contentDescription="Full fijos" android:src="@drawable/nff" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+
+        <!-- ====== CORREDIZAS POR TRAMO (solo full corredizas) ====== -->
+        <LinearLayout
+            android:id="@+id/dgNfcTramoSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Corredizas por tramo (parante)"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <RadioGroup
+                android:id="@+id/dgRgNfcTramo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton android:id="@+id/dgNfcTramoAuto" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Auto" />
+                <RadioButton android:id="@+id/dgNfcTramo2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="2" />
+                <RadioButton android:id="@+id/dgNfcTramo3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="3" />
+                <RadioButton android:id="@+id/dgNfcTramo4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="4" />
+                <RadioButton android:id="@+id/dgNfcTramo5" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="5" />
+            </RadioGroup>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+        </LinearLayout>
+
+        <!-- ============ PUENTE (perfil del puente; todos los modelos) ============ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Puente"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/dgPuenteContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+
+        <!-- ====== COMPUESTAS (en L / en C / serie): Esquinero + Dirección ====== -->
+        <LinearLayout
+            android:id="@+id/dgSeccionCompuesta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Esquinero"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/dgEsquineroContainer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Dirección"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <RadioGroup
+                android:id="@+id/dgRgDireccion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton android:id="@+id/dgRbAdentro" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Adentro" />
+                <RadioButton android:id="@+id/dgRbAfuera" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Afuera" />
+            </RadioGroup>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

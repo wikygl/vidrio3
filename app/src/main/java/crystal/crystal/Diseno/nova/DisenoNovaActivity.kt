@@ -35,6 +35,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         const val EXTRA_RET_PADDING_PX = "extra_ret_padding_px"
         const val EXTRA_OUTPUT_FORMAT = "extra_output_format" // "svg" | "png"
         const val EXTRA_US_CM = "extra_us_cm"
+        const val EXTRA_ENCUENTRO_VACIO = "extra_encuentro_vacio"
+        const val EXTRA_DIRECCION = "extra_direccion"
         const val RESULT_URI = "resultado_uri_imagen"
         const val RESULT_PAQUETE = "resultado_paquete"
     }
@@ -45,6 +47,8 @@ class DisenoNovaActivity : AppCompatActivity() {
     private var anchoCm: Float = 150f
     private var altoCm: Float = 120f
     private var mochetaLateralCm: Float = 0f
+    private var encuentroVacio: String = "1111"
+    private var direccion: String = "adentro"
     private var usCm: Float = 1.5f
     private var corteVerticalCm: Float? = null
     private var paqueteOriginal: String = ""
@@ -75,8 +79,10 @@ class DisenoNovaActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         // ---- MODO HEADLESS (genera imagen y termina) ----
-        val paqueteIntent = intent.getStringExtra(EXTRA_PAQUETE) ?: "{nova,ina,[150,120:s(f)]}"
+        val paqueteIntent = intent.getStringExtra(EXTRA_PAQUETE) ?: "{nova,ina,[150,120:Tl<150>(s(f))]}"
         mochetaLateralCm = intent.getFloatExtra(EXTRA_MOCHETA_LATERAL_CM, 0f)
+        encuentroVacio = intent.getStringExtra(EXTRA_ENCUENTRO_VACIO) ?: "1111"
+        direccion = intent.getStringExtra(EXTRA_DIRECCION) ?: "adentro"
         usCm = intent.getFloatExtra(EXTRA_US_CM, 1.5f)
         val paddingPx = intent.getIntExtra(EXTRA_RET_PADDING_PX, 0)
         val headless = intent.getBooleanExtra(EXTRA_HEADLESS, false)
@@ -85,6 +91,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         if (headless) {
             val vista = VistaDiseno(this).apply {
                 actualizarDesdePaquete(paqueteIntent, 0f, 0f, mochetaLateralCm)
+                setEncuentroVacio(encuentroVacio)
+                setDireccion(direccion)
             }
             val dm = resources.displayMetrics
             val w = dm.widthPixels.coerceAtLeast(720)
@@ -112,6 +120,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding = ActivityDisenoNovaBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        binding.vistaDiseno.setEncuentroVacio(encuentroVacio)
+        binding.vistaDiseno.setDireccion(direccion)
         cargarDesdePaquete(paqueteIntent)
 
         // Toque directo en el lienzo para seleccionar franja (sin diálogos)
@@ -145,12 +155,24 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
         }
 
+        // Tocar el lienzo (fuera del panel) cierra los paneles de contenido abiertos.
+        binding.vistaDiseno.setOnTouchListener { v, event ->
+            if (event.action == android.view.MotionEvent.ACTION_DOWN && cerrarPanelesContenido()) {
+                v.performClick()
+                true
+            } else {
+                false
+            }
+        }
+
         // Botones flotantes (columna)
         binding.btnAgregarFranja.setOnClickListener { dialogoAgregarFranja() }
         binding.btnQuitarFranja.setOnClickListener { quitarFranja() }
         binding.btnAgregarModulo.setOnClickListener { dialogoAgregarModulo() }
         binding.btnQuitarModulo.setOnClickListener { quitarModulo() }
         binding.btnMostrarOcultar.setOnClickListener { alternarColumnaBotones() }
+        // Mantener pulsado el botón de controles abre el menú de opciones sin botón propio.
+        binding.btnMostrarOcultar.setOnLongClickListener { mostrarMenuEditar(); true }
         binding.btnMedidasRapidas.setOnClickListener { dialogoCambiarMedidas() }
         binding.btnCotasPlanos.setOnClickListener { togglePanelCotasPlanos() }
         binding.btnTipoEnsamble.setOnClickListener { alternarEnsamble() }
@@ -166,8 +188,11 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.parante.setOnClickListener { Toast.makeText(this, "Parante no disponible", Toast.LENGTH_SHORT).show() }
         binding.cardEliminarModulo.setOnClickListener { quitarModulo() }
 
-        // Menú inferior
-        binding.botonEditar.setOnClickListener { mostrarMenuEditar() }
+        // Botón inferior: envía el diseño a NovaCorrediza (igual que el botón Atrás).
+        binding.botonEditar.setOnClickListener {
+            prepararResultadoDiseno()
+            finish()
+        }
 
         actualizarInfoSeleccion()
         actualizarVista()
@@ -175,16 +200,15 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     // ===================================== MENÚ EDITAR =====================================
 
+    // Menú con las opciones que NO tienen botón propio. (Ensamble, medidas y limpiar viven en sus
+    // botones: btnTipoEnsamble, btnMedidasRapidas, btnLimpiarDiseno.)
     private fun mostrarMenuEditar() {
         val opciones = arrayOf(
             "Seleccionar franja activa",
             "Editar altura de franja activa",     // solo altura (sin cambiar tipo)
             "Cambiar tipo S↔M (franja activa)",   // sin diálogo
             "Seleccionar módulo de franja activa",
-            "Alternar ensamble (INA/APA)",
-            "Cambiar medidas (ancho, alto, mocheta lateral)",
-            "Ver / copiar paquete",
-            "Limpiar diseño"
+            "Ver / copiar paquete"
         )
         AlertDialog.Builder(this)
             .setTitle("Opciones")
@@ -194,10 +218,7 @@ class DisenoNovaActivity : AppCompatActivity() {
                     1 -> dialogoEditarFranjaAlturaSolo()
                     2 -> alternarTipoFranjaActiva()
                     3 -> dialogoSeleccionarModulo()
-                    4 -> { alternarEnsamble() }
-                    5 -> dialogoCambiarMedidas()
-                    6 -> dialogoVerPaquete()
-                    7 -> limpiarDiseno()
+                    4 -> dialogoVerPaquete()
                 }
             }
             .show()
@@ -223,6 +244,18 @@ class DisenoNovaActivity : AppCompatActivity() {
         panel.visibility = View.VISIBLE
     }
 
+    /** Cierra los paneles de contenido (productos / cotas) si alguno está visible. */
+    private fun cerrarPanelesContenido(): Boolean {
+        var cerro = false
+        if (binding.panelProductos.visibility == View.VISIBLE) {
+            binding.panelProductos.visibility = View.GONE; cerro = true
+        }
+        if (binding.panelCotasPlanos.visibility == View.VISIBLE) {
+            binding.panelCotasPlanos.visibility = View.GONE; cerro = true
+        }
+        return cerro
+    }
+
     private fun togglePanelCotasPlanos() {
         val panel = binding.panelCotasPlanos
         if (panel.visibility == View.VISIBLE) {
@@ -246,7 +279,7 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     // --- Ver / copiar paquete ---
     private fun dialogoVerPaquete() {
-        val paquete = aPaquete()
+        val paquete = paqueteActualLectura()
         AlertDialog.Builder(this)
             .setTitle("Paquete")
             .setMessage(paquete)
@@ -325,22 +358,48 @@ class DisenoNovaActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun agregarFranja(ms: Char, altura: Float) {
-        estructuraEditada = true
-        val esSistema = (ms == 's' || ms == 'S')
-        val nueva = Franja(
-            esSistema = esSistema,
-            alturaCm = max(0f, altura),
-            modulos = mutableListOf(TipoModulo.FIJO) // default: siempre al menos un f
-        )
-        franjas.add(nueva)
-        indiceFranjaActiva = franjas.lastIndex
-
-        // Regla: si al agregar la última, su altura explícita supera el alto total,
-        // se elimina y la anterior ocupa 100% del alto total.
-        normalizarPorExcesoUltimaFranja()
-
+    /**
+     * Camino único de edición de franjas: aplica [transform] a la lista de franja-tokens
+     * (s<>/m<>) de CADA bloque de tramo, manteniendo la cadena simbólica de tramos como
+     * fuente de verdad, y recarga el modelo desde ella. Devuelve false si el paquete actual
+     * no está en forma de bloques T<> (en cuyo caso el llamador usa el camino heredado).
+     */
+    private fun editarFranjasEnTramos(transform: (MutableList<String>) -> Unit): Boolean {
+        val bloques = parsearBloquesTramo()
+        if (bloques.isEmpty()) return false
+        val nuevos = bloques.map { b ->
+            val tokens = splitTopLevelSemicolon(b.contenido).toMutableList()
+            transform(tokens)
+            if (tokens.isEmpty()) tokens.add("s(f)") // nunca dejar un tramo sin franjas
+            b.copy(contenido = tokens.joinToString(";"))
+        }
+        cargarDesdePaquete(reconstruirPaqueteConBloques(nuevos))
         actualizarVista()
+        return true
+    }
+
+    private fun agregarFranja(ms: Char, altura: Float) {
+        val esSistema = (ms == 's' || ms == 'S')
+        val pref = if (esSistema) "s" else "m"
+        var alt = max(0f, altura)
+        if (alt > altoCm) {
+            Toast.makeText(this, "Altura > alto total. Se agrega en auto.", Toast.LENGTH_SHORT).show()
+            alt = 0f
+        }
+        val tag = if (alt > 0f) "<${df1(alt)}>" else ""
+        val manejado = editarFranjasEnTramos { tokens -> tokens.add("$pref$tag(f)") }
+        if (!manejado) {
+            // Camino heredado (paquete sin bloques T<>)
+            estructuraEditada = true
+            franjas.add(
+                Franja(esSistema = esSistema, alturaCm = alt, modulos = mutableListOf(TipoModulo.FIJO))
+            )
+            indiceFranjaActiva = franjas.lastIndex
+            normalizarPorExcesoUltimaFranja()
+            actualizarVista()
+            return
+        }
+        indiceFranjaActiva = franjas.lastIndex
     }
 
     private fun normalizarPorExcesoUltimaFranja() {
@@ -362,12 +421,23 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun quitarFranja() {
-        if (franjas.isNotEmpty()) {
+        val bloques = parsearBloquesTramo()
+        val nFranjas = bloques.firstOrNull()?.let { splitTopLevelSemicolon(it.contenido).size } ?: franjas.size
+        if (nFranjas <= 1) {
+            Toast.makeText(this, "Debe quedar al menos una franja.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val manejado = editarFranjasEnTramos { tokens ->
+            if (tokens.size > 1) tokens.removeAt(tokens.lastIndex)
+        }
+        if (!manejado && franjas.isNotEmpty()) {
             estructuraEditada = true
             franjas.removeLast()
             indiceFranjaActiva = franjas.lastIndex
             actualizarVista()
+            return
         }
+        indiceFranjaActiva = franjas.lastIndex
     }
 
     private fun repetirModulo(fc: Char, cantidad: Int) {
@@ -386,15 +456,15 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     /**
      * Parchea el bloque T<> del tramo activo con los módulos actuales de franjas[indiceFranjaActiva],
-     * preservando la estructura NS multi-tramo. Si no hay estructura NS, recae en aPaquete().
+     * preservando la estructura NS multi-tramo.
      */
     private fun aplicarModificacionModulosAlPaquete() {
         val fr = franjas.getOrNull(indiceFranjaActiva) ?: run {
-            estructuraEditada = true; actualizarVista(); return
+            actualizarVista(); return
         }
         val bloques = parsearBloquesTramo()
         if (bloques.isEmpty()) {
-            estructuraEditada = true; actualizarVista(); return
+            actualizarVista(); return
         }
         val tramoIdx = if (indiceTramoActivo in bloques.indices) indiceTramoActivo else 0
         val bloque = bloques[tramoIdx]
@@ -405,12 +475,12 @@ class DisenoNovaActivity : AppCompatActivity() {
             it.trim().startsWith(franjaPrefix, ignoreCase = true)
         }
         if (franjaIdxInBloque < 0) {
-            estructuraEditada = true; actualizarVista(); return
+            actualizarVista(); return
         }
 
         val franjaToken = franjaTokens[franjaIdxInBloque].trim()
         val openP = franjaToken.indexOf('(')
-        if (openP < 0) { estructuraEditada = true; actualizarVista(); return }
+        if (openP < 0) { actualizarVista(); return }
         val franjaHead = franjaToken.substring(0, openP)   // e.g. "s<100>" o "s"
 
         // Reconstruir string de módulos a partir del estado actual de fr
@@ -480,6 +550,12 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
         }
 
+        // La franja editada puede tener módulos recién agregados sin <w>: se anotan con
+        // anchos equitativos para que el paquete siempre lleve anchos explícitos.
+        if (tramoIdx in newBloques.indices) {
+            newBloques[tramoIdx] = anotarAnchosEquitativosFranja(newBloques[tramoIdx], fr.esSistema)
+        }
+
         cargarDesdePaquete(reconstruirPaqueteConBloques(newBloques))
         actualizarVista()
     }
@@ -509,6 +585,62 @@ class DisenoNovaActivity : AppCompatActivity() {
             changed = true
         }
         return if (changed) bloque.copy(contenido = tokens.joinToString(";")) else bloque
+    }
+
+    /**
+     * Reescribe los <w> de TODAS las franjas del bloque para que sumen [nuevoAncho]:
+     * proporcional a los anchos actuales si los hay, o equitativo si están sin medida.
+     * Siempre escribe medidas explícitas (a diferencia de escalarAnchosModulosEnBloque,
+     * que salta las franjas sin <w>). Así el tramo que cambia/absorbe queda consistente.
+     */
+    private fun reescalarFranjasATramo(bloque: BloqueTramo, nuevoAncho: Float): BloqueTramo {
+        val tokens = splitTopLevelSemicolon(bloque.contenido).toMutableList()
+        tokens.forEachIndexed { idx, token ->
+            val t = token.trim()
+            val openP = t.indexOf('('); if (openP < 0) return@forEachIndexed
+            val head = t.substring(0, openP)
+            val interior = extraerBloqueModulosFranja(t) ?: return@forEachIndexed
+            val grupos = interior.split(Regex("""(?i)\s*;\s*p\s*;\s*"""))
+            val modsPorGrupo = grupos.map { parsearModsSegmento(it) }
+            val totalMedidas = modsPorGrupo.flatten().sumOf { (it.medida ?: 0f).toDouble() }.toFloat()
+            val nMods = modsPorGrupo.flatten().size.coerceAtLeast(1)
+            // Reparto proporcional (o equitativo si no hay medidas). El ancho del tramo es lo
+            // autoritativo: NovaCorrediza re-deriva los módulos desde él a precisión completa,
+            // así que aquí basta con dejar las proporciones correctas en df1.
+            val nuevoInterior = modsPorGrupo.joinToString(";P;") { mods ->
+                mods.joinToString("") { m ->
+                    val w = if (totalMedidas > 0.05f && m.medida != null) m.medida / totalMedidas * nuevoAncho
+                            else nuevoAncho / nMods
+                    "${m.tipo}<${df1(w)}>"
+                }
+            }.ifEmpty { "f<${df1(nuevoAncho)}>" }
+            tokens[idx] = "$head($nuevoInterior)"
+        }
+        return bloque.copy(contenido = tokens.joinToString(";"))
+    }
+
+    /**
+     * Reescribe los módulos de la franja [esSistema] del bloque con anchos explícitos
+     * equitativos (ancho del tramo ÷ nº de módulos), preservando los ;P; internos.
+     * Garantiza que el editor emita siempre <w>, incluso en módulos recién agregados.
+     */
+    private fun anotarAnchosEquitativosFranja(bloque: BloqueTramo, esSistema: Boolean): BloqueTramo {
+        val prefix = if (esSistema) "s" else "m"
+        val tokens = splitTopLevelSemicolon(bloque.contenido).toMutableList()
+        val idx = tokens.indexOfFirst { it.trim().startsWith(prefix, ignoreCase = true) }
+        if (idx < 0) return bloque
+        val token = tokens[idx].trim()
+        val openP = token.indexOf('('); if (openP < 0) return bloque
+        val head = token.substring(0, openP)
+        val interior = extraerBloqueModulosFranja(token) ?: return bloque
+        val grupos = interior.split(Regex("""(?i)\s*;\s*p\s*;\s*"""))
+        val nMods = grupos.sumOf { parsearModsSegmento(it).size }.coerceAtLeast(1)
+        val w = bloque.ancho / nMods
+        val nuevoInterior = grupos.joinToString(";P;") { g ->
+            parsearModsSegmento(g).joinToString("") { m -> "${m.tipo}<${df1(w)}>" }
+        }.ifEmpty { "f<${df1(bloque.ancho)}>" }
+        tokens[idx] = "$head($nuevoInterior)"
+        return bloque.copy(contenido = tokens.joinToString(";"))
     }
 
     private fun agregarModuloDirecto(tipo: TipoModulo) {
@@ -641,11 +773,22 @@ class DisenoNovaActivity : AppCompatActivity() {
                 val alt = etAltura.text.toString().aNumeroSeguro().coerceAtLeast(0f)
                 if (alt > altoCm && franjas.isNotEmpty()) {
                     Toast.makeText(this, "Altura > alto total. Se mantiene la anterior.", Toast.LENGTH_SHORT).show()
-                } else {
+                    return@setPositiveButton
+                }
+                val idx = indiceFranjaActiva
+                val manejado = editarFranjasEnTramos { tokens ->
+                    val tk = tokens.getOrNull(idx)?.trim() ?: return@editarFranjasEnTramos
+                    val openP = tk.indexOf('(')
+                    if (openP < 0) return@editarFranjasEnTramos
+                    val pref = tk.first()
+                    val tag = if (alt > 0f) "<${df1(alt)}>" else ""
+                    tokens[idx] = "$pref$tag${tk.substring(openP)}"
+                }
+                if (!manejado) {
                     estructuraEditada = true
                     fr.alturaCm = alt
+                    actualizarVista()
                 }
-                actualizarVista()
             }
             .setNegativeButton("Cancelar", null)
             .show()
@@ -687,24 +830,30 @@ class DisenoNovaActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Editar módulo [$indiceModulo] en franja [$indiceFranjaActiva]")
             .setItems(opciones) { _, which ->
+                val p = fr.parantes
                 when (which) {
                     0 -> fr.modulos[indiceModulo] =
                         if (fr.modulos[indiceModulo] == TipoModulo.CORREDIZA) TipoModulo.FIJO else TipoModulo.CORREDIZA
-                    1 -> fr.modulos.add(indiceModulo, TipoModulo.FIJO)
-                    2 -> fr.modulos.add(indiceModulo, TipoModulo.CORREDIZA)
-                    3 -> fr.modulos.add(indiceModulo + 1, TipoModulo.FIJO)
-                    4 -> fr.modulos.add(indiceModulo + 1, TipoModulo.CORREDIZA)
+                    1 -> { fr.modulos.add(indiceModulo, TipoModulo.FIJO); p.replaceAll { if (it >= indiceModulo) it + 1 else it } }
+                    2 -> { fr.modulos.add(indiceModulo, TipoModulo.CORREDIZA); p.replaceAll { if (it >= indiceModulo) it + 1 else it } }
+                    3 -> { fr.modulos.add(indiceModulo + 1, TipoModulo.FIJO); p.replaceAll { if (it >= indiceModulo + 1) it + 1 else it } }
+                    4 -> { fr.modulos.add(indiceModulo + 1, TipoModulo.CORREDIZA); p.replaceAll { if (it >= indiceModulo + 1) it + 1 else it } }
                     5 -> {
                         if (fr.modulos.size <= 1) {
                             Toast.makeText(this, "Debe quedar al menos un módulo.", Toast.LENGTH_SHORT).show()
                             return@setItems
                         }
                         fr.modulos.removeAt(indiceModulo)
+                        p.replaceAll { if (it > indiceModulo) it - 1 else it }
+                        p.removeAll { it <= 0 || it >= fr.modulos.size }
                     }
                 }
-                estructuraEditada = true
-                recalcularCorteVerticalProporcional()
-                actualizarVista()
+                // Reconstruye en la cadena el tramo que contiene el módulo editado (sin aPaquete()).
+                val sorted = fr.parantes.sorted()
+                var t = 0
+                for (pp in sorted) { if (indiceModulo >= pp) t++ else break }
+                indiceTramoActivo = t.coerceIn(0, sorted.size)
+                aplicarModificacionModulosAlPaquete()
             }
             .setNegativeButton("Cancelar", null)
             .show()
@@ -816,19 +965,39 @@ class DisenoNovaActivity : AppCompatActivity() {
             return
         }
         val fr = franjas[indiceFranjaActiva]
-        estructuraEditada = true
-        fr.esSistema = !fr.esSistema
+        val idx = indiceFranjaActiva
+        val nuevoEsSistema = !fr.esSistema
+        val manejado = editarFranjasEnTramos { tokens ->
+            val tk = tokens.getOrNull(idx)?.trim()
+            if (tk.isNullOrEmpty()) return@editarFranjasEnTramos
+            val esS = tk.startsWith("s", ignoreCase = true)
+            tokens[idx] = (if (esS) "m" else "s") + tk.substring(1)
+        }
+        if (!manejado) {
+            estructuraEditada = true
+            fr.esSistema = nuevoEsSistema
+            actualizarVista()
+        }
         Toast.makeText(
             this,
-            if (fr.esSistema) "Franja cambiada a Sistema (S)" else "Franja cambiada a Mocheta (M)",
+            if (nuevoEsSistema) "Franja cambiada a Sistema (S)" else "Franja cambiada a Mocheta (M)",
             Toast.LENGTH_SHORT
         ).show()
-        actualizarVista()
     }
 
     private fun alternarEnsamble() {
-        estructuraEditada = true
-        tipo = if (tipo == TipoEnsamble.APA) TipoEnsamble.INA else TipoEnsamble.APA
+        // Solo cambia el tipo en el encabezado {nova,<tipo>,[...]}, parcheando la cadena
+        // para conservar tramos y anchos. No usar aPaquete() (colapsaría a un solo Tl).
+        val nuevoTipo = if (tipo == TipoEnsamble.APA) "ina" else "apa"
+        val actual = paqueteActualLectura()
+        val c1 = actual.indexOf(',')
+        val c2 = actual.indexOf(',', c1 + 1)
+        if (c1 in 1 until c2) {
+            val nuevo = actual.substring(0, c1 + 1) + nuevoTipo + actual.substring(c2)
+            cargarDesdePaquete(nuevo)
+        } else {
+            tipo = if (tipo == TipoEnsamble.APA) TipoEnsamble.INA else TipoEnsamble.APA
+        }
         actualizarVista()
     }
 
@@ -1022,7 +1191,7 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     private fun contarTramosDesdePaqueteActual(): Int {
-        val base = if (!estructuraEditada && paqueteOriginal.isNotBlank()) paqueteOriginal else aPaquete()
+        val base = if (paqueteOriginal.isNotBlank()) paqueteOriginal else paqueteBase()
         val limpio = base.replace(" ", "")
         val idxColon = limpio.indexOf(':')
         val idxClose = limpio.lastIndexOf(']')
@@ -1036,10 +1205,10 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     private fun paqueteActualLectura(): String {
-        return if (!estructuraEditada && paqueteOriginal.isNotBlank()) {
+        return if (paqueteOriginal.isNotBlank()) {
             paqueteConDimensionesActualizadas(paqueteOriginal)
         } else {
-            aPaquete()
+            paqueteBase()
         }
     }
 
@@ -1342,63 +1511,6 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
 
-    /** Serializa con df1() y nunca deja una franja sin módulos (mínimo: f). */
-    /** Serializa usando df1(); si altura==0 no escribe "<…>" para dejarla en AUTO. */
-    /** Serializa usando df1(); si altura==0 no escribe "<…>" (AUTO),
-     * excepto cuando hay una única franja: en ese caso, si altura==0,
-     * se fuerza a ocupar el 100% escribiendo <altoCm>. */
-    private fun aPaquete(): String {
-        val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
-        if (franjas.isEmpty()) {
-            return "{${clase},${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
-        }
-        val sb = StringBuilder()
-        sb.append("{")
-            .append(clase).append(",")
-            .append(tipoTxt)
-            .append(",[")
-            .append(df1(anchoCm)).append(",")
-            .append(df1(altoCm)).append(":")
-            .append("Tl<").append(df1(anchoCm)).append(">(")
-        val n = franjas.size
-
-        franjas.forEachIndexed { i, f ->
-            val pref = if (f.esSistema) "s" else "m"
-
-            // asegurar al menos un módulo
-            if (f.modulos.isEmpty()) f.modulos.add(TipoModulo.FIJO)
-            val parantesSet = f.parantes.toSet()
-            val patron = buildString {
-                f.modulos.forEachIndexed { idx, mod ->
-                    if (idx in parantesSet) append(";P;")
-                    append(if (mod == TipoModulo.CORREDIZA) "c" else "f")
-                }
-            }
-
-            sb.append(pref)
-
-            val alt = f.alturaCm.coerceAtLeast(0f)
-            val debeForzar100 = (n == 1 && alt == 0f)   // único tramo en AUTO → 100%
-            when {
-                debeForzar100 -> {
-                    sb.append("<").append(df1(altoCm)).append(">")
-                }
-                alt > 0f -> {
-                    sb.append("<").append(df1(alt)).append(">")
-                }
-                else -> {
-                    // alt == 0 → AUTO: no escribimos <…>
-                }
-            }
-
-            sb.append("(").append(patron).append(")")
-            if (i < franjas.lastIndex) sb.append(";")
-        }
-
-        sb.append(")]}")
-        return sb.toString()
-    }
-
     // =========================== PARSEO (entrada tolerante) ===========================
 
     private fun extraerDimensionesDelPaquete(paquete: String): Pair<Float, Float>? {
@@ -1518,17 +1630,23 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     // =========================== VISTA / REDIBUJO ===========================
 
+    /** Paquete mínimo válido (un tramo, un fijo) usado como base/fallback en cadena. */
+    private fun paqueteBase(): String {
+        val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
+        return "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
+    }
+
     private fun paqueteConDimensionesActualizadas(base: String): String {
         val t = base.replace(" ", "")
-        if (!t.startsWith("{") || !t.endsWith("}")) return aPaquete()
+        if (!t.startsWith("{") || !t.endsWith("}")) return paqueteBase()
         val c1 = t.indexOf(',')
-        if (c1 <= 1) return aPaquete()
+        if (c1 <= 1) return paqueteBase()
         val c2 = t.indexOf(',', c1 + 1)
-        if (c2 <= c1 + 1) return aPaquete()
+        if (c2 <= c1 + 1) return paqueteBase()
         val idxBracketOpen = t.indexOf('[', c2 + 1)
         val idxColon = t.indexOf(':', idxBracketOpen + 1)
         val idxBracketClose = t.lastIndexOf(']')
-        if (idxBracketOpen < 0 || idxColon < 0 || idxBracketClose < idxColon) return aPaquete()
+        if (idxBracketOpen < 0 || idxColon < 0 || idxBracketClose < idxColon) return paqueteBase()
 
         val claseBase = t.substring(1, c1)
         val tipoBase = t.substring(c1 + 1, c2)
@@ -1537,29 +1655,20 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     private fun actualizarVista() {
-        val paquetePreferido = if (!estructuraEditada && paqueteOriginal.isNotBlank()) {
+        val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
+        val paqueteSeguro = "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
+        val paquete = if (paqueteOriginal.isNotBlank()) {
             paqueteConDimensionesActualizadas(paqueteOriginal)
         } else {
-            aPaquete()
+            paqueteSeguro
         }
-
-        val paqueteFallback = aPaquete()
         val aplicado = runCatching {
-            binding.vistaDiseno.actualizarDesdePaquete(paquetePreferido, 0f, 0f, mochetaLateralCm)
+            binding.vistaDiseno.actualizarDesdePaquete(paquete, 0f, 0f, mochetaLateralCm)
         }.isSuccess
         if (!aplicado) {
-            val aplicadoFallback = runCatching {
-                binding.vistaDiseno.actualizarDesdePaquete(paqueteFallback, 0f, 0f, mochetaLateralCm)
-            }.isSuccess
-            if (!aplicadoFallback) {
-                val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
-                val paqueteSeguro = "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:s(f)]}"
-                binding.vistaDiseno.actualizarDesdePaquete(paqueteSeguro, 0f, 0f, mochetaLateralCm)
-            }
-            if (!estructuraEditada) {
-                paqueteOriginal = paqueteFallback
-                estructuraEditada = true
-            }
+            // Render de emergencia SOLO para la vista; NUNCA se altera paqueteOriginal (la fuente
+            // de verdad). Antes esto colapsaba el diseño a un solo Tl vía aPaquete().
+            runCatching { binding.vistaDiseno.actualizarDesdePaquete(paqueteSeguro, 0f, 0f, mochetaLateralCm) }
         }
 
         binding.vistaDiseno.actualizarCorteVertical(corteVerticalCm)
@@ -1666,7 +1775,14 @@ class DisenoNovaActivity : AppCompatActivity() {
             val contenidoFinal = if (nuevoPuente != null && nuevoPuente > 0f) {
                 actualizarAltoPuenteEnContenido(bloque.contenido, nuevoPuente)
             } else bloque.contenido
-            BloqueTramo(bloque.letra, anchosFinal[i], contenidoFinal)
+            var bt = BloqueTramo(bloque.letra, anchosFinal[i], contenidoFinal)
+            // Reescribir los <w> de los módulos para que su suma sea el nuevo ancho del tramo,
+            // en TODOS los tramos que cambian (editado y los que absorben). Si no, el motor
+            // desigual deriva el puente de una suma de módulos desactualizada.
+            if (kotlin.math.abs(anchosFinal[i] - bloque.ancho) > 0.05f) {
+                bt = reescalarFranjasATramo(bt, anchosFinal[i])
+            }
+            bt
         }
 
         cargarDesdePaquete(reconstruirPaqueteConBloques(bloquesFinal))
@@ -1885,21 +2001,28 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     private fun limpiarDiseno() {
-        estructuraEditada = true
-        franjas.clear()
+        // Volver al diseño base por la cadena (un tramo, un fijo), sin usar aPaquete().
+        val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
         indiceFranjaActiva = -1
+        indiceTramoActivo = -1
+        indiceModuloActivo = -1
+        corteVerticalCm = null
+        cargarDesdePaquete("{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}")
         actualizarVista()
     }
 
-    override fun onBackPressed() {
-        val paqueteSalida = if (!estructuraEditada && paqueteOriginal.isNotBlank()) {
+    /**
+     * Envía el diseño actual a NovaCorrediza. Lo usa SOLO el botón "Volver"; el botón Atrás del
+     * sistema NO lo llama, así que Atrás vuelve sin aplicar cambios al diseño.
+     */
+    private fun prepararResultadoDiseno() {
+        val paqueteSalida = if (paqueteOriginal.isNotBlank()) {
             paqueteConDimensionesActualizadas(paqueteOriginal)
         } else {
-            aPaquete()
+            paqueteBase()
         }
         setResult(RESULT_OK, Intent().apply {
             putExtra(RESULT_PAQUETE, paqueteSalida)
         })
-        super.onBackPressed()
     }
 }

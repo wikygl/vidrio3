@@ -3,6 +3,7 @@ package crystal.crystal.datos
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -16,7 +17,13 @@ import kotlinx.coroutines.withContext
 class ListaActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityListaBinding
-    private lateinit var productAdapter: ProductAdapter  // <-- NUEVO: adaptador
+    private lateinit var productAdapter: ProductAdapter
+    private var selectedProduct: Product? = null
+    private val selectedImages = mutableListOf<String>()
+
+    companion object {
+        private const val REQUEST_IMAGES = 410
+    }
 
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,184 +31,199 @@ class ListaActivity : AppCompatActivity() {
         binding = ActivityListaBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // EJEMPLO: si recibes algo de otra Activity
-        val monto: Intent = intent
-        val cantidad = monto.getStringExtra("monto")
-        // binding.etml.setText("$cantidad") // si tuvieras un EditText 'etml'
-
-        // Imagen de PDF (ejemplo)
         val bitmap = intent.getParcelableExtra<Bitmap>("pdf_image")
         binding.img.setImageBitmap(bitmap)
 
-        // 1. CONFIGURAR RECYCLER VIEW + ADAPTER
-        productAdapter = ProductAdapter()
+        productAdapter = ProductAdapter { product -> cargarProductoEnFormulario(product) }
         binding.recyclerViewProducts.apply {
             layoutManager = LinearLayoutManager(this@ListaActivity)
             adapter = productAdapter
         }
 
-        // 2. LISTENERS DE LOS BOTONES
-        binding.btnAdd.setOnClickListener {
-            addProduct()
-        }
-        binding.btnUpdate.setOnClickListener {
-            updateProduct()
-        }
-        binding.btnDelete.setOnClickListener {
-            deleteProduct()
-        }
-        binding.btnListAll.setOnClickListener {
-            listAllProducts()
-        }
-        binding.btnSearch.setOnClickListener {
-            searchProducts()
+        binding.btnAdd.setOnClickListener { addProduct() }
+        binding.btnUpdate.setOnClickListener { updateProduct() }
+        binding.btnDelete.setOnClickListener { deleteProduct() }
+        binding.btnListAll.setOnClickListener { listAllProducts() }
+        binding.btnSearch.setOnClickListener { searchProducts() }
+        binding.btnImages.setOnClickListener { seleccionarImagenes() }
+
+        actualizarResumenImagenes()
+        listAllProducts()
+    }
+
+    private fun addProduct() {
+        val product = leerProductoFormulario() ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            DatabaseProvider.getInstance(this@ListaActivity).productDao().insertProduct(product)
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@ListaActivity, "Guardado", Toast.LENGTH_SHORT).show()
+                clearCrudFields()
+                listAllProducts()
+            }
         }
     }
 
-    // ==============================
-    // FUNCIÓN: AGREGAR PRODUCTO
-    // ==============================
-    private fun addProduct() {
-        val desc = binding.editTextDescription.text.toString().trim()
-        val price = binding.editTextPrice.text.toString().trim().toDoubleOrNull() ?: 0.0
-        val stock = binding.editTextStock.text.toString().trim().toIntOrNull() ?: 0
+    private fun updateProduct() {
+        val product = leerProductoFormulario() ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            val dao = DatabaseProvider.getInstance(this@ListaActivity).productDao()
+            selectedProduct?.takeIf { it.nombre != product.nombre }?.let { dao.deleteProduct(it) }
+            dao.insertProduct(product)
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@ListaActivity, "Actualizado", Toast.LENGTH_SHORT).show()
+                clearCrudFields()
+                listAllProducts()
+            }
+        }
+    }
 
-        // Si quieres validar campos:
-        if (desc.isEmpty()) {
-            Toast.makeText(this, "Descripción vacía", Toast.LENGTH_SHORT).show()
+    private fun deleteProduct() {
+        val nombre = binding.editTextDescription.text.toString().trim()
+        if (nombre.isBlank()) {
+            Toast.makeText(this, "Selecciona o escribe un nombre", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val newProduct = Product(
-            description = desc,
-            price = price,
-            stock = stock
-        )
-
         CoroutineScope(Dispatchers.IO).launch {
-            val db = DatabaseProvider.getInstance(this@ListaActivity)
-            db.productDao().insertProduct(newProduct)
+            val dao = DatabaseProvider.getInstance(this@ListaActivity).productDao()
+            val productToDelete = selectedProduct?.takeIf { it.nombre == nombre }
+                ?: dao.getProductByName(nombre)
 
             withContext(Dispatchers.Main) {
-                Toast.makeText(this@ListaActivity, "Producto agregado", Toast.LENGTH_SHORT).show()
-                // Limpia campos
-                binding.editTextDescription.text.clear()
-                binding.editTextPrice.text.clear()
-                binding.editTextStock.text.clear()
+                if (productToDelete == null) {
+                    Toast.makeText(this@ListaActivity, "No existe: $nombre", Toast.LENGTH_SHORT).show()
+                } else {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        dao.deleteProduct(productToDelete)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@ListaActivity, "Eliminado", Toast.LENGTH_SHORT).show()
+                            clearCrudFields()
+                            listAllProducts()
+                        }
+                    }
+                }
             }
         }
     }
 
-    // ==============================
-    // FUNCIÓN: LISTAR TODOS
-    // ==============================
     private fun listAllProducts() {
         CoroutineScope(Dispatchers.IO).launch {
-            val db = DatabaseProvider.getInstance(this@ListaActivity)
-            val productList = db.productDao().getAllProducts()
+            val productList = DatabaseProvider.getInstance(this@ListaActivity)
+                .productDao()
+                .getAllProducts()
             withContext(Dispatchers.Main) {
                 productAdapter.setData(productList)
-                // Si quieres mostrar algo en lyProducto, puedes hacerlo aquí
             }
         }
     }
 
-    // ==============================
-    // FUNCIÓN: BUSCAR POR DESCRIPCIÓN
-    // ==============================
     private fun searchProducts() {
         val searchText = binding.editTextSearch.text.toString().trim()
         if (searchText.isBlank()) {
-            Toast.makeText(this, "Ingresa texto para buscar", Toast.LENGTH_SHORT).show()
+            listAllProducts()
             return
         }
         CoroutineScope(Dispatchers.IO).launch {
-            val db = DatabaseProvider.getInstance(this@ListaActivity)
-            // % para buscar coincidencias parciales
-            val results = db.productDao().searchProductsByDescription("%$searchText%")
-
+            val results = DatabaseProvider.getInstance(this@ListaActivity)
+                .productDao()
+                .searchProductsByName("%$searchText%")
             withContext(Dispatchers.Main) {
                 productAdapter.setData(results)
             }
         }
     }
 
-    // ==============================
-    // FUNCIÓN: ACTUALIZAR POR ID
-    // ==============================
-    private fun updateProduct() {
-        val idText = binding.editTextId.text.toString().trim()
-        val id = idText.toIntOrNull()
-        if (id == null) {
-            Toast.makeText(this, "ID inválido para actualizar", Toast.LENGTH_SHORT).show()
-            return
+    private fun leerProductoFormulario(): Product? {
+        val nombre = binding.editTextDescription.text.toString().trim()
+        val price = binding.editTextPrice.text.toString().trim().toDoubleOrNull() ?: 0.0
+
+        if (nombre.isBlank()) {
+            Toast.makeText(this, "Ingresa el nombre", Toast.LENGTH_SHORT).show()
+            return null
         }
 
-        // Nuevos valores
-        val desc = binding.editTextDescription.text.toString().trim()
-        val price = binding.editTextPrice.text.toString().toDoubleOrNull() ?: 0.0
-        val stock = binding.editTextStock.text.toString().toIntOrNull() ?: 0
+        return Product(
+            nombre = nombre,
+            price = price,
+            imagenes = selectedImages.distinct().joinToString("\n")
+        )
+    }
 
-        CoroutineScope(Dispatchers.IO).launch {
-            val dao = DatabaseProvider.getInstance(this@ListaActivity).productDao()
-            val existingProduct = dao.getProductById(id)
-            if (existingProduct != null) {
-                // Creamos uno nuevo con los campos actualizados
-                val updated = existingProduct.copy(
-                    description = desc,
-                    price = price,
-                    stock = stock
+    @SuppressLint("SetTextI18n")
+    private fun cargarProductoEnFormulario(product: Product) {
+        selectedProduct = product
+        selectedImages.clear()
+        selectedImages.addAll(product.imagenes())
+
+        binding.editTextDescription.setText(product.nombre)
+        binding.editTextPrice.setText(if (product.price == 0.0) "" else product.price.toString())
+        binding.tvNombre.text = product.nombre
+        binding.tvPrecio.text = "S/ ${String.format("%.2f", product.price)}"
+        binding.tvDescripcion.text = "Imagenes guardadas: ${selectedImages.size}"
+        actualizarResumenImagenes()
+    }
+
+    private fun seleccionarImagenes() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, REQUEST_IMAGES)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_IMAGES || resultCode != RESULT_OK || data == null) return
+
+        val uris = mutableListOf<Uri>()
+        data.clipData?.let { clip ->
+            for (i in 0 until clip.itemCount) {
+                uris += clip.getItemAt(i).uri
+            }
+        } ?: data.data?.let { uris += it }
+
+        val nuevasImagenes = uris.map { uri ->
+            runCatching {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-                dao.updateProduct(updated)
-
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ListaActivity, "Producto actualizado", Toast.LENGTH_SHORT).show()
-                    clearCrudFields()
-                }
-            } else {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ListaActivity, "No existe producto con ID $id", Toast.LENGTH_SHORT).show()
-                }
             }
+            uri.toString()
+        }
+        selectedImages.addAll(nuevasImagenes)
+        val unicas = selectedImages.distinct()
+        selectedImages.clear()
+        selectedImages.addAll(unicas)
+        actualizarResumenImagenes()
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun actualizarResumenImagenes() {
+        binding.tvImagenesSeleccionadas.text = "Imagenes: ${selectedImages.size}"
+        binding.tvDescripcion.text = if (selectedImages.isEmpty()) {
+            "Sin imagenes seleccionadas."
+        } else {
+            "Imagenes seleccionadas: ${selectedImages.size}"
+        }
+        if (selectedImages.isNotEmpty()) {
+            binding.img.setImageURI(Uri.parse(selectedImages.first()))
+        } else {
+            binding.img.setImageDrawable(null)
         }
     }
 
-    // ==============================
-    // FUNCIÓN: ELIMINAR POR ID
-    // ==============================
-    private fun deleteProduct() {
-        val idText = binding.editTextId.text.toString().trim()
-        val id = idText.toIntOrNull()
-        if (id == null) {
-            Toast.makeText(this, "ID inválido para eliminar", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        CoroutineScope(Dispatchers.IO).launch {
-            val dao = DatabaseProvider.getInstance(this@ListaActivity).productDao()
-            val productToDelete = dao.getProductById(id)
-            if (productToDelete != null) {
-                dao.deleteProduct(productToDelete)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ListaActivity, "Producto eliminado", Toast.LENGTH_SHORT).show()
-                    clearCrudFields()
-                }
-            } else {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ListaActivity, "No se encontró producto con ID $id", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    // ==============================
-    // AUX: Limpiar campos
-    // ==============================
     private fun clearCrudFields() {
-        binding.editTextId.text.clear()
+        selectedProduct = null
+        selectedImages.clear()
         binding.editTextDescription.text.clear()
         binding.editTextPrice.text.clear()
-        binding.editTextStock.text.clear()
         binding.editTextSearch.text.clear()
+        binding.tvNombre.text = "Sin seleccion"
+        binding.tvPrecio.text = "S/ 0.00"
+        actualizarResumenImagenes()
     }
 }

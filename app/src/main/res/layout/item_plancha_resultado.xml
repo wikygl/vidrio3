@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="16dp"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="3dp"
+    app:cardBackgroundColor="@android:color/white">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- Nombre + eficiencia -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="3dp">
+
+            <TextView
+                android:id="@+id/tvNombrePlancha"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#0099FF" />
+
+            <TextView
+                android:id="@+id/tvEficiencia"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp" />
+
+            <Button
+                android:id="@+id/btnPdfPlancha"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:text="PDF"
+                android:textSize="11sp"
+                android:backgroundTint="#4CAF50"
+                android:textColor="@android:color/white" />
+        </LinearLayout>
+
+        <!-- Info tipo + piezas -->
+        <TextView
+            android:id="@+id/tvInfoPlancha"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#6A6A6A"
+            android:layout_marginBottom="10dp" />
+
+        <!-- Vista visual: plancha con cortes numerados -->
+        <HorizontalScrollView
+            android:id="@+id/scrollVistaCorte"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:fillViewport="false"
+            android:overScrollMode="ifContentScrolls"
+            android:scrollbars="horizontal">
+
+            <crystal.crystal.optimizadores.planchas.PlanchaVistaCorte
+                android:id="@+id/vistaCorte"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </HorizontalScrollView>
+
+        <!-- Leyenda: número → descripción + medidas -->
+        <LinearLayout
+            android:id="@+id/layoutLeyenda"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#F5F5F5"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp" />
+
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

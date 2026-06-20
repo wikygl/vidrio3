@@ -100,6 +100,25 @@ class CorteDataManager(private val context: Context) {
             .apply()
     }
 
+    fun guardarResultadoOptimizacion(resultado: ResultadoOptimizacion, nombreLista: String) {
+        sharedPref.edit()
+            .putString("resultado_optimizacion_ultimo", gson.toJson(resultado))
+            .putString("resultado_optimizacion_nombre_lista", nombreLista)
+            .apply()
+    }
+
+    fun recuperarResultadoOptimizacion(): ResultadoOptimizacion? {
+        val json = sharedPref.getString("resultado_optimizacion_ultimo", null) ?: return null
+        return try {
+            gson.fromJson(json, ResultadoOptimizacion::class.java)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun recuperarNombreListaResultadoOptimizacion(): String =
+        sharedPref.getString("resultado_optimizacion_nombre_lista", "") ?: ""
+
     /**
      * Guarda las varillas usadas en la optimización
      */

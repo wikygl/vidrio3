@@ -35,6 +35,7 @@
         android:id="@+id/vistaDiseno"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:layout_marginBottom="180dp"
         android:contentDescription="Lienzo de diseno"
         app:layout_constraintBottom_toTopOf="@+id/botonEditar"
         app:layout_constraintEnd_toEndOf="parent"
@@ -47,7 +48,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_margin="9dp"
-        app:layout_constraintBottom_toBottomOf="@+id/vistaDiseno"
+        app:layout_constraintBottom_toTopOf="@+id/botonEditar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
@@ -183,7 +184,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:layout_gravity="center"
-                                    android:text="X"
+                                    android:text="B"
                                     android:textStyle="bold" />
                             </FrameLayout>
                         </androidx.cardview.widget.CardView>
@@ -250,14 +251,14 @@
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:gravity="center"
-                                    android:text="Corrediza" />
+                                    android:text="Corr...za" />
 
                                 <ImageView
                                     android:layout_width="48dp"
                                     android:layout_height="48dp"
                                     android:layout_margin="4dp"
                                     android:contentDescription="Producto 2"
-                                    app:srcCompat="@drawable/ic_fichad2" />
+                                    app:srcCompat="@drawable/mpfijou" />
                             </LinearLayout>
 
                         </androidx.cardview.widget.CardView>
@@ -289,7 +290,8 @@
                                     android:layout_height="48dp"
                                     android:layout_margin="4dp"
                                     android:contentDescription="Producto 3"
-                                    app:srcCompat="@drawable/ic_fichad3" />
+                                    android:rotation="90"
+                                    app:srcCompat="@drawable/mpmocheta" />
                             </LinearLayout>
 
                         </androidx.cardview.widget.CardView>
@@ -301,7 +303,7 @@
 
                 <LinearLayout
                     android:id="@+id/panelCotasPlanos"
-                    android:layout_width="200dp"
+                    android:layout_width="210dp"
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_control_panel"
                     android:elevation="8dp"
@@ -482,7 +484,7 @@
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:backgroundTint="@color/azul"
-        android:text="Editar"
+        android:text="Volver"
         android:textAllCaps="false"
         android:textColor="@color/blanco"
         android:textSize="18sp"

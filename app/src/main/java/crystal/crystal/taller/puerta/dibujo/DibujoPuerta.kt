@@ -171,9 +171,12 @@ object DibujoPuerta {
                 val cx = rect.centerX(); val cy = rect.centerY()
                 canvas.translate(cx, cy); canvas.rotate(anguloGrados); canvas.translate(-cx, -cy)
                 val thickness = paflonPx
-                val gap = (h - barras * thickness) / (barras + 1)
+                val rad = Math.toRadians(anguloGrados.toDouble())
+                val alcance = ((w * kotlin.math.abs(kotlin.math.sin(rad).toFloat())) +
+                        (h * kotlin.math.abs(kotlin.math.cos(rad).toFloat()))) / 2f
+                val gap = ((alcance * 2f) - barras * thickness) / (barras + 1)
                 val diag = kotlin.math.sqrt(w * w + h * h)
-                var y = top + gap
+                var y = cy - alcance + gap
                 repeat(barras) {
                     val r = RectF(paflonPx - diag, y, right + diag, y + thickness)
                     canvas.drawRect(r, pPaflon); canvas.drawRect(r, pLinea)
@@ -388,7 +391,10 @@ object DibujoPuerta {
         anchoContenedor: Float,
         altoContenedor: Float,
         marcoCm: Float = 2.2f,
-        pisoCm: Float = 0f
+        pisoCm: Float = 0f,
+        grumaCm: Float = 0.8f,
+        panelDelgadoCm: Float = 0f,
+        mostrarVidrioCentral: Boolean = true
     ): Bitmap {
         val factor   = minOf(anchoContenedor / anchoCm, altoContenedor / altoCm)
         val anchoPx  = anchoCm  * factor
@@ -451,8 +457,12 @@ object DibujoPuerta {
         val cuerpoAlto  = cuerpoBot - topCuerpo
         val cuerpoLeft  = marcoPx
 
-        val grumaPx    = 0.8f * factor
-        val anchoIzqPx = (cuerpoAncho - grumaPx) / 4f
+        val grumaPx    = grumaCm * factor
+        val anchoIzqPx = if (panelDelgadoCm > 0f) {
+            (panelDelgadoCm * factor).coerceIn(0f, (cuerpoAncho - grumaPx).coerceAtLeast(0f))
+        } else {
+            (cuerpoAncho - grumaPx) / 4f
+        }
         val anchoDerPx = cuerpoAncho - anchoIzqPx - grumaPx
 
         // Columna izquierda — plancha ciega
@@ -474,6 +484,7 @@ object DibujoPuerta {
         }
 
         // Rectángulo de vidrio: desde bajo el panel superior hasta sobre el panel inferior
+        if (mostrarVidrioCentral) {
         val yVidTop = topCuerpo + altPanel + grumaPx
         val yVidBot = topCuerpo + (n - 1) * (altPanel + grumaPx)
         val vidAncho = anchoDerPx / 2f
@@ -487,6 +498,7 @@ object DibujoPuerta {
         if (rVidInt.width() > 0f && rVidInt.height() > 0f) {
             canvas.drawRect(rVidInt, pInterior)
             canvas.drawRect(rVidInt, pLineaFin)
+        }
         }
 
         canvas.drawRect(rColDer, pLinea)
@@ -871,6 +883,59 @@ object DibujoPuerta {
         base.canvas.drawRect(base.hojaRect, base.pLinea)
         base.canvas.restore()
         return base.bmp
+    }
+
+    fun generarBitmapTere6(
+        context: Context,
+        anchoCm: Float,
+        altoCm: Float,
+        altoHojaCm: Float,
+        anchoContenedor: Float,
+        altoContenedor: Float,
+        marcoCm: Float = 2.2f,
+        pisoCm: Float = 0f,
+        nZocalo: Int = 1,
+        cantidadTubos: Int
+    ): Bitmap {
+        val base = crearBaseHoja(context, anchoCm, altoCm, altoHojaCm, anchoContenedor, altoContenedor, marcoCm, pisoCm, nZocalo)
+        val tuboPx = 6f * base.factor
+        val grumaPx = 0.5f * base.factor
+        val marcoInternoPx = 2f * base.factor
+        val pMarcoInterno = Paint(base.pPanel).apply {
+            color = oscurecerColor(color, 0.86f)
+        }
+
+        val marcoInterno = RectF(base.innerLeft, base.innerTop, base.innerRight, base.contentBot)
+        base.canvas.drawRect(marcoInterno, pMarcoInterno)
+        base.canvas.drawRect(marcoInterno, base.pLinea)
+
+        val areaTubos = RectF(
+            base.innerLeft + marcoInternoPx,
+            base.innerTop + marcoInternoPx,
+            base.innerRight - marcoInternoPx,
+            base.contentBot - marcoInternoPx
+        )
+
+        var y = areaTubos.top
+        repeat(cantidadTubos.coerceAtLeast(1)) {
+            val yBot = minOf(y + tuboPx, areaTubos.bottom)
+            val r = RectF(areaTubos.left, y, areaTubos.right, yBot)
+            base.canvas.drawRect(r, base.pPanel)
+            base.canvas.drawRect(r, base.pLinea)
+            y += tuboPx + grumaPx
+        }
+
+        base.canvas.drawRect(base.hojaRect, base.pLinea)
+        base.canvas.restore()
+        return base.bmp
+    }
+
+    private fun oscurecerColor(color: Int, factor: Float): Int {
+        return Color.rgb(
+            (Color.red(color) * factor).toInt().coerceIn(0, 255),
+            (Color.green(color) * factor).toInt().coerceIn(0, 255),
+            (Color.blue(color) * factor).toInt().coerceIn(0, 255)
+        )
     }
 
     private fun dibujarVidrio(canvas: Canvas, rect: RectF, paint: Paint) {

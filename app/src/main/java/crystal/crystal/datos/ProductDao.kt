@@ -10,27 +10,24 @@ import androidx.room.Update
 @Dao
 interface ProductDao {
 
-    // CREATE
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProduct(product: Product)
 
-    // READ - Obtener todos
-    @Query("SELECT * FROM products")
+    @Query("SELECT * FROM products ORDER BY nombre ASC")
     suspend fun getAllProducts(): List<Product>
 
-    // READ - Obtener por ID
-    @Query("SELECT * FROM products WHERE id = :id LIMIT 1")
-    suspend fun getProductById(id: Int): Product?
+    @Query("SELECT * FROM products WHERE nombre = :nombre LIMIT 1")
+    suspend fun getProductByName(nombre: String): Product?
 
-    // UPDATE
     @Update
     suspend fun updateProduct(product: Product)
 
-    // DELETE
     @Delete
     suspend fun deleteProduct(product: Product)
 
-    // SEARCH - por descripción (usando LIKE)
-    @Query("SELECT * FROM products WHERE description LIKE :searchText")
+    @Query("SELECT * FROM products WHERE nombre LIKE :searchText ORDER BY nombre ASC")
+    suspend fun searchProductsByName(searchText: String): List<Product>
+
+    @Query("SELECT * FROM products WHERE nombre LIKE :searchText ORDER BY nombre ASC")
     suspend fun searchProductsByDescription(searchText: String): List<Product>
 }

@@ -25,7 +25,7 @@ object MeasuresMessageCodec {
         """^\s*($NUMBER_PATTERN)\s*(?:-|->|=|igual)\s*($NUMBER_PATTERN)\s*$CONNECTOR_PATTERN\s*($NUMBER_PATTERN)\s*$""",
         RegexOption.IGNORE_CASE
     )
-    private val variantRegex = Regex("""^[a-zA-Z]+\s*\d*$""")
+    private val variantRegex = Regex("""^(?:[a-zA-Z]{1,3}\s*\d+|[a-zA-Z])$""")
 
     fun isMeasuresFormat(message: String): Boolean = parse(message) != null
 
@@ -36,6 +36,7 @@ object MeasuresMessageCodec {
         val parsedItems = mutableListOf<ParsedMeasureLine>()
         val baseProductParts = mutableListOf<String>()
         var currentVariant: String? = null
+        var justCompletedMeasure = false
 
         for (line in lines) {
             val parsedMeasure = parseMeasureLine(line)
@@ -43,18 +44,22 @@ object MeasuresMessageCodec {
                 val productName = buildProductName(baseProductParts, currentVariant)
                 if (productName.isBlank()) return null
                 parsedItems += parsedMeasure.copy(productName = productName)
+                justCompletedMeasure = true
                 continue
             }
 
             if (shouldUseAsVariant(line, baseProductParts)) {
                 currentVariant = cleanVariantLabel(line)
+                justCompletedMeasure = false
                 continue
             }
 
-            if (parsedItems.isNotEmpty()) {
+            if (justCompletedMeasure) {
+                baseProductParts.clear()
                 currentVariant = null
             }
             baseProductParts += cleanProductLabel(line)
+            justCompletedMeasure = false
         }
 
         if (parsedItems.isEmpty()) return null

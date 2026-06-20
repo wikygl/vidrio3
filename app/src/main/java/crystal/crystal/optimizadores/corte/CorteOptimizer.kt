@@ -77,6 +77,18 @@ class CorteOptimizer {
         val metodologia: String
     )
 
+    private data class CortePlano(
+        val longitud: Float,
+        val referencia: String
+    )
+
+    private data class BinReempaque(
+        val longitud: Float,
+        val cortes: MutableList<Float> = mutableListOf(),
+        val referencias: MutableList<String> = mutableListOf(),
+        var restante: Float = longitud
+    )
+
     // ========== MODELO CONSISTENTE DE GROSOR DE DISCO ==========
 
     /**
@@ -114,12 +126,15 @@ class CorteOptimizer {
 
     /**
      * FUNCIÓN PRINCIPAL MEJORADA - Maneja cortes más largos que varillas disponibles
+     * @param nivel 1–20: controla la profundidad de búsqueda. Mayor nivel = mejor resultado, más lento.
      */
     fun optimizarCortesConConfiguracion(
         piezasRequeridas: List<PiezaCorte>,
         varillasDisponibles: List<PiezaCorte>,
-        grosorDisco: Float
+        grosorDisco: Float,
+        nivel: Int = 5
     ): List<VarillaConReferencias> {
+        val nivelClamped = nivel.coerceIn(1, 20)
 
         val tiempoInicio = System.currentTimeMillis()
         DebugHelper.logInicioOptimizacionInteligente()
@@ -134,7 +149,7 @@ class CorteOptimizer {
         Log.d("CortesLargos", "Varillas completas generadas: ${varillasCompletas.size}")
 
         // PASO 1: Aplicar Fórmula 1 con las piezas ajustadas
-        val resultadoInicial = formula1VarillaMinimaCorteMayor(piezasAjustadas, varillasDisponibles, grosorDisco)
+        val resultadoInicial = formula1VarillaMinimaCorteMayor(piezasAjustadas, varillasDisponibles, grosorDisco, nivelClamped)
 
         // PASO 2: Combinar varillas completas + resultado de optimización
         val resultadoCombinado = combinarResultados(varillasCompletas, resultadoInicial.varillasUsadas)
@@ -145,13 +160,19 @@ class CorteOptimizer {
         // PASO 3: Redistribuir cortes para optimizar retazos
         val resultadoOptimizado = redistribuirCortesInteligente(
             resultadoCombinado.toMutableList(),
-            grosorDisco
+            grosorDisco,
+            nivelClamped
+        )
+        val resultadoReparado = repararResultadoFinal(
+            resultadoOptimizado,
+            grosorDisco,
+            nivelClamped
         )
 
         val tiempoTotal = System.currentTimeMillis() - tiempoInicio
         Log.d("CorteOptimizer", "✅ Optimización completada en ${tiempoTotal}ms")
 
-        return resultadoOptimizado
+        return resultadoReparado
     }
 
     /**
@@ -258,12 +279,10 @@ class CorteOptimizer {
         return resultado
     }
 
-    /**
-     * FUNCIÓN COMPLETAMENTE NUEVA: Post-procesamiento directo y simple
-     */
     private fun redistribuirCortesInteligente(
         varillasOriginales: MutableList<VarillaConReferencias>,
-        grosorDisco: Float
+        grosorDisco: Float,
+        nivel: Int = 5
     ): List<VarillaConReferencias> {
 
         Log.d("Redistribucion", "🎯 NUEVO ENFOQUE: Post-procesamiento directo y simple")
@@ -321,7 +340,7 @@ class CorteOptimizer {
                 }
             }
 
-        } while (huboEliminacion && intentos < 10)
+        } while (huboEliminacion && intentos < nivel * 2)
 
         Log.d("Redistribucion", "\n=== RESULTADO FINAL ===")
         Log.d("Redistribucion", "🎉 Varillas eliminadas: $eliminaciones")
@@ -410,27 +429,239 @@ class CorteOptimizer {
         return cortes.sum() + (cortes.size - 1) * grosorDisco
     }
 
-    /**
-     * FUNCIÓN ORIGINAL - COMENTADA para mantener compatibilidad
-     */
+    private fun repararResultadoFinal(
+        varillas: List<VarillaConReferencias>,
+        grosorDisco: Float,
+        nivel: Int
+    ): List<VarillaConReferencias> {
+        var resultadoActual = varillas.filter { it.varilla.cortes.isNotEmpty() }
+        if (resultadoActual.size <= 1) return resultadoActual
+
+        var mejoras = 0
+        val maxMejoras = nivel.coerceIn(1, 20)
+
+        while (mejoras < maxMejoras) {
+            val reparado = intentarReempacarEnMenosVarillas(resultadoActual, grosorDisco, nivel)
+            if (reparado == null || reparado.size >= resultadoActual.size) break
+            if (!conservaMismosCortes(resultadoActual, reparado)) {
+                Log.w("ReparacionCortes", "Reempaque descartado: no conserva los mismos cortes")
+                break
+            }
+
+            Log.d(
+                "ReparacionCortes",
+                "Mejora aceptada: ${resultadoActual.size} -> ${reparado.size} varillas"
+            )
+            resultadoActual = reparado
+            mejoras++
+        }
+
+        return resultadoActual
+    }
+
+    private fun intentarReempacarEnMenosVarillas(
+        varillas: List<VarillaConReferencias>,
+        grosorDisco: Float,
+        nivel: Int
+    ): List<VarillaConReferencias>? {
+        if (varillas.size <= 1) return null
+
+        val cortes = extraerCortesPlanos(varillas)
+        if (cortes.isEmpty()) return null
+
+        val cantidadDestino = varillas.size - 1
+        val longitudesDestino = varillas
+            .map { it.varilla.longitud }
+            .sortedDescending()
+            .take(cantidadDestino)
+
+        if (longitudesDestino.isEmpty()) return null
+
+        val maxLongitudDestino = longitudesDestino.maxOrNull() ?: return null
+        if (cortes.any { it.longitud > maxLongitudDestino + 0.001f }) return null
+
+        val espacioMinimo = cortes.sumOf { it.longitud.toDouble() }.toFloat() +
+            (cortes.size - cantidadDestino).coerceAtLeast(0) * grosorDisco
+        val espacioDisponible = longitudesDestino.sum()
+        if (espacioMinimo > espacioDisponible + 0.001f) return null
+
+        val rapido = reempacarBestFitDescendente(cortes, longitudesDestino, grosorDisco)
+        if (rapido != null) {
+            Log.d("ReparacionCortes", "Reempaque rapido encontro ${rapido.size} varillas")
+            return rapido
+        }
+
+        val profundo = reempacarBacktrackingLimitado(cortes, longitudesDestino, grosorDisco, nivel)
+        if (profundo != null) {
+            Log.d("ReparacionCortes", "Reempaque profundo encontro ${profundo.size} varillas")
+        }
+        return profundo
+    }
+
+    private fun extraerCortesPlanos(varillas: List<VarillaConReferencias>): List<CortePlano> {
+        val cortes = mutableListOf<CortePlano>()
+        varillas.forEach { varilla ->
+            varilla.varilla.cortes.zip(varilla.referencias) { corte, referencia ->
+                cortes.add(CortePlano(corte, referencia))
+            }
+        }
+        return cortes
+    }
+
+    private fun reempacarBestFitDescendente(
+        cortes: List<CortePlano>,
+        longitudesDestino: List<Float>,
+        grosorDisco: Float
+    ): List<VarillaConReferencias>? {
+        val bins = longitudesDestino.map { BinReempaque(it) }.toMutableList()
+        val cortesOrdenados = ordenarCortesParaReempaque(cortes)
+
+        for (corte in cortesOrdenados) {
+            val destino = bins.indices
+                .mapNotNull { indice ->
+                    val retazo = calcularRetazoAlAgregar(bins[indice], corte.longitud, grosorDisco)
+                    retazo?.let { indice to it }
+                }
+                .minByOrNull { it.second }
+                ?.first
+                ?: return null
+
+            agregarCorteBin(bins[destino], corte, grosorDisco)
+        }
+
+        return binsAResultado(bins)
+    }
+
+    private fun reempacarBacktrackingLimitado(
+        cortes: List<CortePlano>,
+        longitudesDestino: List<Float>,
+        grosorDisco: Float,
+        nivel: Int
+    ): List<VarillaConReferencias>? {
+        val bins = longitudesDestino.map { BinReempaque(it) }.toMutableList()
+        val cortesOrdenados = ordenarCortesParaReempaque(cortes)
+        val nodos = intArrayOf(0)
+        val nivelControlado = nivel.coerceIn(1, 20)
+        val maxNodos = nivelControlado * 2500
+        val tiempoFin = System.currentTimeMillis() + nivelControlado * 250L
+
+        fun buscar(indiceCorte: Int): Boolean {
+            if (indiceCorte >= cortesOrdenados.size) return true
+            if (nodos[0] >= maxNodos || System.currentTimeMillis() > tiempoFin) return false
+
+            nodos[0]++
+            val corte = cortesOrdenados[indiceCorte]
+            val candidatos = bins.indices
+                .mapNotNull { indice ->
+                    val retazo = calcularRetazoAlAgregar(bins[indice], corte.longitud, grosorDisco)
+                    retazo?.let { indice to it }
+                }
+                .sortedBy { it.second }
+
+            val estadosProbados = HashSet<String>()
+            for ((indiceBin, _) in candidatos) {
+                val bin = bins[indiceBin]
+                val estado = estadoBinParaPoda(bin)
+                if (!estadosProbados.add(estado)) continue
+
+                agregarCorteBin(bin, corte, grosorDisco)
+                if (buscar(indiceCorte + 1)) return true
+                quitarUltimoCorteBin(bin, grosorDisco)
+            }
+
+            return false
+        }
+
+        return if (buscar(0)) binsAResultado(bins) else null
+    }
+
+    private fun ordenarCortesParaReempaque(cortes: List<CortePlano>): List<CortePlano> {
+        return cortes.sortedWith(
+            compareByDescending<CortePlano> { it.longitud }
+                .thenBy { it.referencia }
+        )
+    }
+
+    private fun calcularRetazoAlAgregar(
+        bin: BinReempaque,
+        corte: Float,
+        grosorDisco: Float
+    ): Float? {
+        val cortes = bin.cortes + corte
+        val retazo = bin.longitud - calcularEspacioNecesario(cortes, grosorDisco)
+        return if (retazo >= -0.001f) retazo.coerceAtLeast(0f) else null
+    }
+
+    private fun agregarCorteBin(
+        bin: BinReempaque,
+        corte: CortePlano,
+        grosorDisco: Float
+    ) {
+        bin.cortes.add(corte.longitud)
+        bin.referencias.add(corte.referencia)
+        bin.restante = bin.longitud - calcularEspacioNecesario(bin.cortes, grosorDisco)
+    }
+
+    private fun quitarUltimoCorteBin(bin: BinReempaque, grosorDisco: Float) {
+        if (bin.cortes.isEmpty()) return
+        bin.cortes.removeAt(bin.cortes.lastIndex)
+        bin.referencias.removeAt(bin.referencias.lastIndex)
+        bin.restante = bin.longitud - calcularEspacioNecesario(bin.cortes, grosorDisco)
+    }
+
+    private fun binsAResultado(bins: List<BinReempaque>): List<VarillaConReferencias> {
+        return bins
+            .filter { it.cortes.isNotEmpty() }
+            .map { bin ->
+                VarillaConReferencias(
+                    Varilla(
+                        longitud = bin.longitud,
+                        cortes = bin.cortes.toMutableList(),
+                        restante = bin.restante.coerceAtLeast(0f)
+                    ),
+                    bin.referencias.toMutableList()
+                )
+            }
+    }
+
+    private fun estadoBinParaPoda(bin: BinReempaque): String {
+        val restanteCent = Math.round(bin.restante * 100f)
+        return "${bin.longitud}|${bin.cortes.size}|$restanteCent"
+    }
+
+    private fun conservaMismosCortes(
+        original: List<VarillaConReferencias>,
+        reempacado: List<VarillaConReferencias>
+    ): Boolean {
+        return conteoCortes(original) == conteoCortes(reempacado)
+    }
+
+    private fun conteoCortes(varillas: List<VarillaConReferencias>): Map<String, Int> {
+        val conteo = HashMap<String, Int>()
+        varillas.forEach { varilla ->
+            varilla.varilla.cortes.zip(varilla.referencias) { corte, referencia ->
+                val key = "${Math.round(corte * 1000f)}|$referencia"
+                conteo[key] = conteo.getOrDefault(key, 0) + 1
+            }
+        }
+        return conteo
+    }
+
     fun optimizarCortes(
         piezasRequeridas: List<PiezaCorte>,
         varillasDisponibles: List<PiezaCorte>,
-        grosorDisco: Float
-    ): List<VarillaConReferencias> {
-        // Redirigir a la función con configuración
-        return optimizarCortesConConfiguracion(piezasRequeridas, varillasDisponibles, grosorDisco)
-    }
+        grosorDisco: Float,
+        nivel: Int = 5
+    ): List<VarillaConReferencias> =
+        optimizarCortesConConfiguracion(piezasRequeridas, varillasDisponibles, grosorDisco, nivel)
 
     // ========== FÓRMULA 1 ESPECÍFICA MEJORADA - ACTIVA ==========
 
-    /**
-     * 🔧 FÓRMULA 1 COMPLETAMENTE REESCRITA CON MODELO CONSISTENTE
-     */
     private fun formula1VarillaMinimaCorteMayor(
         piezasRequeridas: List<PiezaCorte>,
         varillasDisponibles: List<PiezaCorte>,
-        grosorDisco: Float
+        grosorDisco: Float,
+        nivel: Int = 5
     ): ResultadoInterno {
 
         val varillasConCantidad = varillasDisponibles.map {
@@ -444,9 +675,9 @@ class CorteOptimizer {
         val resultado = mutableListOf<VarillaConReferencias>()
         var iteracion = 0
 
-        // CONFIGURACIÓN DE OPTIMIZACIÓN
-        val MAX_OPCIONES_LLENADO = 15
-        val TIMEOUT_ITERACION_MS = 2000L
+        // CONFIGURACIÓN DE OPTIMIZACIÓN según nivel
+        val MAX_OPCIONES_LLENADO = nivel * 3
+        val TIMEOUT_ITERACION_MS = nivel.toLong() * 300L
         val condicionantes = listOf(0f, 1f, 2f, 3f, 5f, 8f, 12f, 20f, 30f)
 
         Log.d("Formula1Consistente", "=== FÓRMULA 1 CON MODELO CONSISTENTE ===")
@@ -504,13 +735,14 @@ class CorteOptimizer {
             }
 
             // PASO 4: Generar opciones de llenado
-            val opcionesLlenado = generarOpcionesLlenadoConsistente(
+            val opcionesLlenado = generarOpcionesLlenadoBacktrack(
                 corteMayor,
                 cortesConCantidad.filter { it.cantidad > 0 },
                 varillaSeleccionada.longitud,
                 grosorDisco,
                 MAX_OPCIONES_LLENADO,
-                TIMEOUT_ITERACION_MS
+                TIMEOUT_ITERACION_MS,
+                nivel
             )
 
             if (opcionesLlenado.isEmpty()) {
@@ -524,12 +756,25 @@ class CorteOptimizer {
 
             Log.d("Formula1Consistente", "🔍 ${opcionesLlenado.size} opciones válidas generadas")
 
+            val opcionesValidas = opcionesLlenado.mapNotNull {
+                normalizarOpcionLlenado(it, varillaSeleccionada.longitud, grosorDisco)
+            }
+
+            if (opcionesValidas.isEmpty()) {
+                Log.d("Formula1Consistente", "No quedan opciones que quepan tras recalcular retazo")
+                varillaSeleccionada.cantidad--
+                if (varillaSeleccionada.cantidad <= 0) {
+                    varillasConCantidad.remove(varillaSeleccionada)
+                }
+                continue
+            }
+
             // PASO 5: Evaluar opciones contra condicionantes
             var opcionSeleccionada: OpcionLlenadoFormula1? = null
             var condicionanteUsado = "SIN RESTRICCIÓN"
 
             for ((index, limite) in condicionantes.withIndex()) {
-                opcionSeleccionada = opcionesLlenado.firstOrNull { it.retazo <= limite }
+                opcionSeleccionada = opcionesValidas.firstOrNull { it.retazo <= limite }
 
                 if (opcionSeleccionada != null) {
                     condicionanteUsado = "CONDICIONANTE ${index + 1} (≤${limite}cm)"
@@ -539,7 +784,7 @@ class CorteOptimizer {
 
             // Si no cumple condicionantes, usar la mejor opción
             if (opcionSeleccionada == null) {
-                opcionSeleccionada = opcionesLlenado.minByOrNull { it.retazo }
+                opcionSeleccionada = opcionesValidas.minByOrNull { it.retazo }
                 condicionanteUsado = "MEJOR OPCIÓN (sin restricción)"
             }
 
@@ -551,8 +796,7 @@ class CorteOptimizer {
             // PASO 6: Crear varilla resultado
             val nuevaVarilla = crearVarillaConsistente(
                 varillaSeleccionada,
-                opcionSeleccionada,
-                grosorDisco
+                opcionSeleccionada
             )
 
             resultado.add(nuevaVarilla)
@@ -597,87 +841,130 @@ class CorteOptimizer {
         )
     }
 
+    private fun normalizarOpcionLlenado(
+        opcion: OpcionLlenadoFormula1,
+        longitudVarilla: Float,
+        grosorDisco: Float
+    ): OpcionLlenadoFormula1? {
+        val retazoRecalculado = calcularRetazo(opcion.cortesUsados, longitudVarilla, grosorDisco)
+        return when {
+            retazoRecalculado < -0.001f -> {
+                Log.w(
+                    "Formula1Consistente",
+                    "Opcion descartada por retazo negativo: ${String.format("%.3f", retazoRecalculado)}cm"
+                )
+                null
+            }
+            else -> opcion.copy(retazo = retazoRecalculado.coerceAtLeast(0f))
+        }
+    }
+
     /**
-     * 🔧 GENERA OPCIONES DE LLENADO CON MODELO CONSISTENTE
+     * Genera opciones de llenado usando backtracking con presupuesto controlado por nivel.
+     * Explora todas las combinaciones válidas hasta agotar nodos o tiempo.
+     * Devuelve las mejores (menor retazo) hasta maxOpciones.
      */
-    private fun generarOpcionesLlenadoConsistente(
+    private fun generarOpcionesLlenadoBacktrack(
         corteMayorObligatorio: CorteConCantidad,
         cortesDisponibles: List<CorteConCantidad>,
         longitudVarilla: Float,
         grosorDisco: Float,
         maxOpciones: Int,
-        timeoutMs: Long
+        timeoutMs: Long,
+        nivel: Int
     ): List<OpcionLlenadoFormula1> {
 
-        val tiempoInicio = System.currentTimeMillis()
-        val opciones = mutableListOf<OpcionLlenadoFormula1>()
-
-        // OPCIÓN 1: Solo el corte mayor (siempre incluir si es válida)
-        val opcionSolo = listOf(corteMayorObligatorio)
-        if (cabeEnVarilla(opcionSolo, longitudVarilla, grosorDisco)) {
-            val retazoSolo = calcularRetazo(opcionSolo, longitudVarilla, grosorDisco)
-            opciones.add(OpcionLlenadoFormula1(
-                cortesUsados = opcionSolo,
-                retazo = retazoSolo,
-                metodologia = "SOLO CORTE MAYOR"
-            ))
-            Log.d("Formula1Debug", "✅ Opción solo corte: retazo ${String.format("%.2f", retazoSolo)}cm")
-        } else {
-            Log.e("Formula1Error", "❌ El corte mayor ${corteMayorObligatorio.longitud}cm no cabe en varilla ${longitudVarilla}cm")
+        if (!cabeEnVarilla(listOf(corteMayorObligatorio), longitudVarilla, grosorDisco)) {
+            Log.e("Backtrack", "Corte ${corteMayorObligatorio.longitud}cm no cabe en varilla ${longitudVarilla}cm")
             return emptyList()
         }
 
-        // OPCIONES 2+: Agregar más cortes greedily
-        val cortesOrdenados = cortesDisponibles.filter {
-            it.longitud != corteMayorObligatorio.longitud || it.referencia != corteMayorObligatorio.referencia
-        }.sortedByDescending { it.longitud }
+        val espacioInicial = longitudVarilla -
+            calcularEspacioTotalNecesario(listOf(corteMayorObligatorio), grosorDisco)
 
-        for (startIndex in 0 until minOf(8, cortesOrdenados.size)) {
-            if (System.currentTimeMillis() - tiempoInicio > timeoutMs) break
-            if (opciones.size >= maxOpciones) break
+        val resultados = mutableListOf<OpcionLlenadoFormula1>()
+        resultados.add(OpcionLlenadoFormula1(
+            listOf(corteMayorObligatorio),
+            espacioInicial,
+            "SOLO"
+        ))
 
-            val cortesUsados = mutableListOf(corteMayorObligatorio)
+        // Nodos máximos a explorar según nivel: 1→200, 10→2000, 20→4000
+        val maxNodos = nivel * 200
+        val tiempoFin = System.currentTimeMillis() + timeoutMs
+        val contador = intArrayOf(0)
 
-            // Agregar cortes greedily desde startIndex
-            for (i in startIndex until cortesOrdenados.size) {
-                val corte = cortesOrdenados[i]
-                if (corte.cantidad <= 0) continue
+        // El mapa de usados arranca con el corte obligatorio ya consumido
+        val usados = HashMap<String, Int>()
+        usados["${corteMayorObligatorio.longitud}_${corteMayorObligatorio.referencia}"] = 1
 
-                // Verificar disponibilidad
-                val vecesUsado = cortesUsados.count {
-                    it.longitud == corte.longitud && it.referencia == corte.referencia
-                }
+        val cortesOrdenados = cortesDisponibles.sortedByDescending { it.longitud }
+        val cortesActuales = mutableListOf(corteMayorObligatorio)
 
-                if (vecesUsado >= corte.cantidad) continue
+        buscarOpcionesBacktrack(
+            cortesActuales, usados, espacioInicial,
+            cortesOrdenados, 0,
+            grosorDisco, longitudVarilla,
+            resultados, contador, maxNodos, tiempoFin
+        )
 
-                // Probar agregar este corte
-                val cortesConNuevo = cortesUsados + corte
+        Log.d("Backtrack", "nivel=$nivel nodos=${contador[0]} opciones=${resultados.size}")
 
-                if (cabeEnVarilla(cortesConNuevo, longitudVarilla, grosorDisco)) {
-                    cortesUsados.add(corte)
-                    Log.d("Formula1Debug", "   ✅ Agregado: ${corte.longitud}cm")
-                } else {
-                    Log.d("Formula1Debug", "   ❌ No cabe: ${corte.longitud}cm")
-                }
-            }
+        // Devolver las maxOpciones con menor retazo
+        return resultados.sortedBy { it.retazo }.take(maxOpciones)
+    }
 
-            if (cortesUsados.size > 1) {
-                val retazoCalculado = calcularRetazo(cortesUsados, longitudVarilla, grosorDisco)
+    /**
+     * DFS con poda: agrega cortes a cortesActuales respetando cantidades.
+     * "desde" evita duplicados (solo avanzamos en el índice, no retrocedemos).
+     */
+    private fun buscarOpcionesBacktrack(
+        cortesActuales: MutableList<CorteConCantidad>,
+        usados: HashMap<String, Int>,
+        espacioRestante: Float,
+        cortesOrdenados: List<CorteConCantidad>,
+        desde: Int,
+        grosorDisco: Float,
+        longitudVarilla: Float,
+        resultados: MutableList<OpcionLlenadoFormula1>,
+        contador: IntArray,
+        maxNodos: Int,
+        tiempoFin: Long
+    ) {
+        if (contador[0] >= maxNodos || System.currentTimeMillis() > tiempoFin) return
 
-                Log.d("Formula1Debug", "🎯 Opción desde índice $startIndex:")
-                Log.d("Formula1Debug", "   Cortes: ${cortesUsados.map { "${it.longitud}(${it.referencia})" }}")
-                Log.d("Formula1Debug", "   Retazo: ${String.format("%.2f", retazoCalculado)}cm")
+        for (i in desde until cortesOrdenados.size) {
+            val corte = cortesOrdenados[i]
+            if (corte.cantidad <= 0) continue
 
-                opciones.add(OpcionLlenadoFormula1(
-                    cortesUsados = cortesUsados.toList(),
-                    retazo = retazoCalculado,
-                    metodologia = "GREEDY DESDE ÍNDICE $startIndex"
-                ))
-            }
+            val key = "${corte.longitud}_${corte.referencia}"
+            val vecesUsado = usados.getOrDefault(key, 0)
+            if (vecesUsado >= corte.cantidad) continue
+
+            // grosorDisco adicional por el nuevo corte
+            val espacioNecesario = corte.longitud + grosorDisco
+            if (espacioNecesario > espacioRestante + 0.001f) continue
+
+            contador[0]++
+
+            cortesActuales.add(corte)
+            usados[key] = vecesUsado + 1
+            val nuevoEspacio = espacioRestante - espacioNecesario
+
+            val retazo = longitudVarilla -
+                calcularEspacioTotalNecesario(cortesActuales, grosorDisco)
+            resultados.add(OpcionLlenadoFormula1(cortesActuales.toList(), retazo, "BT"))
+
+            buscarOpcionesBacktrack(
+                cortesActuales, usados, nuevoEspacio,
+                cortesOrdenados, i,   // desde=i permite reutilizar mismo tipo (multi-cantidad)
+                grosorDisco, longitudVarilla,
+                resultados, contador, maxNodos, tiempoFin
+            )
+
+            cortesActuales.removeAt(cortesActuales.size - 1)
+            usados[key] = vecesUsado
         }
-
-        Log.d("Formula1Debug", "📊 ${opciones.size} opciones válidas generadas")
-        return opciones.take(maxOpciones)
     }
 
     /**
@@ -685,12 +972,11 @@ class CorteOptimizer {
      */
     private fun crearVarillaConsistente(
         varillaSeleccionada: VarillaConCantidad,
-        opcionSeleccionada: OpcionLlenadoFormula1,
-        grosorDisco: Float
+        opcionSeleccionada: OpcionLlenadoFormula1
     ): VarillaConReferencias {
 
         // Usar el retazo ya calculado correctamente en la opción
-        val retazoCalculado = opcionSeleccionada.retazo
+        val retazoCalculado = opcionSeleccionada.retazo.coerceAtLeast(0f)
 
         Log.d("CrearVarillaConsistente", "📏 CREANDO VARILLA:")
         Log.d("CrearVarillaConsistente", "   Longitud: ${varillaSeleccionada.longitud}cm")
@@ -698,7 +984,7 @@ class CorteOptimizer {
         Log.d("CrearVarillaConsistente", "   Retazo: ${String.format("%.2f", retazoCalculado)}cm")
 
         // VALIDACIÓN FINAL
-        if (retazoCalculado < 0) {
+        if (opcionSeleccionada.retazo < -0.001f) {
             Log.e("CrearVarillaConsistente", "❌ ERROR CRÍTICO: Retazo negativo ${retazoCalculado}cm")
             throw Exception("Error crítico: retazo negativo calculado")
         }

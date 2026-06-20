@@ -18,7 +18,7 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <!-- Visor de vídeo/audio -->
-    <com.google.android.exoplayer2.ui.PlayerView
+    <androidx.media3.ui.PlayerView
         android:id="@+id/visorVideo"
         android:layout_width="0dp"
         android:layout_height="0dp"
@@ -74,4 +74,3 @@
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
-

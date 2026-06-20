@@ -1,15 +1,18 @@
 package crystal.crystal.pdf
 
-import android.content.ContentResolver
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
 
+import com.bumptech.glide.Glide
 import com.itextpdf.io.font.constants.StandardFonts
 import com.itextpdf.io.image.ImageDataFactory
 import com.itextpdf.kernel.colors.ColorConstants
@@ -34,22 +37,40 @@ import crystal.crystal.Listado
 
 import java.io.ByteArrayOutputStream
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PdfGenerator(private val activity: AppCompatActivity) {
 
     fun generarYCompartir(cliente: String, lista: List<Listado>, precioTotal: String) {
-        val pdfFile = generar(cliente, lista, precioTotal) ?: return
+        if (lista.isEmpty()) {
+            Toast.makeText(activity, "La lista vacia", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-        if (pdfFile.exists() && pdfFile.length() > 0) {
-            val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", pdfFile)
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                putExtra(Intent.EXTRA_STREAM, uri)
-                type = "application/pdf"
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val listaSnapshot = lista.map { it.copy() }
+        Toast.makeText(activity, "Generando PDF...", Toast.LENGTH_SHORT).show()
+
+        activity.lifecycleScope.launch {
+            val pdfFile = withContext(Dispatchers.IO) {
+                runCatching { generar(cliente, listaSnapshot, precioTotal) }.getOrNull()
             }
-            activity.startActivity(Intent.createChooser(shareIntent, "Compartir archivo"))
-        } else {
-            Toast.makeText(activity, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
+
+            if (activity.isFinishing || activity.isDestroyed) return@launch
+
+            if (pdfFile != null && pdfFile.exists() && pdfFile.length() > 0) {
+                val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", pdfFile)
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    type = "application/pdf"
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                Toast.makeText(activity, "PDF generado", Toast.LENGTH_SHORT).show()
+                activity.startActivity(Intent.createChooser(shareIntent, "Compartir archivo"))
+            } else {
+                Toast.makeText(activity, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -73,7 +94,6 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         document.add(titulo)
 
         if (lista.isEmpty()) {
-            Toast.makeText(activity, "La lista vacía", Toast.LENGTH_SHORT).show()
             document.close()
             return null
         }
@@ -121,7 +141,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             cellTexto.setPadding(9f)
             table.addCell(cellTexto)
 
-            val imageCell = crearCeldaImagen(anexo)
+            val imageCell = crearCeldaImagenes(anexo)
             imageCell.setBorder(com.itextpdf.layout.borders.Border.NO_BORDER)
             imageCell.setPadding(9f)
             table.addCell(imageCell)
@@ -159,35 +179,183 @@ class PdfGenerator(private val activity: AppCompatActivity) {
 
         document.close()
 
-        Toast.makeText(activity, "PDF generado: ${pdfFile.absolutePath}", Toast.LENGTH_LONG).show()
         return pdfFile
     }
 
-    private fun crearCeldaImagen(anexo: String): Cell {
-        if (anexo.isEmpty()) {
+    private fun crearCeldaImagenes(anexo: String): Cell {
+        val imagenes = extraerImagenesAnexo(anexo).take(5)
+        if (imagenes.isEmpty()) {
             return Cell().add(Paragraph(""))
         }
 
-        return try {
-            val imageUri = Uri.parse(anexo)
-            val bitmap = BitmapFactory.decodeStream(activity.contentResolver.openInputStream(imageUri))
+        if (imagenes.size == 1) {
+            return crearCeldaImagen(imagenes.first())
+        }
 
-            if (bitmap != null) {
-                val stream = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-                val imageData = ImageDataFactory.create(stream.toByteArray())
-                val image = Image(imageData)
-                image.setAutoScale(true)
-                image.setMaxWidth(270f)
-                image.setMaxHeight(270f)
+        val cell = Cell()
+        cell.add(
+            Paragraph("Opciones de mismo costo a escoger:")
+                .setFont(PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD))
+                .setFontSize(10f)
+                .setBold()
+        )
+
+        val tablaImagenes = Table(UnitValue.createPercentArray(floatArrayOf(1f, 1f)))
+        tablaImagenes.setWidth(UnitValue.createPercentValue(100f))
+
+        imagenes.forEachIndexed { index, imageUri ->
+            val opcionCell = Cell()
+            opcionCell.setBorder(com.itextpdf.layout.borders.Border.NO_BORDER)
+            opcionCell.setPadding(4f)
+            opcionCell.add(
+                Paragraph("Opcion ${index + 1}")
+                    .setFontSize(9f)
+                    .setTextAlignment(TextAlignment.CENTER)
+            )
+            crearImagenPdf(imageUri, maxWidth = 125f, maxHeight = 115f)?.let { image ->
+                opcionCell.add(image)
+            } ?: opcionCell.add(
+                Paragraph("Imagen no disponible")
+                    .setFontSize(8f)
+                    .setTextAlignment(TextAlignment.CENTER)
+            )
+            tablaImagenes.addCell(opcionCell)
+        }
+
+        if (imagenes.size % 2 != 0) {
+            tablaImagenes.addCell(
+                Cell()
+                    .setBorder(com.itextpdf.layout.borders.Border.NO_BORDER)
+                    .setPadding(4f)
+            )
+        }
+
+        cell.add(tablaImagenes)
+        return cell
+    }
+
+    private fun crearCeldaImagen(anexo: String): Cell {
+        return try {
+            crearImagenPdf(anexo, maxWidth = 270f, maxHeight = 270f)?.let { image ->
                 Cell().add(image)
-            } else {
-                Cell().add(Paragraph("Imagen no disponible"))
-            }
+            } ?: Cell().add(Paragraph("Imagen no disponible"))
         } catch (e: Exception) {
             e.printStackTrace()
             Cell().add(Paragraph("Imagen no disponible"))
         }
+    }
+
+    private fun crearImagenPdf(anexo: String, maxWidth: Float, maxHeight: Float): Image? {
+        val imageUri = Uri.parse(anexo)
+        val bitmap = decodificarImagenReducida(imageUri) ?: return null
+        val stream = ByteArrayOutputStream()
+        val formato = if (bitmap.hasAlpha()) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+        val calidad = if (formato == Bitmap.CompressFormat.PNG) 100 else 78
+        bitmap.compress(formato, calidad, stream)
+        bitmap.recycle()
+        val imageData = ImageDataFactory.create(stream.toByteArray())
+        return Image(imageData).apply {
+            setAutoScale(true)
+            setMaxWidth(maxWidth)
+            setMaxHeight(maxHeight)
+        }
+    }
+
+    private fun extraerImagenesAnexo(anexo: String): List<String> {
+        return anexo
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .toList()
+    }
+
+    private fun decodificarImagenReducida(
+        imageUri: Uri,
+        maxWidth: Int = 1400,
+        maxHeight: Int = 1400
+    ): Bitmap? {
+        decodificarConImageDecoder(imageUri, maxWidth, maxHeight)?.let { return it }
+        decodificarConBitmapFactory(imageUri, maxWidth, maxHeight)?.let { return it }
+        return decodificarConGlide(imageUri, maxWidth, maxHeight)
+    }
+
+    private fun decodificarConImageDecoder(
+        imageUri: Uri,
+        maxWidth: Int,
+        maxHeight: Int
+    ): Bitmap? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+
+        return runCatching {
+            val source = ImageDecoder.createSource(activity.contentResolver, imageUri)
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val width = info.size.width
+                val height = info.size.height
+                val scale = minOf(
+                    maxWidth.toFloat() / width.toFloat(),
+                    maxHeight.toFloat() / height.toFloat(),
+                    1f
+                )
+                decoder.setTargetSize(
+                    (width * scale).toInt().coerceAtLeast(1),
+                    (height * scale).toInt().coerceAtLeast(1)
+                )
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        }.getOrNull()
+    }
+
+    private fun decodificarConBitmapFactory(
+        imageUri: Uri,
+        maxWidth: Int,
+        maxHeight: Int
+    ): Bitmap? {
+        val bounds = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+
+        activity.contentResolver.openInputStream(imageUri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, bounds)
+        } ?: return null
+
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val opciones = BitmapFactory.Options().apply {
+            inSampleSize = calcularInSampleSize(bounds.outWidth, bounds.outHeight, maxWidth, maxHeight)
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+
+        return activity.contentResolver.openInputStream(imageUri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, opciones)
+        }
+    }
+
+    private fun decodificarConGlide(
+        imageUri: Uri,
+        maxWidth: Int,
+        maxHeight: Int
+    ): Bitmap? {
+        return runCatching {
+            Glide.with(activity.applicationContext)
+                .asBitmap()
+                .load(imageUri)
+                .submit(maxWidth, maxHeight)
+                .get()
+        }.getOrNull()
+    }
+
+    private fun calcularInSampleSize(
+        width: Int,
+        height: Int,
+        reqWidth: Int,
+        reqHeight: Int
+    ): Int {
+        var inSampleSize = 1
+        while ((height / inSampleSize) > reqHeight || (width / inSampleSize) > reqWidth) {
+            inSampleSize *= 2
+        }
+        return inSampleSize.coerceAtLeast(1)
     }
 
     private fun df1(defo: Float): String {

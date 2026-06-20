@@ -9,6 +9,7 @@ import crystal.crystal.Listado
 import crystal.crystal.R
 import crystal.crystal.datos.DatabaseProvider
 import crystal.crystal.datos.Product
+import crystal.crystal.datos.ProductSearch
 import crystal.crystal.databinding.ActivityMainBinding
 import crystal.crystal.red.interop.ChatInteropIntents
 import crystal.crystal.red.interop.MeasuresMessageCodec
@@ -29,6 +30,10 @@ class ImportadorMedidas(
     private val calcMLineales: (Float, Float) -> Float,
     private val calcMCubicos: (Float, Float, Float) -> Float
 ) {
+    private enum class ModoImportacion {
+        SUMAR,
+        REEMPLAZAR
+    }
 
     fun manejarMensajeMedidas() {
         val mensajeTexto = ChatInteropIntents.consumeStringExtra(
@@ -80,8 +85,12 @@ class ImportadorMedidas(
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val db = DatabaseProvider.getInstance(activity)
-                val productosEncontrados = db.productDao()
-                    .searchProductsByDescription("%${parsedMeasures.productName}%")
+                val catalogo = db.productDao().getAllProducts()
+                val consultas = buildList {
+                    add(parsedMeasures.productName)
+                    addAll(parsedMeasures.items.map { it.productName })
+                }
+                val productosEncontrados = ProductSearch.buscarSimilares(catalogo, consultas, 10)
 
                 withContext(Dispatchers.Main) {
                     if (productosEncontrados.isNotEmpty()) {
@@ -111,7 +120,7 @@ class ImportadorMedidas(
     ) {
         val opciones = mutableListOf<String>()
         productos.forEach { producto ->
-            opciones += "${producto.description}\n   Precio: S/ ${String.format("%.2f", producto.price)}"
+            opciones += "${producto.nombre}\n   Precio: S/ ${String.format("%.2f", producto.price)}"
         }
         opciones += "Sin precio (S/ 0.00)"
         opciones += "Cancelar"
@@ -124,7 +133,7 @@ class ImportadorMedidas(
                         val productoSeleccionado = productos[which]
                         Toast.makeText(
                             activity,
-                            "Seleccionado: ${productoSeleccionado.description}",
+                            "Seleccionado: ${productoSeleccionado.nombre}",
                             Toast.LENGTH_SHORT
                         ).show()
                         importarMedidasConPrecio(parsedMeasures, productoSeleccionado.price)
@@ -142,8 +151,31 @@ class ImportadorMedidas(
     }
 
     @SuppressLint("SetTextI18n", "DefaultLocale")
-    private fun importarMedidasConPrecio(parsedMeasures: ParsedMeasuresMessage, precio: Double) {
+    private fun importarMedidasConPrecio(
+        parsedMeasures: ParsedMeasuresMessage,
+        precio: Double,
+        modo: ModoImportacion? = null
+    ) {
         val lista = obtenerLista()
+        if (lista.isNotEmpty() && modo == null) {
+            AlertDialog.Builder(activity)
+                .setTitle("Confirmacion")
+                .setMessage("La lista actual no esta vacia. Deseas sumar las medidas importadas a la lista existente?")
+                .setPositiveButton("Sumar") { _, _ ->
+                    importarMedidasConPrecio(parsedMeasures, precio, ModoImportacion.SUMAR)
+                }
+                .setNegativeButton("Reemplazar") { _, _ ->
+                    importarMedidasConPrecio(parsedMeasures, precio, ModoImportacion.REEMPLAZAR)
+                }
+                .setNeutralButton("Cancelar", null)
+                .show()
+            return
+        }
+
+        if (modo == ModoImportacion.REEMPLAZAR) {
+            lista.clear()
+        }
+
         var elementosAgregados = 0
 
         for (item in parsedMeasures.items) {
@@ -173,7 +205,7 @@ class ImportadorMedidas(
                     costo = costoTotal,
                     producto = item.productName,
                     peri = peri,
-                    metcua = metroscua,
+                    metcua = metroscua * item.quantity,
                     metli = ml * item.quantity,
                     metcub = cub,
                     color = ContextCompat.getColor(activity, R.color.color),

@@ -1,28 +1,50 @@
 package crystal.crystal.optimizadores.corte
 
 import android.app.AlertDialog
+import android.content.ClipData
 import android.app.Dialog
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.PopupMenu
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import crystal.crystal.R
 import crystal.crystal.databinding.ActivityCorteBinding
+import crystal.crystal.red.ListChatActivity
+import crystal.crystal.red.interop.ChatInteropIntents
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Activity principal refactorizada - delega responsabilidades a clases especializadas
  * Mantiene exactamente la misma funcionalidad que el código original
  */
 class CorteActivity: AppCompatActivity() {
+
+    companion object {
+        const val MIME_CORTE_CRYSTAL = "application/vnd.crystal.corte+json"
+        const val EXTENSION_CORTE_CRYSTAL = "crystalcorte"
+        const val FORMAT_CORTE_CRYSTAL = "crystal.corte"
+    }
 
     private var lista = mutableListOf<PiezaCorte>()
     private var lista2 = mutableListOf<PiezaCorte>()
@@ -37,6 +59,18 @@ class CorteActivity: AppCompatActivity() {
 
     private var ultimasEstadisticas: AnalisisMejoras.EstadisticasOptimizacion? = null
     private var nombreListaActual: String = ""
+    private var proyectoOptimizadorActual: String = ""
+    private var bloqueandoCargaSpinner = false
+    private var spinnerConProyectosOptimizador = false
+    private var spinnerProyectoKeys: List<String> = emptyList()
+
+    private data class ProyectoCorte(
+        val piezas: MutableList<PiezaCorte>,
+        val varillas: MutableList<PiezaCorte>,
+        val resultado: String,
+        val grosorDisco: String,
+        val nivel: Int
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,8 +92,25 @@ class CorteActivity: AppCompatActivity() {
         mostrarDialogo2()
         actualizar()
         actualizar2()
+        manejarIntentEntrada(intent)
 
         binding.etMedida.requestFocus()
+        binding.listadoTxt.setOnClickListener {
+            mostrarDialogoGuardarProyectoOptimizador()
+        }
+        binding.listadoTxt.setOnLongClickListener {
+            mostrarDialogoAbrirProyectoOptimizador()
+            true
+        }
+
+        binding.tvNivel.text = (binding.sbNivel.progress + 1).toString()
+        binding.sbNivel.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                binding.tvNivel.text = (progress + 1).toString()
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
 
         binding.btAnadir.setOnClickListener {
             try {
@@ -73,6 +124,8 @@ class CorteActivity: AppCompatActivity() {
         binding.btAnadir.setOnLongClickListener {
             // Llamar a la función para poblar el Spinner usando la clase especializada
             if (listManager.hayListasDisponibles()) {
+                spinnerConProyectosOptimizador = false
+                spinnerProyectoKeys = emptyList()
                 listManager.poblarSpinnerConDatosGuardados(binding.spCortes)
             }
             true
@@ -108,11 +161,12 @@ class CorteActivity: AppCompatActivity() {
                     try {
                         val tiempoInicio = System.currentTimeMillis()
 
-                        // NUEVO: Usar la configuración para timeouts y parámetros
+                        val nivel = binding.sbNivel.progress + 1
                         val resultadoOptimizado = optimizer.optimizarCortesConConfiguracion(
                             piezasParaOptimizar,
                             varillasDisponibles,
-                            grosorDisco
+                            grosorDisco,
+                            nivel
                         )
 
                         val tiempoTotal = System.currentTimeMillis() - tiempoInicio
@@ -124,7 +178,7 @@ class CorteActivity: AppCompatActivity() {
                         runOnUiThread {
                             ocultarIndicadorPensamiento()
                             // AHORA SÍ navegar con el resultado correcto
-                            mostrarResultadoOptimizadoCorregido(resultadoOptimizado, tiempoTotal)
+                            mostrarResultadoOptimizadoCorregido(resultadoOptimizado, piezasParaOptimizar, tiempoTotal)
                         }
                     } catch (e: Exception) {
                         runOnUiThread {
@@ -139,6 +193,19 @@ class CorteActivity: AppCompatActivity() {
             }
         }
 
+        binding.btOpti.setOnLongClickListener {
+            compartirContextoCorte()
+            true
+        }
+
+        binding.tvResultado.setOnClickListener {
+            abrirUltimoResultadoGuardado(mostrarAvisoSiNoExiste = true)
+        }
+
+        binding.btAjustes.setOnClickListener {
+            mostrarMenuAjustes()
+        }
+
         binding.btAgregar.setOnClickListener {
             abrirDialogoCortes()
         }
@@ -149,8 +216,14 @@ class CorteActivity: AppCompatActivity() {
 
         binding.spCortes.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                if (bloqueandoCargaSpinner) return
                 val nombreSeleccionado = parent.getItemAtPosition(position).toString()
-                cargarListaSeleccionada(nombreSeleccionado)
+                if (spinnerConProyectosOptimizador) {
+                    val nombreProyecto = spinnerProyectoKeys.getOrNull(position) ?: nombreSeleccionado
+                    abrirProyectoOptimizador(nombreProyecto, actualizarSpinner = false)
+                } else {
+                    cargarListaSeleccionada(nombreSeleccionado)
+                }
             }
 
             override fun onNothingSelected(parent: AdapterView<*>) {}
@@ -190,6 +263,8 @@ class CorteActivity: AppCompatActivity() {
                 .show()
             true
         }
+
+        mostrarAvisoResultadoGuardado()
     }
 
     override fun onResume() {
@@ -205,11 +280,140 @@ class CorteActivity: AppCompatActivity() {
         guardarDatos() // Guardar datos al pausar la actividad
     }
 
+    private fun mostrarAvisoResultadoGuardado() {
+        val resultado = dataManager.recuperarResultadoOptimizacion() ?: return
+        if (resultado.varillasUsadas.isEmpty()) return
+
+        val nombre = dataManager.recuperarNombreListaResultadoOptimizacion()
+        val detalle = if (nombre.isBlank()) {
+            "${resultado.totalBarrasUsadas} barras, ${resultado.totalCortes} cortes."
+        } else {
+            "$nombre\n${resultado.totalBarrasUsadas} barras, ${resultado.totalCortes} cortes."
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Resultado guardado")
+            .setMessage("Hay una optimizacion anterior disponible.\n\n$detalle\n\nDeseas abrirla?")
+            .setPositiveButton("Abrir") { _, _ -> abrirUltimoResultadoGuardado() }
+            .setNegativeButton("Ahora no", null)
+            .show()
+    }
+
+    private fun abrirUltimoResultadoGuardado(mostrarAvisoSiNoExiste: Boolean = false) {
+        val resultado = dataManager.recuperarResultadoOptimizacion()
+        if (resultado == null || resultado.varillasUsadas.isEmpty()) {
+            if (mostrarAvisoSiNoExiste) {
+                Toast.makeText(this, "No hay resultado guardado", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
+        startActivity(Intent(this, ResultadoOptimizacionActivity::class.java).apply {
+            putExtra("resultado_optimizacion", resultado)
+            putExtra("nombre_lista", dataManager.recuperarNombreListaResultadoOptimizacion())
+        })
+    }
+
     // === NUEVAS FUNCIONES PARA DESCUENTOS AUTOMÁTICOS ===
 
     /**
      * Procesa los descuentos automáticos basados en los cortes ejecutados
      */
+    private fun mostrarMenuAjustes() {
+        PopupMenu(this, binding.btAjustes).apply {
+            menu.add("Seleccionar medidas iguales")
+            setOnMenuItemClickListener { item ->
+                when (item.title.toString()) {
+                    "Seleccionar medidas iguales" -> {
+                        mostrarDialogoMedidasIguales()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    private data class GrupoMedidaIgual(
+        val longitud: Float,
+        val indices: List<Int>
+    )
+
+    private fun mostrarDialogoMedidasIguales() {
+        val grupos = lista.indices
+            .groupBy { claveMedida(lista[it].longitud) }
+            .mapNotNull { (_, indices) ->
+                if (indices.size < 2) return@mapNotNull null
+                GrupoMedidaIgual(
+                    longitud = lista[indices.first()].longitud,
+                    indices = indices
+                )
+            }
+            .sortedBy { it.longitud }
+
+        if (grupos.isEmpty()) {
+            Toast.makeText(this, "No hay grupos de medidas iguales", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val etiquetasGrupos = grupos.map { grupo ->
+            val cantidadPiezas = grupo.indices.size
+            val cantidadUnidades = grupo.indices.sumOf { lista[it].cantidad }
+            val estado = when {
+                grupo.indices.all { lista[it].cortada } -> "activas"
+                grupo.indices.none { lista[it].cortada } -> "inactivas"
+                else -> "mixtas"
+            }
+            "${formatter.df1(grupo.longitud)} cm - $cantidadPiezas filas, $cantidadUnidades uni ($estado)"
+        }
+        val etiquetas = listOf("Todos los grupos") + etiquetasGrupos
+        val seleccionados = BooleanArray(etiquetas.size)
+
+        AlertDialog.Builder(this)
+            .setTitle("Medidas iguales")
+            .setMultiChoiceItems(etiquetas.toTypedArray(), seleccionados) { _, which, checked ->
+                seleccionados[which] = checked
+                if (which == 0) {
+                    for (i in 1 until seleccionados.size) seleccionados[i] = checked
+                }
+            }
+            .setPositiveButton("Aplicar") { _, _ ->
+                val gruposElegidos = if (seleccionados.firstOrNull() == true) {
+                    grupos
+                } else {
+                    grupos.filterIndexed { index, _ -> seleccionados[index + 1] }
+                }
+
+                if (gruposElegidos.isEmpty()) {
+                    Toast.makeText(this, "No seleccionaste grupos", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                aplicarToggleGruposMedida(gruposElegidos)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun aplicarToggleGruposMedida(grupos: List<GrupoMedidaIgual>) {
+        var filasAfectadas = 0
+        grupos.forEach { grupo ->
+            val activar = grupo.indices.none { lista[it].cortada }
+            grupo.indices.forEach { index ->
+                lista[index] = lista[index].copy(cortada = activar)
+                filasAfectadas++
+            }
+        }
+
+        actualizar()
+        dataManager.guardarPiezas(lista)
+        Toast.makeText(this, "Grupos actualizados: ${grupos.size}. Filas: $filasAfectadas", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun claveMedida(longitud: Float): Int =
+        (longitud * 1000f).roundToInt()
+
     private fun procesarDescuentosAutomaticos() {
         val cortesEjecutados = dataManager.recuperarCortesEjecutados()
 
@@ -316,6 +520,363 @@ class CorteActivity: AppCompatActivity() {
         binding.tvResultado.setText(textoResultado)
     }
 
+    private fun prefsProyectosOptimizador() =
+        getSharedPreferences("OptimizadorProyectos", Context.MODE_PRIVATE)
+
+    private fun nombresProyectosOptimizador(): MutableSet<String> {
+        return prefsProyectosOptimizador()
+            .getStringSet("corte_nombres", emptySet())
+            ?.toMutableSet()
+            ?: mutableSetOf()
+    }
+
+    private fun mostrarDialogoGuardarProyectoOptimizador() {
+        val input = EditText(this).apply {
+            hint = "Nombre del proyecto"
+            setText(nombreListaActual.ifBlank { proyectoOptimizadorActual.ifBlank { "Corte perfiles" } })
+            selectAll()
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Guardar proyecto")
+            .setView(input)
+            .setPositiveButton("Guardar presente") { _, _ ->
+                val nombre = input.text.toString().trim()
+                if (nombre.isBlank()) {
+                    Toast.makeText(this, "Ingrese un nombre", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                guardarProyectoOptimizador(nombre)
+            }
+            .setNeutralButton("Guardar todas") { _, _ ->
+                guardarTodasLasListasOptimizador(input.text.toString().trim())
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun guardarProyectoOptimizador(nombre: String) {
+        val proyecto = ProyectoCorte(
+            piezas = lista,
+            varillas = lista2,
+            resultado = binding.tvResultado.text.toString(),
+            grosorDisco = binding.etGrosor.text.toString(),
+            nivel = binding.sbNivel.progress
+        )
+        val prefs = prefsProyectosOptimizador()
+        val nombres = nombresProyectosOptimizador().apply { add(nombre) }
+        prefs.edit()
+            .putStringSet("corte_nombres", nombres)
+            .putString("corte_$nombre", Gson().toJson(proyecto))
+            .apply()
+        proyectoOptimizadorActual = nombre
+        actualizarTituloProyectoOptimizador()
+        Toast.makeText(this, "Proyecto guardado: $nombre", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun guardarTodasLasListasOptimizador(nombre: String) {
+        val adapter = binding.spCortes.adapter
+        val count = adapter?.count ?: 0
+        if (count == 0) {
+            Toast.makeText(this, "Primero carga las listas con click largo en Añadir", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val nombres = (0 until count).map { adapter.getItem(it).toString() }
+        var guardadas = 0
+        var paqueteGuardado = ""
+        val prefs = prefsProyectosOptimizador()
+        val nombresGuardados = nombresProyectosOptimizador()
+
+        nombres.forEach { nombreLista ->
+            val piezasLista = listManager.cargarLista(nombreLista).toMutableList()
+            if (piezasLista.isEmpty()) return@forEach
+            val paquete = paqueteDesdePiezas(piezasLista, nombre)
+            if (paqueteGuardado.isBlank()) paqueteGuardado = paquete
+            val nombreProyecto = nombreListaConPaquete(paquete, nombreLista, guardadas + 1)
+            val proyecto = ProyectoCorte(
+                piezas = piezasLista,
+                varillas = lista2,
+                resultado = "",
+                grosorDisco = binding.etGrosor.text.toString(),
+                nivel = binding.sbNivel.progress
+            )
+            nombresGuardados.add(nombreProyecto)
+            prefs.edit()
+                .putString("corte_$nombreProyecto", Gson().toJson(proyecto))
+                .apply()
+            guardadas++
+        }
+
+        if (guardadas == 0) {
+            Toast.makeText(this, "No hay listas validas para guardar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        prefs.edit()
+            .putStringSet("corte_nombres", nombresGuardados)
+            .apply()
+        proyectoOptimizadorActual = ""
+        actualizarTituloProyectoOptimizador()
+        val paqueteMensaje = paqueteGuardado.ifBlank { "Sin paquete" }
+        Toast.makeText(this, "Paquete $paqueteMensaje: $guardadas listas de corte", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun nombreListaConPaquete(paquete: String, nombreLista: String, indice: Int): String {
+        val base = nombreLista.trim().ifBlank { "Lista $indice" }
+        val prefijo = paquete.trim().ifBlank { "Paquete" }
+        return "$prefijo: $base"
+    }
+
+    private fun mostrarDialogoAbrirProyectoOptimizador() {
+        val nombres = nombresProyectosOptimizador().sorted()
+        if (nombres.isEmpty()) {
+            Toast.makeText(this, "No hay proyectos guardados", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val paquetes = nombres.groupBy { paqueteDesdeNombreGuardado(it) }.toSortedMap()
+        val etiquetas = paquetes.map { (paquete, listas) -> "Paquete $paquete: ${listas.size} listas de corte" }
+        AlertDialog.Builder(this)
+            .setTitle("Abrir proyecto")
+            .setItems(etiquetas.toTypedArray()) { _, which ->
+                val paquete = paquetes.keys.elementAt(which)
+                mostrarDialogoListasDelPaquete(paquete, paquetes.getValue(paquete).sorted())
+            }
+            .setNeutralButton("Cargar paquetes") { _, _ ->
+                poblarSpinnerProyectosOptimizador(nombres)
+            }
+            .setNegativeButton("Eliminar") { _, _ ->
+                mostrarDialogoEliminarPaquetes(paquetes)
+            }
+            .show()
+    }
+
+    private fun mostrarDialogoListasDelPaquete(paquete: String, nombres: List<String>) {
+        val etiquetas = nombres.map { listaDesdeNombreGuardado(it) }
+        AlertDialog.Builder(this)
+            .setTitle("Paquete $paquete")
+            .setItems(etiquetas.toTypedArray()) { _, which ->
+                abrirProyectoOptimizador(nombres[which])
+            }
+            .setNeutralButton("Abrir todas") { _, _ ->
+                abrirPaqueteOptimizador(paquete, nombres)
+            }
+            .setNegativeButton("Eliminar") { _, _ ->
+                mostrarDialogoEliminarListasDelPaquete(paquete, nombres)
+            }
+            .show()
+    }
+
+    private fun mostrarDialogoEliminarPaquetes(paquetes: Map<String, List<String>>) {
+        val nombresPaquete = paquetes.keys.toList()
+        val etiquetas = nombresPaquete.map { paquete -> "Paquete $paquete: ${paquetes[paquete]?.size ?: 0} listas" }
+        val seleccionados = BooleanArray(nombresPaquete.size)
+        AlertDialog.Builder(this)
+            .setTitle("Eliminar paquetes")
+            .setMultiChoiceItems(etiquetas.toTypedArray(), seleccionados) { _, which, checked ->
+                seleccionados[which] = checked
+            }
+            .setPositiveButton("Eliminar") { _, _ ->
+                val claves = nombresPaquete
+                    .filterIndexed { index, _ -> seleccionados[index] }
+                    .flatMap { paquetes[it].orEmpty() }
+                eliminarProyectosOptimizador(claves)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun mostrarDialogoEliminarListasDelPaquete(paquete: String, nombres: List<String>) {
+        val etiquetas = nombres.map { listaDesdeNombreGuardado(it) }
+        val seleccionados = BooleanArray(nombres.size)
+        AlertDialog.Builder(this)
+            .setTitle("Eliminar de $paquete")
+            .setMultiChoiceItems(etiquetas.toTypedArray(), seleccionados) { _, which, checked ->
+                seleccionados[which] = checked
+            }
+            .setPositiveButton("Eliminar") { _, _ ->
+                eliminarProyectosOptimizador(nombres.filterIndexed { index, _ -> seleccionados[index] })
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun eliminarProyectosOptimizador(nombresEliminar: List<String>) {
+        if (nombresEliminar.isEmpty()) {
+            Toast.makeText(this, "No seleccionaste nada para eliminar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val nombresActuales = nombresProyectosOptimizador()
+        val prefs = prefsProyectosOptimizador()
+        val editor = prefs.edit()
+        nombresEliminar.forEach { nombre ->
+            nombresActuales.remove(nombre)
+            editor.remove("corte_$nombre")
+        }
+        editor.putStringSet("corte_nombres", nombresActuales).apply()
+        if (nombresEliminar.contains(proyectoOptimizadorActual) ||
+            nombresEliminar.any { paqueteDesdeNombreGuardado(it) == proyectoOptimizadorActual }
+        ) {
+            proyectoOptimizadorActual = ""
+            actualizarTituloProyectoOptimizador()
+        }
+        Toast.makeText(this, "Eliminados: ${nombresEliminar.size}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun abrirPaqueteOptimizador(paquete: String, nombres: List<String>) {
+        val proyectos = nombres.mapNotNull { nombre ->
+            val json = prefsProyectosOptimizador().getString("corte_$nombre", null)
+            try {
+                if (json.isNullOrBlank()) null else Gson().fromJson(json, ProyectoCorte::class.java)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        if (proyectos.isEmpty()) {
+            Toast.makeText(this, "No se pudo abrir el paquete", Toast.LENGTH_SHORT).show()
+            return
+        }
+        bloqueandoCargaSpinner = true
+        try {
+            lista = proyectos.flatMap { it.piezas }.toMutableList()
+            lista2 = proyectos.first().varillas.toMutableList()
+            binding.tvResultado.setText("")
+            binding.etGrosor.setText(proyectos.first().grosorDisco)
+            binding.sbNivel.progress = proyectos.first().nivel.coerceIn(0, binding.sbNivel.max)
+            binding.tvNivel.text = (binding.sbNivel.progress + 1).toString()
+            proyectoOptimizadorActual = paquete
+            nombreListaActual = paquete
+            actualizar()
+            actualizar2()
+            guardarDatos()
+            actualizarTituloProyectoOptimizador()
+            poblarSpinnerProyectosOptimizador(nombres)
+        } finally {
+            binding.spCortes.post { bloqueandoCargaSpinner = false }
+        }
+        Toast.makeText(this, "Paquete abierto: $paquete", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun abrirProyectoOptimizador(nombre: String, actualizarSpinner: Boolean = true) {
+        val json = prefsProyectosOptimizador().getString("corte_$nombre", null)
+        if (json.isNullOrBlank()) {
+            Toast.makeText(this, "No se pudo abrir el proyecto", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val proyecto = try {
+            Gson().fromJson(json, ProyectoCorte::class.java)
+        } catch (_: Exception) {
+            null
+        }
+        if (proyecto == null) {
+            Toast.makeText(this, "Proyecto invalido", Toast.LENGTH_SHORT).show()
+            return
+        }
+        bloqueandoCargaSpinner = true
+        try {
+            lista = proyecto.piezas.toMutableList()
+            lista2 = proyecto.varillas.toMutableList()
+            binding.tvResultado.setText(proyecto.resultado)
+            binding.etGrosor.setText(proyecto.grosorDisco)
+            binding.sbNivel.progress = proyecto.nivel.coerceIn(0, binding.sbNivel.max)
+            binding.tvNivel.text = (binding.sbNivel.progress + 1).toString()
+            proyectoOptimizadorActual = nombre
+            nombreListaActual = nombre
+            actualizar()
+            actualizar2()
+            guardarDatos()
+            actualizarTituloProyectoOptimizador()
+            if (actualizarSpinner) {
+                val paquete = paqueteDesdeNombreGuardado(nombre)
+                val nombresPaquete = nombresProyectosOptimizador()
+                    .filter { paqueteDesdeNombreGuardado(it) == paquete }
+                    .sorted()
+                poblarSpinnerProyectosOptimizador(nombresPaquete, nombre)
+            }
+        } finally {
+            binding.spCortes.post { bloqueandoCargaSpinner = false }
+        }
+        Toast.makeText(this, "Proyecto abierto: $nombre", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun poblarSpinnerProyectosOptimizador(
+        nombres: List<String> = nombresProyectosOptimizador().sorted(),
+        seleccionar: String? = null
+    ) {
+        if (nombres.isEmpty()) {
+            Toast.makeText(this, "No hay proyectos guardados", Toast.LENGTH_SHORT).show()
+            return
+        }
+        bloqueandoCargaSpinner = true
+        spinnerConProyectosOptimizador = true
+        spinnerProyectoKeys = nombres
+        val etiquetas = nombres.map { listaDesdeNombreGuardado(it) }
+        val adapter = ArrayAdapter(this, R.layout.lista_spinner, etiquetas)
+        adapter.setDropDownViewResource(R.layout.lista_spinner)
+        binding.spCortes.adapter = adapter
+        val index = seleccionar?.let { nombres.indexOf(it) } ?: -1
+        if (index >= 0) binding.spCortes.setSelection(index, false)
+        binding.spCortes.post { bloqueandoCargaSpinner = false }
+        Toast.makeText(this, "Listas guardadas cargadas en el spinner", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun paqueteDesdePiezas(piezas: List<PiezaCorte>, fallback: String): String {
+        return piezas.asSequence()
+            .map { extraerPaqueteDesdeReferencia(it.referencia) }
+            .firstOrNull { it.isNotBlank() }
+            ?: fallback.trim().ifBlank { "Sin paquete" }
+    }
+
+    private fun extraerPaqueteDesdeReferencia(referencia: String): String {
+        val limpio = referencia.trim().trim('(', ')')
+        if (limpio.isBlank()) return ""
+        val sinLista = quitarListaDesdeReferencia(limpio)
+        val candidato = if (sinLista.contains(",")) {
+            sinLista.substringAfterLast(",").trim().substringBefore(" ")
+        } else {
+            sinLista.substringAfterLast(" ", "").trim()
+        }
+        return candidato.trim().trim(')', '(')
+    }
+
+    private fun quitarListaDesdeReferencia(referencia: String): String {
+        val partes = referencia.split(",").map { it.trim() }
+        if (partes.size < 3) return referencia
+
+        val listasConocidas = listManager.nombresListasDisponibles()
+            .map { it.substringBefore("[").trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        val ultimaParte = partes.last()
+
+        return if (ultimaParte in listasConocidas) {
+            partes.dropLast(1).joinToString(", ")
+        } else {
+            referencia
+        }
+    }
+
+    private fun paqueteDesdeNombreGuardado(nombre: String): String {
+        return if (nombre.contains(":")) {
+            nombre.substringBefore(":").trim().ifBlank { "Sin paquete" }
+        } else {
+            "Guardados anteriores"
+        }
+    }
+
+    private fun listaDesdeNombreGuardado(nombre: String): String {
+        return if (nombre.contains(":")) {
+            nombre.substringAfter(":").trim().ifBlank { nombre }
+        } else {
+            nombre
+        }
+    }
+
+    private fun actualizarTituloProyectoOptimizador() {
+        binding.tvIdVende.text = if (proyectoOptimizadorActual.isBlank()) {
+            "Corte Varillas"
+        } else {
+            "Corte Varillas - $proyectoOptimizadorActual"
+        }
+    }
+
     // === FUNCIONES DE FORMATO (delegadas a Formatter) ===
 
     private fun actualizar() {
@@ -402,16 +963,23 @@ class CorteActivity: AppCompatActivity() {
     // NUEVO: Método corregido que navega DESPUÉS de la optimización
     private fun mostrarResultadoOptimizadoCorregido(
         varillasUsadas: List<CorteOptimizer.VarillaConReferencias>,
+        piezasSolicitadas: List<PiezaCorte>,
         tiempoOptimizacion: Long
     ) {
         // Generar resultado estructurado
-        val resultadoEstructurado = optimizer.generarResultadoEstructurado(varillasUsadas)
+        val resultadoBase = optimizer.generarResultadoEstructurado(varillasUsadas)
+        val faltantes = calcularCortesFaltantes(piezasSolicitadas, resultadoBase)
+        val resultadoEstructurado = resultadoBase.copy(
+            cortesErroneos = faltantes.sumOf { it.cantidad },
+            cortesFaltantes = faltantes
+        )
 
         // DEBUG: Log del resultado estructurado
         DebugHelper.logResultadoEstructurado(resultadoEstructurado)
 
         // Guardar las varillas usadas
         dataManager.guardarVarillasUsadas(varillasUsadas)
+        dataManager.guardarResultadoOptimizacion(resultadoEstructurado, nombreListaActual)
 
         // NUEVO: Mostrar análisis detallado con AnalisisMejoras
         mostrarAnalisisMejorasDetallado(resultadoEstructurado, tiempoOptimizacion)
@@ -426,6 +994,34 @@ class CorteActivity: AppCompatActivity() {
         val textoResultado = generarTextoResultadoLegacy(varillasUsadas)
         binding.tvResultado.setText(textoResultado)
         dataManager.guardarResultado(textoResultado)
+    }
+
+    private fun calcularCortesFaltantes(
+        piezasSolicitadas: List<PiezaCorte>,
+        resultado: ResultadoOptimizacion
+    ): List<CorteFaltante> {
+        val cortados = mutableMapOf<String, Int>()
+        resultado.varillasUsadas
+            .flatMap { it.cortesConReferencias }
+            .forEach { corte ->
+                val key = claveCorte(corte.longitud, corte.referencia)
+                cortados[key] = (cortados[key] ?: 0) + 1
+            }
+
+        return piezasSolicitadas.mapNotNull { pieza ->
+            val cortadosDePieza = cortados[claveCorte(pieza.longitud, pieza.referencia)] ?: 0
+            val faltan = pieza.cantidad - cortadosDePieza
+            if (faltan > 0) {
+                CorteFaltante(pieza.longitud, pieza.referencia, faltan)
+            } else {
+                null
+            }
+        }
+    }
+
+    private fun claveCorte(longitud: Float, referencia: String): String {
+        val longitudNormalizada = (longitud * 1000f).roundToInt()
+        return "$longitudNormalizada|${referencia.trim()}"
     }
 
     /**
@@ -637,6 +1233,208 @@ class CorteActivity: AppCompatActivity() {
             actualizar()
             dataManager.guardarPiezas(lista)
         }
+    }
+
+    private fun compartirContextoCorte() {
+        val texto = crearTextoCompartirCorte()
+        if (texto.isBlank()) {
+            Toast.makeText(this, "No hay medidas para compartir", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val proyecto = proyectoOptimizadorActual.ifBlank { nombreListaActual }.ifBlank { "corte" }
+        val nombreArchivo = "Cortes_${sanitizarNombreArchivo(proyecto)}_${
+            SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        }.$EXTENSION_CORTE_CRYSTAL"
+        val shareDir = File(cacheDir, "cortesshare").apply { mkdirs() }
+        val file = File(shareDir, nombreArchivo)
+
+        runCatching {
+            file.writeText(construirPaqueteCorteCrystal(texto, proyecto).toString(2))
+            val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+            val intent = Intent(this, ListChatActivity::class.java).apply {
+                putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_URI, uri.toString())
+                putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME, file.name)
+                putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME, MIME_CORTE_CRYSTAL)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = ClipData.newUri(contentResolver, "corte_crystal", uri)
+            }
+            startActivity(intent)
+        }.onFailure {
+            Toast.makeText(this, "No se pudo compartir formato Crystal: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun construirPaqueteCorteCrystal(texto: String, proyecto: String): JSONObject {
+        val piezas = JSONArray().also { arr ->
+            lista.forEach { pieza ->
+                arr.put(
+                    JSONObject()
+                        .put("longitud", pieza.longitud)
+                        .put("cantidad", pieza.cantidad)
+                        .put("referencia", quitarListaDesdeReferencia(pieza.referencia))
+                        .put("activa", pieza.cortada)
+                )
+            }
+        }
+        val varillas = JSONArray().also { arr ->
+            lista2.forEach { varilla ->
+                arr.put(
+                    JSONObject()
+                        .put("longitud", varilla.longitud)
+                        .put("cantidad", varilla.cantidad)
+                        .put("referencia", varilla.referencia)
+                        .put("activa", varilla.cortada)
+                )
+            }
+        }
+
+        return JSONObject()
+            .put("format", FORMAT_CORTE_CRYSTAL)
+            .put("version", 1)
+            .put("exportedAt", System.currentTimeMillis())
+            .put("cliente", proyecto)
+            .put("producto", "Lista de cortes")
+            .put("infoProducto", "Corte lineal")
+            .put("notas", texto)
+            .put("corte", JSONObject().put("piezas", piezas).put("varillas", varillas))
+    }
+
+    private fun sanitizarNombreArchivo(valor: String): String =
+        valor.trim()
+            .replace(Regex("[^A-Za-z0-9_-]+"), "_")
+            .trim('_')
+            .ifBlank { "corte" }
+
+    private fun manejarIntentEntrada(intent: Intent?) {
+        if (intent == null) return
+        val uri = when (intent.action) {
+            Intent.ACTION_SEND -> obtenerStreamCompartido(intent)
+            Intent.ACTION_VIEW -> intent.data
+            else -> null
+        } ?: return
+
+        runCatching {
+            val texto = contentResolver.openInputStream(uri)?.bufferedReader().use { it?.readText() }.orEmpty()
+            val root = JSONObject(texto)
+            if (root.optString("format") != FORMAT_CORTE_CRYSTAL) return
+            confirmarImportarCorteCrystal(root)
+            intent.action = null
+            intent.data = null
+            intent.removeExtra(Intent.EXTRA_STREAM)
+        }.onFailure {
+            Toast.makeText(this, "No se pudo abrir Corte Crystal: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun obtenerStreamCompartido(intent: Intent): Uri? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        }
+    }
+
+    private fun confirmarImportarCorteCrystal(root: JSONObject) {
+        val proyecto = root.optString("cliente").ifBlank { "corte" }
+        val corte = root.optJSONObject("corte") ?: JSONObject()
+        val piezas = corte.optJSONArray("piezas")?.length() ?: 0
+        val varillas = corte.optJSONArray("varillas")?.length() ?: 0
+
+        AlertDialog.Builder(this)
+            .setTitle("Corte Crystal")
+            .setMessage("Proyecto: $proyecto\nPiezas: $piezas\nVarillas: $varillas\n\nDeseas abrir este corte?")
+            .setPositiveButton("Abrir") { _, _ -> importarCorteCrystal(root) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun importarCorteCrystal(root: JSONObject) {
+        runCatching {
+            val proyecto = root.optString("cliente").ifBlank { "Corte Crystal" }
+            val corte = root.optJSONObject("corte") ?: JSONObject()
+            val piezasJson = corte.optJSONArray("piezas") ?: JSONArray()
+            val varillasJson = corte.optJSONArray("varillas") ?: JSONArray()
+
+            val piezas = mutableListOf<PiezaCorte>()
+            for (i in 0 until piezasJson.length()) {
+                piezasJson.optJSONObject(i)?.toPiezaCorte()?.let { piezas.add(it) }
+            }
+
+            val varillas = mutableListOf<PiezaCorte>()
+            for (i in 0 until varillasJson.length()) {
+                varillasJson.optJSONObject(i)?.toPiezaCorte()?.let { varillas.add(it) }
+            }
+
+            if (piezas.isEmpty() && varillas.isEmpty()) {
+                Toast.makeText(this, "El archivo no contiene cortes", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            lista = piezas
+            lista2 = varillas
+            nombreListaActual = proyecto
+            proyectoOptimizadorActual = ""
+            actualizar()
+            actualizar2()
+            guardarDatos()
+            actualizarTituloProyectoOptimizador()
+            Toast.makeText(this, "Corte Crystal abierto", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            Toast.makeText(this, "No se pudo importar corte: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun JSONObject.toPiezaCorte(): PiezaCorte? {
+        val longitud = optDouble("longitud", Double.NaN).takeIf { !it.isNaN() }?.toFloat() ?: return null
+        val cantidad = optInt("cantidad", 0)
+        val referencia = optString("referencia")
+        if (longitud <= 0f || cantidad <= 0 || referencia.isBlank()) return null
+        return PiezaCorte(longitud, cantidad, referencia, optBoolean("activa", true))
+    }
+
+    private fun crearTextoCompartirCorte(): String {
+        val medida = binding.etMedida.text?.toString()?.trim().orEmpty()
+        val cantidad = binding.etCant.text?.toString()?.trim().orEmpty()
+        val referencia = binding.etRefe.text?.toString()?.trim().orEmpty()
+        val hayFormulario = medida.isNotEmpty() || cantidad.isNotEmpty() || referencia.isNotEmpty()
+
+        if (lista.isEmpty() && lista2.isEmpty() && !hayFormulario) return ""
+
+        return buildString {
+            appendLine("Crystal - Optimizacion de corte lineal")
+            val proyecto = proyectoOptimizadorActual.ifBlank { nombreListaActual }
+            if (proyecto.isNotBlank()) appendLine("Proyecto: $proyecto")
+            appendLine("Grosor disco: ${binding.etGrosor.text?.toString()?.ifBlank { binding.etGrosor.hint } ?: binding.etGrosor.hint} cm")
+            appendLine("Nivel: ${binding.sbNivel.progress + 1}")
+
+            if (hayFormulario) {
+                appendLine()
+                appendLine("Medida en formulario:")
+                appendLine("Medida: ${medida.ifBlank { "-" }} cm")
+                appendLine("Cantidad: ${cantidad.ifBlank { "-" }}")
+                appendLine("Referencia: ${referencia.ifBlank { "-" }}")
+            }
+
+            if (lista.isNotEmpty()) {
+                appendLine()
+                appendLine("Piezas:")
+                lista.forEachIndexed { index, pieza ->
+                    val estado = if (pieza.cortada) "" else " [inactiva]"
+                    appendLine("${index + 1}. ${formatter.df1(pieza.longitud)} cm = ${pieza.cantidad} (${pieza.referencia})$estado")
+                }
+            }
+
+            if (lista2.isNotEmpty()) {
+                appendLine()
+                appendLine("Varillas y retazos:")
+                lista2.forEachIndexed { index, varilla ->
+                    val estado = if (varilla.cortada) "" else " [inactiva]"
+                    appendLine("${index + 1}. ${formatter.df1(varilla.longitud)} cm = ${varilla.cantidad} (${varilla.referencia})$estado")
+                }
+            }
+        }.trim()
     }
 
     // === FUNCIONES DE DIÁLOGOS (mantenidas igual que el original) ===

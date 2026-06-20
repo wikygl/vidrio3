@@ -59,64 +59,6 @@ object NovaUIHelper {
 
     // ==================== FUNCIONES DE DISEÃ‘O ====================
 
-    fun obtenerRecursoDiseno(divisiones: Int, siNoMoch: Int, tipoVentana: String = "apa", prefijo: String = "ic_fichad"): Int {
-        val nombreRecurso = obtenerNombreDiseno(divisiones, siNoMoch, tipoVentana, prefijo)
-
-        return when (nombreRecurso) {
-            // NovaApa (aparente) - con sufijo "a" cuando hay mocheta
-            "ic_fichad1a" -> R.drawable.ic_fichad1a
-            "ic_fichad2a" -> R.drawable.ic_fichad2a
-            "ic_fichad3a" -> R.drawable.ic_fichad3a
-            "ic_fichad4a" -> R.drawable.ic_fichad4a
-            "ic_fichad5a" -> R.drawable.ic_fichad5a
-            "ic_fichad6a" -> R.drawable.ic_fichad6a
-            "ic_fichad7a" -> R.drawable.ic_fichad7a
-            "ic_fichad8a" -> R.drawable.ic_fichad8a
-            "ic_fichad9a" -> R.drawable.ic_fichad9a
-            "ic_fichad10a" -> R.drawable.ic_fichad10a
-            "ic_fichad11a" -> R.drawable.ic_fichad11a
-            "ic_fichad12a" -> R.drawable.ic_fichad12a
-            "ic_fichad13a" -> R.drawable.ic_fichad13a
-            "ic_fichad14a" -> R.drawable.ic_fichad14a
-            "ic_fichad15a" -> R.drawable.ic_fichad15a
-
-            // NovaIna (inaparente) - sin sufijo cuando hay mocheta
-            "ic_fichad1" -> R.drawable.ic_fichad1
-            "ic_fichad2" -> R.drawable.ic_fichad2
-            "ic_fichad3" -> R.drawable.ic_fichad3
-            "ic_fichad4" -> R.drawable.ic_fichad4
-            "ic_fichad5" -> R.drawable.ic_fichad5
-            "ic_fichad6" -> R.drawable.ic_fichad6
-            "ic_fichad7" -> R.drawable.ic_fichad7
-            "ic_fichad8" -> R.drawable.ic_fichad8
-            "ic_fichad9" -> R.drawable.ic_fichad9
-            "ic_fichad10" -> R.drawable.ic_fichad10
-            "ic_fichad11" -> R.drawable.ic_fichad11
-            "ic_fichad12" -> R.drawable.ic_fichad12
-            "ic_fichad13" -> R.drawable.ic_fichad13
-            "ic_fichad14" -> R.drawable.ic_fichad14
-            "ic_fichad15" -> R.drawable.ic_fichad15
-
-            // Ambos - con sufijo "c" cuando NO hay mocheta
-            "ic_fichad1c" -> R.drawable.ic_fichad1
-            "ic_fichad2c" -> R.drawable.ic_fichad2c
-            "ic_fichad3c" -> R.drawable.ic_fichad3c
-            "ic_fichad4c" -> R.drawable.ic_fichad4c
-            "ic_fichad5c" -> R.drawable.ic_fichad5c
-            "ic_fichad6c" -> R.drawable.ic_fichad6c
-            "ic_fichad7c" -> R.drawable.ic_fichad7c
-            "ic_fichad8c" -> R.drawable.ic_fichad8c
-            "ic_fichad9c" -> R.drawable.ic_fichad9c
-            "ic_fichad10c" -> R.drawable.ic_fichad10c
-            "ic_fichad11c" -> R.drawable.ic_fichad11c
-            "ic_fichad12c" -> R.drawable.ic_fichad12c
-            "ic_fichad13c" -> R.drawable.ic_fichad13c
-            "ic_fichad14c" -> R.drawable.ic_fichad14c
-            "ic_fichad15c" -> R.drawable.ic_fichad15c
-
-            else -> R.drawable.ic_fichad5
-        }
-    }
 
     fun obtenerNombreDiseno(divisiones: Int, siNoMoch: Int, tipoVentana: String = "apa", prefijo: String = "ic_fichad"): String {
         // LÃ“GICA ORIGINAL: siNoMoch = 1 â†’ sin sufijo, siNoMoch = 0 â†’ sufijo "c"
@@ -178,7 +120,8 @@ object NovaUIHelper {
         siNoMoch: Int,
         puntosU: String = "",
         modelo: String = "nn",
-        alturaPuente: Float = 2.5f
+        alturaPuente: Float = 2.5f,
+        mochetaInferior: Float = 0f
     ): String {
         val altoPuenteTexto = if (siNoMoch == 1) {
             NovaCalculos.df1(altoHoja)
@@ -196,7 +139,8 @@ object NovaUIHelper {
                         modelo = modelo,
                         alto = alto,
                         altoHoja = altoHoja,
-                        alturaPuente = alturaPuente
+                        alturaPuente = alturaPuente,
+                        mochetaInferior = mochetaInferior
                     )
                     val inf = alturas.inferior ?: alturas.superior
                     inf.coerceAtLeast(0f) to alturas.superior.coerceAtLeast(0f)
@@ -229,14 +173,24 @@ object NovaUIHelper {
         altoHoja: Float,
         divisiones: Int,
         siNoMoch: Int,
-        texto: String
+        texto: String,
+        mochetaInferior: Float = 0f,
+        remate: String = texto
     ): String {
+        // `texto` = modulación (patrón de hojas del sistema); `remate` = nn/nr/np/nci (mochetas).
         val mo       = NovaCalculos.altoMocheta(alto, altoHoja, tubo = 2.5f)
-        val moDos    = (alto - altoHoja).coerceAtLeast(0f) / 2f
+        val disponible = (alto - altoHoja).coerceAtLeast(0f)
+        val moDos    = disponible / 2f
+        // Doble puente (np): si se ingresó una mocheta inferior explícita (> 0) se respeta
+        // ese valor y la mocheta superior toma el resto; si es 0 se reparte el disponible
+        // en dos partes iguales (comportamiento previo).
+        val moDosInf = if (remate == "np" && mochetaInferior > 0f) mochetaInferior.coerceAtMost(disponible) else moDos
+        val moDosSup = if (remate == "np" && mochetaInferior > 0f) (disponible - moDosInf).coerceAtLeast(0f) else moDos
         val altoPuente = if (siNoMoch == 1) NovaCalculos.df1(altoHoja) else ""
         val altoSisTxt = NovaCalculos.df1(altoHoja)
         val moTxt    = NovaCalculos.df1(mo)
-        val moDosT   = NovaCalculos.df1(moDos)
+        val moDosInfT = NovaCalculos.df1(moDosInf)
+        val moDosSupT = NovaCalculos.df1(moDosSup)
 
         val grupos   = NovaCalculos.gruposDivisionesMochetaPorModelo(ancho, divisiones, texto)
         val nTramos  = grupos.size
@@ -253,18 +207,26 @@ object NovaUIHelper {
             val modsS = when (texto) {
                 "ncc"  -> { val h = NovaCalculos.df1(w / 2); "c<$h>c<$h>" }
                 "n3c"  -> { val h = NovaCalculos.df1(w / 3); "c<$h>c<$h>c<$h>" }
-                "ncfc" -> { val h = NovaCalculos.df1(w / 3); "c<$h>f<$h>c<$h>" }
+                "ncfc" -> NovaCalculos.ordenDivisCfc(nDiv, w)
+                "nff"  -> {
+                    val h = NovaCalculos.df1(w / nDiv)
+                    (1..nDiv).joinToString("") { "f<$h>" }
+                }
+                "nfc"  -> {
+                    val h = NovaCalculos.df1(w / nDiv)
+                    (1..nDiv).joinToString("") { "c<$h>" }
+                }
                 else   -> NovaCalculos.ordenDivis(nDiv, w)
             }
 
-            val contenido = when (texto) {
+            val contenido = when (remate) {
                 "nr" -> {
                     val s = "s<$altoSisTxt>($modsS)"
                     if (siNoMoch == 1) "m<$moTxt>($modsM);$s" else s
                 }
                 "np", "nci" -> {
                     val s = "s<$altoSisTxt>($modsS)"
-                    if (siNoMoch == 1) "m<$moDosT>($modsM);$s;m<$moDosT>($modsM)" else s
+                    if (siNoMoch == 1) "m<$moDosInfT>($modsM);$s;m<$moDosSupT>($modsM)" else s
                 }
                 else -> {
                     val s = "s<$altoPuente>($modsS)"
@@ -287,22 +249,34 @@ object NovaUIHelper {
         altoHoja: Float,
         divisiones: Int,
         siNoMoch: Int,
-        texto: String
+        texto: String,
+        mochetaInferior: Float = 0f,
+        remate: String = texto
     ): String {
+        // `texto` = modulación (patrón de hojas del sistema); `remate` = nn/nr/np/nci (mochetas).
         val mo       = NovaCalculos.altoMocheta(alto, altoHoja, tubo = 2.5f)
-        val moDos    = (alto - altoHoja).coerceAtLeast(0f) / 2f
+        val disponible = (alto - altoHoja).coerceAtLeast(0f)
+        val moDos    = disponible / 2f
+        // Doble puente (np): respeta la mocheta inferior ingresada (> 0) y deja el resto
+        // para la superior; con 0 reparte el disponible en dos partes iguales.
+        val moDosInf = if (remate == "np" && mochetaInferior > 0f) mochetaInferior.coerceAtMost(disponible) else moDos
+        val moDosSup = if (remate == "np" && mochetaInferior > 0f) (disponible - moDosInf).coerceAtLeast(0f) else moDos
         val altoPuente = if (siNoMoch == 1) NovaCalculos.df1(altoHoja) else ""
         val altoSisTxt = NovaCalculos.df1(altoHoja)
         val moTxt    = NovaCalculos.df1(mo)
-        val moDosT   = NovaCalculos.df1(moDos)
+        val moDosInfT = NovaCalculos.df1(moDosInf)
+        val moDosSupT = NovaCalculos.df1(moDosSup)
 
         val grupos   = NovaCalculos.gruposDivisionesMochetaPorModelo(ancho, divisiones, texto)
         val nTramos  = grupos.size
-        val anchoUtil   = if (nTramos > 1) ancho - (nTramos - 1) * 2.5f else ancho
+        // ncfc/nfc en INA: orden por grupos pero SIN parantes que dividan → un solo tramo continuo.
+        // No se descuentan parantes y los grupos se unen sin ";P;".
+        val unTramo  = (NovaCalculos.ncfcUnTramo && texto == "ncfc") || (NovaCalculos.nfcUnTramo && texto == "nfc")
+        val anchoUtil   = if (nTramos > 1 && !unTramo) ancho - (nTramos - 1) * 2.5f else ancho
         val anchoPorDiv = if (divisiones > 0) anchoUtil / divisiones else ancho
 
         if (nTramos <= 1) {
-            return generarTramos(ancho, alto, altoHoja, divisiones, siNoMoch, texto)
+            return generarTramos(ancho, alto, altoHoja, divisiones, siNoMoch, texto, mochetaInferior, remate)
         }
 
         val listaSistMods = mutableListOf<String>()
@@ -315,23 +289,32 @@ object NovaUIHelper {
             listaSistMods.add(when (texto) {
                 "ncc"  -> { val h = NovaCalculos.df1(w / 2); "c<$h>c<$h>" }
                 "n3c"  -> { val h = NovaCalculos.df1(w / 3); "c<$h>c<$h>c<$h>" }
-                "ncfc" -> { val h = NovaCalculos.df1(w / 3); "c<$h>f<$h>c<$h>" }
+                "ncfc" -> NovaCalculos.ordenDivisCfc(nDiv, w)
+                "nff"  -> {
+                    val h = NovaCalculos.df1(w / nDiv)
+                    (1..nDiv).joinToString("") { "f<$h>" }
+                }
+                "nfc"  -> {
+                    val h = NovaCalculos.df1(w / nDiv)
+                    (1..nDiv).joinToString("") { "c<$h>" }
+                }
                 else   -> NovaCalculos.ordenDivis(nDiv, w)
             })
         }
 
-        val sistMods = listaSistMods.joinToString(";P;")
-        val mochMods = listaMochMods.joinToString(";P;")
+        val sep = if (unTramo) "" else ";P;"
+        val sistMods = listaSistMods.joinToString(sep)
+        val mochMods = listaMochMods.joinToString(sep)
         val anchoTxt = NovaCalculos.df1(ancho)
 
-        val contenido = when (texto) {
+        val contenido = when (remate) {
             "nr" -> {
                 val s = "s<$altoSisTxt>($sistMods)"
                 if (siNoMoch == 1) "m<$moTxt>($mochMods);$s" else s
             }
             "np", "nci" -> {
                 val s = "s<$altoSisTxt>($sistMods)"
-                if (siNoMoch == 1) "m<$moDosT>($mochMods);$s;m<$moDosT>($mochMods)" else s
+                if (siNoMoch == 1) "m<$moDosInfT>($mochMods);$s;m<$moDosSupT>($mochMods)" else s
             }
             else -> {
                 val s = "s<$altoPuente>($sistMods)"
@@ -347,10 +330,12 @@ object NovaUIHelper {
         altoHoja: Float,
         divisiones: Int,
         siNoMoch: Int,
-        texto: String
+        texto: String,
+        mochetaInferior: Float = 0f,
+        remate: String = texto
     ): String {
         val encabezado = "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:"
-        return encabezado + generarTramosConsolidado(ancho, alto, altoHoja, divisiones, siNoMoch, texto)
+        return encabezado + generarTramosConsolidado(ancho, alto, altoHoja, divisiones, siNoMoch, texto, mochetaInferior, remate)
     }
 
     fun generarDiseno(
@@ -359,10 +344,20 @@ object NovaUIHelper {
         altoHoja: Float,
         divisiones: Int,
         siNoMoch: Int,
-        texto: String
+        texto: String,
+        mochetaInferior: Float = 0f,
+        remate: String = texto
     ): String {
         val encabezado = "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:"
-        return encabezado + generarTramos(ancho, alto, altoHoja, divisiones, siNoMoch, texto)
+        // INA ncfc/nfc: un solo tramo continuo (sin el parante " P<2.5> " entre grupos). Se usa el
+        // consolidado, que con el flag de un-tramo une los grupos en un único Tl sin parante.
+        val unTramo = (NovaCalculos.ncfcUnTramo && texto == "ncfc") || (NovaCalculos.nfcUnTramo && texto == "nfc")
+        val cuerpo = if (unTramo) {
+            generarTramosConsolidado(ancho, alto, altoHoja, divisiones, siNoMoch, texto, mochetaInferior, remate)
+        } else {
+            generarTramos(ancho, alto, altoHoja, divisiones, siNoMoch, texto, mochetaInferior, remate)
+        }
+        return encabezado + cuerpo
     }
 
     fun generarPuntosU(
@@ -393,9 +388,11 @@ object NovaUIHelper {
         alto: Float,
         altoHoja: Float,
         divisiones: Int,
-        texto: String
+        texto: String,
+        mochetaInferior: Float = 0f,
+        remate: String = texto
     ): String {
-        val diseno = generarDiseno(ancho, alto, altoHoja, divisiones, siNoMoch = 1, texto)
+        val diseno = generarDiseno(ancho, alto, altoHoja, divisiones, siNoMoch = 1, texto, mochetaInferior, remate)
         return "{nova,$tipoNova,[$diseno]}"
     }
 }

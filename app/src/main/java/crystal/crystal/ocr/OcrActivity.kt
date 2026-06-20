@@ -310,9 +310,9 @@ class OcrActivity : AppCompatActivity() {
 
         // Calcular valores usando conversión a metros (asumiendo centímetros)
         val piescua = (med1 / 100) * (med2 / 100) * 11.1f * cantidad
-        val metcua = (med1 / 100) * (med2 / 100)
+        val metcua = (med1 / 100) * (med2 / 100) * cantidad
         val metli = (med1 / 100) * cantidad
-        val metcub = (med1 / 100) * (med2 / 100) * 1f
+        val metcub = (med1 / 100) * (med2 / 100) * 1f * cantidad
         val peri = (((med1 * 2) + (med2 * 2)) / 100)
         val costo = piescua * precio
 

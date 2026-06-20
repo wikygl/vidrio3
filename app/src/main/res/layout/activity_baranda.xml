@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/root"
@@ -8,166 +7,510 @@
     android:layout_height="match_parent"
     tools:context=".Diseno.BarandaActivity">
 
-    <ScrollView
-        android:id="@+id/scrollView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
+    <LinearLayout
+        android:id="@+id/layout2"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
 
-        <androidx.constraintlayout.widget.ConstraintLayout
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="540dp"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/lyPanelIzquierdo"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginStart="9dp"
+                android:layout_marginTop="9dp"
+                android:layout_marginEnd="4.5dp"
+                android:layout_weight="1"
+                android:background="@drawable/corner"
+                android:orientation="vertical"
+                tools:ignore="NestedWeights">
+
+                <TextView
+                    android:id="@+id/titleTextView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/corner2"
+                    android:backgroundTint="@color/color"
+                    android:gravity="center"
+                    android:text="Barandas"
+                    android:textColor="@color/blanco"
+                    tools:ignore="TextContrastCheck" />
+
+                <LinearLayout
+                    android:id="@+id/fichaTLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="150dp"
+                    android:background="@drawable/cornere"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/previewLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="1dp"
+                        android:layout_marginEnd="1dp"
+                        android:background="@color/amarillo"
+                        android:gravity="center"
+                        android:text="Vista previa"
+                        android:textSize="10sp"
+                        tools:ignore="SmallSp,TextContrastCheck" />
+
+                    <FrameLayout
+                        android:id="@+id/barandaPreviewContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_marginStart="1dp"
+                        android:layout_marginEnd="1dp"
+                        android:layout_weight="1"
+                        android:background="@color/blanco"
+                        android:layout_gravity="center">
+
+                        <ImageView
+                            android:id="@+id/imageView8"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:src="@drawable/baranda"
+                            android:layout_gravity="center"/>
+                    </FrameLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvMedidas"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="@string/medidas_y_cantidad"
+                    android:textColor="@color/color"
+                    tools:ignore="TextContrastCheck" />
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:fadingEdge="horizontal"
+                    tools:ignore="UselessParent">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="@string/ancho"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/anchoTotalEditText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="@string/alto"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/altoTotalEditText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Vidrios"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/cantidadVidriosEditText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Tubo parante"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/espesorTuboParanteEditText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Tubo cabezal"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/espesorTuboCabezalEditText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Cuello"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etCuello"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </ScrollView>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="0.81"
+                android:orientation="vertical">
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_marginTop="9dp"
+                    android:layout_marginEnd="9dp">
+
+                    <LinearLayout
+                        android:id="@+id/lyResultados"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:background="@drawable/corner"
+                        android:orientation="vertical"
+                        android:paddingBottom="4.5dp"
+                        app:layout_constraintBottom_toTopOf="@+id/tvProyectoActivo"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent">
+
+                        <TextView
+                            android:id="@+id/textView28"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/corner2"
+                            android:backgroundTint="@color/color"
+                            android:gravity="center"
+                            android:text="@string/referencias_y_c_lculos"
+                            android:textColor="@color/blanco"
+                            tools:ignore="TextContrastCheck" />
+
+                        <ScrollView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical">
+
+                                <LinearLayout
+                                    android:id="@+id/lyReferencias"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/cornere"
+                                    android:orientation="vertical">
+
+                                    <TextView
+                                        android:id="@+id/tvReferencias"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:text="@string/referencias"
+                                        android:visibility="gone" />
+
+                                    <TextView
+                                        android:id="@+id/txReferencias"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:paddingTop="1dp"
+                                        android:paddingBottom="1dp" />
+                                </LinearLayout>
+
+                                <TextView
+                                    android:id="@+id/textView33"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="center"
+                                    android:text="@string/c_lculos"
+                                    android:textColor="@color/color"
+                                    tools:ignore="TextContrastCheck" />
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="vertical">
+
+                                    <LinearLayout
+                                        android:id="@+id/lyCabezal"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/blanco"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvCabezal"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Tubo Cabezal" />
+
+                                        <TextView
+                                            android:id="@+id/txCabezal"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <LinearLayout
+                                        android:id="@+id/lyParante"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/sombra"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvParante"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Tubo Parante" />
+
+                                        <TextView
+                                            android:id="@+id/txParante"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <LinearLayout
+                                        android:id="@+id/lyCuelloResultado"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/blanco"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvCuello"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Tubo Cuello" />
+
+                                        <TextView
+                                            android:id="@+id/txCuello"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <LinearLayout
+                                        android:id="@+id/lyVidrios"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/sombra"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvVidrios"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="@string/vidrios" />
+
+                                        <TextView
+                                            android:id="@+id/txVidrios"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <LinearLayout
+                                        android:id="@+id/lyAccesorios"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/blanco"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvAccesorios"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Accesorios" />
+
+                                        <TextView
+                                            android:id="@+id/txAccesorios"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+                                </LinearLayout>
+                            </LinearLayout>
+                        </ScrollView>
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvProyectoActivo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="#F5F5F5"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:padding="7dp"
+                        android:text="Sin proyecto activo"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        app:layout_constraintBottom_toTopOf="@+id/linearLayout20"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent" />
+
+                    <LinearLayout
+                        android:id="@+id/linearLayout20"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom|end"
+                        android:orientation="horizontal"
+                        app:layout_constraintBottom_toBottomOf="parent">
+
+                        <Button
+                            android:id="@+id/btArchivar"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/naranja"
+                            android:text="@string/archivar"
+                            android:textColor="@color/blanco"
+                            tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+
+                        <Button
+                            android:id="@+id/generarButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/rosa"
+                            android:text="@string/calcular"
+                            android:textColor="@color/blanco"
+                            tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                    </LinearLayout>
+                </androidx.constraintlayout.widget.ConstraintLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/linearLayout2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="16dp">
-
-            <TextView
-                android:id="@+id/titleTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Generador de Barandas"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"/>
-
-            <!-- Ancho Total -->
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/anchoTotalLayout"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:hint="Ancho Total (cm)"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/titleTextView">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/anchoTotalEditText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="numberDecimal"/>
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <!-- Alto Total -->
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/altoTotalLayout"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:hint="Alto Total (cm)"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/anchoTotalLayout"
-                android:layout_marginTop="8dp">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/altoTotalEditText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="numberDecimal"/>
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <!-- Cantidad de Vidrios -->
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/cantidadVidriosLayout"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:hint="Cantidad de Vidrios"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/altoTotalLayout"
-                android:layout_marginTop="8dp">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/cantidadVidriosEditText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="number"/>
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <!-- Espesor Tubo Parante -->
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/espesorTuboParanteLayout"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:hint="Espesor Tubo Parante (cm)"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/cantidadVidriosLayout"
-                android:layout_marginTop="8dp">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/espesorTuboParanteEditText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="numberDecimal"/>
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <!-- Espesor Tubo Cabezal -->
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/espesorTuboCabezalLayout"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:hint="Espesor Tubo Cabezal (cm)"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/espesorTuboParanteLayout"
-                android:layout_marginTop="8dp">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/espesorTuboCabezalEditText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="numberDecimal"/>
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <!-- Espesor Tubo Cuello -->
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/lyCuello"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:hint="Espesor Tubo Cuello (cm)"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/espesorTuboCabezalLayout"
-                android:layout_marginTop="8dp">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/etCuello"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="numberDecimal"/>
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <!-- Botón Generar -->
-            <Button
-                android:id="@+id/generarButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="Generar Baranda"
-                android:layout_marginTop="16dp"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/lyCuello"/>
-
-            <!-- Vista Previa -->
-            <TextView
-                android:id="@+id/previewLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Vista Previa:"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:layout_marginTop="24dp"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/generarButton"/>
-
-            <FrameLayout
-                android:id="@+id/barandaPreviewContainer"
-                android:layout_width="0dp"
-                android:layout_height="400dp"
-                android:layout_marginTop="8dp"
-                android:background="@color/sombra"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/previewLabel"/>
-
-        </androidx.constraintlayout.widget.ConstraintLayout>
-    </ScrollView>
+            android:orientation="vertical" />
+    </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

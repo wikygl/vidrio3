@@ -4,10 +4,16 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
+import android.text.Editable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -15,6 +21,7 @@ import android.widget.AdapterView
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -45,31 +52,58 @@ class NovaCorrediza : AppCompatActivity() {
     private var diseno: String = ""
     private var texto: String = ""
     private var otros: Boolean = false
+    // Referencias compactables (en L / en C / serie): texto completo + estado de expansión.
+    private var referenciasFull: String = ""
+    private var referenciasColapsable = false
+    private var referenciasExpandida = false
     // Nombres para tvNombreModelo (geometría + modelo, colores distintos)
     private var nombreGeometria: String = "Plano"
     private var nombreModelo: String = "normal"
-    // Tipo de modelo activo (nn/nr/np/ncc/…) — se aplica dentro de cada geometría
+    // Modulación: patrón de hojas del sistema (nn/ncfc/nff/nfc). Eje independiente.
     private var textoModelo: String = "nn"
+    // Full corredizas: cada cuántas corredizas va el parante que arma otro tramo.
+    // 0 = automático (reparto balanceado como el clásico); >1 = forzar corte cada N.
+    private var corredizasPorTramo: Int = 0
+    // Remate (mochetas): nn=normal, nr=invertido, np=doble puente. Eje independiente.
+    private var modeloRemate: String = "nn"
+    private var nombreRemate: String = "normal"
     private var contadorLado = 1
     private var maxLados = -1
     private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
     private var ultimoPaquete: String = ""
     private var primerClickArchivarRealizado = false
     private var spinnerListo = false
+    private var actualizandoValorPuenteDesdeCodigo = false
+    private var valorPuenteEditadoManualmente = false
     private var metaColorAluminio: String = ""
     private var metaTipoVidrio: String = ""
     private var metaAcabadoSuperficial: String = ""
     private var metaObservaciones: String = ""
+    // Encuentro: lados que colindan (1) o quedan al vacío (0), orden Arriba-Derecha-Abajo-Izquierda.
+    private var metaEncuentro: String = "1111"
+    // Forma (vista frontal): plano | circular | poligonal.
+    private var metaForma: String = "plano"
+    // Esquinero (perfil en la esquina de geometrías compuestas): texto de opción o "ninguno".
+    private var metaEsquinero: String = "tubo 2⅜ x 1"
+    // Dirección de la geometría compuesta (por ahora solo afecta el dibujo): adentro | afuera.
+    private var metaDireccion: String = "adentro"
 
     // Estado para divisiones desiguales (cargado desde DisenoNova)
     private var modulosDesiguales: List<ModuloDesigual> = emptyList()
     private var parantesDesiguales: List<Int> = emptyList()
     private var mochetaDesigual: List<ModuloDesigual> = emptyList()
     private var altoHojaDesigual: Float = 0f
+    // true mientras se cargan campos desde un diseño (evita que los TextWatchers que limpian
+    // el estado desigual se disparen por los setText programáticos de la carga).
+    private var cargandoDiseno = false
     private var primeraMedidaNl: MedidaNl? = null
     private var primeraMedidaNu: MedidaNl? = null
     private var segundaMedidaNu: MedidaNl? = null
     private val ladosNs: MutableList<MedidaNl> = mutableListOf()
+    // Navegación de serie: tras calcular se puede recorrer/editar cada lado de la serie.
+    private var navegandoNs = false
+    private var indiceNs = 0
+    private var materialesNlArchivables: EstadoMateriales? = null
 
     private data class MedidaNl(
         val ancho: Float,
@@ -130,6 +164,7 @@ class NovaCorrediza : AppCompatActivity() {
         modelos()
         configurarCliente()
         spinnerTubo()
+        configurarLimpiezaDesigual()
         binding.fcLayout.visibility = View.GONE
 
         // Estado inicial aparente
@@ -244,6 +279,8 @@ class NovaCorrediza : AppCompatActivity() {
                 intent.putExtra(DisenoNovaActivity.EXTRA_PAQUETE, ultimoPaquete)
             }
             intent.putExtra(DisenoNovaActivity.EXTRA_MOCHETA_LATERAL_CM, mochetaLateralDisenoNl())
+            intent.putExtra(DisenoNovaActivity.EXTRA_ENCUENTRO_VACIO, metaEncuentro)
+            intent.putExtra(DisenoNovaActivity.EXTRA_DIRECCION, metaDireccion)
             intent.putExtra(DisenoNovaActivity.EXTRA_US_CM, binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f)
             lanzarDisenoInteractivo.launch(intent)
             true
@@ -255,7 +292,9 @@ class NovaCorrediza : AppCompatActivity() {
         }
 
         binding.btOk.setOnClickListener {
-            ocultarLySpinner()
+            if (aplicarValorManualPuente()) {
+                ocultarLySpinner()
+            }
         }
 
         binding.textView28.setOnLongClickListener {
@@ -338,21 +377,21 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etDivi3.backgroundTintList = tintList
         binding.etPuente3.backgroundTintList = tintList
         binding.etFlecha.backgroundTintList = tintList
+        binding.etCuerda.backgroundTintList = tintList
         binding.etNmochetas.backgroundTintList = tintList
+        binding.etMochetaInf.backgroundTintList = tintList
 
         // Spinner de tubo: solo visible en aparente
         binding.lySpinner.visibility = View.GONE // siempre oculto por defecto, se muestra con longclick
         // tLayout (Tee): solo aparente
         binding.tLayout.visibility = if (tipoNova == TipoNova.APA) View.VISIBLE else View.GONE
-        // lyUf (U felpero): solo inaparente
-        binding.lyUf.visibility = if (tipoNova == TipoNova.INA) View.VISIBLE else View.GONE
+        // lyUf queda sin uso; fcLayout asume el rol de U felpero/Fijo-corre en inaparente.
+        binding.lyUf.visibility = View.GONE
         // El spinner de tubo aplica a las tres novas
-        if (tipoNova == TipoNova.INA && esPuenteMultiple()) {
-            puente = puenteInaDefault
-            tubo = 2.5f
-            binding.tvP.text = puente
-            sincronizarSpinnerPuenteInaDefault()
+        if (puenteMultipleNoPermitido(puente)) {
+            aplicarPuentePredeterminadoSinMultiple()
         }
+        actualizarVisibilidadMochetaInferior()
     }
 
     // ==================== MENÚ ====================
@@ -460,13 +499,28 @@ class NovaCorrediza : AppCompatActivity() {
         binding.btCalcular.setOnClickListener {
             try {
                 if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) return@setOnClickListener
-                // Si no hay modelo seleccionado, forzar selección mostrando svModelos
+                // Si no hay modelo seleccionado, forzar selección abriendo el diálogo de opciones
                 if (texto.isEmpty()) {
-                    binding.ivDiseno.visibility = View.GONE
-                    binding.svModelos.visibility = View.VISIBLE
+                    abrirDialogoOpcionesNova()
                     return@setOnClickListener
                 }
                 if (texto.isBlank()) texto = "nn"
+                // Full corredizas: asegurar el agrupamiento por tramo elegido por el usuario.
+                NovaCalculos.corredizasPorTramoNfc = corredizasPorTramo
+                // ncfc/nfc en INA = un solo tramo (sin parantes que dividan).
+                NovaCalculos.ncfcUnTramo = (tipoNova == TipoNova.INA && textoModelo == "ncfc")
+                NovaCalculos.nfcUnTramo = (tipoNova == TipoNova.INA && textoModelo == "nfc")
+                // Full corredizas inaparente: máximo 6 divisiones.
+                if (NovaCalculos.nfcUnTramo) {
+                    val anchoNfc = arcoCurvo(binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f)
+                    val divM = binding.etPartes.text?.toString()?.toIntOrNull() ?: 0
+                    if (NovaCalculos.divisiones(anchoNfc, divM) > 6) {
+                        Toast.makeText(this, "Full corredizas inaparente: máximo 6 divisiones.", Toast.LENGTH_LONG).show()
+                        return@setOnClickListener
+                    }
+                }
+                // Si el puente actual no está permitido (p. ej. INA ncfc), pasar al predeterminado.
+                if (puenteMultipleNoPermitido(puente)) aplicarPuentePredeterminadoSinMultiple()
                 if (texto == "ns") {
                     asegurarCamposActivosDesdeUltimoNs()
                 }
@@ -491,10 +545,20 @@ class NovaCorrediza : AppCompatActivity() {
                     calcularDesigual()
                 } else {
                     actualizarTxPrConDisenoV2()
-                    uTexto()
-                    otrosAluminios()
-                    vidriosTexto()
-                    referencias()
+                    if (texto == "nl") {
+                        calcularMaterialesNl()
+                    } else if (texto == "nu") {
+                        calcularMaterialesNu()
+                    } else {
+                        materialesNlArchivables = null
+                        uTexto()
+                        otrosAluminios()
+                        vidriosTexto()
+                        referencias()
+                    }
+                    aplicarVistaReferencias()
+                    // En serie, habilitar la navegación/edición de los lados ya ingresados.
+                    if (texto == "ns") activarNavegacionNs()
 
                     ultimoPaquete = disenoSimbolico()
                     if (texto in setOf("nl", "nu", "ns") && ancho() > 400f) {
@@ -505,13 +569,16 @@ class NovaCorrediza : AppCompatActivity() {
                     val intent = Intent(this, DisenoNovaActivity::class.java).apply {
                         putExtra(DisenoNovaActivity.EXTRA_PAQUETE, ultimoPaquete)
                         putExtra(DisenoNovaActivity.EXTRA_HEADLESS, true)
-                        putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>")) "png" else "svg")
+                        putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>") || modulosDesiguales.isNotEmpty()) "png" else "svg")
                         putExtra(DisenoNovaActivity.EXTRA_RET_PADDING_PX, 4)
                         putExtra(DisenoNovaActivity.EXTRA_MOCHETA_LATERAL_CM, mochetaLateralDisenoNl())
+                        putExtra(DisenoNovaActivity.EXTRA_ENCUENTRO_VACIO, metaEncuentro)
+                putExtra(DisenoNovaActivity.EXTRA_DIRECCION, metaDireccion)
+                        putExtra(DisenoNovaActivity.EXTRA_DIRECCION, metaDireccion)
                         putExtra(DisenoNovaActivity.EXTRA_US_CM, binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f)
                     }
                     lanzarDiseno.launch(intent)
-                    binding.textView28.text = ultimoPaquete
+                    binding.textView28.setText(R.string.referencias_y_c_lculos)
                 }
             } catch (_: Exception) {
                 Toast.makeText(this, "Ingrese dato válido", Toast.LENGTH_SHORT).show()
@@ -520,6 +587,354 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     // ==================== CÁLCULO DESIGUAL ====================
+    private data class EstadoCamposCalculo(
+        val ancho: String,
+        val alto: String,
+        val hoja: String,
+        val divis: String
+    )
+
+    private data class EstadoMateriales(
+        val u: String,
+        val p: String,
+        val r: String,
+        val fc: String,
+        val pf: String,
+        val te: String,
+        val tope: String,
+        val hache: String,
+        val tubo: String,
+        val vidrio: String,
+        val referencias: String
+    )
+
+    private fun calcularMaterialesNl() {
+        val primera = obtenerPrimeraMedidaNlEditable() ?: run {
+            uTexto()
+            otrosAluminios()
+            vidriosTexto()
+            referencias()
+            return
+        }
+        val camposLado2 = capturarCamposCalculo()
+        val lado2Medida = MedidaNl(
+            ancho = camposLado2.ancho.toFloatOrNull() ?: 0f,
+            alto = camposLado2.alto.toFloatOrNull() ?: 0f,
+            hoja = camposLado2.hoja.toFloatOrNull() ?: 0f,
+            divisManual = camposLado2.divis.toIntOrNull() ?: 0
+        )
+        val (primeraCalculo, lado2Calculo) = medidasCalculoNlApa(primera, lado2Medida)
+
+        aplicarMedidaEnCampos(lado2Calculo)
+        uTexto()
+        otrosAluminios()
+        vidriosTexto()
+        referencias()
+        val lado2 = capturarMateriales()
+
+        aplicarMedidaEnCampos(primeraCalculo)
+        uTexto()
+        otrosAluminios()
+        vidriosTexto()
+        referencias()
+        val lado1 = capturarMateriales()
+
+        aplicarMedidaEnCampos(lado2Medida)
+        referencias()
+        val referenciasLado2 = binding.txReferencias.text?.toString().orEmpty()
+        aplicarMedidaEnCampos(primera)
+        referencias()
+        val referenciasLado1 = binding.txReferencias.text?.toString().orEmpty()
+
+        restaurarCamposCalculo(camposLado2)
+        val combinados = combinarMateriales(lado1, lado2)
+        val altoParanteEsquina = maxOf(primera.alto, lado2Medida.alto)
+        val combinadosConEsquina = combinados.copy(
+            tubo = if (opcionEsquinero() != null) combinarTextoCantidades(
+                combinados.tubo,
+                "${df1(altoParanteEsquina)} = 1"
+            ) else combinados.tubo,
+            referencias = combinarReferenciasOriginalesNl(referenciasLado1, referenciasLado2)
+        )
+        val combinadosFiltrados = filtrarMaterialesValorCero(combinadosConEsquina)
+        materialesNlArchivables = combinadosFiltrados
+        aplicarMateriales(combinadosFiltrados)
+    }
+
+    private fun calcularMaterialesNu() {
+        val ladoIzq = obtenerPrimeraMedidaNuEditable()
+        val ladoCentro = obtenerSegundaMedidaNuEditable()
+        if (ladoIzq == null || ladoCentro == null) {
+            materialesNlArchivables = null
+            uTexto()
+            otrosAluminios()
+            vidriosTexto()
+            referencias()
+            return
+        }
+
+        val camposActuales = capturarCamposCalculo()
+        val ladoDer = MedidaNl(
+            ancho = camposActuales.ancho.toFloatOrNull() ?: 0f,
+            alto = camposActuales.alto.toFloatOrNull() ?: 0f,
+            hoja = camposActuales.hoja.toFloatOrNull() ?: 0f,
+            divisManual = camposActuales.divis.toIntOrNull() ?: 0
+        )
+
+        // Descuentos de esquina (solo aplican en APA). En C hay dos esquinas:
+        // izquierda↔centro y centro↔derecha, por lo que el centro descuenta ambas.
+        val (izqCalculo, centroEsquinaIzq) = medidasCalculoNlApa(ladoIzq, ladoCentro)
+        val (centroEsquinaDer, derCalculo) = medidasCalculoNlApa(ladoCentro, ladoDer)
+        val descuentoCentro = (ladoCentro.ancho - centroEsquinaIzq.ancho) +
+            (ladoCentro.ancho - centroEsquinaDer.ancho)
+        val centroCalculo = ladoCentro.copy(
+            ancho = (ladoCentro.ancho - descuentoCentro).coerceAtLeast(0f)
+        )
+
+        aplicarMedidaEnCampos(derCalculo)
+        uTexto()
+        otrosAluminios()
+        vidriosTexto()
+        referencias()
+        val matDer = capturarMateriales()
+
+        aplicarMedidaEnCampos(centroCalculo)
+        uTexto()
+        otrosAluminios()
+        vidriosTexto()
+        referencias()
+        val matCentro = capturarMateriales()
+
+        aplicarMedidaEnCampos(izqCalculo)
+        uTexto()
+        otrosAluminios()
+        vidriosTexto()
+        referencias()
+        val matIzq = capturarMateriales()
+
+        // Referencias con las medidas originales (sin descuento de esquina).
+        aplicarMedidaEnCampos(ladoDer)
+        referencias()
+        val referenciasDer = binding.txReferencias.text?.toString().orEmpty()
+        aplicarMedidaEnCampos(ladoCentro)
+        referencias()
+        val referenciasCentro = binding.txReferencias.text?.toString().orEmpty()
+        aplicarMedidaEnCampos(ladoIzq)
+        referencias()
+        val referenciasIzq = binding.txReferencias.text?.toString().orEmpty()
+
+        restaurarCamposCalculo(camposActuales)
+
+        val combinados = combinarMateriales(combinarMateriales(matIzq, matCentro), matDer)
+        // Dos parantes de esquina (una por cada esquina de la C).
+        val altoParanteEsquinaIzq = maxOf(ladoIzq.alto, ladoCentro.alto)
+        val altoParanteEsquinaDer = maxOf(ladoCentro.alto, ladoDer.alto)
+        val combinadosConEsquina = combinados.copy(
+            tubo = if (opcionEsquinero() != null) combinarTextoCantidades(
+                combinados.tubo,
+                "${df1(altoParanteEsquinaIzq)} = 1",
+                "${df1(altoParanteEsquinaDer)} = 1"
+            ) else combinados.tubo,
+            referencias = combinarReferenciasOriginalesNl(
+                referenciasIzq, referenciasCentro, referenciasDer
+            )
+        )
+        val combinadosFiltrados = filtrarMaterialesValorCero(combinadosConEsquina)
+        materialesNlArchivables = combinadosFiltrados
+        aplicarMateriales(combinadosFiltrados)
+    }
+
+    private fun combinarReferenciasOriginalesNl(vararg referencias: String): String {
+        return referencias
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString("\n")
+    }
+
+    // Descuento de esquina (APA e INA). El perfil lo define el ESQUINERO (no el puente);
+    // "ninguno" = sin descuento. Reparto INVERTIDO: la ventana más ancha recibe la parte
+    // MENOR del aluminio y la más angosta la MAYOR.
+    private fun medidasCalculoNlApa(primera: MedidaNl, segunda: MedidaNl): Pair<MedidaNl, MedidaNl> {
+        // El descuento de esquina reduce el ancho; todos los conteos (divisiones, paños de
+        // mocheta, Tee) se calculan sobre ese ancho ÚTIL ya descontado, no sobre el original.
+        val opcion = opcionEsquinero() ?: return primera to segunda
+        val valorNormal = opcion.valor
+        val valorEsquina = opcion.valorEsquina
+
+        val descuentoPrimera: Float
+        val descuentoSegunda: Float
+        if (kotlin.math.abs(valorEsquina - valorNormal) < 0.001f) {
+            descuentoPrimera = valorNormal
+            descuentoSegunda = valorNormal
+        } else {
+            val mayor = maxOf(valorNormal, valorEsquina)
+            val menor = minOf(valorNormal, valorEsquina)
+            if (primera.ancho >= segunda.ancho) {
+                descuentoPrimera = menor   // más ancha → parte menor
+                descuentoSegunda = mayor
+            } else {
+                descuentoPrimera = mayor
+                descuentoSegunda = menor
+            }
+        }
+
+        return primera.copy(ancho = (primera.ancho - descuentoPrimera).coerceAtLeast(0f)) to
+            segunda.copy(ancho = (segunda.ancho - descuentoSegunda).coerceAtLeast(0f))
+    }
+
+    private fun capturarCamposCalculo(): EstadoCamposCalculo = EstadoCamposCalculo(
+        ancho = binding.etAncho.text?.toString().orEmpty(),
+        alto = binding.etAlto.text?.toString().orEmpty(),
+        hoja = binding.etHoja.text?.toString().orEmpty(),
+        divis = binding.etPartes.text?.toString().orEmpty()
+    )
+
+    private fun restaurarCamposCalculo(estado: EstadoCamposCalculo) {
+        binding.etAncho.setText(estado.ancho)
+        binding.etAlto.setText(estado.alto)
+        binding.etHoja.setText(estado.hoja)
+        binding.etPartes.setText(estado.divis)
+    }
+
+    private fun aplicarMedidaEnCampos(medida: MedidaNl) {
+        binding.etAncho.setText(df1(medida.ancho))
+        binding.etAlto.setText(df1(medida.alto))
+        binding.etHoja.setText(df1(medida.hoja))
+        binding.etPartes.setText(medida.divisManual.toString())
+    }
+
+    private fun capturarMateriales(): EstadoMateriales = EstadoMateriales(
+        u = binding.txU.text?.toString().orEmpty(),
+        p = binding.txP.text?.toString().orEmpty(),
+        r = binding.txR.text?.toString().orEmpty(),
+        fc = binding.txFc.text?.toString().orEmpty(),
+        pf = binding.txPf.text?.toString().orEmpty(),
+        te = binding.txTe.text?.toString().orEmpty(),
+        tope = binding.txTo.text?.toString().orEmpty(),
+        hache = binding.txH.text?.toString().orEmpty(),
+        tubo = binding.txT.text?.toString().orEmpty(),
+        vidrio = binding.txV.text?.toString().orEmpty(),
+        referencias = binding.txReferencias.text?.toString().orEmpty()
+    )
+
+    private fun combinarMateriales(a: EstadoMateriales, b: EstadoMateriales): EstadoMateriales = EstadoMateriales(
+        u = combinarTextoCantidades(a.u, b.u),
+        p = combinarTextoCantidades(a.p, b.p),
+        r = combinarTextoCantidades(a.r, b.r),
+        fc = combinarTextoCantidades(a.fc, b.fc),
+        pf = combinarTextoCantidades(a.pf, b.pf),
+        te = combinarTextoCantidades(a.te, b.te),
+        tope = combinarTextoCantidades(a.tope, b.tope),
+        hache = combinarTextoCantidades(a.hache, b.hache),
+        tubo = combinarTextoCantidades(a.tubo, b.tubo),
+        vidrio = combinarTextoCantidades(a.vidrio, b.vidrio),
+        referencias = listOf(a.referencias, b.referencias)
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString("\n")
+    )
+
+    private fun combinarTextoCantidades(vararg textos: String): String {
+        val orden = mutableListOf<String>()
+        val cantidades = linkedMapOf<String, Int>()
+        val literales = mutableListOf<String>()
+        val patron = Regex("^(.+?)\\s*=\\s*(\\d+)\\s*$")
+
+        for (texto in textos) {
+            texto.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .forEach { linea ->
+                    val match = patron.matchEntire(linea)
+                    if (match == null) {
+                        if (linea !in literales) literales.add(linea)
+                    } else {
+                        val medida = match.groupValues[1].trim()
+                        val cantidad = match.groupValues[2].toIntOrNull() ?: 0
+                        if (!cantidades.containsKey(medida)) orden.add(medida)
+                        cantidades[medida] = (cantidades[medida] ?: 0) + cantidad
+                    }
+                }
+        }
+
+        val lineas = mutableListOf<String>()
+        orden.forEach { medida -> lineas.add("$medida = ${cantidades[medida] ?: 0}") }
+        lineas.addAll(literales)
+        return lineas.joinToString("\n")
+    }
+
+    private fun filtrarMaterialesValorCero(estado: EstadoMateriales): EstadoMateriales = estado.copy(
+        u = filtrarLineasValorCero(estado.u),
+        p = filtrarLineasValorCero(estado.p),
+        r = filtrarLineasValorCero(estado.r),
+        fc = filtrarLineasValorCero(estado.fc),
+        pf = filtrarLineasValorCero(estado.pf),
+        te = filtrarLineasValorCero(estado.te),
+        tope = filtrarLineasValorCero(estado.tope),
+        hache = filtrarLineasValorCero(estado.hache),
+        tubo = filtrarLineasValorCero(estado.tubo),
+        vidrio = filtrarLineasValorCero(estado.vidrio)
+    )
+
+    private fun filtrarLineasValorCero(texto: String): String {
+        return texto.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !lineaTieneValorCero(it) }
+            .joinToString("\n")
+    }
+
+    private fun lineaTieneValorCero(linea: String): Boolean {
+        if (!linea.contains("=")) {
+            val valorUnico = linea.replace(",", ".").toFloatOrNull()
+            return valorUnico != null && kotlin.math.abs(valorUnico) < 0.0001f
+        }
+        val medida = linea.substringBefore("=").trim()
+        val cantidad = linea.substringAfter("=", "").trim().toIntOrNull()
+        if (cantidad == 0) return true
+
+        val numeros = Regex("""-?\d+(?:[.,]\d+)?""").findAll(medida)
+            .mapNotNull { it.value.replace(",", ".").toFloatOrNull() }
+            .toList()
+        return numeros.isNotEmpty() && numeros.any { kotlin.math.abs(it) < 0.0001f }
+    }
+
+    private fun mostrarFijoCorre(textoResultado: String, etiquetaResId: Int = R.string.fijo_corre) {
+        val textoLimpio = filtrarLineasValorCero(textoResultado)
+        binding.txFc.text = textoLimpio
+        binding.tvFc.setText(etiquetaResId)
+        binding.fcLayout.visibility = if (textoLimpio.isNotBlank()) View.VISIBLE else View.GONE
+    }
+
+    private fun ocultarFijoCorre() {
+        binding.txFc.text = ""
+        binding.fcLayout.visibility = View.GONE
+    }
+
+    private fun aplicarMateriales(estado: EstadoMateriales) {
+        binding.txU.text = estado.u
+        binding.txP.text = estado.p
+        binding.txR.text = estado.r
+        binding.txFc.text = estado.fc
+        binding.txPf.text = estado.pf
+        binding.txTe.text = estado.te
+        binding.txTo.text = estado.tope
+        binding.txH.text = estado.hache
+        binding.txT.text = estado.tubo
+        binding.txV.text = estado.vidrio
+        binding.txReferencias.text = estado.referencias
+
+        binding.mulLayout.visibility = if (estado.p.isNotBlank()) View.VISIBLE else View.GONE
+        binding.lyRiel.visibility = if (estado.r.isNotBlank()) View.VISIBLE else View.GONE
+        binding.fcLayout.visibility = if (estado.fc.isNotBlank()) View.VISIBLE else View.GONE
+        binding.lyPf.visibility = if (estado.pf.isNotBlank()) View.VISIBLE else View.GONE
+        binding.tLayout.visibility = if (estado.te.isNotBlank()) View.VISIBLE else View.GONE
+        binding.lyTo.visibility = if (estado.tope.isNotBlank()) View.VISIBLE else View.GONE
+        binding.lyH.visibility = if (estado.hache.isNotBlank()) View.VISIBLE else View.GONE
+        binding.lyTubo.visibility = if (estado.tubo.isNotBlank()) View.VISIBLE else View.GONE
+        // Mostrar el perfil del esquinero junto al parante para no confundir qué es.
+        binding.tvT.text = opcionEsquinero()?.let { "Parante (${it.text})" } ?: getString(R.string.parante)
+    }
+
     @SuppressLint("SetTextI18n")
     private fun calcularDesigual() {
         val ancho = ancho()
@@ -547,7 +962,17 @@ class NovaCorrediza : AppCompatActivity() {
         // U perfiles
         binding.tvU.text = NovaPerfilesHelper.obtenerEtiquetaU(us)
         binding.txU.text = NovaCalculosDesiguales.calcularU(
-            modulosDesiguales, parantesDesiguales, ancho, alto, altoHoja, us, cruce, tipoCalculo, tubo, puente
+            modulosDesiguales,
+            parantesDesiguales,
+            ancho,
+            alto,
+            altoHoja,
+            us,
+            cruce,
+            tipoCalculo,
+            tubo,
+            puente,
+            incluirUFijos = !esModeloInvertidoIna()
         )
 
           // Puentes y Rieles
@@ -577,25 +1002,27 @@ class NovaCorrediza : AppCompatActivity() {
           }
 
           val mostrarFcDesigual = mostrarFijoCorredizo(alto, altoHoja)
-          if (mostrarFcDesigual || usarFcComoUFelpero(alto, altoHoja)) {
+          if (mostrarFcDesigual) {
               val textoFcDesigual = if (textoTramosDesigual.isNotBlank()) textoTramosUnitDesigual else pr.rieles
-              binding.txFc.text = textoFcDesigual
-              val usarTextoUFelpero = (tipoNova == TipoNova.INA) && usarFcComoUFelpero(alto, altoHoja)
-              binding.tvFc.setText(if (usarTextoUFelpero) R.string.u_felpero else R.string.fijo_corre)
-              binding.fcLayout.visibility = if (textoFcDesigual.isNotBlank()) View.VISIBLE else View.GONE
+              mostrarFijoCorre(textoFcDesigual)
           } else {
-              binding.fcLayout.visibility = View.GONE
+              ocultarFijoCorre()
           }
 
         // Vidrios
         binding.txV.text = NovaCalculosDesiguales.calcularVidrios(
             modulosDesiguales, mochetaDesigual, parantesDesiguales,
-            ancho, alto, altoHoja, us, cruce, tipoCalculo, tubo, texto
+            ancho, alto, altoHoja, us, cruce, tipoCalculo, tubo, texto,
+            mochetaInferior = mochetaInferiorDoblePuente(),
+            mochetaInvertidaIna = esModeloInvertidoIna(),
+            puente = puente
         )
 
         // Otros perfiles
         val otros = NovaCalculosDesiguales.calcularOtros(
-            modulosDesiguales, parantesDesiguales, ancho, alto, altoHoja, us, cruce, tipoCalculo, tubo, puente, texto
+            modulosDesiguales, parantesDesiguales, ancho, alto, altoHoja, us, cruce, tipoCalculo, tubo, puente, texto,
+            mochetaInferior = mochetaInferiorDoblePuente(),
+            mocheta = mochetaDesigual
         )
         binding.txPf.text = otros.portafelpa
         binding.lyPf.visibility = if (otros.portafelpa.isNotBlank()) View.VISIBLE else View.GONE
@@ -627,17 +1054,22 @@ class NovaCorrediza : AppCompatActivity() {
                 binding.lyRiel.visibility = View.VISIBLE
 
                 val mostrarFcIna = mostrarFijoCorredizo(alto, altoHoja)
-                if (mostrarFcIna || usarFcComoUFelpero(alto, altoHoja)) {
-                    binding.txFc.text = textoTramosUnitInaDesigual
-                    binding.tvFc.setText(if (usarFcComoUFelpero(alto, altoHoja)) R.string.u_felpero else R.string.fijo_corre)
-                    binding.fcLayout.visibility = View.VISIBLE
+                if (mostrarFcIna) {
+                    val mostrarUfEnFc = mostrarUFelperoIna(alto, altoHoja) || usarFcComoUFelpero(alto, altoHoja)
+                    mostrarFijoCorre(
+                        textoTramosUnitInaDesigual,
+                        if (mostrarUfEnFc) R.string.u_felpero else R.string.fijo_corre
+                    )
                 } else {
-                    binding.fcLayout.visibility = View.GONE
+                    ocultarFijoCorre()
                 }
             }
-            val textoUfDesigual = textoTramosUnitInaDesigual.ifBlank { pr.rieles }
-            binding.txUf.text = textoUfDesigual
-            binding.lyUf.visibility = if (textoUfDesigual.isNotBlank()) View.VISIBLE else View.GONE
+            if (esModeloInvertidoIna()) {
+                val textoFcInvertido = textoFijoCorreInaInvertido(ancho)
+                mostrarFijoCorre(textoFcInvertido)
+            }
+            binding.txUf.text = ""
+            binding.lyUf.visibility = View.GONE
             binding.tLayout.visibility = View.GONE
             val nParantesDiseno = NovaCalculos.nParantesDiseno(ancho, modulosDesiguales.size)
             val textoParantes = if (nParantesDiseno > 0) "${NovaCalculos.df1(alto)} = $nParantesDiseno" else ""
@@ -653,7 +1085,8 @@ class NovaCorrediza : AppCompatActivity() {
             ancho, alto, altoHoja, modulosDesiguales.size, nFijos, nCorredizas,
             if (alto > altoHoja) 1 else 0,
             modelo = texto,
-            alturaPuente = tubo
+            alturaPuente = tubo,
+            mochetaInferior = mochetaInferiorDoblePuente()
         )
 
         // Diseño visual: usar ultimoPaquete (no regenerar)
@@ -661,13 +1094,15 @@ class NovaCorrediza : AppCompatActivity() {
             val intent = Intent(this, DisenoNovaActivity::class.java).apply {
                 putExtra(DisenoNovaActivity.EXTRA_PAQUETE, ultimoPaquete)
                 putExtra(DisenoNovaActivity.EXTRA_HEADLESS, true)
-                putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>")) "png" else "svg")
+                putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>") || modulosDesiguales.isNotEmpty()) "png" else "svg")
                 putExtra(DisenoNovaActivity.EXTRA_RET_PADDING_PX, 4)
                 putExtra(DisenoNovaActivity.EXTRA_MOCHETA_LATERAL_CM, mochetaLateralDisenoNl())
+                putExtra(DisenoNovaActivity.EXTRA_ENCUENTRO_VACIO, metaEncuentro)
+                putExtra(DisenoNovaActivity.EXTRA_DIRECCION, metaDireccion)
                 putExtra(DisenoNovaActivity.EXTRA_US_CM, binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f)
             }
             lanzarDiseno.launch(intent)
-            binding.textView28.text = ultimoPaquete
+            binding.textView28.setText(R.string.referencias_y_c_lculos)
         }
     }
 
@@ -686,14 +1121,12 @@ class NovaCorrediza : AppCompatActivity() {
         binding.btNovar.setOnClickListener {
             seleccionarModelo("invertido", R.drawable.novair, "nr")
             diseno = "novair"; otros = false
-            puente = "tubo 2 x 1"; tubo = 2.5f; binding.tvP.text = puente
+            aplicarPuentePredeterminadoSinMultiple()
         }
         binding.btNovaP2.setOnClickListener {
             seleccionarModelo("doble puente", R.drawable.nova2p, "np")
             diseno = "nova2p"; otros = false
-            puente = puenteNpDefault; tubo = 2.5f; binding.tvP.text = puente
-            val idxNp = indiceSpinnerPuente(puenteNpDefault)
-            if (idxNp >= 0 && binding.spinner.selectedItemPosition != idxNp) binding.spinner.setSelection(idxNp)
+            aplicarPuentePredeterminadoSinMultiple()
         }
         binding.btNovacc.setOnClickListener {
             seleccionarModelo("doble corrediza", R.drawable.novacc, "ncc")
@@ -708,6 +1141,10 @@ class NovaCorrediza : AppCompatActivity() {
             diseno = "novacfc"; otros = true
         }
         // btNoval, btNovau, btNovas, btNovacu migrados al panel de geometría.
+        binding.btNovaff.setOnClickListener {
+            seleccionarModelo("fijo fijo", R.drawable.novaff, "nff")
+            diseno = "novaff"; otros = true
+        }
         binding.btNovaci.setOnClickListener {
             seleccionarModelo("circular", R.drawable.novaci, "nci")
             diseno = "novaci"; otros = true
@@ -733,6 +1170,11 @@ class NovaCorrediza : AppCompatActivity() {
 
         binding.btAgregar.setOnClickListener {
             if (texto != "nl" && texto != "nu" && texto != "ns") return@setOnClickListener
+            // En serie, tras calcular el botón pasa a "Navegar": recorre/edita cada lado.
+            if (texto == "ns" && navegandoNs) {
+                navegarSiguienteNs()
+                return@setOnClickListener
+            }
             val ancho = binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f
             val alto = binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f
             val hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
@@ -754,7 +1196,6 @@ class NovaCorrediza : AppCompatActivity() {
                 binding.tvLado1.visibility = View.VISIBLE
                 binding.etAncho.setText("")
                 binding.etAlto.setText("")
-                binding.etHoja.setText("")
                 binding.etPartes.setText("0")
                 binding.btAgregar.visibility = View.GONE
                 binding.btAgregar.isEnabled = false
@@ -816,12 +1257,272 @@ class NovaCorrediza : AppCompatActivity() {
                     actualizarTxDatosLadoNl(ladosNs.size)
                 }
             }
+            // Tras agregar, devolver el foco a la primera medida (med1) para la siguiente.
+            binding.etAncho.requestFocus()
         }
         binding.ivDiseno.setOnClickListener {
-            // Volver al scroll: solo alterna visibilidad — no toca geometría ni estado de lados
-            binding.ivDiseno.visibility = View.GONE
-            binding.svModelos.visibility = View.VISIBLE
+            // Estrategia tipo Puertas: un diálogo con todas las opciones agrupadas.
+            abrirDialogoOpcionesNova()
         }
+    }
+
+    /**
+     * Diálogo con todas las opciones de la ventana Nova (estrategia tipo Puertas).
+     * Reutiliza la lógica existente: geometría -> seleccionarDesdePanel; modelo/modulación/
+     * circular -> seleccionarModelo; acabado -> ciclo de tipoNova (actualizarModo).
+     * Encuentro y forma poligonal solo guardan el dato (metaEncuentro / metaForma).
+     */
+    private fun abrirDialogoOpcionesNova() {
+        val dlg = crystal.crystal.databinding.DialogOpcionesNovaBinding.inflate(layoutInflater)
+
+        // Grupos de imágenes y resaltado de la opción activa.
+        // Geometría se marca por nombreGeometria; modelo/modulación/otros por textoModelo.
+        val geoViews = listOf(
+            "Plano" to dlg.dgGeoPlano, "En L" to dlg.dgGeoL, "En C" to dlg.dgGeoC,
+            "Curvo" to dlg.dgGeoCurvo, "Serie" to dlg.dgGeoSerie
+        )
+        // Eje remate (se marca por modeloRemate) y eje modulación/otros (por textoModelo).
+        val remateViews = listOf(
+            "nn" to dlg.dgModNormal, "nr" to dlg.dgModInvertido, "np" to dlg.dgModDoblePuente
+        )
+        val modulacionViews = listOf(
+            "nn" to dlg.dgModulNormal, "nfc" to dlg.dgModulDoble,
+            "ncfc" to dlg.dgModulCfc, "nff" to dlg.dgModulFull
+        )
+        val padSel = (4 * resources.displayMetrics.density).toInt()
+        fun marcar(iv: ImageView, sel: Boolean) {
+            iv.setBackgroundResource(if (sel) R.drawable.bg_opcion_seleccionada else 0)
+            if (sel) iv.setPadding(padSel, padSel, padSel, padSel) else iv.setPadding(0, 0, 0, 0)
+        }
+        fun refrescarSeleccion() {
+            geoViews.forEach { (nombre, iv) -> marcar(iv, nombre == nombreGeometria) }
+            remateViews.forEach { (tok, iv) -> marcar(iv, tok == modeloRemate) }
+            modulacionViews.forEach { (tok, iv) -> marcar(iv, tok == textoModelo) }
+        }
+
+        // Esquinero + Dirección: solo en geometrías compuestas (en L / en C / serie).
+        // Se recalcula al abrir y cada vez que cambia la geometría.
+        fun actualizarSeccionCompuesta() {
+            val esCompuesta = texto == "nl" || texto == "nu" || texto == "ns"
+            dlg.dgSeccionCompuesta.visibility = if (esCompuesta) View.VISIBLE else View.GONE
+            if (!esCompuesta) return
+            val opciones = NovaSpinnerData.obtenerOpcionesTubo()
+                .filterNot { it.text.contains("ltiple", ignoreCase = true) }
+            if (!metaEsquinero.equals("ninguno", ignoreCase = true) && opciones.none { it.text == metaEsquinero }) {
+                metaEsquinero = (opciones.firstOrNull { it.valorEsquina == 6f } ?: opciones.first()).text
+            }
+            dlg.dgEsquineroContainer.removeAllViews()
+            val tamPx = (56 * resources.displayMetrics.density).toInt()
+            val esquineroViews = mutableListOf<Pair<String, View>>()
+            fun marcarEsquinero() {
+                esquineroViews.forEach { (txt, v) ->
+                    v.setBackgroundResource(if (txt == metaEsquinero) R.drawable.bg_opcion_seleccionada else 0)
+                }
+            }
+            val anchoItemPx = (78 * resources.displayMetrics.density).toInt()
+            // Cada opción: imagen (si tiene) + texto del nombre, para diferenciarlas.
+            fun crearItemEsquinero(textoOp: String, imgRes: Int?): View {
+                val cont = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        anchoItemPx, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).also { it.setMargins(padSel, padSel, padSel, padSel) }
+                    setPadding(padSel, padSel, padSel, padSel)
+                    setOnClickListener { metaEsquinero = textoOp; marcarEsquinero() }
+                }
+                if (imgRes != null) {
+                    cont.addView(ImageView(this).apply {
+                        layoutParams = android.widget.LinearLayout.LayoutParams(tamPx, tamPx)
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        setImageResource(imgRes)
+                        contentDescription = textoOp
+                    })
+                }
+                cont.addView(android.widget.TextView(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        anchoItemPx, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                    text = textoOp
+                    textSize = 13f
+                    gravity = android.view.Gravity.CENTER
+                    maxLines = 2
+                })
+                return cont
+            }
+            for (op in opciones) {
+                val item = crearItemEsquinero(op.text, op.imageResId)
+                dlg.dgEsquineroContainer.addView(item)
+                esquineroViews.add(op.text to item)
+            }
+            val itemNinguno = crearItemEsquinero("ninguno", null)
+            dlg.dgEsquineroContainer.addView(itemNinguno)
+            esquineroViews.add("ninguno" to itemNinguno)
+            marcarEsquinero()
+            if (metaDireccion == "afuera") dlg.dgRbAfuera.isChecked = true else dlg.dgRbAdentro.isChecked = true
+            dlg.dgRgDireccion.setOnCheckedChangeListener { _, checkedId ->
+                metaDireccion = if (checkedId == R.id.dgRbAfuera) "afuera" else "adentro"
+            }
+        }
+
+        // --- Geometría (vista top) ---
+        dlg.dgGeoPlano.setOnClickListener  { seleccionarDesdePanel(R.drawable.vplano, "nn"); refrescarSeleccion(); actualizarSeccionCompuesta() }
+        dlg.dgGeoL.setOnClickListener      { seleccionarDesdePanel(R.drawable.venl,   "nl"); refrescarSeleccion(); actualizarSeccionCompuesta() }
+        dlg.dgGeoC.setOnClickListener      { seleccionarDesdePanel(R.drawable.venc,   "nu"); refrescarSeleccion(); actualizarSeccionCompuesta() }
+        dlg.dgGeoCurvo.setOnClickListener  { seleccionarDesdePanel(R.drawable.vcurvo, "ncu"); refrescarSeleccion(); actualizarSeccionCompuesta() }
+        dlg.dgGeoSerie.setOnClickListener  { seleccionarDesdePanel(R.drawable.vserie, "ns"); refrescarSeleccion(); actualizarSeccionCompuesta() }
+
+        // --- Acabado (refleja y fija tipoNova; el ciclo por título sigue intacto) ---
+        when (tipoNova) {
+            TipoNova.APA -> dlg.dgRbApa.isChecked = true
+            TipoNova.INA -> dlg.dgRbIna.isChecked = true
+            TipoNova.PIV -> dlg.dgRbPiv.isChecked = true
+        }
+        dlg.dgRgAcabado.setOnCheckedChangeListener { _, checkedId ->
+            tipoNova = when (checkedId) {
+                R.id.dgRbIna -> TipoNova.INA
+                R.id.dgRbPiv -> TipoNova.PIV
+                else -> TipoNova.APA
+            }
+            actualizarModo()
+        }
+
+        // --- Encuentro: marcar según metaEncuentro (orden Arriba-Derecha-Abajo-Izquierda) ---
+        val enc = metaEncuentro.padEnd(4, '1')
+        dlg.dgCbTop.isChecked    = enc.getOrElse(0) { '1' } == '1'
+        dlg.dgCbRight.isChecked  = enc.getOrElse(1) { '1' } == '1'
+        dlg.dgCbBottom.isChecked = enc.getOrElse(2) { '1' } == '1'
+        dlg.dgCbLeft.isChecked   = enc.getOrElse(3) { '1' } == '1'
+        // Muro (ladrillos) en el lado marcado; desaparece al desmarcar (ese lado = vacío).
+        fun bindMuroEncuentro(cb: android.widget.CheckBox, muro: View) {
+            muro.visibility = if (cb.isChecked) View.VISIBLE else View.GONE
+            cb.setOnCheckedChangeListener { _, isChecked ->
+                muro.visibility = if (isChecked) View.VISIBLE else View.GONE
+            }
+        }
+        bindMuroEncuentro(dlg.dgCbTop, dlg.dgMuroTop)
+        bindMuroEncuentro(dlg.dgCbRight, dlg.dgMuroRight)
+        bindMuroEncuentro(dlg.dgCbBottom, dlg.dgMuroBottom)
+        bindMuroEncuentro(dlg.dgCbLeft, dlg.dgMuroLeft)
+
+        // --- Modelo (remate) — eje independiente; no toca la modulación ---
+        dlg.dgModNormal.setOnClickListener      { seleccionarRemate("normal", "nn"); refrescarSeleccion() }
+        dlg.dgModInvertido.setOnClickListener   { seleccionarRemate("invertido", "nr"); refrescarSeleccion() }
+        dlg.dgModDoblePuente.setOnClickListener { seleccionarRemate("doble puente", "np"); refrescarSeleccion() }
+
+        // --- Modulación (arreglo de hojas) ---
+        // La sección "corredizas por tramo" solo aplica a full corredizas (nfc).
+        fun actualizarSeccionNfc() {
+            dlg.dgNfcTramoSection.visibility = if (textoModelo == "nfc") View.VISIBLE else View.GONE
+        }
+        dlg.dgModulNormal.setOnClickListener { seleccionarModelo("normal", R.drawable.ic_fichad3a, "nn"); refrescarSeleccion(); actualizarSeccionNfc() }
+        // Se abandonan doble (ncc) y triple corrediza (n3c). dgModulDoble pasa a "full corredizas"
+        // (todo corredizas, lo contrario a full fijos); dgModulTriple se oculta.
+        dlg.dgModulDoble.setOnClickListener  { seleccionarModelo("full corredizas", R.drawable.novacc, "nfc"); refrescarSeleccion(); actualizarSeccionNfc() }
+        dlg.dgModulTriple.visibility = View.GONE
+        dlg.dgModulCfc.setOnClickListener    { seleccionarModelo("cor. fijo cor.", R.drawable.novacfc, "ncfc"); refrescarSeleccion(); actualizarSeccionNfc() }
+        dlg.dgModulFull.setOnClickListener   { seleccionarModelo("fijo fijo", R.drawable.novaff, "nff"); refrescarSeleccion(); actualizarSeccionNfc() }
+
+        // Selector de corredizas por tramo (Auto/2/3/4/5). Auto = reparto del clásico.
+        when (corredizasPorTramo) {
+            2 -> dlg.dgNfcTramo2.isChecked = true
+            3 -> dlg.dgNfcTramo3.isChecked = true
+            4 -> dlg.dgNfcTramo4.isChecked = true
+            5 -> dlg.dgNfcTramo5.isChecked = true
+            else -> dlg.dgNfcTramoAuto.isChecked = true
+        }
+        dlg.dgRgNfcTramo.setOnCheckedChangeListener { _, checkedId ->
+            corredizasPorTramo = when (checkedId) {
+                R.id.dgNfcTramo2 -> 2
+                R.id.dgNfcTramo3 -> 3
+                R.id.dgNfcTramo4 -> 4
+                R.id.dgNfcTramo5 -> 5
+                else -> 0   // Auto
+            }
+            NovaCalculos.corredizasPorTramoNfc = corredizasPorTramo
+        }
+        actualizarSeccionNfc()
+
+        // --- Puente (mismo selector que el spinner txHpuente; para todos los modelos) ---
+        run {
+            // Invertido / doble puente / INA no admiten Múltiple: se oculta de la lista.
+            val opcionesPuente = NovaSpinnerData.obtenerOpcionesTubo()
+                .filterNot { puenteMultipleNoPermitido(it.text) }
+            val anchoItem = (78 * resources.displayMetrics.density).toInt()
+            val tamImg = (52 * resources.displayMetrics.density).toInt()
+            dlg.dgPuenteContainer.removeAllViews()
+            val vistasPuente = mutableListOf<Pair<String, View>>()
+            fun marcarPuente() {
+                vistasPuente.forEach { (txt, v) ->
+                    v.setBackgroundResource(if (txt == puente) R.drawable.bg_opcion_seleccionada else 0)
+                }
+            }
+            for (op in opcionesPuente) {
+                val cont = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        anchoItem, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).also { it.setMargins(padSel, padSel, padSel, padSel) }
+                    setPadding(padSel, padSel, padSel, padSel)
+                    setOnClickListener { aplicarPuenteDesdeOpcion(op); marcarPuente() }
+                }
+                cont.addView(ImageView(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(tamImg, tamImg)
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    setImageResource(op.imageResId)
+                    contentDescription = op.text
+                })
+                cont.addView(android.widget.TextView(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        anchoItem, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                    text = op.text
+                    textSize = 13f
+                    gravity = android.view.Gravity.CENTER
+                    maxLines = 2
+                })
+                dlg.dgPuenteContainer.addView(cont)
+                vistasPuente.add(op.text to cont)
+            }
+            marcarPuente()
+        }
+
+        actualizarSeccionCompuesta()
+
+        // --- Forma (vista frontal) ---
+        when (metaForma) {
+            "circular"  -> dlg.dgRbFormaCircular.isChecked = true
+            "poligonal" -> dlg.dgRbFormaPoligonal.isChecked = true
+            else        -> dlg.dgRbFormaPlano.isChecked = true
+        }
+        dlg.dgRgForma.setOnCheckedChangeListener { _, checkedId ->
+            when (checkedId) {
+                R.id.dgRbFormaCircular -> {
+                    metaForma = "circular"
+                    seleccionarModelo("circular", R.drawable.novaci, "nci")
+                }
+                R.id.dgRbFormaPoligonal -> metaForma = "poligonal" // solo dato por ahora
+                else -> metaForma = "plano"
+            }
+        }
+
+        // Reflejar la selección actual al abrir el diálogo.
+        refrescarSeleccion()
+
+        AlertDialog.Builder(this)
+            .setTitle("Opciones de la ventana")
+            .setView(dlg.root)
+            .setPositiveButton("Listo") { _, _ ->
+                // Guardar el encuentro (solo dato): 1 = colinda, 0 = al vacío.
+                metaEncuentro = buildString {
+                    append(if (dlg.dgCbTop.isChecked) '1' else '0')
+                    append(if (dlg.dgCbRight.isChecked) '1' else '0')
+                    append(if (dlg.dgCbBottom.isChecked) '1' else '0')
+                    append(if (dlg.dgCbLeft.isChecked) '1' else '0')
+                }
+            }
+            .show()
     }
 
     /** Actualiza tvNombreModelo mostrando geometría y modelo con colores distintos. */
@@ -836,6 +1537,13 @@ class NovaCorrediza : AppCompatActivity() {
         val start = ssb.length
         ssb.append(nombreModelo)
         ssb.setSpan(ForegroundColorSpan(colorMod), start, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        // Remate (cuando no es normal): se combina con la modulación.
+        if (modeloRemate != "nn") {
+            ssb.append(" · ")
+            val r = ssb.length
+            ssb.append(nombreRemate)
+            ssb.setSpan(ForegroundColorSpan(colorGeo), r, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
         binding.tvNombreModelo.text = ssb
     }
 
@@ -856,9 +1564,28 @@ class NovaCorrediza : AppCompatActivity() {
             textoModelo = textoMod                              // siempre se guarda el modelo
             if (texto !in textosGeometria) texto = textoMod    // solo sobreescribe texto si geometría es plana
         }
+        // Si la modulación restringe el puente actual (p. ej. INA ncfc), pasar al permitido.
+        if (puenteMultipleNoPermitido(puente)) aplicarPuentePredeterminadoSinMultiple()
         binding.ivDiseno.setImageResource(drawableRes)
         binding.ivDiseno.visibility = View.VISIBLE
         binding.svModelos.visibility = View.GONE
+        actualizarVisibilidadMochetaInferior()
+    }
+
+    /**
+     * Selección del eje REMATE (mochetas), independiente de la modulación (patrón de hojas).
+     * No toca [texto]/[textoModelo]; solo fija [modeloRemate] para que el remate (invertido,
+     * doble puente) se combine con cualquier modulación.
+     */
+    private fun seleccionarRemate(nombre: String, token: String) {
+        modeloRemate = token
+        nombreRemate = nombre
+        // Invertido/doble puente no admiten Múltiple: si lo estaba, pasar al preestablecido.
+        if (puenteMultipleNoPermitido(puente)) {
+            aplicarPuentePredeterminadoSinMultiple()
+        }
+        actualizarNombreModelo()
+        actualizarVisibilidadMochetaInferior()
     }
 
     /**
@@ -896,6 +1623,7 @@ class NovaCorrediza : AppCompatActivity() {
         when (tipo) {
             "nl" -> {
                 binding.lyFlecha.visibility = View.VISIBLE
+                binding.lyCuerda.visibility = View.VISIBLE
                 maxLados = 2; contadorLado = 1
                 binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
                 binding.btAgregar.visibility = View.VISIBLE
@@ -915,6 +1643,7 @@ class NovaCorrediza : AppCompatActivity() {
             }
             "ncu" -> {
                 binding.lyFlecha.visibility = View.VISIBLE
+                binding.lyCuerda.visibility = View.VISIBLE
                 binding.btAgregar.visibility = View.GONE
                 binding.btAgregar.isEnabled = false; otros = true
             }
@@ -925,6 +1654,7 @@ class NovaCorrediza : AppCompatActivity() {
         }
 
         binding.lyPanelModelos.visibility = View.GONE
+        actualizarVisibilidadMochetaInferior()
     }
 
     private fun asegurarCamposActivosDesdeUltimoNs() {
@@ -937,6 +1667,71 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etAlto.setText(df1(ultimo.alto))
         binding.etHoja.setText(df1(ultimo.hoja))
         binding.etPartes.setText(ultimo.divisManual.toString())
+    }
+
+    // ==================== NAVEGACIÓN DE SERIE (ns) ====================
+    // Tras calcular una serie, btAgregar pasa a "Navegar": al tocarlo carga en los campos
+    // (med1) cada lado guardado, uno por clic, mostrando en el botón el lado actual. Así se
+    // pueden revisar y editar medidas ya ingresadas (antes quedaban ocultas e inaccesibles).
+
+    /** Activa el modo navegar al terminar el cálculo de serie. Consolida la medida en curso. */
+    private fun activarNavegacionNs() {
+        if (navegandoNs) {
+            // Persistir la edición del lado que se está mostrando.
+            guardarCamposEnLadoNs(indiceNs)
+        } else {
+            val a = binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f
+            val al = binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f
+            val h = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
+            val d = binding.etPartes.text?.toString()?.toIntOrNull() ?: 0
+            if (a > 0f && al > 0f) {
+                val actual = MedidaNl(a, al, h, d)
+                val ultimo = ladosNs.lastOrNull()
+                if (ultimo == null || !mismaMedida(ultimo, actual)) {
+                    ladosNs.add(actual)
+                } else {
+                    ladosNs[ladosNs.lastIndex] = actual
+                }
+            }
+            if (ladosNs.isEmpty()) return
+            navegandoNs = true
+            indiceNs = ladosNs.lastIndex
+        }
+        binding.btAgregar.visibility = View.VISIBLE
+        binding.btAgregar.isEnabled = true
+        etiquetaNavegarNs()
+    }
+
+    /** Avanza cíclicamente al siguiente lado de la serie, guardando lo editado del actual. */
+    private fun navegarSiguienteNs() {
+        if (ladosNs.isEmpty()) return
+        guardarCamposEnLadoNs(indiceNs)
+        indiceNs = (indiceNs + 1) % ladosNs.size
+        cargarLadoNsEnCampos(indiceNs)
+        etiquetaNavegarNs()
+        binding.etAncho.requestFocus()
+    }
+
+    private fun guardarCamposEnLadoNs(indice: Int) {
+        if (indice !in ladosNs.indices) return
+        val a = binding.etAncho.text?.toString()?.toFloatOrNull() ?: return
+        val al = binding.etAlto.text?.toString()?.toFloatOrNull() ?: return
+        if (a <= 0f || al <= 0f) return
+        val h = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
+        val d = binding.etPartes.text?.toString()?.toIntOrNull() ?: 0
+        ladosNs[indice] = MedidaNl(a, al, h, d)
+    }
+
+    private fun cargarLadoNsEnCampos(indice: Int) {
+        val m = ladosNs.getOrNull(indice) ?: return
+        binding.etAncho.setText(df1(m.ancho))
+        binding.etAlto.setText(df1(m.alto))
+        binding.etHoja.setText(df1(m.hoja))
+        binding.etPartes.setText(m.divisManual.toString())
+    }
+
+    private fun etiquetaNavegarNs() {
+        binding.btAgregar.text = "Navegar (Lado ${indiceNs + 1}/${ladosNs.size})"
     }
 
     // ==================== FUNCIONES DE CÁLCULO ====================
@@ -971,7 +1766,7 @@ class NovaCorrediza : AppCompatActivity() {
             val ancho = if (anchoTexto.isEmpty()) 120f else anchoTexto.toFloatOrNull() ?: 120f
             val divisTexto = binding.etPartes.text?.toString() ?: ""
             val divis = if (divisTexto.isEmpty()) 0 else divisTexto.toIntOrNull() ?: 0
-            NovaCalculos.divisiones(ancho, divis)
+            NovaCalculos.divisiones(arcoCurvo(ancho), divis)
         } catch (e: Exception) { 1 }
     }
 
@@ -991,6 +1786,119 @@ class NovaCorrediza : AppCompatActivity() {
         return EntradasCalculo(ancho, alto, hoja, divisManual, cruce())
     }
 
+    private data class GeometriaCurva(
+        val cuerda: Float,
+        val flecha: Float,
+        val radio: Float,
+        val angulo: Float,
+        val arco: Float,
+        val cuerdaParte: Float,
+        val flechaParte: Float,
+        val arcoParte: Float
+    )
+
+    private fun flechaCurvaDesdeCampos(): Float {
+        return binding.etFlecha.text
+            ?.toString()
+            ?.trim()
+            ?.replace(",", ".")
+            ?.toFloatOrNull()
+            ?.coerceAtLeast(0f)
+            ?: 0f
+    }
+
+    // Cuerda introducida manualmente (vano real). 0 si no se indicó.
+    private fun cuerdaManualCurva(): Float {
+        if (texto != "ncu") return 0f
+        return binding.etCuerda.text
+            ?.toString()
+            ?.trim()
+            ?.replace(",", ".")
+            ?.toFloatOrNull()
+            ?.coerceAtLeast(0f)
+            ?: 0f
+    }
+
+    // Arco de la curva: lo que se reparte, se cuenta y se corta. Si se indica cuerda
+    // (+ flecha) el arco se calcula de forma exacta con cuerda + flecha; si no, el
+    // 'ancho' introducido ya es el arco. El total no depende del número de partes.
+    private fun arcoCurvo(anchoEntrada: Float): Float =
+        geometriaCurva(anchoEntrada, 1)?.arco ?: anchoEntrada
+
+    // Geometría de la curva. Dos formas de obtenerla:
+    //   - Si hay cuerda (+ flecha): arco calculado con la fórmula clásica cuerda+flecha
+    //     (alternativa más exacta cuando se conoce el vano y se elige la flecha).
+    //   - Si no: el 'ancho' introducido ES el arco, y la cuerda se deriva por la inversa.
+    private fun geometriaCurva(anchoEntrada: Float, divisiones: Int): GeometriaCurva? {
+        if (texto != "ncu") return null
+        val flecha = flechaCurvaDesdeCampos()
+        val cuerdaManual = cuerdaManualCurva()
+        val partes = divisiones.coerceAtLeast(1)
+
+        // Sin flecha no hay curva: el arco es el propio ancho (o la cuerda si se indicó).
+        if (flecha <= 0f) {
+            val base = (if (cuerdaManual > 0f) cuerdaManual else anchoEntrada).coerceAtLeast(0f)
+            if (base <= 0f) return null
+            val parte = base / partes
+            return GeometriaCurva(base, 0f, 0f, 0f, base, parte, 0f, parte)
+        }
+
+        val radioD: Double
+        val anguloD: Double
+        val arco: Float
+        if (cuerdaManual > 0f) {
+            // cuerda + flecha -> radio -> arco
+            radioD = (flecha / 2.0) + (cuerdaManual.toDouble() * cuerdaManual) / (8.0 * flecha)
+            val ratio = (cuerdaManual / (2.0 * radioD)).coerceIn(-1.0, 1.0)
+            anguloD = 2.0 * kotlin.math.asin(ratio)
+            arco = (radioD * anguloD).toFloat()
+        } else {
+            // arco (ancho) + flecha -> radio (inversa). El semiángulo phi cumple
+            // (1 - cos phi) / (2*phi) = flecha/arco, creciente en phi ∈ (0, PI/2];
+            // su máximo (semicírculo) vale 1/PI.
+            arco = anchoEntrada.coerceAtLeast(0f)
+            if (arco <= 0f) return null
+            val ratio = (flecha / arco).toDouble()
+            val phi = if (ratio >= 1.0 / Math.PI) {
+                Math.PI / 2.0
+            } else {
+                var lo = 1e-6
+                var hi = Math.PI / 2.0
+                repeat(80) {
+                    val mid = (lo + hi) / 2.0
+                    val g = (1.0 - kotlin.math.cos(mid)) / (2.0 * mid)
+                    if (g < ratio) lo = mid else hi = mid
+                }
+                (lo + hi) / 2.0
+            }
+            radioD = arco / (2.0 * phi)
+            anguloD = 2.0 * phi
+        }
+
+        val radio = radioD.toFloat()
+        val angulo = anguloD.toFloat()
+        val cuerda = (2.0 * radioD * kotlin.math.sin(anguloD / 2.0)).toFloat()
+        val anguloParte = anguloD / partes
+        val cuerdaParte = (2.0 * radioD * kotlin.math.sin(anguloParte / 2.0)).toFloat()
+        val flechaParte = (radioD * (1.0 - kotlin.math.cos(anguloParte / 2.0))).toFloat()
+
+        return GeometriaCurva(
+            cuerda = cuerda,
+            flecha = flecha,
+            radio = radio,
+            angulo = angulo,
+            arco = arco,
+            cuerdaParte = cuerdaParte,
+            flechaParte = flechaParte,
+            arcoParte = arco / partes
+        )
+    }
+
+    private fun resumenGeometriaCurva(geometria: GeometriaCurva): String {
+        return "Curvo total -> Arco: ${df1(geometria.arco)}; Cuerda: ${df1(geometria.cuerda)}; Flecha: ${df1(geometria.flecha)}\n" +
+            "Curvo/div -> Arco: ${df1(geometria.arcoParte)}; Cuerda: ${df1(geometria.cuerdaParte)}; Flecha: ${df1(geometria.flechaParte)}"
+    }
+
     private fun tipoCalculoPrincipal(): String = if (tipoNova == TipoNova.APA) "apa" else "ina"
 
     private fun valorParanteUFijosApa(): Float {
@@ -999,6 +1907,50 @@ class NovaCorrediza : AppCompatActivity() {
         val esGorrito = p.contains("gorrito") || p.contains("ltiple")
         return if (esMultiple || esGorrito) 2.5f else tubo
     }
+
+    private fun esGeometriaPlana(): Boolean =
+        texto != "nl" && texto != "nu" && texto != "ns" && texto != "ncu" && texto != "nci"
+
+    /** Opción de tubo del esquinero; null si es "ninguno" (sin tubo ni descuento en esquina). */
+    private fun opcionEsquinero(): NovaSpinnerData.SpinnerTubos? {
+        if (metaEsquinero.equals("ninguno", ignoreCase = true)) return null
+        val ops = NovaSpinnerData.obtenerOpcionesTubo()
+        return ops.firstOrNull { it.text == metaEsquinero } ?: ops.getOrNull(2) // default tubo 2⅜x1
+    }
+
+    /** Nº de lados laterales (izquierda/derecha) al vacío, solo en geometría plana. */
+    private fun ladosVaciosLaterales(): Int {
+        if (!esGeometriaPlana()) return 0
+        val e = metaEncuentro.padEnd(4, '1')
+        var n = 0
+        if (e[1] == '0') n++  // derecha
+        if (e[3] == '0') n++  // izquierda
+        return n
+    }
+
+    /**
+     * APA: cada lado lateral al vacío añade un parante que se descuenta del ancho del sistema
+     * (2.5 cm si el puente es Múltiple, o el valor del spinner). En INA no hay descuento.
+     */
+    private fun descuentoAnchoLateralApa(): Float =
+        if (tipoNova == TipoNova.APA) ladosVaciosLaterales() * valorParanteUFijosApa() else 0f
+
+    /** Nº de lados verticales (arriba/abajo) al vacío, solo en geometría plana. */
+    private fun ladosVaciosVerticales(): Int {
+        if (!esGeometriaPlana()) return 0
+        val e = metaEncuentro.padEnd(4, '1')
+        var n = 0
+        if (e[0] == '0') n++  // arriba
+        if (e[2] == '0') n++  // abajo
+        return n
+    }
+
+    /**
+     * APA: sin pared arriba/abajo se añade un falso puente que se descuenta del alto.
+     * En INA NO se descuenta (solo se suma la cantidad de puentes).
+     */
+    private fun descuentoAltoVertical(): Float =
+        if (tipoNova == TipoNova.APA) ladosVaciosVerticales() * valorParanteUFijosApa() else 0f
 
     private fun esPuenteMultipleOGorrito(): Boolean {
         val p = puente.lowercase().trim()
@@ -1013,7 +1965,7 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     private fun mostrarFijoCorredizo(alto: Float, altoHoja: Float): Boolean {
-        return (altoHoja >= alto) || (texto == "nr")
+        return (altoHoja >= alto) || (modeloRemate == "nr") || usarFcComoUFelpero(alto, altoHoja)
     }
 
     private fun esPuenteMultiple(): Boolean {
@@ -1036,18 +1988,140 @@ class NovaCorrediza : AppCompatActivity() {
         return -1
     }
 
-    private fun sincronizarSpinnerPuenteInaDefault() {
-        val idx = indiceSpinnerPuente(puenteInaDefault)
+    private fun sincronizarSpinnerPuente(textoPuente: String) {
+        val idx = indiceSpinnerPuente(textoPuente)
         if (idx >= 0 && binding.spinner.selectedItemPosition != idx) {
             binding.spinner.setSelection(idx)
         }
+    }
+
+    private fun esModeloInvertidoApa(): Boolean {
+        return tipoNova == TipoNova.APA && modeloRemate == "nr"
+    }
+
+    private fun esModeloInvertidoIna(): Boolean {
+        return tipoNova == TipoNova.INA && modeloRemate == "nr"
+    }
+
+    private fun esModeloDoblePuente(): Boolean {
+        return modeloRemate == "np"
+    }
+
+    private fun actualizarVisibilidadMochetaInferior() {
+        binding.lyMochetaInf.visibility = if (esModeloDoblePuente()) View.VISIBLE else View.GONE
+    }
+
+    private fun mochetaInferiorDoblePuente(): Float {
+        if (!esModeloDoblePuente()) return 0f
+        return binding.etMochetaInf.text
+            ?.toString()
+            ?.trim()
+            ?.replace(",", ".")
+            ?.toFloatOrNull()
+            ?.coerceAtLeast(0f)
+            ?: 0f
+    }
+
+    private fun textoUMochetaDoblePuente(alturasMochetas: List<Float>, us: Float, cantidadBase: Int): String {
+        if (alturasMochetas.isEmpty() || cantidadBase <= 0) return ""
+        val lineas = linkedMapOf<String, Int>()
+        for (altura in alturasMochetas) {
+            val key = NovaCalculos.df1(altura - (2f * us))
+            lineas[key] = (lineas[key] ?: 0) + cantidadBase
+        }
+        return lineas.entries.joinToString("\n") { "${it.key} = ${it.value}" }
+    }
+
+    // INA ncfc se trata como un solo tramo; para compensar la resistencia estructural solo se
+    // permiten estos puentes (paflon 1, paflon 1½, cuadrado 2). El resto se bloquea.
+    private val puentesPermitidosIncfc = setOf("paflon 1", "paflon 1½", "tubo 2 x 2")
+    private fun esIncfc(): Boolean = tipoNova == TipoNova.INA && textoModelo == "ncfc"
+
+    // Full corredizas (cualquier remate): según las corredizas POR TRAMO se exige un puente más
+    // resistente. >2 por tramo → 2⅜ o paflones; >4 por tramo → solo paflones.
+    private val puentesPaflon = setOf("paflon 1", "paflon 1½")
+    private val puentesDesde2tresOctavos = setOf("tubo 2⅜ x 1", "paflon 1", "paflon 1½")
+
+    /** Máximo de corredizas en un tramo (el tramo más exigente decide el puente) para full corredizas. */
+    private fun maxCorredizasPorTramoNfc(): Int {
+        val divisManual = binding.etPartes.text?.toString()?.toIntOrNull() ?: 0
+        val anchoRaw = binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f
+        if (anchoRaw <= 0f) return 0
+        val ancho = arcoCurvo(anchoRaw)
+        val divisiones = NovaCalculos.divisiones(ancho, divisManual)
+        return NovaCalculos.gruposDivisionesMochetaPorModelo(ancho, divisiones, "nfc").maxOrNull() ?: 0
+    }
+
+    private fun puenteMultipleNoPermitido(textoPuente: String): Boolean {
+        // INA ncfc: solo se permiten paflon 1, paflon 1½ y cuadrado 2 (tubo 2 x 2).
+        if (esIncfc()) return textoPuente !in puentesPermitidosIncfc
+        // Full corredizas (cualquier remate): el puente depende de las corredizas POR TRAMO.
+        if (textoModelo == "nfc") {
+            val maxCorrTramo = maxCorredizasPorTramoNfc()
+            if (maxCorrTramo > 4) return textoPuente !in puentesPaflon
+            if (maxCorrTramo > 2) return textoPuente !in puentesDesde2tresOctavos
+            // Hasta 2 corredizas por tramo: solo se bloquea Múltiple y gorrito.
+            return esPuenteMultiple(textoPuente) || textoPuente.lowercase().contains("gorrito")
+        }
+        // Invertido (nr) nunca admite Múltiple, en cualquier geometría/forma/acabado.
+        return esPuenteMultiple(textoPuente) &&
+                (tipoNova == TipoNova.INA || esModeloDoblePuente() || modeloRemate == "nr")
+    }
+
+    private fun puentePredeterminadoSinMultiple(): String {
+        // INA ncfc: por defecto paflon 1 (uno de los permitidos).
+        if (esIncfc()) return "paflon 1"
+        // Full corredizas: el predeterminado respeta las corredizas por tramo y no usa múltiple/gorrito.
+        if (textoModelo == "nfc") {
+            val maxCorr = maxCorredizasPorTramoNfc()
+            if (maxCorr > 4) return "paflon 1"
+            if (maxCorr > 2) return puenteInaDefault   // tubo 2⅜ x 1
+            return puenteNpDefault                     // tubo 2 x 1 (no múltiple/gorrito)
+        }
+        // Invertido: preestablecido tubo 2⅜ x 1. INA: igual. Resto (doble puente): tubo 2 x 1.
+        return if (modeloRemate == "nr" || tipoNova == TipoNova.INA) puenteInaDefault else puenteNpDefault
+    }
+
+    private fun aplicarPuentePredeterminadoSinMultiple() {
+        tubo = 2.5f
+        puente = puentePredeterminadoSinMultiple()
+        binding.tvP.text = puente
+        escribirValorPuente(tubo)
+        sincronizarSpinnerPuente(puente)
     }
 
     private fun usarFcComoUFelpero(alto: Float, altoHoja: Float): Boolean {
         return !esPuenteMultiple() && altoHoja < alto && texto != "nr"
     }
 
-    private fun modeloNpVetaMultiple(): Boolean = texto == "np"
+    private fun mostrarUFelperoIna(alto: Float, altoHoja: Float): Boolean {
+        return esPuenteMultiple() && altoHoja < alto
+    }
+
+    private fun textoFijoCorreInaInvertido(ancho: Float): String {
+        return "${NovaCalculos.df1(ancho)} = 1"
+    }
+
+    /**
+     * Suma [cantidad] a la línea cuya medida coincide con [medida] ("medida = N");
+     * si no existe esa línea, añade una nueva. Usado para el falso puente con perfil
+     * elegido (se suma a la cantidad del puente mostrado, mismo perfil y medida = ancho).
+     */
+    private fun agregarPuenteFalso(texto: String, medida: String, cantidad: Int): String {
+        if (cantidad <= 0) return texto
+        val lineas = texto.lines().toMutableList()
+        val patron = Regex("^\\s*${Regex.escape(medida)}\\s*=\\s*(\\d+)\\s*$")
+        for (i in lineas.indices) {
+            val m = patron.matchEntire(lineas[i])
+            if (m != null) {
+                val n = (m.groupValues[1].toIntOrNull() ?: 0) + cantidad
+                lineas[i] = "$medida = $n"
+                return lineas.joinToString("\n")
+            }
+        }
+        val base = if (texto.isBlank()) "" else "$texto\n"
+        return "$base$medida = $cantidad"
+    }
 
     private fun escalarCantidadesTexto(texto: String, factor: Int): String {
         if (factor <= 1 || texto.isBlank()) return texto
@@ -1068,32 +2142,70 @@ class NovaCorrediza : AppCompatActivity() {
     @SuppressLint("SetTextI18n")
     private fun uTexto() {
         val entrada = leerEntradasCalculo()
-        val ancho = entrada.ancho
-        val alto = entrada.alto
+        val alto = entrada.alto - descuentoAltoVertical()
         val hoja = entrada.hoja
         val us = binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f
         val divisManual = entrada.divisManual
         val cruce = entrada.cruce
 
+        // Arco de la curva: lo que se reparte/cuenta/corta. Si hay cuerda + flecha se
+        // calcula con esos (más exacto); si no, el 'ancho' introducido ya es el arco.
+        val ancho = arcoCurvo(entrada.ancho) - descuentoAnchoLateralApa()
         val divisiones = NovaCalculos.divisiones(ancho, divisManual)
         val altoHoja = NovaCalculos.altoHoja(alto, hoja)
+        val mochetaInferior = mochetaInferiorDoblePuente()
 
         if (tipoNova == TipoNova.APA) {
             // === APARENTE ===
-            val nFijos = NovaCalculos.nFijos(divisiones)
-            val fijoUParante = if (divisiones == 2) 1 else NovaCalculos.fijoUParante(divisiones, ancho)
-            val factorMochetas = if (texto == "np") 2 else 1
-            val mochetaUParante = NovaCalculos.mochetaUParante(divisiones, ancho) * factorMochetas
-            val nPuentes = NovaCalculos.nPuentesEfectivos(ancho, divisiones)
-            val uFijos = NovaCalculos.uFijos(ancho, divisiones, cruce, "apa", valorParanteUFijosApa())
-            val uParante = altoHoja - (2*us)
-            val altoMocheta = if (texto == "np") {
+            val nFijos = when {
+                textoModelo == "nff" -> divisiones
+                // Full corredizas: no hay fijos → U de fijos = 0.
+                textoModelo == "nfc" -> 0
+                // ncfc: cantidad real de fijos del patrón invertido (no la del clásico).
+                textoModelo == "ncfc" -> NovaCalculos.nFijos(divisiones, "ncfc")
+                else -> NovaCalculos.nFijos(ancho, divisiones)
+            }
+            // Full fijos con 2 divisiones: sin corredizas no hay tope; esa posición se reemplaza
+            // con U, por lo que la U parante son 2 (no 1 como en la lógica de corrediza).
+            val fijoUParante = when {
+                textoModelo == "nff" && divisiones == 2 -> 2
+                // Full corredizas: no hay fijos → no hay U parante de fijo.
+                textoModelo == "nfc" -> 0
+                // ncfc: U parante solo por lados del fijo que colindan con pared o parante.
+                textoModelo == "ncfc" -> NovaCalculos.uParanteFijosNcfc(ancho, divisiones)
+                divisiones == 2 -> 1
+                else -> NovaCalculos.fijoUParante(divisiones, ancho)
+            }
+            val alturasDoblePuente = if (esModeloDoblePuente()) {
                 NovaInaCalculos.alturasMochetasPorModelo(
-                    modelo = texto,
+                    modelo = modeloRemate,
                     alto = alto,
                     altoHoja = altoHoja,
-                    alturaPuente = tubo
-                ).superior
+                    alturaPuente = tubo,
+                    mochetaInferior = mochetaInferior
+                ).lista()
+            } else {
+                emptyList()
+            }
+            val factorMochetas = if (esModeloDoblePuente()) alturasDoblePuente.size.coerceAtLeast(1) else 1
+            val mochetaUParanteBase = NovaCalculos.mochetaUParante(divisiones, ancho)
+            val mochetaUParante = mochetaUParanteBase * factorMochetas
+            val nPuentes = NovaCalculos.nPuentesEfectivos(ancho, divisiones)
+            val cruceModelo = if (textoModelo == "nff") 0f else cruce
+            val uFijos = NovaCalculos.uFijos(ancho, divisiones, cruceModelo, "apa", valorParanteUFijosApa())
+            // Full fijos: sin corredizas, la U de fijos no se reparte entre divisiones sino
+            // por TRAMO. Su valor es el ancho útil de cada tramo (anchoUtil / nTramos) e iguala
+            // la U de mocheta; son 2 piezas por tramo (una arriba y otra abajo).
+            val nTramosNff = nPuentes.coerceAtLeast(1)
+            val uFijosTexto = if (textoModelo == "nff") (uFijos * divisiones) / nTramosNff else uFijos
+            val nFijosTextoU = when {
+                textoModelo == "nff" -> 2 * nTramosNff
+                // ncfc: 1 U por módulo fijo (la línea se reemplaza luego por corridas de fijos).
+                else -> nFijos
+            }
+            val uParante = altoHoja - (2*us)
+            val altoMocheta = if (esModeloDoblePuente()) {
+                alturasDoblePuente.firstOrNull() ?: 0f
             } else {
                 NovaCalculos.altoMocheta(alto, altoHoja, tubo)
             }
@@ -1109,12 +2221,12 @@ class NovaCorrediza : AppCompatActivity() {
                   hoja = altoHoja,
                   us = us,
                 divisiones = divisiones,
-                uFijos = uFijos,
+                uFijos = uFijosTexto,
                 uParante = uParante,
                 uMocheta = uMocheta,
                   uSuperior = mPuentes1,
                   uSuperior2 = mPuentes2,
-                nFijos = nFijos,
+                nFijos = nFijosTextoU,
                 fijoUParante = fijoUParante,
                 mochetaUParante = mochetaUParante,
                   nPuentes = nPuentes,
@@ -1126,7 +2238,22 @@ class NovaCorrediza : AppCompatActivity() {
               } else {
                   ""
               }
-              val textoUMochetaTramos = escalarCantidadesTexto(textoUMochetaTramosBase, factorMochetas)
+              val textoUMochetaTramosEscalado = escalarCantidadesTexto(textoUMochetaTramosBase, factorMochetas)
+              // Full fijos: la U de la franja sistema tiene la MISMA medida por tramo que la
+              // mocheta y se SUMA a esa línea (la línea propia de U de fijos se filtra por
+              // coincidir con mPuentes1). El Múltiple incorpora su U en la línea del puente, así
+              // que la franja aporta solo 1/tramo con Múltiple y 2/tramo en lo demás (gorrito
+              // incluido). Con la mocheta (1/tramo en Múltiple y gorrito; 2/tramo en lo demás)
+              // el total por tramo queda: Múltiple 2, gorrito 3, otros 4.
+              val textoUMochetaTramos = if (textoModelo == "nff" && textoUMochetaTramosBase.isNotBlank()) {
+                  val franjaPorTramo = if (esPuenteMultiple()) 1 else 2
+                  val franjaTramos = escalarCantidadesTexto(
+                      NovaCalculos.textoTramosUnitarioAparente(ancho, divisiones, puente, tubo, texto), franjaPorTramo
+                  )
+                  combinarTextoCantidades(textoUMochetaTramosEscalado, franjaTramos)
+              } else {
+                  textoUMochetaTramosEscalado
+              }
 
               val patronUSuperior1 = Regex("^${Regex.escape(NovaCalculos.df1(mPuentes1))}\\s*=\\s*\\d+\\s*$")
               val patronUSuperior2 = Regex("^${Regex.escape(NovaCalculos.df1(mPuentes2))}\\s*=\\s*\\d+\\s*$")
@@ -1149,6 +2276,22 @@ class NovaCorrediza : AppCompatActivity() {
                       baseSinAnchoIgual.addAll(lineasMocheta)
                   }
               }
+              val textoUMochetasDoble = if (esModeloDoblePuente()) {
+                  textoUMochetaDoblePuente(alturasDoblePuente, us, mochetaUParanteBase)
+              } else {
+                  ""
+              }
+              if (textoUMochetasDoble.isNotBlank() && textoUMochetasDoble.lines().size > 1) {
+                  val patronUMocheta = Regex("^${Regex.escape(NovaCalculos.df1(uMocheta))}\\s*=\\s*\\d+\\s*$")
+                  val idxUMocheta = baseSinAnchoIgual.indexOfFirst { patronUMocheta.matches(it.trim()) }
+                  val lineasUMocheta = textoUMochetasDoble.lines().filter { it.isNotBlank() }
+                  if (idxUMocheta >= 0) {
+                      baseSinAnchoIgual.removeAt(idxUMocheta)
+                      baseSinAnchoIgual.addAll(idxUMocheta, lineasUMocheta)
+                  } else {
+                      baseSinAnchoIgual.addAll(lineasUMocheta)
+                  }
+              }
               var textoFinalU = baseSinAnchoIgual.joinToString("\n")
               if (divisiones == 1) {
                   val cantidadUFijos = if (esPuenteMultipleOGorrito()) 2 else 4
@@ -1163,36 +2306,83 @@ class NovaCorrediza : AppCompatActivity() {
                   }
                   textoFinalU = lineas.joinToString("\n")
               }
+              if (textoModelo == "ncfc") {
+                  // Reemplazar la línea de U de fijos por corridas: fijos adyacentes suman su medida.
+                  val runText = NovaCalculos.uFijosRunsNcfc(ancho, divisiones, uFijos)
+                  val patronUFijo = Regex("^${Regex.escape(NovaCalculos.df1(uFijos))}\\s*=\\s*\\d+\\s*$")
+                  val lineas = textoFinalU.lines().toMutableList()
+                  val idx = lineas.indexOfFirst { patronUFijo.matches(it.trim()) }
+                  if (idx >= 0) {
+                      lineas.removeAt(idx)
+                      if (runText.isNotBlank()) lineas.addAll(idx, runText.lines())
+                  } else if (runText.isNotBlank()) {
+                      lineas.add(0, runText)
+                  }
+                  textoFinalU = lineas.joinToString("\n")
+                  // La U parante puede dar 0 (fijo que no colinda con pared/parante); no mostrarla.
+                  textoFinalU = filtrarLineasValorCero(textoFinalU)
+              }
+              // Full corredizas: la U son las U horizontales (mismo valor que los puentes, por
+              // tramo) MÁS la U parante de mocheta (vertical) = 2 por tramo. Sin mocheta no van.
+              if (textoModelo == "nfc") {
+                  textoFinalU = if (alto > altoHoja && us != 0f) {
+                      val nTramosNfc = NovaCalculos.gruposDivisionesMochetaPorModelo(ancho, divisiones, "nfc").size
+                      val vertical = "${NovaCalculos.df1(uMocheta)} = ${2 * nTramosNfc}"
+                      if (textoUMochetaTramos.isNotBlank()) "$textoUMochetaTramos\n$vertical" else vertical
+                  } else ""
+              }
 
               binding.txU.text = textoFinalU
         } else {
             // === INAPARENTE/PIVOTANTE: lógica de vidrio3/NovaIna ===
             binding.tvU.text = NovaPerfilesHelper.obtenerEtiquetaU(us)
-            val divisionesU = if (tipoNova == TipoNova.INA && texto == "np") 1 else divisiones
-            binding.txU.text = NovaInaCalculos.calcularTextoU(
-                ancho = ancho,
-                alto = alto,
-                hoja = hoja,
-                us = us,
-                divisiones = divisionesU,
-                cruceExacto = binding.etCruce.text?.toString()?.toFloatOrNull() ?: 0f
-            )
+            val divisionesU = if (tipoNova == TipoNova.INA && esModeloDoblePuente()) 1 else divisiones
+            if (textoModelo == "nfc") {
+                // Full corredizas INA: la U son solo las del marco de mocheta, con las mismas
+                // reglas que el resto de INA: la superior es uSuperior(ancho) = 1 (arriba) y los
+                // costados son uParante2 = 2. Sin mocheta (altoHoja>=alto) no va.
+                binding.txU.text = if (alto > altoHoja && us != 0f) {
+                    val superior = NovaInaCalculos.uSuperior(ancho)
+                    val vertical = NovaInaCalculos.uParante2(alto, altoHoja, us)
+                    "${NovaCalculos.df1(superior)} = 1\n${NovaCalculos.df1(vertical)} = 2"
+                } else ""
+            } else {
+                binding.txU.text = NovaInaCalculos.calcularTextoU(
+                    ancho = ancho,
+                    alto = alto,
+                    hoja = hoja,
+                    us = us,
+                    divisiones = divisionesU,
+                    cruceExacto = binding.etCruce.text?.toString()?.toFloatOrNull() ?: 0f,
+                    incluirUFijos = !esModeloInvertidoIna(),
+                    esFullFijos = textoModelo == "nff",
+                    esCfc = textoModelo == "ncfc"
+                )
+            }
         }
     }
 
     // ==================== OTROS ALUMINIOS ====================
     @SuppressLint("SetTextI18n", "SuspiciousIndentation")
     private fun otrosAluminios() {
+        // En plano el parante no es el esquinero: etiqueta por defecto.
+        binding.tvT.text = getString(R.string.parante)
         val entrada = leerEntradasCalculo()
-        val ancho = entrada.ancho
-        val alto = entrada.alto
+        val alto = entrada.alto - descuentoAltoVertical()
         val hoja = entrada.hoja
         val divisManual = entrada.divisManual
         val cruce = entrada.cruce
 
+        // Arco de la curva: lo que se reparte/cuenta/corta. Si hay cuerda + flecha se
+        // calcula con esos (más exacto); si no, el 'ancho' introducido ya es el arco.
+        val ancho = arcoCurvo(entrada.ancho) - descuentoAnchoLateralApa()
         val divisiones = NovaCalculos.divisiones(ancho, divisManual)
         val altoHoja = NovaCalculos.altoHoja(alto, hoja)
-        val nCorredizas = NovaCalculos.nCorredizas(divisiones)
+        val nCorredizas = if (textoModelo == "nff") 0 else NovaCalculos.nCorredizas(ancho, divisiones)
+        // Falso puente (APA, sin pared arriba/abajo): si el puente es Múltiple es un "tubo 2.5"
+        // aparte; con otro perfil (p. ej. paflón) se suma a la cantidad del puente elegido.
+        val nFalsoPuente = if (tipoNova == TipoNova.APA) ladosVaciosVerticales() else 0
+        val falsoPuenteEsTubo = esPuenteMultipleOGorrito()
         val nPuentes = NovaCalculos.nPuentesEfectivos(ancho, divisiones)
         val portafelpa = NovaCalculos.portafelpa(altoHoja)
         val divDePortas = NovaCalculos.divDePortas(divisiones, nCorredizas)
@@ -1202,7 +2392,8 @@ class NovaCorrediza : AppCompatActivity() {
         val mPuentes1 = NovaCalculos.mPuentes1(ancho, divisiones, tipoCalculo)
         val mPuentes2 = NovaCalculos.mPuentes2(ancho, divisiones, tipoCalculo)
         val paranteApa = if (tipoNova == TipoNova.APA) valorParanteUFijosApa() else 2.5f
-        val uFijos = NovaCalculos.uFijos(ancho, divisiones, cruce, tipoCalculo, paranteApa)
+        val cruceModelo = if (textoModelo == "nff") 0f else cruce
+        val uFijos = NovaCalculos.uFijos(ancho, divisiones, cruceModelo, tipoCalculo, paranteApa)
 
           if (tipoNova == TipoNova.APA) {
               val us = binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f
@@ -1222,7 +2413,9 @@ class NovaCorrediza : AppCompatActivity() {
                     tubo = tubo,
                       us = us,
                       puente = puente,
-                      modelo = texto
+                      modelo = texto,
+                      mochetaInferior = mochetaInferiorDoblePuente(),
+                      remate = modeloRemate
                 )
 
                 val textoTramos = if (alto > altoHoja) {
@@ -1235,12 +2428,13 @@ class NovaCorrediza : AppCompatActivity() {
                 } else {
                     ""
                 }
-              val factorMochetas = if (texto == "np") 2 else 1
-              val textoTramosUnit = escalarCantidadesTexto(textoTramosUnitBase, factorMochetas)
+              val factorMochetas = if (esModeloDoblePuente()) 2 else 1
+              val textoTramosUnitPuente = escalarCantidadesTexto(textoTramosUnitBase, factorMochetas)
+              val textoTramosUnitPerfiles = textoTramosUnitBase
 
               if (textoTramos.isNotBlank()) {
-                  binding.txP.text = textoTramosUnit
-                  binding.txR.text = textoTramosUnit
+                  binding.txP.text = textoTramosUnitPuente
+                  binding.txR.text = textoTramosUnitPerfiles
                   binding.mulLayout.visibility = if (altoHoja >= alto) View.GONE else View.VISIBLE
                   binding.lyRiel.visibility = View.VISIBLE
               } else {
@@ -1249,43 +2443,117 @@ class NovaCorrediza : AppCompatActivity() {
                   binding.txR.text = resultado.rieles
                   binding.lyRiel.visibility = if (resultado.mostrarRieles) View.VISIBLE else View.GONE
               }
-              val mostrarFc = mostrarFijoCorredizo(alto, altoHoja)
-              if (mostrarFc || usarFcComoUFelpero(alto, altoHoja)) {
-                  val textoFc = if (textoTramos.isNotBlank()) textoTramosUnit else resultado.rieles
-                  binding.txFc.text = textoFc
-                  val usarTextoUFelpero = (tipoNova == TipoNova.INA) && usarFcComoUFelpero(alto, altoHoja)
-                  binding.tvFc.setText(if (usarTextoUFelpero) R.string.u_felpero else R.string.fijo_corre)
-                  binding.fcLayout.visibility = if (textoFc.isNotBlank()) View.VISIBLE else View.GONE
-              } else {
-                  binding.fcLayout.visibility = View.GONE
+              // Falso puente con perfil elegido (no Múltiple): medida = ancho.
+              if (nFalsoPuente > 0 && !falsoPuenteEsTubo) {
+                  binding.txP.text = if (alto > altoHoja) {
+                      // Hay puente real: se suma el falso a la cantidad del puente mostrado.
+                      agregarPuenteFalso(binding.txP.text?.toString().orEmpty(), NovaCalculos.df1(ancho), nFalsoPuente)
+                  } else {
+                      // No hay puente real (altoHoja >= alto): se muestra solo el falso puente.
+                      "${NovaCalculos.df1(ancho)} = $nFalsoPuente"
+                  }
+                  binding.mulLayout.visibility = View.VISIBLE
               }
-                  val nParantesDiseno = when (texto) {
+              val mostrarFc = mostrarFijoCorredizo(alto, altoHoja)
+              if (mostrarFc) {
+                  val textoFc = if (textoTramos.isNotBlank()) textoTramosUnitPerfiles else resultado.rieles
+                  mostrarFijoCorre(textoFc)
+              } else {
+                  ocultarFijoCorre()
+              }
+              // ncfc: riel y u felpera / fijo-corredizo = 1 pieza por tramo, medida = ancho del tramo.
+              if (textoModelo == "ncfc") {
+                  val nCorrNcfc = NovaCalculos.nCorredizas(divisiones, "ncfc")
+                  if (nCorrNcfc > 0) {
+                      val textoTramoNcfc = NovaCalculos.anchosTramoNcfc(ancho, divisiones)
+                          .groupingBy { NovaCalculos.df1(it) }.eachCount()
+                          .entries.joinToString("\n") { "${it.key} = ${it.value}" }
+                      binding.txR.text = textoTramoNcfc
+                      binding.lyRiel.visibility = View.VISIBLE
+                      mostrarFijoCorre(textoTramoNcfc)
+                  } else {
+                      binding.txR.text = ""
+                      binding.lyRiel.visibility = View.GONE
+                      ocultarFijoCorre()
+                  }
+              }
+              // Full corredizas: el riel es 1 por cada corrediza; por tramo la medida es el ancho
+              // del tramo y la cantidad = corredizas de ese tramo.
+              if (textoModelo == "nfc") {
+                  val rielNfc = NovaCalculos.rielPorCorredizasNfc(ancho, divisiones, puente, tubo)
+                  binding.txR.text = rielNfc
+                  binding.lyRiel.visibility = if (rielNfc.isNotBlank()) View.VISIBLE else View.GONE
+                  // Riel superior = doble-c: 1 cada 2 corredizas (⌈/2⌉), misma medida por tramo.
+                  val dobleC = NovaCalculos.rielSuperiorNfc(ancho, divisiones, puente, tubo)
+                  if (dobleC.isNotBlank()) {
+                      mostrarFijoCorre(dobleC)
+                      binding.tvFc.text = "doble-c"
+                  } else {
+                      ocultarFijoCorre()
+                  }
+              }
+                  val nParantesDiseno = (when (textoModelo) {
                       "ncc" -> NovaCalculos.nParantesCadaDosCorredizas(divisiones)
                       "n3c" -> NovaCalculos.nParantesCadaTresCorredizas(divisiones)
-                      "ncfc" -> NovaCalculos.nParantesCadaTresCorredizas(divisiones)
+                      "ncfc" -> NovaCalculos.nParantesDiseno(ancho, divisiones)
+                      // Full corredizas: parantes = nº de tramos − 1 (según corredizas por tramo).
+                      "nfc" -> (NovaCalculos.gruposDivisionesMochetaPorModelo(ancho, divisiones, "nfc").size - 1).coerceAtLeast(0)
                       else -> NovaCalculos.nParantesDiseno(ancho, divisiones)
-                  }
-                  val textoParantes = if (nParantesDiseno > 0) "${NovaCalculos.df1(alto)} = $nParantesDiseno" else ""
+                  }) + ladosVaciosLaterales()  // APA: +1 parante por lado lateral al vacío
+                  val textoParantes = if (nParantesDiseno > 0) "${NovaCalculos.df1(entrada.alto)} = $nParantesDiseno" else ""
                   binding.txT.text = textoParantes
                   binding.lyTubo.visibility = if (textoParantes.isNotBlank()) View.VISIBLE else View.GONE
-            binding.txPf.text = resultado.portafelpaTxt
-            binding.lyPf.visibility = if (resultado.mostrarPortafelpa) View.VISIBLE else View.GONE
+            if (textoModelo == "nfc") {
+                // Full corredizas: 2 portafelpas por corrediza (todo es corrediza).
+                val cantPf = 2 * NovaCalculos.nCorredizas(divisiones, "nfc")
+                binding.txPf.text = if (cantPf > 0) "${NovaCalculos.df1(portafelpa)} = $cantPf" else ""
+                binding.lyPf.visibility = if (cantPf > 0) View.VISIBLE else View.GONE
+            } else if (textoModelo == "ncfc") {
+                // ncfc: 2 portafelpas por corrediza + 1 por cada lado de fijo que colinda con corrediza.
+                val nCorrNcfc = NovaCalculos.nCorredizas(divisiones, "ncfc")
+                val cantPf = 2 * nCorrNcfc + NovaCalculos.portafelpaFijosNcfc(ancho, divisiones)
+                binding.txPf.text = if (cantPf > 0) "${NovaCalculos.df1(portafelpa)} = $cantPf" else ""
+                binding.lyPf.visibility = if (cantPf > 0) View.VISIBLE else View.GONE
+            } else {
+                binding.txPf.text = resultado.portafelpaTxt
+                binding.lyPf.visibility = if (resultado.mostrarPortafelpa) View.VISIBLE else View.GONE
+            }
             binding.txTe.text = resultado.teeTxt
             binding.tLayout.visibility = if (resultado.mostrarTee) View.VISIBLE else View.GONE
-            binding.txTo.text = resultado.topeTxt
-            binding.lyTo.visibility = if (resultado.mostrarTope) View.VISIBLE else View.GONE
-            binding.txH.text = resultado.hacheTxt
-            binding.lyH.visibility = if (resultado.mostrarHache) View.VISIBLE else View.GONE
+            if (textoModelo == "ncfc") {
+                // ncfc: ángulo tope = 1 por cada corrediza que toca el inicio o el final del tramo.
+                val nTope = NovaCalculos.anguloTopeCorredizasNcfc(ancho, divisiones)
+                binding.txTo.text = if (nTope > 0) "${NovaCalculos.df1(altoHoja - 0.9f)} = $nTope" else ""
+                binding.lyTo.visibility = if (nTope > 0) View.VISIBLE else View.GONE
+            } else if (textoModelo == "nfc") {
+                // Full corredizas: ángulo tope a cada lado de cada tramo (todos los bordes son
+                // corredizas) → 2 por tramo.
+                val nTope = 2 * NovaCalculos.gruposDivisionesMochetaPorModelo(ancho, divisiones, "nfc").size
+                binding.txTo.text = if (nTope > 0) "${NovaCalculos.df1(altoHoja - 0.9f)} = $nTope" else ""
+                binding.lyTo.visibility = if (nTope > 0) View.VISIBLE else View.GONE
+            } else {
+                binding.txTo.text = resultado.topeTxt
+                binding.lyTo.visibility = if (resultado.mostrarTope) View.VISIBLE else View.GONE
+            }
+            if (textoModelo == "ncfc" || textoModelo == "nfc") {
+                // H = 1 por cada módulo corrediza (misma medida que la H existente).
+                val nCorr = NovaCalculos.nCorredizas(divisiones, textoModelo)
+                binding.txH.text = if (nCorr > 0) "${NovaCalculos.df1(uFijos)} = $nCorr" else ""
+                binding.lyH.visibility = if (nCorr > 0) View.VISIBLE else View.GONE
+            } else {
+                binding.txH.text = resultado.hacheTxt
+                binding.lyH.visibility = if (resultado.mostrarHache) View.VISIBLE else View.GONE
+            }
 
             // Ocultar lyUf en aparente
             binding.lyUf.visibility = View.GONE
             if (divisiones == 1) {
+                // Sin corredizas (1 división) no hay "fijo corrediza": la U ya lo reemplaza.
                 binding.txR.text = ""
-                binding.txFc.text = ""
                 binding.txPf.text = ""
                 binding.txTe.text = ""
                 binding.lyRiel.visibility = View.GONE
-                binding.fcLayout.visibility = View.GONE
+                ocultarFijoCorre()
                 binding.lyUf.visibility = View.GONE
                 binding.tLayout.visibility = View.GONE
                 binding.lyPf.visibility = View.GONE
@@ -1298,7 +2566,8 @@ class NovaCorrediza : AppCompatActivity() {
                 alto = alto,
                 hoja = hoja,
                 divisiones = divisiones,
-                cruceExacto = cruceExacto
+                cruceExacto = cruceExacto,
+                puentesExtra = ladosVaciosVerticales()
             )
 
                 val textoTramos = if (alto > altoHoja) {
@@ -1326,50 +2595,119 @@ class NovaCorrediza : AppCompatActivity() {
               }
 
             val mostrarFc = mostrarFijoCorredizo(alto, altoHoja)
-            if (mostrarFc || usarFcComoUFelpero(alto, altoHoja)) {
-                val textoFc = if (textoTramos.isNotBlank()) textoTramosUnit else resultado.rieles
-                binding.txFc.text = textoFc
-                val usarTextoUFelpero = (tipoNova == TipoNova.INA) && usarFcComoUFelpero(alto, altoHoja)
-                binding.tvFc.setText(if (usarTextoUFelpero) R.string.u_felpero else R.string.fijo_corre)
-                binding.fcLayout.visibility = if (textoFc.isNotBlank()) View.VISIBLE else View.GONE
+            if (mostrarFc) {
+                val textoFc = when {
+                    esModeloInvertidoIna() -> textoFijoCorreInaInvertido(ancho)
+                    textoTramos.isNotBlank() -> textoTramosUnit
+                    else -> resultado.rieles
+                }
+                val mostrarUfEnFc = mostrarUFelperoIna(alto, altoHoja) || usarFcComoUFelpero(alto, altoHoja)
+                val textoUf = if (textoTramos.isNotBlank()) textoTramosUnit else resultado.uFelpero
+                val textoPrincipal = if (!esModeloInvertidoIna() && mostrarUfEnFc) textoUf else textoFc
+                mostrarFijoCorre(
+                    textoPrincipal,
+                    if (!esModeloInvertidoIna() && mostrarUfEnFc) R.string.u_felpero else R.string.fijo_corre
+                )
             } else {
-                binding.fcLayout.visibility = View.GONE
+                ocultarFijoCorre()
+            }
+
+            // ncfc INA = un solo tramo: puente, U felpera y riel son al ANCHO TOTAL (1 c/u). El
+            // descuento de parante lateral por encuentro sin check ya está incluido en `ancho`.
+            if (textoModelo == "ncfc") {
+                val medidaTotal = "${NovaCalculos.df1(ancho)} = 1"
+                // Riel (siempre que haya corredizas) al ancho total.
+                binding.txR.text = medidaTotal
+                binding.lyRiel.visibility = View.VISIBLE
+                // U felpera al ancho total.
+                mostrarFijoCorre(medidaTotal, R.string.u_felpero)
+                // Puente al ancho total, solo si existe puente (hay mocheta: altoHoja < alto).
+                if (altoHoja < alto) {
+                    binding.txP.text = medidaTotal
+                    binding.mulLayout.visibility = View.VISIBLE
+                } else {
+                    binding.mulLayout.visibility = View.GONE
+                }
+            }
+
+            // Full corredizas INA (un tramo): riel = 1 por corrediza; doble-c (era u felpera) =
+            // 1 cada 2 corredizas; puente al ancho total. Medidas por tramo (= ancho, un solo tramo).
+            if (textoModelo == "nfc") {
+                val rielNfc = NovaCalculos.rielPorCorredizasNfc(ancho, divisiones, puente, tubo)
+                binding.txR.text = rielNfc
+                binding.lyRiel.visibility = if (rielNfc.isNotBlank()) View.VISIBLE else View.GONE
+                val dobleC = NovaCalculos.rielSuperiorNfc(ancho, divisiones, puente, tubo)
+                if (dobleC.isNotBlank()) {
+                    mostrarFijoCorre(dobleC)
+                    binding.tvFc.text = "doble-c"
+                } else ocultarFijoCorre()
+                if (altoHoja < alto) {
+                    binding.txP.text = "${NovaCalculos.df1(ancho)} = 1"
+                    binding.mulLayout.visibility = View.VISIBLE
+                } else binding.mulLayout.visibility = View.GONE
             }
 
             // U FELPERO
-            val textoUf = if (textoTramos.isNotBlank()) textoTramosUnit else resultado.uFelpero
-            binding.txUf.text = textoUf
+            binding.txUf.text = ""
 
             // HACHE
-            binding.txH.text = resultado.hache
+            if (textoModelo == "ncfc" || textoModelo == "nfc") {
+                // H = 1 por cada módulo corrediza (misma medida = hache inaparente).
+                val nCorr = NovaCalculos.nCorredizas(divisiones, textoModelo)
+                val hacheIna = NovaInaCalculos.hache(ancho, divisiones, NovaInaCalculos.cruce(cruceExacto, divisiones))
+                binding.txH.text = if (nCorr > 0) "${NovaCalculos.df1(hacheIna)} = $nCorr" else ""
+            } else {
+                binding.txH.text = resultado.hache
+            }
 
             // ÁNGULO TOPE
-            binding.txTo.text = resultado.angTope
-            binding.lyTo.visibility = if (resultado.mostrarAngTope) View.VISIBLE else View.GONE
+            if (textoModelo == "nfc") {
+                // Full corredizas: ángulo tope a cada costado (un tramo) → 2.
+                binding.txTo.text = "${NovaCalculos.df1(altoHoja - 0.9f)} = 2"
+                binding.lyTo.visibility = View.VISIBLE
+            } else {
+                binding.txTo.text = resultado.angTope
+                binding.lyTo.visibility = if (resultado.mostrarAngTope) View.VISIBLE else View.GONE
+            }
 
             // PORTAFELPA
-            binding.txPf.text = resultado.portafelpa
+            if (textoModelo == "ncfc") {
+                // Contada por módulos sobre el patrón real: 2 por corrediza + 1 por cada lado de
+                // fijo que colinda con corrediza.
+                val cantPf = NovaCalculos.portafelpaTotalNcfc(ancho, divisiones)
+                binding.txPf.text = if (cantPf > 0) "${NovaCalculos.df1(NovaCalculos.portafelpa(altoHoja))} = $cantPf" else ""
+                binding.lyPf.visibility = if (cantPf > 0) View.VISIBLE else View.GONE
+            } else if (textoModelo == "nfc") {
+                // Full corredizas: 2 portafelpas por corrediza.
+                val cantPf = 2 * NovaCalculos.nCorredizas(divisiones, "nfc")
+                binding.txPf.text = if (cantPf > 0) "${NovaCalculos.df1(NovaCalculos.portafelpa(altoHoja))} = $cantPf" else ""
+                binding.lyPf.visibility = if (cantPf > 0) View.VISIBLE else View.GONE
+            } else {
+                binding.txPf.text = resultado.portafelpa
+            }
 
               // Visibilidad inaparente
-              binding.lyH.visibility = if (resultado.mostrarHache) View.VISIBLE else View.GONE
-              binding.lyUf.visibility = if (textoUf.isNotBlank()) View.VISIBLE else View.GONE
+              binding.lyH.visibility = if (textoModelo == "ncfc" || textoModelo == "nfc") {
+                  if (binding.txH.text.isNotBlank()) View.VISIBLE else View.GONE
+              } else if (resultado.mostrarHache) View.VISIBLE else View.GONE
+              binding.lyUf.visibility = View.GONE
               binding.tLayout.visibility = View.GONE
-              val nParantesDiseno = when (texto) {
+              val nParantesDiseno = (when (textoModelo) {
                   "ncc" -> NovaCalculos.nParantesCadaDosCorredizas(divisiones)
                   "n3c" -> NovaCalculos.nParantesCadaTresCorredizas(divisiones)
-                  "ncfc" -> NovaCalculos.nParantesCadaTresCorredizas(divisiones)
+                  // ncfc/nfc en INA es un solo tramo: no hay parantes que dividan.
+                  "ncfc", "nfc" -> 0
                   else -> NovaCalculos.nParantesDiseno(ancho, divisiones)
-              }
-              val textoParantes = if (nParantesDiseno > 0) "${NovaCalculos.df1(alto)} = $nParantesDiseno" else ""
+              }) + ladosVaciosLaterales()  // INA: +1 parante por lado lateral al vacío
+              val textoParantes = if (nParantesDiseno > 0) "${NovaCalculos.df1(entrada.alto)} = $nParantesDiseno" else ""
               binding.txT.text = textoParantes
               binding.lyTubo.visibility = if (textoParantes.isNotBlank()) View.VISIBLE else View.GONE
 
               // TEE vacío en ina
               binding.txTe.text = ""
               if (divisiones == 1) {
-                  binding.txR.text = ""
+                binding.txR.text = ""
                 binding.txFc.text = ""
-                binding.txUf.text = ""
                 binding.txPf.text = ""
                 binding.lyRiel.visibility = View.GONE
                   binding.fcLayout.visibility = View.GONE
@@ -1379,37 +2717,74 @@ class NovaCorrediza : AppCompatActivity() {
                   binding.lyTubo.visibility = View.GONE
               }
           }
+
+        // Full fijos (nff): no hay corredizas, así que se oculta todo lo relacionado a ellas
+        // (riel, fijo corrediza, U felpero, H, portafelpa, tope). El Tee es de mochetas (no de
+        // corredizas) y el puente sigue su lógica principal (se muestra si altoHoja < alto).
+        if (textoModelo == "nff") {
+            binding.txR.text = ""
+            binding.txPf.text = ""
+            binding.txH.text = ""
+            binding.txTo.text = ""
+            ocultarFijoCorre()
+            binding.lyRiel.visibility = View.GONE
+            binding.lyUf.visibility = View.GONE
+            binding.lyH.visibility = View.GONE
+            binding.lyPf.visibility = View.GONE
+            binding.lyTo.visibility = View.GONE
+        }
+
+        // Falso puente como pieza aparte "tubo 2.5" solo cuando el puente es Múltiple;
+        // con otro perfil ya se sumó a la cantidad del puente (nPuentes), sin línea aparte.
+        if (nFalsoPuente > 0 && falsoPuenteEsTubo) {
+            binding.txFalsoPuente.text = "${NovaCalculos.df1(ancho)} = $nFalsoPuente"
+            binding.lyFalsoPuente.visibility = View.VISIBLE
+        } else {
+            binding.lyFalsoPuente.visibility = View.GONE
+        }
       }
 
     // ==================== VIDRIOS ====================
     @SuppressLint("SetTextI18n")
     private fun vidriosTexto() {
-        val ancho = ancho()
-        val alto = alto()
+        val alto = alto() - descuentoAltoVertical()
         val hoja = altoHoja()
         val us = binding.etU.text.toString().toFloat()
-        val divisManual = divisiones()
+        val divisManual = binding.etPartes.text?.toString()?.toIntOrNull() ?: 0
         val cruce = cruce()
 
+        // Arco de la curva (ver arcoCurvo): cuerda + flecha si se indican, si no el ancho.
+        val ancho = arcoCurvo(binding.etAncho.text.toString().toFloat()) - descuentoAnchoLateralApa()
         val divisiones = NovaCalculos.divisiones(ancho, divisManual)
         val altoHoja = NovaCalculos.altoHoja(alto, hoja)
 
         if (tipoNova == TipoNova.APA) {
             // === APARENTE: lógica original ===
-          val nFijos = when (texto) {
-              "ncc", "n3c" -> 0
-              "ncfc" -> NovaCalculos.nFijos(divisiones, "ncfc")
-              else -> NovaCalculos.nFijos(divisiones)
+          val nFijos = when {
+              textoModelo == "nff" -> divisiones
+              textoModelo == "nfc" -> 0   // full corredizas: sin fijos
+              textoModelo == "ncfc" -> NovaCalculos.nFijos(divisiones, "ncfc")
+              else -> NovaCalculos.nFijos(ancho, divisiones)
           }
-          val nCorredizas = when (texto) {
-              "ncc", "n3c" -> divisiones
-              "ncfc" -> NovaCalculos.nCorredizas(divisiones, "ncfc")
-              else -> NovaCalculos.nCorredizas(divisiones)
+          // ncfc: la cantidad de vidrios de corrediza usa el conteo del patrón invertido.
+          val nCorredizas = when {
+              textoModelo == "nff" -> 0
+              textoModelo == "nfc" -> divisiones   // full corredizas: todas son corredizas
+              textoModelo == "ncfc" -> NovaCalculos.nCorredizas(divisiones, "ncfc")
+              else -> NovaCalculos.nCorredizas(ancho, divisiones)
           }
-            val uFijos = NovaCalculos.uFijos(ancho, divisiones, cruce, "apa", valorParanteUFijosApa())
+            val cruceModelo = if (textoModelo == "nff") 0f else cruce
+            val uFijos = NovaCalculos.uFijos(ancho, divisiones, cruceModelo, "apa", valorParanteUFijosApa())
 
-            val vidriosFijos = NovaVidriosHelper.calcularVidriosFijos(ancho, uFijos, altoHoja, us, nFijos, divisiones, "aparente")
-            val vidrioCorre = NovaVidriosHelper.calcularVidriosCorredizos(uFijos, altoHoja, nCorredizas)
+            // Usar textoModelo (modulación) y no texto (geometría): en L/C/serie texto es "nl"/etc
+            // y el vidrio de fijos necesita la modulación para aplicar la lógica de full fijos.
+            // Full corredizas: sin vidrio de fijo.
+            val vidriosFijos = if (textoModelo == "nfc") "" else
+                NovaVidriosHelper.calcularVidriosFijos(ancho, uFijos, altoHoja, us, nFijos, divisiones, "aparente", textoModelo)
+            // Full corredizas: cada corrediza tiene ancho = uFijos (= H); cantidad = nº de corredizas.
+            val vidrioCorre = if (textoModelo == "nfc")
+                "${NovaCalculos.df1(uFijos)} x ${NovaCalculos.df1(altoHoja - 3.5f)} = $nCorredizas"
+            else NovaVidriosHelper.calcularVidriosCorredizos(uFijos, altoHoja, nCorredizas)
               val vidrioMocheta = NovaVidriosHelper.calcularVidrioMochetaAparente(
                   ancho = ancho,
                   alto = alto,
@@ -1418,19 +2793,35 @@ class NovaCorrediza : AppCompatActivity() {
                   tubo = tubo,
                   puente = puente,
                   us = us,
-                  modelo = texto
+                  // modelo = modulación (patrón); el remate (np/nr) va aparte para combinarlos.
+                  modelo = textoModelo,
+                  mochetaInferior = mochetaInferiorDoblePuente(),
+                  remate = modeloRemate
               )
 
-            binding.txV.text = if (hoja < alto) {
-                if (divisiones > 1) "$vidriosFijos\n$vidrioCorre\n$vidrioMocheta"
-                else "$vidriosFijos\n$vidrioMocheta"
-            } else {
-                if (divisiones > 1) "$vidriosFijos\n$vidrioCorre"
-                else vidriosFijos
-            }
+            // Full fijos: sin corredizas no se muestra el vidrio de corrediza (el del -1.4).
+            val mostrarVidrioCorre = textoModelo != "nff" && divisiones > 1
+            val partesVidrio = mutableListOf(vidriosFijos)
+            if (mostrarVidrioCorre) partesVidrio.add(vidrioCorre)
+            if (hoja < alto) partesVidrio.add(vidrioMocheta)
+            binding.txV.text = partesVidrio.filter { it.isNotBlank() }.joinToString("\n")
         } else {
             // === INAPARENTE/PIVOTANTE: lógica de vidrio3/NovaIna ===
             val cruceExacto = binding.etCruce.text?.toString()?.toFloatOrNull() ?: 0f
+            if (textoModelo == "nfc") {
+                // Full corredizas INA: cada corrediza = uFijos (= H) de ancho, cantidad = nº de
+                // corredizas (igual que en APA), más la mocheta.
+                val cruceIna = NovaInaCalculos.cruce(cruceExacto, divisiones)
+                val uFijosIna = NovaInaCalculos.uFijos(ancho, divisiones, cruceIna)
+                val corr = "${NovaCalculos.df1(uFijosIna)} x ${NovaCalculos.df1(altoHoja - 3.5f)} = $divisiones"
+                val mocheta = NovaInaCalculos.vidrioMocheta(
+                    ancho = ancho, alto = alto, hoja = hoja, altoHoja = altoHoja,
+                    divisiones = divisiones, cruce = cruceIna, modelo = "nfc",
+                    alturaPuente = tubo, mochetaInferior = mochetaInferiorDoblePuente(),
+                    mochetaInvertidaIna = esModeloInvertidoIna(), remate = modeloRemate
+                )
+                binding.txV.text = listOf(corr, mocheta).filter { it.isNotBlank() }.joinToString("\n")
+            } else {
               binding.txV.text = NovaInaCalculos.calcularVidrios(
                   ancho = ancho,
                   alto = alto,
@@ -1438,24 +2829,31 @@ class NovaCorrediza : AppCompatActivity() {
                   us = us,
                   divisiones = divisiones,
                   cruceExacto = cruceExacto,
-                  modelo = texto,
-                  alturaPuente = tubo
+                  // modelo = modulación (patrón); el remate (np/nr) va aparte para combinarlos.
+                  modelo = textoModelo,
+                  alturaPuente = tubo,
+                  mochetaInferior = mochetaInferiorDoblePuente(),
+                  mochetaInvertidaIna = esModeloInvertidoIna(),
+                  remate = modeloRemate
               )
+            }
           }
       }
 
     // ==================== REFERENCIAS ====================
     private fun referencias() {
-        val ancho = binding.etAncho.text.toString().toFloat()
-        val alto = binding.etAlto.text.toString().toFloat()
+        val anchoEntrada = binding.etAncho.text.toString().toFloat()
+        val alto = binding.etAlto.text.toString().toFloat() - descuentoAltoVertical()
         val hoja = binding.etHoja.text.toString().toFloat()
         val divisManual = binding.etPartes.text.toString().toInt()
 
+        // Arco de la curva (ver arcoCurvo): cuerda + flecha si se indican, si no el ancho.
+        val ancho = arcoCurvo(anchoEntrada) - descuentoAnchoLateralApa()
         val divisiones = NovaCalculos.divisiones(ancho, divisManual)
         val altoHoja = NovaCalculos.altoHoja(alto, hoja)
         val siNoMoch = NovaCalculos.siNoMoch(alto, hoja)
-        val nFijos = NovaCalculos.nFijos(divisiones)
-        val nCorredizas = NovaCalculos.nCorredizas(divisiones)
+        val nFijos = NovaCalculos.nFijos(ancho, divisiones)
+        val nCorredizas = NovaCalculos.nCorredizas(ancho, divisiones)
         val tipoCalculo = tipoCalculoPrincipal()
         val puntosU = if (divisiones > 4) {
             NovaUIHelper.generarPuntosU(ancho, divisManual, cruce(), tipoCalculo)
@@ -1463,17 +2861,122 @@ class NovaCorrediza : AppCompatActivity() {
             ""
         }
 
-        binding.txReferencias.text = NovaUIHelper.generarReferencias(
+        val referenciasBase = NovaUIHelper.generarReferencias(
             ancho, alto, altoHoja, divisiones, nFijos, nCorredizas, siNoMoch, puntosU,
             modelo = texto,
-            alturaPuente = tubo
+            alturaPuente = tubo,
+            mochetaInferior = mochetaInferiorDoblePuente()
         )
+        val geometria = geometriaCurva(ancho, divisiones)
+        binding.txReferencias.text = if (geometria != null) {
+            "$referenciasBase\n${resumenGeometriaCurva(geometria)}"
+        } else {
+            referenciasBase
+        }
+    }
+
+    // ============ VISTA COMPACTABLE DE REFERENCIAS (en L / en C / serie) ============
+    // En geometrías compuestas la información ocupa mucho espacio y tapa los cálculos.
+    // Se muestra solo "An x Al" de cada ventana (color distinto por ventana) y, al tocar,
+    // se despliega toda la información; al volver a tocar, se contrae.
+
+    /**
+     * Toma el texto completo que ya está en txReferencias y, según la geometría, lo deja
+     * plano (plano/curvo) o lo convierte en una vista compactable con color por ventana
+     * (en L / en C / serie). Llamar al final del cálculo, una sola vez.
+     */
+    private fun aplicarVistaReferencias() {
+        val full = binding.txReferencias.text?.toString().orEmpty()
+        referenciasFull = full
+        binding.txReferencias.tag = full
+        val compuesta = texto == "nl" || texto == "nu" || texto == "ns"
+        if (!compuesta) {
+            referenciasColapsable = false
+            binding.txReferencias.setOnClickListener(null)
+            binding.txReferencias.isClickable = false
+            return
+        }
+        referenciasColapsable = true
+        referenciasExpandida = false
+        binding.txReferencias.isClickable = true
+        binding.txReferencias.setOnClickListener {
+            referenciasExpandida = !referenciasExpandida
+            renderReferencias()
+        }
+        renderReferencias()
+    }
+
+    private fun renderReferencias() {
+        binding.txReferencias.text = if (referenciasColapsable && !referenciasExpandida) {
+            construirReferenciasColapsadas(referenciasFull)
+        } else if (referenciasColapsable) {
+            colorearMedidasReferencias(referenciasFull, conPie = true)
+        } else {
+            referenciasFull
+        }
+    }
+
+    /** Color por ventana: mismo tono, distinta oscuridad (más claro a más oscuro). */
+    private fun colorVentana(indice: Int, total: Int): Int {
+        val h = 210f
+        val s = 0.85f
+        val v = if (total <= 1) 0.55f else (0.78f - (indice.toFloat() / (total - 1)) * 0.40f)
+        return Color.HSVToColor(floatArrayOf(h, s, v))
+    }
+
+    private fun esLineaMedida(linea: String) = linea.trimStart().startsWith("An:")
+
+    /** Vista contraída: solo las medidas (An x Al) de cada ventana, con color por ventana. */
+    private fun construirReferenciasColapsadas(full: String): SpannableStringBuilder {
+        val medidas = full.split("\n").filter { esLineaMedida(it) }
+        val sb = SpannableStringBuilder()
+        medidas.forEachIndexed { i, m ->
+            val ini = sb.length
+            sb.append(m.trim())
+            sb.setSpan(ForegroundColorSpan(colorVentana(i, medidas.size)), ini, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.setSpan(StyleSpan(Typeface.BOLD), ini, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.append("\n")
+        }
+        val ini = sb.length
+        sb.append("▼ toca para ver el detalle")
+        sb.setSpan(ForegroundColorSpan(Color.GRAY), ini, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.setSpan(RelativeSizeSpan(0.85f), ini, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return sb
+    }
+
+    /** Vista expandida: texto completo con las líneas de medida coloreadas por ventana. */
+    private fun colorearMedidasReferencias(full: String, conPie: Boolean): SpannableStringBuilder {
+        val lineas = full.split("\n")
+        val total = lineas.count { esLineaMedida(it) }
+        val sb = SpannableStringBuilder()
+        var idx = 0
+        lineas.forEachIndexed { i, l ->
+            val ini = sb.length
+            sb.append(l)
+            if (esLineaMedida(l)) {
+                sb.setSpan(ForegroundColorSpan(colorVentana(idx, total)), ini, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                sb.setSpan(StyleSpan(Typeface.BOLD), ini, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                idx++
+            }
+            if (i < lineas.size - 1) sb.append("\n")
+        }
+        if (conPie) {
+            val ini = sb.length
+            sb.append("\n▲ toca para contraer")
+            sb.setSpan(ForegroundColorSpan(Color.GRAY), ini, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.setSpan(RelativeSizeSpan(0.85f), ini, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        return sb
     }
 
     @SuppressLint("SetTextI18n")
-    private fun cargarDesdePaqueteDiseno(paquete: String) {
+    private fun cargarDesdePaqueteDiseno(paquete: String?) {
+        cargandoDiseno = true
         try {
-            val t = paquete.replace(" ", "")
+            val paqueteSeguro = paquete?.trim()
+                ?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+                ?: return
+            val t = paqueteSeguro.replace(" ", "")
             val contenido = t.trim().removePrefix("{").removeSuffix("}")
             val cabParts = contenido.split(",")
             if (cabParts.size < 3) return
@@ -1490,7 +2993,10 @@ class NovaCorrediza : AppCompatActivity() {
             // Dimensiones
             val resto = contenido.substringAfter("$tipoTxt,").trim()
             if (!resto.startsWith("[")) return
-            val dentro = resto.removePrefix("[").substringBeforeLast("]")
+            val sinBracketInicial = resto.removePrefix("[")
+            val idxCierre = sinBracketInicial.lastIndexOf(']')
+            if (idxCierre < 0) return
+            val dentro = sinBracketInicial.substring(0, idxCierre)
             val idxColon = dentro.indexOf(":")
             if (idxColon < 0) return
             val dimsTxt = dentro.substring(0, idxColon)
@@ -1503,116 +3009,120 @@ class NovaCorrediza : AppCompatActivity() {
 
             // Buscar franja sistema para extraer altoHoja y divisiones
             val cuerpoRaw = dentro.substring(idxColon + 1)
-            // Nuevo formato T<>: desenvolver el primer bloque T<>() para acceder a s<>/m<>
-            val cuerpoTxt = if (cuerpoRaw.replace(" ", "").lowercase().startsWith("t")) {
-                val s = cuerpoRaw.replace(" ", "")
-                val openParen = s.indexOf('(')
-                if (openParen >= 0) {
-                    var depth = 0
-                    var result = cuerpoRaw
-                    for (j in openParen until s.length) {
-                        when (s[j]) {
-                            '(' -> depth++
-                            ')' -> { depth--; if (depth == 0) { result = s.substring(openParen + 1, j); break } }
-                        }
-                    }
-                    result
-                } else cuerpoRaw
-            } else cuerpoRaw
-            val secciones = splitRespetandoParentesis(cuerpoTxt)
-
             // Limpiar estado desigual previo
             modulosDesiguales = emptyList()
             parantesDesiguales = emptyList()
             mochetaDesigual = emptyList()
             altoHojaDesigual = 0f
 
-            for (sec in secciones) {
-                val low = sec.trim().lowercase()
-                if (low.startsWith("s")) {
-                    // Extraer altoHoja
+            // ---- Parseo multi-tramo ----
+            // Extraer TODOS los bloques de tramo Tl<W>(...) como pares (anchoTramo, interior).
+            // Si el cuerpo no está en forma de bloques T, se trata como un único tramo.
+            val bloquesTramo: List<Pair<Float, String>> = run {
+                val s = cuerpoRaw.replace(" ", "")
+                if (!s.lowercase().startsWith("t")) return@run listOf(ancho to s)
+                val out = mutableListOf<Pair<Float, String>>()
+                var i = 0
+                while (i < s.length) {
+                    if (s[i].lowercaseChar() == 't') {
+                        var j = i + 1
+                        if (j < s.length && s[j].lowercaseChar() in 'a'..'z' && s[j] != '<') j++
+                        var wTramo = ancho
+                        if (j < s.length && s[j] == '<') {
+                            val gt = s.indexOf('>', j)
+                            if (gt < 0) break
+                            wTramo = s.substring(j + 1, gt).replace(",", ".").toFloatOrNull() ?: ancho
+                            j = gt + 1
+                        }
+                        if (j < s.length && s[j] == '(') {
+                            var depth = 0; var close = j
+                            for (p in j until s.length) {
+                                when (s[p]) {
+                                    '(' -> depth++
+                                    ')' -> { depth--; if (depth == 0) { close = p; break } }
+                                }
+                            }
+                            out.add(wTramo to s.substring(j + 1, close))
+                            i = close + 1
+                            continue
+                        }
+                    }
+                    i++
+                }
+                if (out.isEmpty()) listOf(ancho to s) else out
+            }
+
+            val regexMod = Regex("([fc])(?:<([^>]+)>)?")
+            val modsAll = mutableListOf<ModuloDesigual>()
+            val parantesAll = mutableListOf<Int>()
+            val mochAll = mutableListOf<ModuloDesigual>()
+
+            for ((bi, bloque) in bloquesTramo.withIndex()) {
+                val wTramo = bloque.first
+                val franjasBloque = splitRespetandoParentesis(bloque.second)
+                val sFranja = franjasBloque.firstOrNull { it.trim().lowercase().startsWith("s") }
+                val mFranja = franjasBloque.firstOrNull { it.trim().lowercase().startsWith("m") }
+
+                // altoHoja desde el primer s<...>
+                if (altoHojaDesigual == 0f && sFranja != null) {
+                    val low = sFranja.trim().lowercase()
                     if (low.length > 1 && low[1] == '<') {
-                        val ah = low.substringAfter("<").substringBefore(">")
-                            .replace(",", ".").toFloatOrNull() ?: 0f
-                        if (ah > 0f) {
-                            binding.etHoja.setText(df1(ah))
-                            altoHojaDesigual = ah
-                        }
+                        val ah = low.substringAfter("<").substringBefore(">").replace(",", ".").toFloatOrNull() ?: 0f
+                        if (ah > 0f) { binding.etHoja.setText(df1(ah)); altoHojaDesigual = ah }
                     }
+                }
 
-                    // Extraer módulos con sus anchos y posiciones de parantes
-                    val interior = low.substringAfter("(").substringBeforeLast(")")
-                    val modsParsed = mutableListOf<ModuloDesigual>()
-                    val parantesPos = mutableListOf<Int>()
-                    val regexMod = Regex("([fc])(?:<([^>]+)>)?")
-                    // Dividir por ;P; para detectar parantes
-                    val gruposTxt = interior.split(";p;")
-                    var idx = 0
-                    for ((gi, grupo) in gruposTxt.withIndex()) {
-                        val matches = regexMod.findAll(grupo)
-                        for (m in matches) {
+                // Módulos del sistema (grupos ;P; internos = parantes dentro del bloque)
+                if (sFranja != null) {
+                    val interior = sFranja.trim().lowercase().substringAfter("(").substringBeforeLast(")")
+                    val nMods = interior.count { it == 'f' || it == 'c' }.coerceAtLeast(1)
+                    val grupos = interior.split(";p;")
+                    val inicioBloque = modsAll.size
+                    for ((gi, grupo) in grupos.withIndex()) {
+                        for (m in regexMod.findAll(grupo)) {
                             val tipo = m.groupValues[1][0]
-                            val anchoMod = m.groupValues[2].replace(",", ".").toFloatOrNull()
-                                ?: (ancho / interior.count { it == 'f' || it == 'c' })
-                            modsParsed.add(ModuloDesigual(tipo, anchoMod))
-                            idx++
+                            val w = m.groupValues[2].replace(",", ".").toFloatOrNull() ?: (wTramo / nMods)
+                            modsAll.add(ModuloDesigual(tipo, w))
                         }
-                        if (gi < gruposTxt.size - 1) {
-                            parantesPos.add(idx) // parante after this index
-                        }
+                        // Parante tras cada grupo, salvo el último grupo del último bloque.
+                        val esUltimoGrupoGlobal = (bi == bloquesTramo.lastIndex && gi == grupos.lastIndex)
+                        if (!esUltimoGrupoGlobal) parantesAll.add(modsAll.size)
                     }
+                    // El ancho del TRAMO es lo autoritativo: re-derivar el ancho de cada módulo
+                    // desde wTramo conservando su proporción, a precisión completa. Así módulos
+                    // iguales dan exactamente wTramo/divisiones (U uniforme) y la suma cierra
+                    // exacta sin arrastrar redondeos del df1 del paquete.
+                    reDerivarDesdeTramo(modsAll, inicioBloque, modsAll.size, wTramo)
+                }
 
-                    val divs = modsParsed.size
-                    if (divs > 0) binding.etPartes.setText(divs.toString())
-
-                    // Detectar desigualdad: si todos los anchos son iguales (±0.5cm) → normal
-                    if (modsParsed.size > 1) {
-                        val anchoProm = modsParsed.map { it.ancho }.average().toFloat()
-                        val esDesigual = modsParsed.any { kotlin.math.abs(it.ancho - anchoProm) > 0.5f }
-                        if (esDesigual) {
-                            modulosDesiguales = modsParsed
-                            parantesDesiguales = parantesPos
-                        }
+                // Mocheta del bloque
+                if (mFranja != null) {
+                    val interior = mFranja.trim().lowercase().substringAfter("(").substringBeforeLast(")")
+                    val nMoch = interior.count { it == 'f' || it == 'c' }.coerceAtLeast(1)
+                    val inicioMoch = mochAll.size
+                    for (m in regexMod.findAll(interior)) {
+                        val tipo = m.groupValues[1][0]
+                        val w = m.groupValues[2].replace(",", ".").toFloatOrNull() ?: (wTramo / nMoch)
+                        mochAll.add(ModuloDesigual(tipo, w))
                     }
-                    break
+                    reDerivarDesdeTramo(mochAll, inicioMoch, mochAll.size, wTramo)
                 }
             }
 
-            // Multi-tramo: corregir etPartes sumando módulos de TODOS los tramos
-            val cuerpoSinEsp = cuerpoRaw.replace(" ", "")
-            if (cuerpoSinEsp.lowercase().startsWith("t") && cuerpoSinEsp.contains("P<", ignoreCase = true)) {
-                val totalDivs = Regex("s(?:<[^>]*>)?\\(([^)]*)\\)", RegexOption.IGNORE_CASE)
-                    .findAll(cuerpoSinEsp)
-                    .sumOf { m -> m.groupValues[1].count { c -> c == 'f' || c == 'c' } }
-                if (totalDivs > 0) binding.etPartes.setText(totalDivs.toString())
-            }
+            val divs = modsAll.size
+            if (divs > 0) binding.etPartes.setText(divs.toString())
 
-            // Extraer mocheta desigual si hay módulos desiguales
-            if (modulosDesiguales.isNotEmpty()) {
-                for (sec in secciones) {
-                    val low = sec.trim().lowercase()
-                    if (low.startsWith("m")) {
-                        val interior = low.substringAfter("(").substringBeforeLast(")")
-                        val regexMod = Regex("([fc])(?:<([^>]+)>)?")
-                        val mochParsed = mutableListOf<ModuloDesigual>()
-                        val matches = regexMod.findAll(interior)
-                        for (m in matches) {
-                            val tipo = m.groupValues[1][0]
-                            val anchoMod = m.groupValues[2].replace(",", ".").toFloatOrNull()
-                                ?: (ancho / interior.count { it == 'f' || it == 'c' }.coerceAtLeast(1))
-                            mochParsed.add(ModuloDesigual(tipo, anchoMod))
-                        }
-                        if (mochParsed.isNotEmpty()) {
-                            mochetaDesigual = mochParsed
-                        }
-                        break
-                    }
-                }
+            // Todo lo que llega aquí proviene de diseñoNova: se trata SIEMPRE con el motor
+            // desigual usando los anchos exactos del diseño (iguales o no). Sin umbral de 0.5.
+            if (modsAll.isNotEmpty()) {
+                modulosDesiguales = modsAll
+                parantesDesiguales = parantesAll
+                mochetaDesigual = mochAll
             }
 
             // Guardar paquete y actualizar diseño
-            ultimoPaquete = paquete
-            binding.textView28.text = paquete
+            ultimoPaquete = paqueteSeguro
+            binding.textView28.setText(R.string.referencias_y_c_lculos)
             val tipoMsg = if (modulosDesiguales.isNotEmpty()) " (desigual)" else ""
             Toast.makeText(this, "Diseño cargado: ${df1(ancho)} x ${df1(alto)}$tipoMsg", Toast.LENGTH_SHORT).show()
 
@@ -1620,17 +3130,67 @@ class NovaCorrediza : AppCompatActivity() {
             val intentRender = Intent(this, DisenoNovaActivity::class.java).apply {
                 putExtra(DisenoNovaActivity.EXTRA_PAQUETE, ultimoPaquete)
                 putExtra(DisenoNovaActivity.EXTRA_HEADLESS, true)
-                putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>")) "png" else "svg")
+                putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>") || modulosDesiguales.isNotEmpty()) "png" else "svg")
                 putExtra(DisenoNovaActivity.EXTRA_RET_PADDING_PX, 4)
                 putExtra(DisenoNovaActivity.EXTRA_MOCHETA_LATERAL_CM, mochetaLateralDisenoNl())
+                putExtra(DisenoNovaActivity.EXTRA_ENCUENTRO_VACIO, metaEncuentro)
+                putExtra(DisenoNovaActivity.EXTRA_DIRECCION, metaDireccion)
                 putExtra(DisenoNovaActivity.EXTRA_US_CM, binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f)
             }
             lanzarDiseno.launch(intentRender)
 
         } catch (e: Exception) {
             Toast.makeText(this, "Error al cargar diseño: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+            cargandoDiseno = false
         }
     }
+
+    /**
+     * Suelta el estado de divisiones desiguales (cargado de diseñoNova) cuando el usuario
+     * edita manualmente los campos base. Así el siguiente Calcular vuelve a la lógica normal
+     * con los datos nuevos, sin necesidad de salir y reentrar a NovaCorrediza.
+     */
+    private fun limpiarEstadoDesigual() {
+        if (cargandoDiseno || modulosDesiguales.isEmpty()) return
+        modulosDesiguales = emptyList()
+        parantesDesiguales = emptyList()
+        mochetaDesigual = emptyList()
+        altoHojaDesigual = 0f
+    }
+
+    /** Al editar manualmente cualquier campo base se suelta el estado desigual. */
+    private fun configurarLimpiezaDesigual() {
+        val watcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { limpiarEstadoDesigual() }
+        }
+        binding.etPartes.addTextChangedListener(watcher)
+        binding.etHoja.addTextChangedListener(watcher)
+        binding.etAncho.addTextChangedListener(watcher)
+        binding.etAlto.addTextChangedListener(watcher)
+        binding.etCruce.addTextChangedListener(watcher)
+        binding.etU.addTextChangedListener(watcher)
+    }
+
+    /**
+     * Re-deriva el ancho de los módulos [start, end) desde el ancho del tramo [wTramo],
+     * conservando su proporción y a precisión completa. El tramo es lo autoritativo: módulos
+     * iguales quedan exactamente wTramo/n y su suma cierra exacta (sin arrastrar el df1 del
+     * paquete, que es lo que partía la U en 46.2 / 46.3).
+     */
+    private fun reDerivarDesdeTramo(mods: MutableList<ModuloDesigual>, start: Int, end: Int, wTramo: Float) {
+        if (start >= end || wTramo <= 0f) return
+        val suma = (start until end).sumOf { mods[it].ancho.toDouble() }.toFloat()
+        if (suma <= 0.05f) {
+            val n = end - start
+            for (i in start until end) mods[i] = mods[i].copy(ancho = wTramo / n)
+        } else {
+            for (i in start until end) mods[i] = mods[i].copy(ancho = wTramo * mods[i].ancho / suma)
+        }
+    }
+
     private fun splitRespetandoParentesis(texto: String): List<String> {
         val result = mutableListOf<String>()
         var depth = 0
@@ -1656,17 +3216,22 @@ class NovaCorrediza : AppCompatActivity() {
         val divisManual = binding.etPartes.text.toString().toInt()
         val divisiones = NovaCalculos.divisiones(ancho, divisManual)
         val altoHoja = NovaCalculos.altoHoja(alto, hoja)
+        val mochetaInferior = mochetaInferiorDoblePuente()
 
         if (texto == "nl") {
             val primera = obtenerPrimeraMedidaNlEditable()
             if (primera != null) {
-                val divisA = NovaCalculos.divisiones(primera.ancho, primera.divisManual, "nn")
-                val divisB = NovaCalculos.divisiones(ancho, divisManual, "nn")
-                val altoHojaA = NovaCalculos.altoHoja(primera.alto, primera.hoja)
-                val altoHojaB = NovaCalculos.altoHoja(alto, hoja)
-                val tramosBase = NovaUIHelper.generarTramosConsolidado(primera.ancho, primera.alto, altoHojaA, divisA, 1, textoModelo)
-                val tramosAleta = NovaUIHelper.generarTramosConsolidado(ancho, alto, altoHojaB, divisB, 1, textoModelo)
-                val cabecera = "${NovaCalculos.df1(primera.ancho)},${NovaCalculos.df1(primera.alto)}:"
+                // Aplicar el descuento de esquina (mismo que materiales) para que el dibujo use
+                // el ancho ÚTIL: divisiones y paños de mocheta coinciden con la lista de corte.
+                val aletaMedida = MedidaNl(ancho, alto, hoja, divisManual)
+                val (primeraC, aletaC) = medidasCalculoNlApa(primera, aletaMedida)
+                val divisA = NovaCalculos.divisiones(primeraC.ancho, primeraC.divisManual, "nn")
+                val divisB = NovaCalculos.divisiones(aletaC.ancho, aletaC.divisManual, "nn")
+                val altoHojaA = NovaCalculos.altoHoja(primeraC.alto, primeraC.hoja)
+                val altoHojaB = NovaCalculos.altoHoja(aletaC.alto, aletaC.hoja)
+                val tramosBase = NovaUIHelper.generarTramosConsolidado(primeraC.ancho, primeraC.alto, altoHojaA, divisA, 1, textoModelo, mochetaInferior, modeloRemate)
+                val tramosAleta = NovaUIHelper.generarTramosConsolidado(aletaC.ancho, aletaC.alto, altoHojaB, divisB, 1, textoModelo, mochetaInferior, modeloRemate)
+                val cabecera = "${NovaCalculos.df1(primeraC.ancho)},${NovaCalculos.df1(primeraC.alto)}:"
                 return "{nova,${tipoPaquete()},[$cabecera$tramosBase A<90> $tramosAleta]}"
             }
         }
@@ -1675,23 +3240,34 @@ class NovaCorrediza : AppCompatActivity() {
             val ladoCentro = obtenerSegundaMedidaNuEditable()
             if (ladoIzq != null && ladoCentro != null) {
                 val ladoDer = MedidaNl(ancho, alto, hoja, divisManual)
-                val divisIzq = NovaCalculos.divisiones(ladoIzq.ancho, ladoIzq.divisManual, "nn")
-                val divisCentro = NovaCalculos.divisiones(ladoCentro.ancho, ladoCentro.divisManual, "nn")
-                val divisDer = NovaCalculos.divisiones(ladoDer.ancho, ladoDer.divisManual, "nn")
-                val altoHojaIzq = NovaCalculos.altoHoja(ladoIzq.alto, ladoIzq.hoja)
-                val altoHojaCentro = NovaCalculos.altoHoja(ladoCentro.alto, ladoCentro.hoja)
-                val altoHojaDer = NovaCalculos.altoHoja(ladoDer.alto, ladoDer.hoja)
-                val tramosIzq = NovaUIHelper.generarTramosConsolidado(ladoIzq.ancho, ladoIzq.alto, altoHojaIzq, divisIzq, 1, textoModelo)
-                val tramosCentro = NovaUIHelper.generarTramosConsolidado(ladoCentro.ancho, ladoCentro.alto, altoHojaCentro, divisCentro, 1, textoModelo)
-                val tramosDer = NovaUIHelper.generarTramosConsolidado(ladoDer.ancho, ladoDer.alto, altoHojaDer, divisDer, 1, textoModelo)
-                val cabecera = "${NovaCalculos.df1(ladoCentro.ancho)},${NovaCalculos.df1(ladoCentro.alto)}:"
+                // Descuento de esquina (igual que materiales): dos esquinas, el centro descuenta
+                // ambas. El dibujo usa el ancho ÚTIL para que coincida con la lista de corte.
+                val (izqC, centroEsqIzq) = medidasCalculoNlApa(ladoIzq, ladoCentro)
+                val (centroEsqDer, derC) = medidasCalculoNlApa(ladoCentro, ladoDer)
+                val descuentoCentro = (ladoCentro.ancho - centroEsqIzq.ancho) +
+                    (ladoCentro.ancho - centroEsqDer.ancho)
+                val centroC = ladoCentro.copy(
+                    ancho = (ladoCentro.ancho - descuentoCentro).coerceAtLeast(0f)
+                )
+                val divisIzq = NovaCalculos.divisiones(izqC.ancho, izqC.divisManual, "nn")
+                val divisCentro = NovaCalculos.divisiones(centroC.ancho, centroC.divisManual, "nn")
+                val divisDer = NovaCalculos.divisiones(derC.ancho, derC.divisManual, "nn")
+                val altoHojaIzq = NovaCalculos.altoHoja(izqC.alto, izqC.hoja)
+                val altoHojaCentro = NovaCalculos.altoHoja(centroC.alto, centroC.hoja)
+                val altoHojaDer = NovaCalculos.altoHoja(derC.alto, derC.hoja)
+                val tramosIzq = NovaUIHelper.generarTramosConsolidado(izqC.ancho, izqC.alto, altoHojaIzq, divisIzq, 1, textoModelo, mochetaInferior, modeloRemate)
+                val tramosCentro = NovaUIHelper.generarTramosConsolidado(centroC.ancho, centroC.alto, altoHojaCentro, divisCentro, 1, textoModelo, mochetaInferior, modeloRemate)
+                val tramosDer = NovaUIHelper.generarTramosConsolidado(derC.ancho, derC.alto, altoHojaDer, divisDer, 1, textoModelo, mochetaInferior, modeloRemate)
+                val cabecera = "${NovaCalculos.df1(centroC.ancho)},${NovaCalculos.df1(centroC.alto)}:"
                 return "{nova,${tipoPaquete()},[$cabecera$tramosIzq A<90> $tramosCentro A<90> $tramosDer]}"
             }
         }
         if (texto == "ns") {
             val lados = mutableListOf<MedidaNl>()
             lados.addAll(ladosNs)
-            if (ancho > 0f && alto > 0f) {
+            // En modo navegar, ladosNs ya contiene toda la serie (los campos se guardaron
+            // en el lado actual antes de construir); no anexar la medida en curso.
+            if (!navegandoNs && ancho > 0f && alto > 0f) {
                 val actual = MedidaNl(ancho = ancho, alto = alto, hoja = hoja, divisManual = divisManual)
                 val ultimo = lados.lastOrNull()
                 if (ultimo == null || !mismaMedida(ultimo, actual)) {
@@ -1702,13 +3278,13 @@ class NovaCorrediza : AppCompatActivity() {
                 val base = lados.first()
                 val divisBase = NovaCalculos.divisiones(base.ancho, base.divisManual, "nn")
                 val altoHojaBase = NovaCalculos.altoHoja(base.alto, base.hoja)
-                val tramosBase = NovaUIHelper.generarTramosConsolidado(base.ancho, base.alto, altoHojaBase, divisBase, 1, textoModelo)
+                val tramosBase = NovaUIHelper.generarTramosConsolidado(base.ancho, base.alto, altoHojaBase, divisBase, 1, textoModelo, mochetaInferior, modeloRemate)
                 val partes = mutableListOf(tramosBase)
                 for (i in 1 until lados.size) {
                     val lado = lados[i]
                     val divisLado = NovaCalculos.divisiones(lado.ancho, lado.divisManual, "nn")
                     val altoHojaLado = NovaCalculos.altoHoja(lado.alto, lado.hoja)
-                    val tramosLado = NovaUIHelper.generarTramosConsolidado(lado.ancho, lado.alto, altoHojaLado, divisLado, 1, textoModelo)
+                    val tramosLado = NovaUIHelper.generarTramosConsolidado(lado.ancho, lado.alto, altoHojaLado, divisLado, 1, textoModelo, mochetaInferior, modeloRemate)
                     partes.add("A<90>")
                     partes.add(tramosLado)
                 }
@@ -1717,15 +3293,20 @@ class NovaCorrediza : AppCompatActivity() {
             }
         }
         if (texto == "ncu") {
+            // Arco de la curva (ver arcoCurvo). El tag U<...> aplica la flecha al dibujo.
+            val arco = arcoCurvo(ancho)
+            val divisionesCurvas = NovaCalculos.divisiones(arco, divisManual)
             val disenoBase = NovaUIHelper.generarDisenoConsolidado(
-                ancho = ancho,
+                ancho = arco,
                 alto = alto,
                 altoHoja = altoHoja,
-                divisiones = divisiones,
+                divisiones = divisionesCurvas,
                 siNoMoch = 1,
-                texto = textoModelo
+                texto = textoModelo,
+                mochetaInferior = mochetaInferior,
+                remate = modeloRemate
             )
-            val disenoCurvo = insertarTagSimpleEnPrimerSistema(disenoBase, "U<10>")
+            val disenoCurvo = insertarTagSimpleEnPrimerSistema(disenoBase, "U<${df1(flechaCurvaDesdeCampos())}>")
             return "{nova,${tipoPaquete()},[$disenoCurvo]}"
         }
         if (texto == "nci") {
@@ -1735,18 +3316,22 @@ class NovaCorrediza : AppCompatActivity() {
                 altoHoja = altoHoja,
                 divisiones = divisiones,
                 siNoMoch = 1,
-                texto = "np"
+                texto = "np",
+                mochetaInferior = mochetaInferior
             )
             val disenoCircular = insertarTagSimpleEnPrimerSistema(disenoBase, "O<1>")
             return "{nova,${tipoPaquete()},[$disenoCircular]}"
         }
 
-        return NovaUIHelper.generarPaqueteSimbolico(tipoPaquete(), ancho, alto, altoHoja, divisiones, texto)
+        // Patrón = textoModelo (modulación); remate = modeloRemate. Ejes independientes.
+        return NovaUIHelper.generarPaqueteSimbolico(tipoPaquete(), ancho, alto, altoHoja, divisiones, textoModelo, mochetaInferior, modeloRemate)
     }
 
     private fun disenoSimbolicoV2(numeroProductoAuto: Int? = null): String {
         val clienteTxt = escaparCampoV2(binding.txC.text?.toString()?.trim().orEmpty().ifBlank { "sin cliente" })
-        val anchoTxt = dfV2(binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f)
+        val anchoValor = binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f
+        // En curvo se guarda el arco (ver arcoCurvo): cuerda + flecha si se indican.
+        val anchoTxt = dfV2(arcoCurvo(anchoValor))
         val altoTxt = dfV2(binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f)
         val hpTxt = dfV2(binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f)
         val cantidad = obtenerCantidadPreferida()
@@ -1761,9 +3346,20 @@ class NovaCorrediza : AppCompatActivity() {
             "ncu" -> "c"
             else -> "p"
         }
-        val forma = if (texto == "nci") "c" else "r"
-        val encuentro = if (texto == "nv") "a" else "m"
-        val modelo = when (texto) {
+        val forma = when (metaForma) {
+            "circular"  -> "c"
+            "poligonal" -> "p"
+            else        -> if (texto == "nci") "c" else "r"
+        }
+        // Encuentro: si algún lado quedó al vacío se codifica (ARBL: 1=colinda, 0=vacío);
+        // si los 4 colindan, se conserva el valor histórico (a/m).
+        val encuentro = when {
+            metaEncuentro != "1111" -> metaEncuentro
+            texto == "nv" -> "a"
+            else -> "m"
+        }
+        // El "modelo" del paquete refleja el REMATE (eje independiente de la modulación).
+        val modelo = when (modeloRemate) {
             "nn" -> "n"
             "nr" -> "i"
             "np" -> "b"
@@ -1837,10 +3433,14 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     private fun limpiarEstadoNl() {
+        materialesNlArchivables = null
         primeraMedidaNl = null
         primeraMedidaNu = null
         segundaMedidaNu = null
         ladosNs.clear()
+        navegandoNs = false
+        indiceNs = 0
+        binding.btAgregar.text = getString(R.string.agregar)
         binding.etAncho2.setText("")
         binding.etAlto2.setText("")
         binding.etPuente2.setText("")
@@ -1858,6 +3458,8 @@ class NovaCorrediza : AppCompatActivity() {
         binding.lyAlto3.visibility = View.GONE
         binding.lyPuente3.visibility = View.GONE
         binding.lyDivi3.visibility = View.GONE
+        binding.lyFlecha.visibility = View.GONE
+        binding.lyCuerda.visibility = View.GONE
         binding.txDatos.setText(R.string.otros_datos)
     }
 
@@ -1953,40 +3555,101 @@ class NovaCorrediza : AppCompatActivity() {
         val adapter = NovaSpinnerData.AdaptadorSpinner(this, spinnerOptions)
         spinnerListo = false
         binding.spinner.adapter = adapter
+        binding.editTextNumberDecimal.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (!actualizandoValorPuenteDesdeCodigo) {
+                    valorPuenteEditadoManualmente = true
+                }
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
         binding.spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 if (!spinnerListo) {
                     spinnerListo = true
                     return
                 }
+                val tuboAnterior = tubo
+                val puenteAnterior = puente
                 val selectedOption = spinnerOptions[position]
-                if (modeloNpVetaMultiple() && esPuenteMultiple(selectedOption.text)) {
-                    tubo = 2.5f
-                    puente = puenteNpDefault
-                    val idxNp = indiceSpinnerPuente(puenteNpDefault)
-                    if (idxNp >= 0 && binding.spinner.selectedItemPosition != idxNp) {
-                        binding.spinner.setSelection(idxNp)
-                    }
-                } else if (tipoNova == TipoNova.INA && esPuenteMultiple(selectedOption.text)) {
-                    tubo = 2.5f
-                    puente = puenteInaDefault
-                    sincronizarSpinnerPuenteInaDefault()
+                if (puenteMultipleNoPermitido(selectedOption.text)) {
+                    aplicarPuentePredeterminadoSinMultiple()
                 } else {
                     tubo = selectedOption.valor
                     puente = selectedOption.text
+                    binding.tvP.text = puente
+                    escribirValorPuente(tubo)
                 }
-                binding.tvP.text = puente
+                recalcularSiYaFueCalculado(tuboAnterior, puenteAnterior)
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
     }
 
+    /** Aplica un puente elegido desde el diálogo de opciones (misma lógica que el spinner). */
+    private fun aplicarPuenteDesdeOpcion(op: NovaSpinnerData.SpinnerTubos) {
+        if (puenteMultipleNoPermitido(op.text)) {
+            aplicarPuentePredeterminadoSinMultiple()
+        } else {
+            tubo = op.valor
+            puente = op.text
+            binding.tvP.text = puente
+            escribirValorPuente(tubo)
+        }
+        actualizarVisibilidadMochetaInferior()
+    }
+
     // ==================== SPINNER HELPERS ====================
     private fun mostrarLySpinner() {
+        escribirValorPuente(tubo)
         binding.lySpinner.alpha = 0f
         binding.lySpinner.visibility = View.VISIBLE
         binding.lySpinner.animate().alpha(1f).setDuration(300).start()
     }
+
+    private fun aplicarValorManualPuente(): Boolean {
+        val valorManual = binding.editTextNumberDecimal.text
+            ?.toString()
+            ?.trim()
+            ?.replace(",", ".")
+            ?.toFloatOrNull()
+
+        if (valorManual == null || valorManual <= 0f) {
+            Toast.makeText(this, "Ingrese valor válido", Toast.LENGTH_SHORT).show()
+            return false
+        }
+
+        val valorAnterior = tubo
+        val esIngresoManual = valorPuenteEditadoManualmente
+        tubo = valorManual
+        if (esIngresoManual) {
+            puente = "tubo: ${df1(tubo)}"
+        }
+        escribirValorPuente(tubo)
+        binding.tvP.text = puente
+        if (esIngresoManual) {
+            recalcularSiYaFueCalculado(valorAnterior, "")
+        }
+        return true
+    }
+
+    private fun recalcularSiYaFueCalculado(tuboAnterior: Float, puenteAnterior: String) {
+        val cambioTubo = kotlin.math.abs(tuboAnterior - tubo) > 0.001f
+        val cambioPuente = puenteAnterior.isNotEmpty() && puenteAnterior != puente
+        if (ultimoPaquete.isNotBlank() && (cambioTubo || cambioPuente)) {
+            binding.btCalcular.post { binding.btCalcular.performClick() }
+        }
+    }
+
+    private fun escribirValorPuente(valor: Float) {
+        actualizandoValorPuenteDesdeCodigo = true
+        binding.editTextNumberDecimal.setText(df1(valor))
+        binding.editTextNumberDecimal.setSelection(binding.editTextNumberDecimal.text?.length ?: 0)
+        actualizandoValorPuenteDesdeCodigo = false
+        valorPuenteEditadoManualmente = false
+    }
+
     private fun ocultarLySpinner() {
         binding.lySpinner.animate().alpha(0f).setDuration(300)
             .withEndAction { binding.lySpinner.visibility = View.GONE }.start()
@@ -2011,9 +3674,36 @@ class NovaCorrediza : AppCompatActivity() {
             archivarMapas()
             ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
             Toast.makeText(this, "Archivado", Toast.LENGTH_SHORT).show()
-            binding.etAncho.setText("")
-            binding.etAlto.setText("")
+            limpiarMedidasTrasArchivar()
         }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun limpiarMedidasTrasArchivar() {
+        binding.etAncho.setText("")
+        binding.etAlto.setText("")
+
+        if (texto != "nl") return
+
+        primeraMedidaNl = null
+        materialesNlArchivables = null
+        binding.etHoja.setText("")
+        binding.etPartes.setText("0")
+        binding.etAncho2.setText("")
+        binding.etAlto2.setText("")
+        binding.etPuente2.setText("")
+        binding.etDivi2.setText("0")
+        binding.lyAncho2.visibility = View.GONE
+        binding.lyAlto2.visibility = View.GONE
+        binding.lyPuente2.visibility = View.GONE
+        binding.lyDivi2.visibility = View.GONE
+        binding.tvLado1.visibility = View.GONE
+        contadorLado = 1
+        maxLados = 2
+        binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+        binding.txDatos.setText(R.string.otros_datos)
+        binding.btAgregar.visibility = View.VISIBLE
+        binding.btAgregar.isEnabled = true
     }
 
     private fun mostrarDialogoMetadatosProduccion(onContinuar: () -> Unit) {
@@ -2075,8 +3765,7 @@ class NovaCorrediza : AppCompatActivity() {
         } else {
             mapOf(
                 "Portafelpa" to ModoMasivoHelper.texto(binding.txPf),
-                "Tope" to ModoMasivoHelper.texto(binding.txTo),
-                "U felpero" to ModoMasivoHelper.texto(binding.txUf)
+                "Tope" to ModoMasivoHelper.texto(binding.txTo)
             )
         }
         val perfiles = mapOf(
@@ -2095,7 +3784,7 @@ class NovaCorrediza : AppCompatActivity() {
             perfiles = perfiles,
             vidrios = ModoMasivoHelper.texto(binding.txV),
             accesorios = accesorios.filter { it.value.isNotBlank() },
-            referencias = ModoMasivoHelper.texto(binding.txReferencias),
+            referencias = if (referenciasColapsable) referenciasFull else ModoMasivoHelper.texto(binding.txReferencias),
             disenoPaquete = paqueteDiseno,
             disenoSimbolicoV2 = paqueteDisenoV2
         )
@@ -2113,46 +3802,50 @@ class NovaCorrediza : AppCompatActivity() {
         val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
         var ultimoID = ""
 
+        // Si la vista de referencias está contraída, archivar el texto completo (sin spans).
+        if (referenciasColapsable) binding.txReferencias.text = referenciasFull
+
         for (u in 1..cant) {
             val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
             val identificadorPaquete = "${prefijo}${siguienteNumero}"
             ultimoID = identificadorPaquete
+            val matNl = if (texto == "nl") materialesNlArchivables else null
 
             if (esValido(binding.lyReferencias)) {
                 ListaCasilla.procesarReferenciasConPrefijo(this, binding.tvReferencias, binding.txReferencias, mapListas, identificadorPaquete)
             }
             if (esValido(binding.u13layout)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvU, binding.txU, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvU, txArchivableNl(binding.txU, matNl?.u), mapListas, identificadorPaquete)
             }
             if (esValido(binding.mulLayout)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvP, binding.txP, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvP, txArchivableNl(binding.txP, matNl?.p), mapListas, identificadorPaquete)
             }
             if (esValido(binding.fcLayout)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvFc, binding.txFc, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvFc, txArchivableNl(binding.txFc, matNl?.fc), mapListas, identificadorPaquete)
             }
             if (esValido(binding.lyRiel)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvR, binding.txR, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvR, txArchivableNl(binding.txR, matNl?.r), mapListas, identificadorPaquete)
             }
             if (esValido(binding.lyTubo)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvT, binding.txT, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvT, txArchivableNl(binding.txT, matNl?.tubo), mapListas, identificadorPaquete)
+            }
+            if (esValido(binding.lyFalsoPuente)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvFalsoPuente, binding.txFalsoPuente, mapListas, identificadorPaquete)
             }
             if (esValido(binding.lyPf)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvPf, binding.txPf, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvPf, txArchivableNl(binding.txPf, matNl?.pf), mapListas, identificadorPaquete)
             }
             if (tipoNova == TipoNova.APA && esValido(binding.tLayout)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvTe, binding.txTe, mapListas, identificadorPaquete)
-            }
-            if (tipoNova != TipoNova.APA && esValido(binding.lyUf)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvUf, binding.txUf, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvTe, txArchivableNl(binding.txTe, matNl?.te), mapListas, identificadorPaquete)
             }
             if (esValido(binding.lyTo)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvTo, binding.txTo, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvTo, txArchivableNl(binding.txTo, matNl?.tope), mapListas, identificadorPaquete)
             }
             if (esValido(binding.lyH)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvH, binding.txH, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvH, txArchivableNl(binding.txH, matNl?.hache), mapListas, identificadorPaquete)
             }
             if (esValido(binding.lyVidrios)) {
-                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvV, binding.txV, mapListas, identificadorPaquete)
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvV, txArchivableNl(binding.txV, matNl?.vidrio), mapListas, identificadorPaquete)
             }
             // Cliente: archivar directamente (no usa formato "valor = cantidad")
             val clienteTexto = binding.txC.text.toString()
@@ -2205,11 +3898,19 @@ class NovaCorrediza : AppCompatActivity() {
             ProyectoManager.actualizarContadorPorPrefijo(this, prefijo, siguienteNumero)
         }
 
+        // Restaurar la vista compactable tras archivar.
+        if (referenciasColapsable) renderReferencias()
+
         MapStorage.guardarMap(this, mapListas)
         ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
         val msg = if (cant > 1) "Archivadas $cant unidades en proyecto: ${ProyectoManager.getProyectoActivo()}"
                   else "Datos archivados como $ultimoID en proyecto: ${ProyectoManager.getProyectoActivo()}"
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun txArchivableNl(original: TextView, textoTotal: String?): TextView {
+        if (texto != "nl" || textoTotal == null) return original
+        return TextView(this).apply { text = textoTotal }
     }
 
     private fun actualizarTxPrConDisenoV2(numeroProductoAuto: Int? = null) {

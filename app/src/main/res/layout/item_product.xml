@@ -1,33 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
+    android:orientation="horizontal"
     android:padding="8dp">
 
-    <TextView
-        android:id="@+id/tvItemDescription"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Descripción" />
+    <ImageView
+        android:id="@+id/ivItemPreview"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@color/sombra"
+        android:scaleType="centerCrop"
+        android:contentDescription="@string/producto" />
 
-    <TextView
-        android:id="@+id/tvItemPrice"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Precio: $0.0" />
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/tvItemStock"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Stock: 0" />
+        <TextView
+            android:id="@+id/tvItemDescription"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Producto o servicio"
+            android:textStyle="bold" />
 
-    <TextView
-        android:id="@+id/tvItemCode"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Código:0" />
+        <TextView
+            android:id="@+id/tvItemPrice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="S/ 0.00" />
 
+        <TextView
+            android:id="@+id/tvItemImages"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Imagenes: 0" />
+    </LinearLayout>
 </LinearLayout>

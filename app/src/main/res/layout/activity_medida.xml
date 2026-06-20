@@ -5,522 +5,1313 @@
     android:id="@+id/layout_principal"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#F7F4EC"
     tools:context=".taller.MedidaActivity">
 
-
-    <FrameLayout
-        android:id="@+id/lyVista"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="9dp"
-        android:layout_marginEnd="9dp"
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        android:elevation="2dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:id="@+id/imageView7"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                app:srcCompat="@drawable/ojos"
-                android:layout_marginEnd="9dp"/>
-
-            <TextView
-                android:id="@+id/textView18"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="F"
-                android:textStyle="bold"
-                android:layout_marginEnd="9dp"/>
-
-        </LinearLayout>
-
-    </FrameLayout>
-
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/lyLienzoRectangulos"
+    <LinearLayout
+        android:id="@+id/panelInfoMedida"
         android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_control_panel"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="6dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView
-            android:id="@+id/tvClienteHeader"
-            android:layout_width="0dp"
+            android:id="@+id/tvInfoClienteMedida"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginEnd="92dp"
-            android:background="@drawable/bg_control_panel"
-            android:padding="8dp"
-            android:text="Cliente: sin datos"
-            android:textStyle="bold"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Cliente: sin cliente"
+            android:textColor="#263238"
+            android:textSize="12sp" />
 
-        <crystal.crystal.taller.RectanglesDrawingView
-            android:id="@+id/rectanglesDrawingView"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:background="#F5F5F5"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/tvClienteHeader" />
-
-        <FrameLayout
-            android:id="@+id/overlayControlesMedida"
-            android:layout_width="0dp"
+        <TextView
+            android:id="@+id/tvInfoProductoMedida"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="9dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent">
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Producto: sin producto"
+            android:textColor="#263238"
+            android:textSize="12sp" />
 
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:id="@+id/columnaBotonesMedida"
+        <TextView
+            android:id="@+id/tvInfoArchivoMedida"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:text="Medidas: sin archivar"
+            android:textColor="#455A64"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/panelSuperiorMedida"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_control_panel"
+        android:elevation="10dp"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <EditText
+            android:id="@+id/etClienteMedida"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Cliente"
+            android:inputType="textCapWords"
+            android:singleLine="true" />
+
+        <EditText
+            android:id="@+id/etInfoProductoMedida"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:hint="Info producto actual"
+            android:inputType="textCapSentences"
+            android:singleLine="true" />
+
+        <EditText
+            android:id="@+id/etNotasMedida"
+            android:layout_width="match_parent"
+            android:layout_height="88dp"
+            android:layout_marginTop="6dp"
+            android:gravity="top|start"
+            android:hint="Lista archivada del cliente"
+            android:inputType="textMultiLine|textCapSentences"
+            android:overScrollMode="always"
+            android:scrollbars="vertical"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/panelHerramientasMedida"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/panelInfoMedida">
+
+        <Button
+            android:id="@+id/btnHerramientaLapiz"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:text="Lapiz"
+            android:textAllCaps="false" />
+
+        <Button
+            android:id="@+id/btnHerramientaFormas"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="Formas"
+            android:textAllCaps="false" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/panelFormasMedida"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_control_panel"
+        android:elevation="8dp"
+        android:orientation="vertical"
+        android:paddingStart="6dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="6dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnTabFormasBasicas"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:text="Básicas"
+                android:textAllCaps="false"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnTabFormasRecurrentes"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:text="Recurrentes"
+                android:textAllCaps="false"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/contenidoFormasBasicas"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp">
+
+            <ImageButton
+                android:id="@+id/btnFormaRectangulo"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Rectangulo"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/rect" />
+
+            <ImageButton
+                android:id="@+id/btnFormaTriangulo"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Triangulo"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/triang" />
+
+            <ImageButton
+                android:id="@+id/btnFormaCirculo"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Circulo"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/circ" />
+
+            <ImageButton
+                android:id="@+id/btnFormaLapiz"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Lapiz"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/lapiz" />
+
+            <ImageButton
+                android:id="@+id/btnFormaTexto"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Texto"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/texto" />
+
+            <ImageButton
+                android:id="@+id/btnFormaLinea"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Linea"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/linea" />
+
+            <ImageButton
+                android:id="@+id/btnFormaLinea90"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Linea 90"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/l90" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/contenidoFormasRecurrentes"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/btnRecurrenteF1"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Forma recurrente 1"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/f1" />
+
+            <ImageButton
+                android:id="@+id/btnRecurrenteF2"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Forma recurrente 2"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/f2" />
+
+            <ImageButton
+                android:id="@+id/btnRecurrenteF3"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Forma recurrente 3"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/f3" />
+
+            <ImageButton
+                android:id="@+id/btnRecurrenteF4"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Forma recurrente 4"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/f4" />
+
+            <ImageButton
+                android:id="@+id/btnRecurrenteF5"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Forma recurrente 5"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/f5" />
+
+            <ImageButton
+                android:id="@+id/btnRecurrenteF6"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Forma recurrente 6"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/f6" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/panelEngraMedida"
+        android:layout_width="0dp"
+        android:layout_height="64dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_control_panel"
+        android:elevation="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnEngraBisagra"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Bisagra"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/bisagra" />
+
+        <ImageButton
+            android:id="@+id/btnEngraAdentro"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Adentro"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/adentro" />
+
+        <ImageButton
+            android:id="@+id/btnEngraAfuera"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Afuera"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/afuera" />
+
+        <ImageButton
+            android:id="@+id/btnEngraMichi"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Michi"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/michi" />
+
+        <ImageButton
+            android:id="@+id/btnEngraInterior"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Interior"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/interior" />
+
+        <ImageButton
+            android:id="@+id/btnEngraExterior"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Exterior"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/exterior" />
+
+        <ImageButton
+            android:id="@+id/btnFuncionVano"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Vano exacto"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/vano" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/panelArchivoMedida"
+        android:layout_width="0dp"
+        android:layout_height="64dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_control_panel"
+        android:elevation="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnArchivoArchivar"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Archivar"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/archivar" />
+
+        <ImageButton
+            android:id="@+id/btnArchivoAbrir"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Abrir"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/abrir" />
+
+        <ImageButton
+            android:id="@+id/btnArchivoVerBocetos"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Ver medida"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/lista" />
+
+        <ImageButton
+            android:id="@+id/btnArchivoLimpiarLienzo"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Limpiar lienzo"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/limpia" />
+
+        <ImageButton
+            android:id="@+id/btnArchivoCompartir"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Compartir"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/comptir" />
+
+        <ImageButton
+            android:id="@+id/btnArchivoCalcul"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Calcular"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/calcul" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/panelOperacionesMedida"
+        android:layout_width="0dp"
+        android:layout_height="64dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_control_panel"
+        android:elevation="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnSoldarPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Soldar"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/soldar" />
+
+        <ImageButton
+            android:id="@+id/btnCortarPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Cortar"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/cortar" />
+
+        <ImageButton
+            android:id="@+id/btnRedondearPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Redondear esquina"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/f6"
+            android:visibility="gone" />
+
+        <ImageButton
+            android:id="@+id/btnEspejoPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Espejo"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/espejo" />
+
+        <ImageButton
+            android:id="@+id/btnDuplicarPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Duplicar"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/duplicar" />
+
+        <ImageButton
+            android:id="@+id/btnRotarPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Rotar"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/rotar" />
+
+        <ImageButton
+            android:id="@+id/btnEscalaPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Escala"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/escala" />
+
+        <ImageButton
+            android:id="@+id/btnCompasPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Compas"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/compas" />
+
+        <ImageButton
+            android:id="@+id/btnAgruparPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Agrupar"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/agrupar" />
+
+        <ImageButton
+            android:id="@+id/btnDesagruparPanelMedida"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Desagrupar"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/desagrupar" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/panelPlantillasMedida"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_control_panel"
+        android:elevation="8dp"
+        android:orientation="vertical"
+        android:paddingStart="8dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Plantillas de producto"
+            android:textColor="#263238"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnPlantillaPuerta"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:text="Puerta"
+                android:textAllCaps="false"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnPlantillaVentana"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:text="Ventana"
+                android:textAllCaps="false"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnPlantillaMampara"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:text="Mampara"
+                android:textAllCaps="false"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnPlantillaCorrediza"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:text="Corrediza"
+                android:textAllCaps="false"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnPlantillaDucha"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:text="P. Ducha"
+                android:textAllCaps="false"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnPlantillaBaranda"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:text="Baranda"
+                android:textAllCaps="false"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnPlantillaReja"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:text="Reja"
+                android:textAllCaps="false"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnPlantillaMuro"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:text="Muro Cort."
+                android:textAllCaps="false"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/panelEdicionMedida"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="12dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/panelHerramientasMedida">
+
+        <Button
+            android:id="@+id/btnHerramientaSeleccion"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_weight="1"
+            android:text="Selec"
+            android:textAllCaps="false" />
+
+        <Button
+            android:id="@+id/btnSoldarMedida"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="Soldar"
+
+            android:textAllCaps="false" />
+
+        <Button
+            android:id="@+id/btnRestarMedida"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="Cortar"
+            android:textAllCaps="false" />
+    </LinearLayout>
+
+    <crystal.crystal.taller.SketchMedidasView
+        android:id="@+id/sketchMedidas"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="#F7F4EC"
+        app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/panelEdicionMedida"
+        tools:ignore="MissingClass" />
+
+    <LinearLayout
+        android:id="@+id/panelVistaMedida"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="12dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/panelEdicionMedida">
+
+        <Button
+            android:id="@+id/btnZoomMenosMedida"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:text="Z-"
+            android:textAllCaps="false"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btnZoomMasMedida"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="Z+"
+            android:textAllCaps="false"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btnAjustarMedida"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="Ajustar"
+            android:textAllCaps="false"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btnPdfMedida"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="PDF"
+            android:textAllCaps="false"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/panelAccionesMedida"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="10dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:elevation="6dp"
-                android:padding="8dp">
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
 
                 <LinearLayout
-                    android:id="@+id/panelClienteMedida"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="6dp"
-                    android:background="@drawable/bg_control_panel"
-                    android:elevation="8dp"
-                    android:orientation="vertical"
-                    android:padding="10dp"
-                    android:visibility="gone"
-                    app:layout_constraintBottom_toTopOf="@+id/btnControlCliente"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent">
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/txProyecto"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:text="Cliente"
-                        android:textStyle="bold" />
+                        android:layout_weight="1"
+                        android:text="Proyecto"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
 
-                    <EditText
-                        android:id="@+id/etClienteNombrePanel"
+                    <ImageView
+                        android:id="@+id/btProject"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="Nombre del cliente"
-                        android:inputType="textCapWords" />
-
-                    <EditText
-                        android:id="@+id/etClienteDocumentoPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:hint="Documento / RUC / DNI"
-                        android:inputType="text" />
-
-                    <EditText
-                        android:id="@+id/etClienteTelefonoPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:hint="Telefono"
-                        android:inputType="phone" />
-
-                    <EditText
-                        android:id="@+id/etClienteDireccionPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:hint="Direccion / referencia"
-                        android:inputType="textCapSentences" />
+                        android:layout_weight="1"
+                        android:src="@drawable/user"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
                 </LinearLayout>
 
                 <LinearLayout
-                    android:id="@+id/panelProductosMedida"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="6dp"
-                    android:background="@drawable/bg_control_panel"
-                    android:elevation="8dp"
-                    android:orientation="vertical"
-                    android:padding="10dp"
-                    android:visibility="gone"
-                    app:layout_constraintBottom_toTopOf="@+id/btnControlProductos"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent">
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/tvFiles"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:text="Productos"
-                        android:textStyle="bold" />
+                        android:layout_weight="1"
+                        android:text="Archivo"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
 
-                    <CheckBox
-                        android:id="@+id/cbProductoVentanaPanel"
+                    <ImageView
+                        android:id="@+id/btArchivar"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Ventana" />
-
-                    <CheckBox
-                        android:id="@+id/cbProductoPuertaPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Puerta" />
-
-                    <CheckBox
-                        android:id="@+id/cbProductoMamparaPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Mampara" />
+                        android:layout_weight="1"
+                        android:src="@drawable/archivar"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
                 </LinearLayout>
 
                 <LinearLayout
-                    android:id="@+id/panelDatosTecnicosMedida"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="6dp"
-                    android:background="@drawable/bg_control_panel"
-                    android:elevation="8dp"
-                    android:orientation="vertical"
-                    android:padding="10dp"
-                    android:visibility="gone"
-                    app:layout_constraintBottom_toTopOf="@+id/btnControlDatosTecnicos"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent">
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/textView10"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:text="Datos tecnicos"
-                        android:textStyle="bold" />
+                        android:layout_weight="1"
+                        android:text="Formas"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
 
-                    <Button
-                        android:id="@+id/btnSistemaPanel"
+                    <ImageView
+                        android:id="@+id/btFormas"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Sistema: sin seleccionar" />
-
-                    <Button
-                        android:id="@+id/btnTipoPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Tipo: sin seleccionar" />
-
-                    <Button
-                        android:id="@+id/btnModeloPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Modelo: sin seleccionar" />
-
-                    <Button
-                        android:id="@+id/btnAcabadoPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Acabado: sin seleccionar" />
-
-                    <Button
-                        android:id="@+id/btnEspecificacionesPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Especificaciones" />
-
-                    <Button
-                        android:id="@+id/btnAccesoriosPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Accesorios" />
+                        android:layout_weight="1"
+                        android:src="@drawable/formas"
+                        android:gravity="center_horizontal"/>
                 </LinearLayout>
 
                 <LinearLayout
-                    android:id="@+id/panelGeometriaMedida"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="6dp"
-                    android:background="@drawable/bg_control_panel"
-                    android:elevation="8dp"
-                    android:orientation="vertical"
-                    android:padding="10dp"
-                    android:visibility="gone"
-                    app:layout_constraintBottom_toTopOf="@+id/btnControlGeometria"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent">
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/textViewEngra"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:text="Geometria"
-                        android:textStyle="bold" />
+                        android:layout_weight="1"
+                        android:text="Función"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
 
-                    <Button
-                        android:id="@+id/btnGeometriaPlanoPanel"
+                    <ImageView
+                        android:id="@+id/btEngra"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Plano (elevacion)" />
-
-                    <Button
-                        android:id="@+id/btnGeometriaEsquineroPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Esquinero (L)" />
-
-                    <Button
-                        android:id="@+id/btnGeometriaCurvoPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Curvo (arco)" />
-
-                    <Button
-                        android:id="@+id/btnGeometriaCTopPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Top en C" />
-
-                    <Button
-                        android:id="@+id/btnGeometriaMultiLadoPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Multiple lado" />
+                        android:layout_weight="1"
+                        android:src="@drawable/engra"
+                        android:gravity="center_horizontal"/>
                 </LinearLayout>
 
                 <LinearLayout
-                    android:id="@+id/panelEncuentrosMedida"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="6dp"
-                    android:background="@drawable/bg_control_panel"
-                    android:elevation="8dp"
-                    android:orientation="vertical"
-                    android:padding="10dp"
-                    android:visibility="gone"
-                    app:layout_constraintBottom_toTopOf="@+id/btnControlEncuentros"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent">
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/textView26"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:text="Encuentros y transiciones"
-                        android:textStyle="bold" />
+                        android:layout_weight="1"
+                        android:text="Plantillas"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
 
-                    <Button
-                        android:id="@+id/btnEncuentroMuroPanel"
+                    <ImageView
+                        android:id="@+id/btPlantillas"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Muro" />
-
-                    <Button
-                        android:id="@+id/btnEncuentroAcopladoPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Acoplado" />
-
-                    <Button
-                        android:id="@+id/btnEncuentroIndependientePanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Independiente" />
-
-                    <Button
-                        android:id="@+id/btnEncuentroBordeLibrePanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Borde libre" />
+                        android:layout_weight="1"
+                        android:src="@drawable/chacana"
+                        android:gravity="center_horizontal"/>
                 </LinearLayout>
 
                 <LinearLayout
-                    android:id="@+id/panelMedidasPanel"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="6dp"
-                    android:background="@drawable/bg_control_panel"
-                    android:elevation="8dp"
-                    android:orientation="vertical"
-                    android:padding="10dp"
-                    android:visibility="gone"
-                    app:layout_constraintBottom_toTopOf="@+id/btnControlMedidas"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent">
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/textView27"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:text="Ingresar cotas por lado"
-                        android:textStyle="bold" />
+                        android:layout_weight="1"
+                        android:text="Edicion"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
 
-                    <EditText
-                        android:id="@+id/etMedidaSuperiorPanel"
+                    <ImageView
+                        android:id="@+id/btEdicion"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="Lado superior"
-                        android:inputType="numberDecimal" />
-
-                    <EditText
-                        android:id="@+id/etMedidaDerechaPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:hint="Altura lado derecho (desde base)"
-                        android:inputType="numberDecimal" />
-
-                    <EditText
-                        android:id="@+id/etMedidaInferiorPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:hint="Lado inferior"
-                        android:inputType="numberDecimal" />
-
-                    <EditText
-                        android:id="@+id/etMedidaIzquierdaPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:hint="Lado izquierdo"
-                        android:inputType="numberDecimal" />
-
-                    <EditText
-                        android:id="@+id/etDistPisoPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:hint="Distancia piso a base (cm)"
-                        android:inputType="numberDecimal" />
-
-                    <EditText
-                        android:id="@+id/etDistTechoPanel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:hint="Distancia techo a parte superior (cm)"
-                        android:inputType="numberDecimal" />
+                        android:layout_weight="1"
+                        android:src="@drawable/masca"
+                        android:gravity="center_horizontal"/>
                 </LinearLayout>
 
                 <LinearLayout
-                    android:id="@+id/filaControlesMedida"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent">
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                    <Button
-                        android:id="@+id/btnControlCliente"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
+                    <TextView
+                        android:id="@+id/textView30"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Cliente"
-                        android:textAllCaps="false" />
+                        android:text="Selec"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
 
-                    <Button
-                        android:id="@+id/btnControlProductos"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="6dp"
+                    <ImageView
+                        android:id="@+id/btSelec"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Productos"
-                        android:textAllCaps="false" />
-
-                    <Button
-                        android:id="@+id/btnControlDatosTecnicos"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="6dp"
-                        android:layout_weight="1"
-                        android:text="Datos"
-                        android:textAllCaps="false" />
-
-                    <Button
-                        android:id="@+id/btnControlEncuentros"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="6dp"
-                        android:layout_weight="1"
-                        android:text="Encuentros"
-                        android:textAllCaps="false" />
-
-                    <Button
-                        android:id="@+id/btnControlGeometria"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="6dp"
-                        android:layout_weight="1"
-                        android:text="Geometria"
-                        android:textAllCaps="false" />
-
-                    <Button
-                        android:id="@+id/btnControlMedidas"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="6dp"
-                        android:layout_weight="1"
-                        android:text="Medidas"
-                        android:textAllCaps="false" />
+                        android:src="@drawable/selecccion"
+                        android:gravity="center_horizontal"/>
                 </LinearLayout>
 
-            </androidx.constraintlayout.widget.ConstraintLayout>
-        </FrameLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-        <Button
-            android:id="@+id/btnDeshacerAccion"
-            android:layout_width="wrap_content"
+                    <TextView
+                        android:id="@+id/textView31"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Eliminar"
+                        android:textSize="9sp"
+                        android:gravity="center_horizontal"/>
+
+                    <ImageView
+                        android:id="@+id/btEliminar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:src="@drawable/eliminar_m"
+                        android:gravity="center_horizontal"/>
+                </LinearLayout>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <LinearLayout
+            android:id="@+id/panelAjustesMedida"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_control_panel"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="2dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="2dp"
+            android:paddingBottom="3dp">
+
+            <ImageButton
+                android:id="@+id/btnAjusteVistaPanel"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Ajustar"
+                android:padding="2dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ajuste" />
+
+            <ImageButton
+                android:id="@+id/btnAtrasMedida"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="1dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Deshacer"
+                android:padding="2dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/atras" />
+
+            <ImageButton
+                android:id="@+id/btnAdelanteMedida"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="1dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Rehacer"
+                android:padding="2dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/adelante" />
+
+            <ImageButton
+                android:id="@+id/btnZoomMasPanel"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="1dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Zoom mas"
+                android:padding="2dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/zoommas" />
+
+            <ImageButton
+                android:id="@+id/btnZoomMenosPanel"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="1dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Zoom menos"
+                android:padding="2dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/zoommenos" />
+
+            <ImageButton
+                android:id="@+id/btnMoverMedida"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="1dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Mover"
+                android:padding="2dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/mover" />
+
+            <ImageButton
+                android:id="@+id/btnNuloMedida"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="1dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Nulo"
+                android:padding="2dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/nulo" />
+
+            <ImageButton
+                android:id="@+id/btnLimpiaMedida"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="1dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Limpiar"
+                android:padding="2dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/limpia" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="12dp"
-            android:text="Atras"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/btnLimpiarLienzo" />
+            android:orientation="horizontal"
+            android:visibility="gone">
 
-        <Button
-            android:id="@+id/btnArchivarMedida"
-            android:layout_width="wrap_content"
+            <Button
+                android:id="@+id/btnGuardarMedida"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="Guardar"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/btnArchivarMedida"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:text="Archivar"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/btnAbrirMedida"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:text="Abrir"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/btnEnviarMedida"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:text="Enviar"
+                android:textAllCaps="false" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="12dp"
-            android:text="Archivar"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/btnDeshacerAccion" />
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
 
-        <Button
-            android:id="@+id/btnLimpiarLienzo"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="12dp"
-            android:text="Limpiar"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-    </androidx.constraintlayout.widget.ConstraintLayout>
+            <Button
+                android:id="@+id/btnDeshacerMedida"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="Deshacer"
+                android:textAllCaps="false" />
 
+            <Button
+                android:id="@+id/btnLimpiarMedida"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:text="Limpiar"
+                android:textAllCaps="false" />
+        </LinearLayout>
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
-
-
-
-
-

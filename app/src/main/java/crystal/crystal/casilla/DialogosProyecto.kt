@@ -3,12 +3,20 @@ package crystal.crystal.casilla
 import android.app.AlertDialog
 import android.content.Context
 import android.widget.ArrayAdapter
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
 object DialogosProyecto {
+
+    private data class ElementoPaqueteRef(
+        val categoria: String,
+        val indice: Int,
+        val elemento: MutableList<String>
+    )
 
     // Interfaz para callbacks
     interface ProyectoCallback {
@@ -199,7 +207,7 @@ object DialogosProyecto {
         // Agregar encabezado
         elementosLista.add("📋 Resumen del Proyecto:")
         elementosLista.add("Total: ${paquetes.size} paquetes")
-        elementosLista.add("Toca un paquete para eliminarlo:")
+        elementosLista.add("Toca un paquete para editarlo:")
         elementosLista.add("") // Línea vacía
 
         var indiceActual = 4
@@ -248,7 +256,7 @@ object DialogosProyecto {
                 // Verificar si se clickeó un paquete
                 val paqueteSeleccionado = mapaPaquetes[position]
                 if (paqueteSeleccionado != null) {
-                    mostrarConfirmacionEliminarPaqueteCompleto(context, nombreProyecto, paqueteSeleccionado, callback)
+                    mostrarDialogoOpcionesPaquete(context, nombreProyecto, paqueteSeleccionado, callback)
                 }
             }
             .setNegativeButton("Atrás") { _, _ ->
@@ -312,9 +320,7 @@ object DialogosProyecto {
                     }
                     .show()
             }
-            .setNegativeButton("Atrás") { _, _ ->
-                mostrarDialogoElementosProyecto(context, nombreProyecto, callback)
-            }
+            .setNegativeButton("Salir", null)
             .show()
     }
 
@@ -327,14 +333,17 @@ object DialogosProyecto {
         paquete: String,
         callback: ProyectoCallback
     ) {
-        val opciones = arrayOf("🗑️ Eliminar Paquete", "🔍 Explorar Contenido")
+        val opciones = arrayOf("Editar contenido", "Eliminar paquete", "Salir")
 
         AlertDialog.Builder(context)
             .setTitle("Opciones: $paquete")
-            .setMessage("Proyecto: $nombreProyecto")
-            .setItems(opciones) { _, which ->
+            .setItems(opciones) { dialog, which ->
                 when (which) {
-                    0 -> {
+                    0 -> mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
+                    1 -> mostrarConfirmacionEliminarPaqueteCompleto(context, nombreProyecto, paquete, callback)
+                    2 -> {
+                        dialog.dismiss()
+                        return@setItems
                         // Confirmar eliminación del paquete
                         AlertDialog.Builder(context)
                             .setTitle("Confirmar Eliminación")
@@ -366,14 +375,7 @@ object DialogosProyecto {
                             .setNegativeButton("Cancelar", null)
                             .show()
                     }
-                    1 -> {
-                        // Explorar contenido del paquete
-                        mostrarDialogoContenidoPaquete(context, nombreProyecto, paquete, callback)
-                    }
                 }
-            }
-            .setNegativeButton("Atrás") { _, _ ->
-                mostrarDialogoElementosProyecto(context, nombreProyecto, callback)
             }
             .show()
     }
@@ -381,6 +383,254 @@ object DialogosProyecto {
     /**
      * NIVEL 5: Mostrar contenido completo de un paquete con opciones de edición
      */
+    private fun mostrarDialogoEditorPaquete(
+        context: Context,
+        nombreProyecto: String,
+        paquete: String,
+        callback: ProyectoCallback
+    ) {
+        val mapListas = MapStorage.cargarProyecto(context, nombreProyecto)
+        if (mapListas == null) {
+            Toast.makeText(context, "No se pudo cargar el proyecto", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val referencias = mutableListOf<ElementoPaqueteRef>()
+        for ((categoria, lista) in mapListas) {
+            lista.forEachIndexed { index, elemento ->
+                if (elemento.size >= 3 && elemento[2] == paquete) {
+                    referencias.add(ElementoPaqueteRef(categoria, index, elemento))
+                }
+            }
+        }
+
+        val contenedor = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 16, 32, 0)
+        }
+
+        contenedor.addView(TextView(context).apply {
+            text = "Proyecto: $nombreProyecto\nPaquete: $paquete"
+            setPadding(0, 0, 0, 16)
+        })
+
+        contenedor.addView(TextView(context).apply {
+            text = "Contenido actual"
+            setPadding(0, 8, 0, 8)
+        })
+
+        if (referencias.isEmpty()) {
+            contenedor.addView(TextView(context).apply {
+                text = "Sin elementos en este paquete."
+                setPadding(0, 0, 0, 16)
+            })
+        } else {
+            referencias.forEach { ref ->
+                val valor = ref.elemento.getOrNull(0).orEmpty()
+                val cantidad = ref.elemento.getOrNull(1).orEmpty()
+                contenedor.addView(Button(context).apply {
+                    text = "${ref.categoria}: $valor = $cantidad"
+                    setOnClickListener {
+                        mostrarDialogoAccionesElementoPaquete(context, nombreProyecto, paquete, ref, callback)
+                    }
+                })
+            }
+        }
+
+        contenedor.addView(TextView(context).apply {
+            text = "Agregar elemento"
+            setPadding(0, 20, 0, 8)
+        })
+
+        val categoria = EditText(context).apply {
+            hint = "Categoria"
+        }
+        val valor = EditText(context).apply {
+            hint = "Valor"
+        }
+        val cantidad = EditText(context).apply {
+            hint = "Cantidad"
+        }
+        contenedor.addView(categoria)
+        contenedor.addView(valor)
+        contenedor.addView(cantidad)
+
+        val scroll = ScrollView(context).apply {
+            addView(contenedor)
+        }
+
+        AlertDialog.Builder(context)
+            .setTitle("Editar: $paquete")
+            .setView(scroll)
+            .setPositiveButton("Agregar") { _, _ ->
+                val cat = categoria.text.toString().trim()
+                val valTxt = valor.text.toString().trim()
+                val cant = cantidad.text.toString().trim()
+                if (cat.isBlank()) {
+                    Toast.makeText(context, "Categoria requerida", Toast.LENGTH_SHORT).show()
+                    mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
+                    return@setPositiveButton
+                }
+                val listasActualizadas = MapStorage.cargarProyecto(context, nombreProyecto)
+                    ?: return@setPositiveButton
+                listasActualizadas.getOrPut(cat) { mutableListOf() }.add(mutableListOf(valTxt, cant, paquete))
+                MapStorage.guardarProyecto(context, nombreProyecto, listasActualizadas)
+                Toast.makeText(context, "Elemento agregado", Toast.LENGTH_SHORT).show()
+                mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
+            }
+            .setNeutralButton("Opciones") { _, _ ->
+                mostrarDialogoOpcionesPaquete(context, nombreProyecto, paquete, callback)
+            }
+            .show()
+    }
+
+    private fun mostrarDialogoAccionesElementoPaquete(
+        context: Context,
+        nombreProyecto: String,
+        paquete: String,
+        ref: ElementoPaqueteRef,
+        callback: ProyectoCallback
+    ) {
+        val opciones = arrayOf("Editar elemento", "Eliminar elemento")
+        AlertDialog.Builder(context)
+            .setTitle("${ref.categoria}: ${ref.elemento.getOrNull(0).orEmpty()}")
+            .setItems(opciones) { _, which ->
+                when (which) {
+                    0 -> mostrarDialogoEditarElementoPaquete(context, nombreProyecto, paquete, ref, callback)
+                    1 -> confirmarEliminarElementoPaquete(context, nombreProyecto, paquete, ref, callback)
+                }
+            }
+            .setNegativeButton("AtrÃ¡s") { _, _ ->
+                mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
+            }
+            .show()
+    }
+
+    private fun mostrarDialogoAgregarElementoPaquete(
+        context: Context,
+        nombreProyecto: String,
+        paquete: String,
+        callback: ProyectoCallback
+    ) {
+        mostrarFormularioElementoPaquete(context, "Agregar elemento", "", "", "") { categoria, valor, cantidad ->
+            val mapListas = MapStorage.cargarProyecto(context, nombreProyecto) ?: return@mostrarFormularioElementoPaquete
+            mapListas.getOrPut(categoria) { mutableListOf() }.add(mutableListOf(valor, cantidad, paquete))
+            MapStorage.guardarProyecto(context, nombreProyecto, mapListas)
+            Toast.makeText(context, "Elemento agregado", Toast.LENGTH_SHORT).show()
+            mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
+        }
+    }
+
+    private fun mostrarDialogoEditarElementoPaquete(
+        context: Context,
+        nombreProyecto: String,
+        paquete: String,
+        ref: ElementoPaqueteRef,
+        callback: ProyectoCallback
+    ) {
+        mostrarFormularioElementoPaquete(
+            context,
+            "Editar elemento",
+            ref.categoria,
+            ref.elemento.getOrNull(0).orEmpty(),
+            ref.elemento.getOrNull(1).orEmpty()
+        ) { categoria, valor, cantidad ->
+            val mapListas = MapStorage.cargarProyecto(context, nombreProyecto) ?: return@mostrarFormularioElementoPaquete
+            val listaOriginal = mapListas[ref.categoria] ?: return@mostrarFormularioElementoPaquete
+            if (ref.indice !in listaOriginal.indices) return@mostrarFormularioElementoPaquete
+
+            val actualizado = ref.elemento.toMutableList()
+            while (actualizado.size < 3) actualizado.add("")
+            actualizado[0] = valor
+            actualizado[1] = cantidad
+            actualizado[2] = paquete
+
+            if (categoria == ref.categoria) {
+                listaOriginal[ref.indice] = actualizado
+            } else {
+                listaOriginal.removeAt(ref.indice)
+                if (listaOriginal.isEmpty()) mapListas.remove(ref.categoria)
+                mapListas.getOrPut(categoria) { mutableListOf() }.add(actualizado)
+            }
+
+            MapStorage.guardarProyecto(context, nombreProyecto, mapListas)
+            Toast.makeText(context, "Elemento actualizado", Toast.LENGTH_SHORT).show()
+            mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
+        }
+    }
+
+    private fun confirmarEliminarElementoPaquete(
+        context: Context,
+        nombreProyecto: String,
+        paquete: String,
+        ref: ElementoPaqueteRef,
+        callback: ProyectoCallback
+    ) {
+        AlertDialog.Builder(context)
+            .setTitle("Eliminar elemento")
+            .setMessage("Â¿Eliminar '${ref.elemento.getOrNull(0).orEmpty()}' de ${ref.categoria}?")
+            .setPositiveButton("Eliminar") { _, _ ->
+                val mapListas = MapStorage.cargarProyecto(context, nombreProyecto) ?: return@setPositiveButton
+                val lista = mapListas[ref.categoria] ?: return@setPositiveButton
+                if (ref.indice in lista.indices) {
+                    lista.removeAt(ref.indice)
+                    if (lista.isEmpty()) mapListas.remove(ref.categoria)
+                    MapStorage.guardarProyecto(context, nombreProyecto, mapListas)
+                    Toast.makeText(context, "Elemento eliminado", Toast.LENGTH_SHORT).show()
+                }
+                mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
+            }
+            .setNegativeButton("Cancelar") { _, _ ->
+                mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
+            }
+            .show()
+    }
+
+    private fun mostrarFormularioElementoPaquete(
+        context: Context,
+        titulo: String,
+        categoriaInicial: String,
+        valorInicial: String,
+        cantidadInicial: String,
+        onGuardar: (categoria: String, valor: String, cantidad: String) -> Unit
+    ) {
+        val contenedor = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 16, 32, 0)
+        }
+        val categoria = EditText(context).apply {
+            hint = "Categoria"
+            setText(categoriaInicial)
+        }
+        val valor = EditText(context).apply {
+            hint = "Valor"
+            setText(valorInicial)
+        }
+        val cantidad = EditText(context).apply {
+            hint = "Cantidad"
+            setText(cantidadInicial)
+        }
+        contenedor.addView(categoria)
+        contenedor.addView(valor)
+        contenedor.addView(cantidad)
+
+        AlertDialog.Builder(context)
+            .setTitle(titulo)
+            .setView(contenedor)
+            .setPositiveButton("Guardar") { _, _ ->
+                val cat = categoria.text.toString().trim()
+                val valTxt = valor.text.toString().trim()
+                val cant = cantidad.text.toString().trim()
+                if (cat.isBlank()) {
+                    Toast.makeText(context, "Categoria requerida", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                onGuardar(cat, valTxt, cant)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     private fun mostrarDialogoContenidoPaquete(
         context: Context,
         nombreProyecto: String,
@@ -424,8 +674,7 @@ object DialogosProyecto {
             .setTitle("📋 Contenido: $paquete")
             .setMessage("Proyecto: $nombreProyecto\nTotal elementos: $totalElementos\n\n$contenidoTexto")
             .setPositiveButton("✏️ Editar") { _, _ ->
-                Toast.makeText(context, "Función de edición detallada en desarrollo", Toast.LENGTH_LONG).show()
-                // TODO: Implementar editor detallado por elementos individuales
+                mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
             }
             .setNeutralButton("🗑️ Eliminar Todo") { _, _ ->
                 AlertDialog.Builder(context)
@@ -751,7 +1000,7 @@ object DialogosProyecto {
             paquete.contains("MP") -> "MamparaPaflon"
             paquete.contains("VA") -> "VentanaAl"
             paquete.contains("MV") -> "MamparaVidrio"
-            paquete.contains("MU") -> "Muro"
+            paquete.contains("MU") || paquete.contains("MC") -> "Muro"
             else -> "Desconocido"
         }
     }

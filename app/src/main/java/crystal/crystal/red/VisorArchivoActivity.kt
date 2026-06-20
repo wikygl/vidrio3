@@ -4,14 +4,15 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.bumptech.glide.Glide
-import com.google.android.exoplayer2.ExoPlayer
-import com.google.android.exoplayer2.MediaItem
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
 import crystal.crystal.databinding.ActivityVisorArchivoBinding
 import java.io.File
 import java.net.URL
@@ -29,7 +30,12 @@ class VisorArchivoActivity : AppCompatActivity() {
         binding = ActivityVisorArchivoBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val uriArchivo = intent.getParcelableExtra<Uri>("uri_archivo") ?: run {
+        val uriArchivo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra("uri_archivo", Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra("uri_archivo")
+        } ?: run {
             finish()
             return
         }

@@ -244,8 +244,11 @@ object NovaPerfilesHelper {
         tubo: Float,
         us: Float,
         puente: String,
-        modelo: String = "nn"
+        modelo: String = "nn",
+        mochetaInferior: Float = 0f,
+        remate: String = modelo
     ): OtrosAparenteResult {
+        // `modelo` = modulación (patrón); `remate` = remate de mochetas (nn/nr/np).
         val puentesTxt = when {
             divisiones in 6..12 && divisiones % 2 == 0 ->
                 "${NovaCalculos.df1(mPuentes1)} = $nPuentes\n${NovaCalculos.df1(alto)} = ${nPuentes - 1}"
@@ -266,17 +269,19 @@ object NovaPerfilesHelper {
         val tuboTxt = if (alto > altoHoja) "${NovaCalculos.df1(ancho)} = 1" else ""
         val portafelpaTxt = if (divisiones != 1) "${NovaCalculos.df1(portafelpa)} = $divDePortas" else ""
 
-        val alturasMochetas = if (modelo == "np") {
+        val alturasMochetas = if (remate == "np") {
             NovaInaCalculos.alturasMochetasPorModelo(
-                modelo = modelo,
+                modelo = remate,
                 alto = alto,
                 altoHoja = altoHoja,
-                alturaPuente = tubo
+                alturaPuente = tubo,
+                mochetaInferior = mochetaInferior
             ).lista()
         } else {
             listOf(NovaCalculos.altoMocheta(alto, altoHoja, tubo))
         }
-        val nTeesBase = NovaCalculos.cantidadTeePorTramosMocheta(ancho, divisiones, modelo)
+        val paranteAnchoMocheta = if (puente == "Múltiple" || puente == "gorrito") 2.5f else tubo
+        val nTeesBase = NovaCalculos.cantidadTeePorTramosMocheta(ancho, divisiones, modelo, paranteAnchoMocheta)
         val teeTxt = if (nTeesBase > 0 && alturasMochetas.isNotEmpty()) {
             val lineas = linkedMapOf<String, Int>()
             for (alturaMocheta in alturasMochetas) {

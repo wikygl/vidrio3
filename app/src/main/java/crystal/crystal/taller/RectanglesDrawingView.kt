@@ -60,11 +60,24 @@ class RectanglesDrawingView @JvmOverloads constructor(
         RECTO, ARCO, ARCO_RECTO
     }
 
+    enum class TipoOp {
+        AGREGAR, QUITAR
+    }
+
+    data class OperacionRect(
+        val tipo: TipoOp,
+        val lado: Side,
+        val anchoCm: Float,
+        val altoCm: Float,
+        val offsetCm: Float
+    )
+
     var onSideMeasurementChanged: ((Side, Float, Float) -> Unit)? = null
     var onEsquineroAletaAnchoChanged: ((Float, Float) -> Unit)? = null
     var onEsquineroAletaAltoChanged: ((Float, Float) -> Unit)? = null
     var onMultiLadoAletaAnchoChanged: ((Int, Float, Float) -> Unit)? = null
     var onMultiLadoAletaAltoChanged: ((Int, Float, Float) -> Unit)? = null
+    var onOperacionesRectChanged: (() -> Unit)? = null
     private var productType: ProductType = ProductType.NONE
     private var encounterType: EncounterType = EncounterType.MURO
     private var geometryType: GeometryType = GeometryType.PLANO
@@ -114,6 +127,8 @@ class RectanglesDrawingView @JvmOverloads constructor(
     private var sillHeightCm = 90f
     private var headClearanceCm = 0f
 
+    private val operacionesRect = mutableListOf<OperacionRect>()
+
     private val presetFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.argb(40, 46, 125, 50)
@@ -123,6 +138,36 @@ class RectanglesDrawingView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeWidth = 6f
         color = Color.rgb(46, 125, 50)
+    }
+    private val opAgregarFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(50, 33, 150, 243)
+    }
+    private val opAgregarStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        color = Color.rgb(21, 101, 192)
+    }
+    private val opQuitarFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(80, 244, 67, 54)
+    }
+    private val opQuitarStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        color = Color.rgb(198, 40, 40)
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(12f, 8f), 0f)
+    }
+    private val opShapeOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 5f
+        color = Color.rgb(13, 71, 161)
+    }
+    private val opCotaTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        textSize = 26f
+        color = Color.rgb(13, 71, 161)
+        textAlign = Paint.Align.CENTER
     }
     private val shapePath = Path()
     private var leftX = 0f
@@ -380,6 +425,7 @@ class RectanglesDrawingView @JvmOverloads constructor(
             drawCachedContext(canvas)
             drawMainOpening(canvas)
             drawAcoples(canvas)
+            drawOperacionesRect(canvas)
             drawCotas(canvas)
             drawTopGuideOverlay(canvas)
         }
@@ -2420,6 +2466,115 @@ class RectanglesDrawingView @JvmOverloads constructor(
             contextDirty = false
         }
         contextBitmap?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+    }
+
+    // ==================== Operaciones rectangulares (agregar / quitar) ====================
+
+    fun getOperacionesRect(): List<OperacionRect> = operacionesRect.toList()
+
+    fun agregarOperacionRect(op: OperacionRect): Boolean {
+        if (geometryType != GeometryType.PLANO) return false
+        if (op.anchoCm <= 0f || op.altoCm <= 0f) return false
+        operacionesRect.add(op)
+        contextDirty = true
+        invalidate()
+        onOperacionesRectChanged?.invoke()
+        return true
+    }
+
+    fun eliminarOperacionRect(index: Int): Boolean {
+        if (index !in operacionesRect.indices) return false
+        operacionesRect.removeAt(index)
+        contextDirty = true
+        invalidate()
+        onOperacionesRectChanged?.invoke()
+        return true
+    }
+
+    fun limpiarOperacionesRect() {
+        if (operacionesRect.isEmpty()) return
+        operacionesRect.clear()
+        contextDirty = true
+        invalidate()
+        onOperacionesRectChanged?.invoke()
+    }
+
+    /**
+     * Calcula el rectángulo en píxeles de pantalla que representa la operación,
+     * anclando un lado del rectángulo de la operación contra el lado indicado
+     * del [presetRect]. AGREGAR sale hacia afuera; QUITAR entra hacia adentro.
+     */
+    private fun rectPxOperacion(op: OperacionRect): RectF {
+        val s = scalePxPerCm
+        val anchoPx = op.anchoCm * s
+        val altoPx = op.altoCm * s
+        val offsetPx = op.offsetCm * s
+        val haciaAfuera = op.tipo == TipoOp.AGREGAR
+        return when (op.lado) {
+            Side.TOP -> {
+                val left = presetRect.left + offsetPx
+                val right = left + anchoPx
+                if (haciaAfuera) RectF(left, presetRect.top - altoPx, right, presetRect.top)
+                else RectF(left, presetRect.top, right, presetRect.top + altoPx)
+            }
+            Side.BOTTOM -> {
+                val left = presetRect.left + offsetPx
+                val right = left + anchoPx
+                if (haciaAfuera) RectF(left, presetRect.bottom, right, presetRect.bottom + altoPx)
+                else RectF(left, presetRect.bottom - altoPx, right, presetRect.bottom)
+            }
+            Side.LEFT -> {
+                val top = presetRect.top + offsetPx
+                val bottom = top + altoPx
+                if (haciaAfuera) RectF(presetRect.left - anchoPx, top, presetRect.left, bottom)
+                else RectF(presetRect.left, top, presetRect.left + anchoPx, bottom)
+            }
+            Side.RIGHT -> {
+                val top = presetRect.top + offsetPx
+                val bottom = top + altoPx
+                if (haciaAfuera) RectF(presetRect.right, top, presetRect.right + anchoPx, bottom)
+                else RectF(presetRect.right - anchoPx, top, presetRect.right, bottom)
+            }
+        }
+    }
+
+    private fun drawOperacionesRect(canvas: Canvas) {
+        if (operacionesRect.isEmpty()) return
+        if (geometryType != GeometryType.PLANO) return
+
+        // Construye la forma compuesta: presetRect ± operaciones.
+        val composite = Path().apply { addRect(presetRect, Path.Direction.CW) }
+        operacionesRect.forEach { op ->
+            val rectOp = rectPxOperacion(op)
+            val opPath = Path().apply { addRect(rectOp, Path.Direction.CW) }
+            when (op.tipo) {
+                TipoOp.AGREGAR -> composite.op(opPath, Path.Op.UNION)
+                TipoOp.QUITAR -> composite.op(opPath, Path.Op.DIFFERENCE)
+            }
+        }
+
+        // Pinta cada operación con su tipo (relleno + borde).
+        operacionesRect.forEach { op ->
+            val r = rectPxOperacion(op)
+            when (op.tipo) {
+                TipoOp.AGREGAR -> {
+                    canvas.drawRect(r, opAgregarFillPaint)
+                    canvas.drawRect(r, opAgregarStrokePaint)
+                }
+                TipoOp.QUITAR -> {
+                    canvas.drawRect(r, opQuitarFillPaint)
+                    canvas.drawRect(r, opQuitarStrokePaint)
+                }
+            }
+            // Cota interior: ancho × alto en cm.
+            val etiqueta = "${formatCota(op.anchoCm)} × ${formatCota(op.altoCm)}"
+            val cx = (r.left + r.right) / 2f
+            val cy = (r.top + r.bottom) / 2f + opCotaTextPaint.textSize / 2f
+            canvas.drawText(etiqueta, cx, cy, opCotaTextPaint)
+        }
+
+        // Contorno de la forma compuesta resultante (sobre todo).
+        canvas.drawPath(composite, opShapeOutlinePaint)
     }
 
 }

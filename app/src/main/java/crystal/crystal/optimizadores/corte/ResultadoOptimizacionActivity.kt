@@ -1,7 +1,12 @@
 package crystal.crystal.optimizadores.corte
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
+import android.graphics.Color
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.util.Log
 import android.widget.Button
 import android.widget.TextView
@@ -22,6 +27,8 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
 
     // Agregar DataManager para guardar cortes ejecutados
     private lateinit var dataManager: CorteDataManager
+    private var resultadoActual: ResultadoOptimizacion? = null
+    private var nombreListaActual: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +60,10 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
     @SuppressLint("LongLogTag")
     private fun mostrarResultados() {
         val resultado = intent.getParcelableExtra<ResultadoOptimizacion>("resultado_optimizacion")
+            ?: dataManager.recuperarResultadoOptimizacion()
+        resultadoActual = resultado
+        nombreListaActual = intent.getStringExtra("nombre_lista")
+            ?: dataManager.recuperarNombreListaResultadoOptimizacion()
 
         Log.d("ResultadoOptimizacionDebug", "=== INICIO mostrarResultados ===")
         Log.d("ResultadoOptimizacionDebug", "Resultado recibido: ${resultado != null}")
@@ -62,12 +73,18 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
             Log.d("ResultadoOptimizacionDebug", "Varillas en resultado: ${resultado.varillasUsadas.size}")
 
             // Mostrar estadísticas en el header
-            val nombreLista = intent.getStringExtra("nombre_lista").orEmpty()
+            val nombreLista = nombreListaActual
             tvBarrasUsadas.text = if (nombreLista.isNotBlank())
                 "Barras a cortar: ${resultado.totalBarrasUsadas} de $nombreLista"
             else
                 "Barras a cortar: ${resultado.totalBarrasUsadas}"
-            tvCantidadCortes.text = "Cantidad de cortes: ${resultado.totalCortes} (sin errores)"
+            if (resultado.cortesErroneos > 0) {
+                tvCantidadCortes.text = textoCortesConFaltantes(resultado)
+                mostrarAvisoCortesFaltantes(resultado)
+            } else {
+                tvCantidadCortes.text = "Cantidad de cortes (${resultado.totalCortes})"
+                tvCantidadCortes.setTextColor(Color.BLACK)
+            }
 
             // NUEVO: Verificar si ya existe un adapter
             val adapterExistente = recyclerResultados.adapter as? ResultadoAdapter
@@ -81,9 +98,13 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
             } else {
                 Log.d("ResultadoOptimizacionDebug", "Creando nuevo adapter")
                 // Crear nuevo adapter
-                val adapter = ResultadoAdapter(this, resultado.varillasUsadas.toMutableList())
+                val adapter = ResultadoAdapter(this, resultado.varillasUsadas.toMutableList()) {
+                    guardarResultadoActual(it)
+                }
                 recyclerResultados.adapter = adapter
             }
+
+            guardarResultadoActual(resultado.varillasUsadas)
 
             Log.d("ResultadoOptimizacionDebug", "RecyclerView actualizado")
 
@@ -101,10 +122,71 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
         }
     }
 
+    private fun mostrarAvisoCortesFaltantes(resultado: ResultadoOptimizacion) {
+        val detalle = resultado.cortesFaltantes
+            .take(12)
+            .joinToString("\n") { faltante ->
+                "${formatearNumero(faltante.longitud)} cm = ${faltante.cantidad} (${faltante.referencia})"
+            }
+        val extra = if (resultado.cortesFaltantes.size > 12) {
+            "\n... y ${resultado.cortesFaltantes.size - 12} medidas mas"
+        } else {
+            ""
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Faltan cortes")
+            .setMessage("No alcanzaron las varillas para completar todo.\n\nFaltan ${resultado.cortesErroneos} corte(s):\n\n$detalle$extra")
+            .setPositiveButton("Entendido", null)
+            .show()
+    }
+
+    private fun textoCortesConFaltantes(resultado: ResultadoOptimizacion): SpannableString {
+        val primeraLinea = "Cantidad de cortes (${resultado.totalCortes})"
+        val segundaLinea = "Cortes no incluidos (${resultado.cortesErroneos})"
+        val texto = "$primeraLinea\n$segundaLinea"
+        return SpannableString(texto).apply {
+            setSpan(
+                ForegroundColorSpan(Color.BLACK),
+                0,
+                primeraLinea.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            setSpan(
+                ForegroundColorSpan(Color.RED),
+                primeraLinea.length + 1,
+                texto.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+    }
+
+    private fun formatearNumero(numero: Float): String {
+        return if (numero % 1.0f == 0.0f) {
+            numero.toInt().toString()
+        } else {
+            "%.1f".format(numero).replace(",", ".")
+        }
+    }
+
+    override fun onPause() {
+        guardarResultadoActual()
+        super.onPause()
+    }
+
+    private fun guardarResultadoActual(varillas: List<VarillaResultado>? = null) {
+        val base = resultadoActual ?: return
+        val varillasActuales = varillas ?: (recyclerResultados.adapter as? ResultadoAdapter)?.resultados ?: base.varillasUsadas
+        val actualizado = base.copy(varillasUsadas = varillasActuales)
+        resultadoActual = actualizado
+        dataManager.guardarResultadoOptimizacion(actualizado, nombreListaActual)
+    }
+
     /**
      * Procesa las varillas que fueron marcadas como cortadas y las guarda
      */
     private fun procesarVarillasCortadas() {
+        guardarResultadoActual()
         val adapter = recyclerResultados.adapter as? ResultadoAdapter
         if (adapter != null) {
             val varillasResultado = adapter.resultados

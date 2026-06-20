@@ -298,6 +298,32 @@
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck" />
                         </LinearLayout>
 
+                        <LinearLayout
+                            android:id="@+id/lyMarcoValor"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Marco"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etMarco"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:text="2.5"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck" />
+                        </LinearLayout>
+
 
                     </LinearLayout>
                 </ScrollView>
@@ -380,7 +406,7 @@
                                         android:layout_width="match_parent"
                                         android:layout_height="wrap_content"
                                         android:layout_weight="1"
-                                        android:text="@string/marco" />
+                                        android:text="marco 3&quot;" />
 
                                     <TextView
                                         android:id="@+id/txMarco"
