@@ -45,7 +45,7 @@ object NovaCalculosDesiguales {
 
     private fun esPuenteMultipleOGorrito(puente: String): Boolean {
         val p = puente.lowercase().trim()
-        return p.contains("multi") || p.contains("múlt") || p.contains("mÃºlt") || p.contains("gorrito") || p.contains("ltiple")
+        return p.contains("multi") || p.contains("múlt") || p.contains("múlt") || p.contains("gorrito") || p.contains("ltiple")
     }
 
     fun textoUAnchoMochetaPorTramos(

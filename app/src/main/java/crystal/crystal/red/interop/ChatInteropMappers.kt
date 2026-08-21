@@ -45,7 +45,8 @@ fun DocumentSnapshot.toLegacyChatCompat(): Chat? {
         unreadCount = 0,
         lastMessageText = getString("lastMessageText")
             ?: getString(ChatInteropFields.Chat.LAST_MESSAGE_PREVIEW)
-            ?: ""
+            ?: "",
+        esSoporte = getBoolean("esSoporte") ?: false
     )
 }
 
@@ -67,6 +68,7 @@ fun DocumentSnapshot.toChatPreviewText(): String {
         "medidas_crystal" -> "Medidas Crystal: $fileName"
         "corte_crystal" -> "Corte Crystal: $fileName"
         "plancha_crystal" -> "Corte Plancha Crystal: $fileName"
+        "proyecto_crystal" -> "Proyecto Crystal: $fileName"
         "cotizacion" -> "Cotizacion"
         else -> message
     }

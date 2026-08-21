@@ -1,4 +1,7 @@
 package crystal.crystal.taller
+import crystal.crystal.taller.mamparas.MamparaVidrioActivity
+import crystal.crystal.taller.mamparas.MamparaFC
+import crystal.crystal.taller.mamparas.MamparaPaflon
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -22,6 +25,7 @@ import crystal.crystal.optimizadores.corte.CorteActivity
 import crystal.crystal.optimizadores.planchas.OptimizacionPlanchasActivity
 import crystal.crystal.taller.nova.NovaCorrediza
 import crystal.crystal.taller.puerta.PuertasActivity
+import crystal.crystal.taller.venAl.VentanaAl
 
 class Taller : AppCompatActivity() {
 
@@ -35,6 +39,11 @@ class Taller : AppCompatActivity() {
     companion object {
         private const val REQUEST_CALCULADORA = 500
         private const val REQUEST_BAUL = 501
+
+        // Formato para compartir un proyecto completo por Crystal chat (público: lo lee el receptor).
+        const val MIME_PROYECTO_CRYSTAL = "application/vnd.crystal.proyecto+json"
+        const val EXTENSION_PROYECTO_CRYSTAL = "crystalproyecto"
+        const val FORMAT_PROYECTO_CRYSTAL = "crystal.proyecto"
 
         private val COLORES_ALUMINIO = listOf(
             "aluminio", "plateado", "negro", "bronce", "champán",
@@ -63,8 +72,108 @@ class Taller : AppCompatActivity() {
         @Suppress("UNCHECKED_CAST", "DEPRECATION")
         val listaPresupuesto = paqueteR?.getSerializable("lista_presupuesto") as? ArrayList<Listado>
         if (!listaPresupuesto.isNullOrEmpty()) {
-            agregarPresupuesto(cliente ?: "Sin cliente", listaPresupuesto)
+            // Flujo de cola de calculadoras (mismo que MedidaActivity) pero respetando la cantidad
+            // de cada ítem. Al entrar con elementos, se ofrece acceder al cálculo.
+            mostrarDialogoAccederCalculo(cliente ?: "Sin cliente", listaPresupuesto)
         }
+    }
+
+    // ==================== ACCEDER AL CÁLCULO (cola de calculadoras) ====================
+
+    private fun mostrarDialogoAccederCalculo(cliente: String, lista: List<Listado>) {
+        val clasificados = enrutador.clasificar(lista, cliente)
+        val conDestino = enrutador.obtenerConDestino(clasificados)
+        val sinDestino = enrutador.obtenerSinDestino(clasificados)
+
+        if (conDestino.isEmpty()) {
+            Toast.makeText(this, "Ningún elemento se pudo enviar a una calculadora", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val cola = ArrayList(conDestino.map { item ->
+            ColaCalculadoras.MedidaCalc(
+                producto = item.listado.producto,
+                ancho = item.listado.medi1,
+                alto = item.listado.medi2,
+                cantidad = item.listado.canti,
+                cliente = item.cliente,
+                bocetoArchivo = ""
+            )
+        })
+        val nombres = cola.map { "${it.producto} — ${fmtMedida(it.ancho)} x ${fmtMedida(it.alto)} = ${it.cantidad.toInt()}" }
+
+        val mensaje = buildString {
+            append("Se enviarán estas medidas a sus calculadoras:\n\n")
+            append(nombres.joinToString("\n"))
+            if (sinDestino.isNotEmpty()) {
+                append("\n\n(${sinDestino.size} sin calculadora: se omiten)")
+            }
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Acceder al cálculo")
+            .setMessage(mensaje)
+            .setPositiveButton("Proceder") { _, _ ->
+                if (!ColaCalculadoras.lanzar(this, cola, 0)) {
+                    Toast.makeText(this, "No se pudo abrir la calculadora", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNeutralButton("Elegir por cuál iniciar") { _, _ ->
+                mostrarDialogoElegirInicio(cola, nombres)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun mostrarDialogoElegirInicio(cola: List<ColaCalculadoras.MedidaCalc>, nombres: List<String>) {
+        AlertDialog.Builder(this)
+            .setTitle("Elegir por cuál iniciar")
+            .setItems(nombres.toTypedArray()) { _, i ->
+                // Reordenar: la elegida primero, el resto en su orden original (nada se pierde).
+                val reordenada = ArrayList<ColaCalculadoras.MedidaCalc>()
+                reordenada.add(cola[i])
+                cola.forEachIndexed { idx, m -> if (idx != i) reordenada.add(m) }
+                if (!ColaCalculadoras.lanzar(this, reordenada, 0)) {
+                    Toast.makeText(this, "No se pudo abrir la calculadora", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Volver") { _, _ ->
+                mostrarDialogoAccederCalculoDesdeCola(cola, nombres)
+            }
+            .show()
+    }
+
+    // Reabre el diálogo principal manteniendo la cola ya construida (al pulsar "Volver").
+    private fun mostrarDialogoAccederCalculoDesdeCola(cola: List<ColaCalculadoras.MedidaCalc>, nombres: List<String>) {
+        val mensaje = "Se enviarán estas medidas a sus calculadoras:\n\n" + nombres.joinToString("\n")
+        AlertDialog.Builder(this)
+            .setTitle("Acceder al cálculo")
+            .setMessage(mensaje)
+            .setPositiveButton("Proceder") { _, _ -> ColaCalculadoras.lanzar(this, cola, 0) }
+            .setNeutralButton("Elegir por cuál iniciar") { _, _ -> mostrarDialogoElegirInicio(cola, nombres) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun fmtMedida(v: Float): String =
+        if (v % 1f == 0f) v.toInt().toString() else String.format(java.util.Locale.US, "%.1f", v)
+
+    // v1: la funcionalidad de enviar el presupuesto a las calculadoras está incompleta. En vez de
+    // procesarlo, se guarda en filesDir/taller_pendientes para revisarlo más adelante, y se avisa.
+    private fun guardarPresupuestoBloqueado(cliente: String, lista: List<Listado>) {
+        runCatching {
+            val dir = java.io.File(filesDir, "taller_pendientes").apply { mkdirs() }
+            val sello = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+            val datos = mapOf(
+                "cliente" to cliente,
+                "fecha" to sello,
+                "items" to lista.map {
+                    mapOf("producto" to it.producto, "cantidad" to it.canti, "escala" to it.escala)
+                }
+            )
+            java.io.File(dir, "pendiente_$sello.json").writeText(com.google.gson.Gson().toJson(datos))
+        }
+        // Sin aviso: entra directo. El presupuesto queda guardado en silencio para retomarlo después.
     }
 
     // ==================== CARD FLOTANTE ====================
@@ -111,6 +220,10 @@ class Taller : AppCompatActivity() {
     // ==================== PROCESAMIENTO ====================
 
     private fun iniciarProcesamientoAcumulado() {
+        if (crystal.crystal.FeaturesV1.BLOQUEAR_TALLER_PRESUPUESTO) {
+            Toast.makeText(this, "Función en desarrollo: no disponible en esta versión", Toast.LENGTH_SHORT).show()
+            return
+        }
         val todosClasificados = mutableListOf<EnrutadorPresupuesto.ItemEnrutado>()
         for ((cliente, lista) in presupuestosPendientes) {
             todosClasificados.addAll(enrutador.clasificar(lista, cliente))
@@ -477,11 +590,13 @@ class Taller : AppCompatActivity() {
         binding.btnA001.setOnClickListener { lanzarCalculadora(PDuchaActivity::class.java) }
         binding.btCurvo.setOnClickListener { startActivity(Intent(this, VidrioCurvoActivity::class.java)) }
         binding.btOptiLineal.setOnClickListener { startActivity(Intent(this, CorteActivity::class.java)) }
-        binding.tbX.setOnClickListener { startActivity(Intent(this, DisenoActivity::class.java)) }
-        binding.btUnidades.setOnClickListener { lanzarCalculadora(RejasActivity::class.java) }
+        // Sin listener en v1 (no navegan a nada): "Diseño Técnico" (tbX) y "Ficha Técnica" (btUnidades).
         binding.btOpti.setOnClickListener { startActivity(Intent(this, OptimizacionPlanchasActivity::class.java)) }
-        binding.btFichas.setOnClickListener { startActivity(Intent(this, FichaActivity::class.java)) }
         binding.btMedTecnica.setOnClickListener{startActivity(Intent(this,MedidaActivity::class.java))}
+        // "Resultados" (btFichas, último botón): NECESARIO — abre las listas de resultados (FichaActivity).
+        binding.btFichas.setOnClickListener { startActivity(Intent(this, FichaActivity::class.java)) }
+        // "Pendientes": lista todos los proyectos guardados y permite compartir el elegido por Crystal chat.
+        binding.tallerBtFiltroPendientes.setOnClickListener { mostrarDialogoCompartirProyecto() }
         binding.btDivisionBano.setOnClickListener { lanzarCalculadora(DivisionBanoActivity::class.java) }
         binding.btBaranda.setOnClickListener { lanzarCalculadora(BarandaActivity::class.java) }
     }
@@ -490,4 +605,70 @@ class Taller : AppCompatActivity() {
         val paquete = Bundle().apply { putString("rcliente", binding.cliente.text.toString()) }
         startActivity(Intent(this, clase).putExtras(paquete))
     }
+
+    // ─── Compartir proyecto por Crystal chat (botón "Pendientes") ──────────────────────────────
+    private fun mostrarDialogoCompartirProyecto() {
+        val proyectos = MapStorage.obtenerListaProyectos(this)
+        if (proyectos.isEmpty()) {
+            Toast.makeText(this, "No hay proyectos guardados", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Proyectos")
+            .setItems(proyectos.toTypedArray()) { _, i -> mostrarAccionesProyecto(proyectos[i]) }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    private fun mostrarAccionesProyecto(nombre: String) {
+        AlertDialog.Builder(this)
+            .setTitle(nombre)
+            .setItems(arrayOf("Poner activo", "Compartir por Crystal chat")) { _, opcion ->
+                when (opcion) {
+                    0 -> ponerProyectoActivo(nombre)
+                    1 -> compartirProyectoPorChat(nombre)
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun ponerProyectoActivo(nombre: String) {
+        ProyectoManager.setProyectoActivo(this, nombre)
+        Toast.makeText(this, "Proyecto activo: $nombre", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun compartirProyectoPorChat(nombre: String) {
+        val mapa = MapStorage.cargarProyecto(this, nombre)
+        if (mapa.isNullOrEmpty()) {
+            Toast.makeText(this, "El proyecto está vacío o no se pudo cargar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        runCatching {
+            val envoltura = com.google.gson.JsonObject().apply {
+                addProperty("format", FORMAT_PROYECTO_CRYSTAL)
+                addProperty("version", 1)
+                addProperty("proyecto", nombre)
+                addProperty("exportedAt", System.currentTimeMillis())
+                add("data", com.google.gson.Gson().toJsonTree(mapa))
+            }
+            val shareDir = java.io.File(cacheDir, "proyectoshare").apply { mkdirs() }
+            val file = java.io.File(shareDir, "${sanitizarNombreArchivo(nombre)}.$EXTENSION_PROYECTO_CRYSTAL")
+            file.writeText(envoltura.toString())
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+            val intent = Intent(this, crystal.crystal.red.ListChatActivity::class.java).apply {
+                putExtra(crystal.crystal.red.interop.ChatInteropIntents.EXTRA_SEND_SHARED_URI, uri.toString())
+                putExtra(crystal.crystal.red.interop.ChatInteropIntents.EXTRA_SEND_SHARED_NAME, file.name)
+                putExtra(crystal.crystal.red.interop.ChatInteropIntents.EXTRA_SEND_SHARED_MIME, MIME_PROYECTO_CRYSTAL)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = android.content.ClipData.newUri(contentResolver, "proyecto_crystal", uri)
+            }
+            startActivity(intent)
+        }.onFailure {
+            Toast.makeText(this, "No se pudo compartir el proyecto: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun sanitizarNombreArchivo(valor: String): String =
+        valor.trim().replace(Regex("[^A-Za-z0-9_-]+"), "_").trim('_').ifBlank { "proyecto" }
 }

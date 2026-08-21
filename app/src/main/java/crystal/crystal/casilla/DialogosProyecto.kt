@@ -6,6 +6,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -17,6 +18,14 @@ object DialogosProyecto {
         val indice: Int,
         val elemento: MutableList<String>
     )
+
+    // Diálogo del editor de paquete (nivel 5). Se guarda para cerrarlo antes de reabrirlo y evitar que
+    // se apilen varios editores; antes había que pulsar "Salir" una vez por cada edición realizada.
+    private var editorDialog: AlertDialog? = null
+
+    // Diálogo "Contenido" (lista de paquetes, nivel 3). Queda atenuado detrás; se guarda para poder
+    // cerrarlo también al pulsar "Salir" y regresar a la pantalla en un solo paso.
+    private var contenidoDialog: AlertDialog? = null
 
     // Interfaz para callbacks
     interface ProyectoCallback {
@@ -249,20 +258,27 @@ object DialogosProyecto {
             ProyectoManager.limpiarProyectoActivo(context)
         }
 
-        // Crear diálogo con paquetes clickeables
-        AlertDialog.Builder(context)
+        // Lista de paquetes que NO se cierra al tocar un ítem (a diferencia de setItems), para que el
+        // diálogo "Contenido" quede atenuado detrás mientras se muestra el de opciones ENCIMA.
+        val listaPaquetes = ListView(context).apply {
+            adapter = ArrayAdapter(context, android.R.layout.simple_list_item_1, elementosLista)
+        }
+        val dlgContenido = AlertDialog.Builder(context)
             .setTitle("📋 Contenido: $nombreProyecto")
-            .setItems(elementosLista.toTypedArray()) { _, position ->
-                // Verificar si se clickeó un paquete
-                val paqueteSeleccionado = mapaPaquetes[position]
-                if (paqueteSeleccionado != null) {
-                    mostrarDialogoOpcionesPaquete(context, nombreProyecto, paqueteSeleccionado, callback)
-                }
-            }
+            .setView(listaPaquetes)
             .setNegativeButton("Atrás") { _, _ ->
                 mostrarDialogoOpcionesProyecto(context, nombreProyecto, callback)
             }
-            .show()
+            .create()
+        listaPaquetes.setOnItemClickListener { _, _, position, _ ->
+            val paqueteSeleccionado = mapaPaquetes[position]
+            if (paqueteSeleccionado != null) {
+                mostrarDialogoOpcionesPaquete(context, nombreProyecto, paqueteSeleccionado, callback)
+            }
+        }
+        runCatching { contenidoDialog?.takeIf { it.isShowing }?.dismiss() }
+        contenidoDialog = dlgContenido
+        dlgContenido.show()
     }
 
     /**
@@ -342,6 +358,11 @@ object DialogosProyecto {
                     0 -> mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
                     1 -> mostrarConfirmacionEliminarPaqueteCompleto(context, nombreProyecto, paquete, callback)
                     2 -> {
+                        // "Salir" cierra TODO el flujo de materiales y regresa a la pantalla.
+                        runCatching { editorDialog?.takeIf { it.isShowing }?.dismiss() }
+                        editorDialog = null
+                        runCatching { contenidoDialog?.takeIf { it.isShowing }?.dismiss() }
+                        contenidoDialog = null
                         dialog.dismiss()
                         return@setItems
                         // Confirmar eliminación del paquete
@@ -459,7 +480,10 @@ object DialogosProyecto {
             addView(contenedor)
         }
 
-        AlertDialog.Builder(context)
+        // Cierra el editor anterior (si sigue visible) para que no se apilen (un editor a la vez → un
+        // solo "Salir"). Protegido: un diálogo de una Activity ya destruida lanzaría al cerrarlo.
+        runCatching { editorDialog?.takeIf { it.isShowing }?.dismiss() }
+        val dlg = AlertDialog.Builder(context)
             .setTitle("Editar: $paquete")
             .setView(scroll)
             .setPositiveButton("Agregar") { _, _ ->
@@ -478,10 +502,18 @@ object DialogosProyecto {
                 Toast.makeText(context, "Elemento agregado", Toast.LENGTH_SHORT).show()
                 mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
             }
-            .setNeutralButton("Opciones") { _, _ ->
+            .setNeutralButton("Opciones", null)
+            .create()
+        // "Opciones" NO debe cerrar el editor: se muestra el diálogo de opciones ENCIMA (el editor
+        // queda atenuado detrás), para no perder el contexto ni saltar a la pantalla principal.
+        // Por eso se sobreescribe el clic del botón neutral (los botones de AlertDialog auto-cierran).
+        dlg.setOnShowListener {
+            dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
                 mostrarDialogoOpcionesPaquete(context, nombreProyecto, paquete, callback)
             }
-            .show()
+        }
+        editorDialog = dlg
+        dlg.show()
     }
 
     private fun mostrarDialogoAccionesElementoPaquete(
@@ -500,7 +532,7 @@ object DialogosProyecto {
                     1 -> confirmarEliminarElementoPaquete(context, nombreProyecto, paquete, ref, callback)
                 }
             }
-            .setNegativeButton("AtrÃ¡s") { _, _ ->
+            .setNegativeButton("Atrás") { _, _ ->
                 mostrarDialogoEditorPaquete(context, nombreProyecto, paquete, callback)
             }
             .show()
@@ -568,7 +600,7 @@ object DialogosProyecto {
     ) {
         AlertDialog.Builder(context)
             .setTitle("Eliminar elemento")
-            .setMessage("Â¿Eliminar '${ref.elemento.getOrNull(0).orEmpty()}' de ${ref.categoria}?")
+            .setMessage("¿Eliminar '${ref.elemento.getOrNull(0).orEmpty()}' de ${ref.categoria}?")
             .setPositiveButton("Eliminar") { _, _ ->
                 val mapListas = MapStorage.cargarProyecto(context, nombreProyecto) ?: return@setPositiveButton
                 val lista = mapListas[ref.categoria] ?: return@setPositiveButton

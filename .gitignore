@@ -15,3 +15,20 @@
 hs_err_pid*.log
 replay_pid*.log
 .claude/
+
+# Firma de release: NUNCA versionar el keystore ni sus contraseñas.
+/keystore.properties
+*.jks
+*.keystore
+
+# Cachés de las herramientas y dependencias descargadas.
+/.gradle-user-home/
+/.android-user-home/
+/functions/node_modules/
+
+# Respaldos de los celulares, registros y comprimidos de trabajo.
+/_backup_*/
+/_logs/
+*.rar
+*.zip
+gcm-diagnose.log

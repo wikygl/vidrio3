@@ -4,25 +4,23 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     tools:context=".taller.FichaActivity">
 
     <LinearLayout
         android:id="@+id/titulo_lay"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:layout_margin="9dp"
-        android:layout_marginTop="9dp"
         android:orientation="vertical"
-        app:layout_constraintBottom_toTopOf="@+id/btAbrir"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.0">
+        app:layout_constraintBottom_toTopOf="@+id/botones_lay"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:background="@color/sombra2"
             android:orientation="vertical">
 
@@ -38,40 +36,51 @@
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvModelo"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="9dp" />
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="9dp" />
     </LinearLayout>
 
-    <Button
-        android:id="@+id/btAbrir"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:id="@+id/botones_lay"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="9dp"
-        android:text="Lista x ventana"
-        android:textSize="11sp"
+        android:orientation="horizontal"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/btCliente" />
+        app:layout_constraintEnd_toEndOf="parent">
 
-    <Button
-        android:id="@+id/btCliente"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Lista x cliente"
-        android:textSize="11sp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/btAbrir"
-        app:layout_constraintEnd_toStartOf="@+id/btMaterial" />
+        <Button
+            android:id="@+id/btAbrir"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Producto"
+            android:textSize="11sp" />
 
-    <Button
-        android:id="@+id/btMaterial"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="9dp"
-        android:text="Lista x material"
-        android:textSize="11sp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/btCliente" />
+        <Button
+            android:id="@+id/btCliente"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Cliente"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btMaterial"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Material"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btPlanos"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Planos"
+            android:textSize="11sp" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

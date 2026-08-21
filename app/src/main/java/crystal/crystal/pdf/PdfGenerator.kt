@@ -44,6 +44,9 @@ import kotlinx.coroutines.withContext
 class PdfGenerator(private val activity: AppCompatActivity) {
 
     fun generarYCompartir(cliente: String, lista: List<Listado>, precioTotal: String) {
+        // Candado (Fase 3): exportar PDF es de pago. Con el cobro apagado no bloquea.
+        if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.puedeExportarPdf(),
+                "Exportar/compartir PDF es una función de pago.")) return
         if (lista.isEmpty()) {
             Toast.makeText(activity, "La lista vacia", Toast.LENGTH_SHORT).show()
             return

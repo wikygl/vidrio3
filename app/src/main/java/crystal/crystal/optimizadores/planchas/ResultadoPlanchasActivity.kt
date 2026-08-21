@@ -35,22 +35,51 @@ class ResultadoPlanchasActivity : AppCompatActivity() {
         val tvZoom = findViewById<TextView>(R.id.tvZoomPlanchas)
         val btnVolver = findViewById<Button>(R.id.btnVolver)
 
+        val tvFaltantes = findViewById<TextView>(R.id.tvFaltantesResumen)
+
         if (resultado != null) {
             tvPlanchas.text = "Planchas usadas: ${resultado.planchas.size}"
             tvArea.text = "Área usada: ${"%.3f".format(resultado.areaUsadaMm2 / 1_000_000.0)} m²"
             tvDesp.text = "Desperdicio: ${"%.3f".format(resultado.areaDesperdicioMm2 / 1_000_000.0)} m²"
 
+            // Indicador rojo en el resumen: cuántos cortes no entraron (el detalle va al final).
+            val nFaltantes = resultado.piezasSinUbicar.size
+            if (nFaltantes > 0) {
+                tvFaltantes.text = "Cortes faltantes (no cortados): $nFaltantes"
+                tvFaltantes.visibility = android.view.View.VISIBLE
+            } else {
+                tvFaltantes.visibility = android.view.View.GONE
+            }
+
             val planchasOrdenadas = resultado.planchas
+                // De menor a mayor: primero los retazos (material sobrante / medidas menores), luego
+                // las planchas por área ascendente; a igualdad, las más aprovechadas primero.
                 .sortedWith(
-                    compareByDescending<PlanchaOptimizada> { porcentajeUso(it) }
-                        .thenByDescending { it.areaUsadaMm2 }
-                        .thenBy { it.indice }
+                    compareByDescending<PlanchaOptimizada> { it.esRetazoEntrada }
+                        .thenBy { it.anchoMm.toLong() * it.altoMm }
+                        .thenByDescending { porcentajeUso(it) }
                 )
+                // Cada unidad conserva el nombre que el usuario le puso en el inventario. Si de ese
+                // nombre se usó más de una unidad, se numeran nombre 1, nombre 2, … para saber cuál
+                // es cuál al momento de cortar.
+                .let { lista ->
+                    val totalPorNombre = lista.groupingBy { it.nombre }.eachCount()
+                    val usados = mutableMapOf<String, Int>()
+                    lista.mapIndexed { i, p ->
+                        val nombre = if ((totalPorNombre[p.nombre] ?: 1) > 1) {
+                            val n = (usados[p.nombre] ?: 0) + 1
+                            usados[p.nombre] = n
+                            "${p.nombre} $n"
+                        } else p.nombre
+                        p.copy(indice = i + 1, nombre = nombre)
+                    }
+                }
                 .toMutableList()
 
             val adapter = ResultadoPlanchasAdapter(this, planchasOrdenadas) { plancha ->
                 PlanchaPdfExport.exportarYCompartir(this, listOf(plancha), plancha.nombre)
             }
+            adapter.setFaltantes(resultado.piezasSinUbicar)
             adapterResultado = adapter
             recycler.layoutManager = LinearLayoutManager(this)
             recycler.adapter = adapter
@@ -86,14 +115,24 @@ class ResultadoPlanchasActivity : AppCompatActivity() {
         }
 
         btnVolver.setOnClickListener {
-            procesarPlanchasCortadas()
-            finish()
+            if (procesarPlanchasCortadas()) finish()
         }
     }
 
-    private fun procesarPlanchasCortadas() {
+    // Devuelve true si se puede cerrar la actividad ahora; false si se mostró la invitación a FULL
+    // (la actividad se cierra al cerrar el diálogo, vía el callback).
+    private fun procesarPlanchasCortadas(): Boolean {
         val planchasCortadas = adapterResultado?.planchas?.filter { it.cortada }.orEmpty()
-        if (planchasCortadas.isEmpty()) return
+        if (planchasCortadas.isEmpty()) return true
+        // Candado (Fase 3): descontar de la lista lo ya cortado es de pago. Muestra la invitación y
+        // vuelve al cerrarla (sin descontar). No cierra la actividad antes de tiempo.
+        if (!crystal.crystal.Suscripcion.avanzadoActivo()) {
+            crystal.crystal.Suscripcion.invitarFull(
+                this,
+                "Descontar de la lista las planchas cortadas es una función de pago."
+            ) { finish() }
+            return false
+        }
 
         val piezas = planchasCortadas
             .flatMap { it.cortes }
@@ -117,11 +156,11 @@ class ResultadoPlanchasActivity : AppCompatActivity() {
         if (piezas.isNotEmpty()) {
             dataManager.guardarPiezasEjecutadas(piezas)
         }
+        return true
     }
 
     override fun onSupportNavigateUp(): Boolean {
-        procesarPlanchasCortadas()
-        finish()
+        if (procesarPlanchasCortadas()) finish()
         return true
     }
 

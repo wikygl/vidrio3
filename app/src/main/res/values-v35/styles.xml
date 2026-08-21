@@ -1,0 +1,20 @@
+<resources>
+    <!--
+      Android 15 (API 35) fuerza edge-to-edge cuando targetSdk = 35: el contenido se dibuja bajo las
+      barras de estado/navegación. Como las pantallas de Crystal aún no gestionan insets, se activa el
+      opt-out temporal para conservar el layout actual. TODO: gestionar WindowInsets y quitar el
+      opt-out antes de subir a targetSdk 36. Estos estilos SOLO aplican en API 35+ (values-v35);
+      deben reflejar los mismos items que values/styles.xml.
+    -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/color</item>
+        <item name="colorPrimaryDark">@color/color</item>
+        <item name="colorAccent">#0099FF</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+
+    <style name="nuevosplash" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/nuevo</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

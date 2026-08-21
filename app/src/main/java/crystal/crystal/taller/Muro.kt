@@ -24,6 +24,7 @@ import crystal.crystal.databinding.ActivityMuroBinding
 class Muro : AppCompatActivity() {
 
     private lateinit var binding : ActivityMuroBinding
+    private lateinit var controladorCola: ControladorColaMedidas
 
     private var anchoTotal: Float = 100f
     private var altoTotal: Float = 100f
@@ -122,6 +123,12 @@ class Muro : AppCompatActivity() {
         }
 
         binding.btArchivar.setOnClickListener {
+            // Candado de suscripción PRIMERO: bloquear antes del diálogo de metadatos, de avanzar la
+            // numeración o de dar el toast de "archivado".
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeArchivar(),
+                    "Archivar es una función de pago. Renueva para guardar tus proyectos.")) {
+                return@setOnClickListener
+            }
             if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) return@setOnClickListener
             mostrarDialogoMetadatosProduccion {
                 archivarMapas()
@@ -145,6 +152,14 @@ class Muro : AppCompatActivity() {
         // Pre-carga desde presupuesto
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.med1.setText(it.toString()) }
         intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.med2.setText(it.toString()) }
+
+        controladorCola = ControladorColaMedidas(
+            activity = this,
+            claseActual = Muro::class.java,
+            etAncho = binding.med1,
+            etAlto = binding.med2
+        )
+        controladorCola.inicializar()
     }
 
     // ==================== MENÚ DE OPCIONES ====================
@@ -474,6 +489,7 @@ class Muro : AppCompatActivity() {
             "Datos archivados como $ultimoID en proyecto: ${ProyectoManager.getProyectoActivo()}"
         }
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        controladorCola.ofrecerSiguiente()
     }
 
     private fun esValido(ly: LinearLayout): Boolean {

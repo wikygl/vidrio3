@@ -71,8 +71,14 @@ class Fotos : AppCompatActivity() {
         // Usar el mismo Adapter que CatalogoActivity
         binding.recyclerFotos.adapter = Adapter(imagenesColeccion,
             clicado = { data ->
-                // Click normal: ir a visor de imagen
-                irAVisorImagen(data)
+                if (intent.getBooleanExtra("modo_seleccion", false)) {
+                    // Modo selección: devolver la imagen elegida para anexarla.
+                    setResult(RESULT_OK, android.content.Intent().putExtra("imagen_uri", data.productos))
+                    finish()
+                } else {
+                    // Click normal: ir a visor de imagen
+                    irAVisorImagen(data)
+                }
             },
             longClick = { data ->
                 // Long click: mostrar opciones de eliminación

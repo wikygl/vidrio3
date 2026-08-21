@@ -22,6 +22,8 @@ class ResultadoAdapter(
     private val onResultadosCambiados: ((List<VarillaResultado>) -> Unit)? = null
 ) : RecyclerView.Adapter<ResultadoAdapter.ResultadoViewHolder>() {
 
+    private val escala = EscalaCorte.cargar(context)
+
     @SuppressLint("LongLogTag")
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ResultadoViewHolder {
         Log.d("ResultadoOptimizacionDebug", "onCreateViewHolder llamado")
@@ -73,9 +75,9 @@ class ResultadoAdapter(
             }
 
             // Título: "x varillas de x cm"
-            val longitudFormateada = formatearNumero(varilla.longitudVarilla)
+            val longitudFormateada = formatearNumero(escala.desdeCm(varilla.longitudVarilla))
             val textoVarillas = if (varilla.cantidadVarillas == 1) "varilla" else "varillas"
-            tvTituloVarilla.text = "${varilla.cantidadVarillas} $textoVarillas de $longitudFormateada cm"
+            tvTituloVarilla.text = "${varilla.cantidadVarillas} $textoVarillas de $longitudFormateada ${escala.sigla}"
 
             // Limpiar cortes anteriores
             layoutCortes.removeAllViews()
@@ -87,9 +89,9 @@ class ResultadoAdapter(
             configurarGraficoBarra(varilla)
 
             // Información del retazo
-            val retazoFormateado = formatearNumero(varilla.retazo)
+            val retazoFormateado = formatearNumero(escala.desdeCm(varilla.retazo))
             val porcentajeRetazo = formatearNumero(varilla.porcentajeRetazo)
-            tvRetazo.text = "Retazo: $retazoFormateado cm ($porcentajeRetazo%)"
+            tvRetazo.text = "Retazo: $retazoFormateado ${escala.sigla} ($porcentajeRetazo%)"
 
             // Eficiencia
             val eficiencia = formatearNumero(varilla.porcentajeUtilizado)
@@ -184,7 +186,7 @@ class ResultadoAdapter(
             val resultado = mutableListOf<String>()
 
             cortesAgrupadosPorLongitud.forEach { (longitud, cortesDeEstaLongitud) ->
-                val longitudFormateada = formatearNumero(longitud)
+                val longitudFormateada = formatearNumero(escala.desdeCm(longitud))
 
                 // Agrupar por referencia dentro de esta longitud
                 val cortesAgrupadosPorRef = cortesDeEstaLongitud.groupBy { it.referencia }

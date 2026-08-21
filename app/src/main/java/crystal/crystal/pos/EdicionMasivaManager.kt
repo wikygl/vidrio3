@@ -14,6 +14,9 @@ class EdicionMasivaManager(
     var onListaModificada: (() -> Unit)? = null
 
     fun mostrarMenuEdicionMasiva() {
+        // Candado (Fase 3): la edición masiva es de pago.
+        if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.puedeModoMasivo(),
+                "La edición masiva es una función de pago.")) return
         if (lista.isEmpty()) {
             Toast.makeText(activity, "No hay elementos para editar", Toast.LENGTH_SHORT).show()
             return

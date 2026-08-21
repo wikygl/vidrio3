@@ -26,10 +26,10 @@ object VinculadorDispositivo {
                     "ownerUid" to uid,      // <- para reglas
                     "perfil" to mapOf(
                         "actualizadoEn" to FieldValue.serverTimestamp()
-                    ),
-                    "estado_servicio" to mapOf(
-                        "mode" to "BASIC"
                     )
+                    // NO se toca estado_servicio aquí: lo gestiona recalcularEstadoServicio (crea el
+                    // trial de 30 días) y los planes. Escribir mode:BASIC aquí bloqueaba el trial y
+                    // degradaba a quien ya pagó.
                 ),
                 SetOptions.merge()
             )

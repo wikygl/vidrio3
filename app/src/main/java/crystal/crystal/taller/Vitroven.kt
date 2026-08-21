@@ -1,9 +1,11 @@
 package crystal.crystal.taller
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,6 +13,8 @@ import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.R
 import crystal.crystal.casilla.ListaCasilla
 import crystal.crystal.casilla.MapStorage
+import crystal.crystal.casilla.ProyectoManager
+import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.Diseno.vitroven.ParametrosVitroven
 import crystal.crystal.Diseno.vitroven.RenderVitroven
 import crystal.crystal.Diseno.vitroven.VitroSimbolicoParser
@@ -31,9 +35,16 @@ class Vitroven : AppCompatActivity() {
 
     private val clip = 9.6f
     private val jArmado = 2.25f
+    /** Holgura de armado del vidrio del fijo, sobre el ancho del U. */
+    private val HOLGURA_FIJO = 0.3f
     private var texto =""
     private var diseno:String =""
     private var disenoSimbolicoManual: String = ""
+    // Metadatos de producción (igual que Nova): color de aluminio y tipo de vidrio. Se piden en un
+    // diálogo antes de archivar y se guardan por ventana como el sufijo -MAT<alu:...;vid:...>, para
+    // que el corte de planchas pueda separar las listas por tipo de vidrio ("Vidrios [arenado]").
+    private var metaColorAluminio: String = ""
+    private var metaTipoVidrio: String = ""
     private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
     private val renderVitroven = RenderVitroven()
     private val lanzarEditorVitro = registerForActivityResult(
@@ -53,6 +64,7 @@ class Vitroven : AppCompatActivity() {
     }
 
     private lateinit var binding: ActivityVitrovenBinding
+    private lateinit var controladorCola: ControladorColaMedidas
 
     private fun seleccionarModelo(codigo: String, nombreDiseno: String, drawableRes: Int) {
         binding.ivDiseno.visibility = View.VISIBLE
@@ -73,10 +85,25 @@ class Vitroven : AppCompatActivity() {
 
         modelos()
 
+        // Proyecto activo (mismo patrón que Nova/puertas/ventanas): restaurar el proyecto abierto
+        // desde almacenamiento, mostrar el visor y procesar un proyecto pasado por intent.
+        ProyectoManager.inicializarDesdeStorage(this)
+        ProyectoUIHelper.configurarVisorProyectoActivo(this, binding.tvProyectoActivo)
+        procesarIntentProyecto(intent)
+
         binding.btCalcular.setOnClickListener {
             try {
+                controladorCola.onCalcular()
                 val disenoSimbolico = disenoSimbolicoOperativo()
-                val usaSimbolico = VitroSimbolicoParser.parse(disenoSimbolico).modulos.isNotEmpty()
+                // Los materiales salen SIEMPRE de las fórmulas por modelo (vidrios/jamba/u/platina/
+                // tubo/tope): son las verificadas en taller, con sus descuentos propios de cada
+                // combinación —incluidos los decimales puestos a propósito para que el redondeo
+                // caiga donde debe—. El cálculo por módulos aplica descuentos genéricos y no
+                // reproduce esos criterios: en "vf" daba las lamas 1.55 cm más angostas, el fijo
+                // 0.2 y el tope 1.9. Solo se usa cuando el diseño se editó a mano y ya no
+                // corresponde a ningún modelo, porque ahí no existe una fórmula específica.
+                val usaSimbolico = disenoEditadoAMano() &&
+                        VitroSimbolicoParser.parse(disenoSimbolico).modulos.isNotEmpty()
                 val clipsRender: Int
                 if (usaSimbolico) {
                     calcularMaterialesSimbolicos(disenoSimbolico)
@@ -116,7 +143,16 @@ class Vitroven : AppCompatActivity() {
             true // Retorna true para indicar que el evento fue manejado
         }
         binding.btArchivar.setOnClickListener {
-            archivarMapas()
+            // Candado de suscripción PRIMERO: si está bloqueado, mostrar la invitación y salir sin
+            // diálogo de metadatos, sin avanzar la numeración ni el toast de "archivado".
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeArchivar(),
+                    "Archivar es una función de pago. Renueva para guardar tus proyectos.")) {
+                return@setOnClickListener
+            }
+            // Como Nova: pedir color de aluminio y tipo de vidrio antes de archivar.
+            mostrarDialogoMetadatosProduccion {
+                archivarMapas()
+            }
         }
 
         binding.etDireccion.setOnClickListener {
@@ -127,6 +163,37 @@ class Vitroven : AppCompatActivity() {
         // Pre-carga desde presupuesto
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etAncho.setText(df1(it)) }
         intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.etAlto.setText(df1(it)) }
+        metaColorAluminio = intent.getStringExtra("color_aluminio")?.trim().orEmpty()
+
+        controladorCola = ControladorColaMedidas(
+            activity = this,
+            claseActual = Vitroven::class.java,
+            etAncho = binding.etAncho,
+            etAlto = binding.etAlto,
+            ivDiseno = binding.ivDiseno,
+            onToqueSimple = {
+                binding.ivDiseno.visibility = View.GONE
+                binding.svModelos.visibility = View.VISIBLE
+                if (binding.ivDiseno.rotation % 360 == 90f) binding.ivDiseno.rotation += -90f
+            },
+            onToqueLargo = {
+                val anchoActual = binding.etAncho.text?.toString()?.toFloatOrNull()
+                val altoActual = binding.etAlto.text?.toString()?.toFloatOrNull()
+                if (anchoActual != null && altoActual != null) {
+                    val i = Intent(this, VitroActivity::class.java).apply {
+                        putExtra(VitroActivity.EXTRA_ANCHO, anchoActual)
+                        putExtra(VitroActivity.EXTRA_ALTO, altoActual)
+                        putExtra(VitroActivity.EXTRA_CLIPS, clipsTotalesActuales())
+                        putExtra(VitroActivity.EXTRA_CLASIFICACION, texto)
+                        putExtra(VitroActivity.EXTRA_DISENO_SIMBOLICO, disenoSimbolicoOperativo())
+                        putExtra(VitroActivity.EXTRA_DIRECCION_VERTICAL, esDireccionVertical())
+                    }
+                    lanzarEditorVitro.launch(i)
+                }
+            },
+            formato = ::df1
+        )
+        controladorCola.inicializar()
     }
 
     fun actualizarDiseno(anchoCm: Float, altoCm: Float, clips: Int) {
@@ -189,6 +256,14 @@ class Vitroven : AppCompatActivity() {
         }
            }
 // FUNCIONES MATERIALES
+
+    /**
+     * Cuánto se le descuenta al alto útil para el vidrio del fijo: el U que se esté usando más la
+     * holgura de armado. Con u13 (1.5) da 1.8, que es el valor que estaba escrito fijo; con
+     * cualquier otro U ese 1.8 quedaba mal, porque el descuento tiene que seguir al perfil.
+     */
+    private fun descuentoAltoFijo(): Float = uM() + HOLGURA_FIJO
+
     private fun vidrios () {
         //Estas variables es para calcular los vidrios fijos.
         val x= df1(med2()-(altoVitro()+2.5f+uM()+0.3f+1)).toFloat()
@@ -225,10 +300,10 @@ class Vitroven : AppCompatActivity() {
 
     val vidrio= when (texto){
         "v" -> vidrioR
-        "vf" -> "${df1(anchoFijoVf()-0.4f)} x ${df1(med2()-1.8f)} = 1\n" +
+        "vf" -> "${df1(anchoFijoVf()-0.4f)} x ${df1(med2()-descuentoAltoFijo())} = 1\n" +
                 vidrio2
         "vv" -> vidrioVv
-        "fvf" -> "${df1(anchoFijoFvf()-0.6f)} x ${df1(med2() - 1.8f)} = 2\n$vidrio2"
+        "fvf" -> "${df1(anchoFijoFvf()-0.6f)} x ${df1(med2() - descuentoAltoFijo())} = 2\n$vidrio2"
         "vb" -> vidrioVb
         "bvm"-> vidrioBvm
             else -> {"${residuo()}"}
@@ -326,6 +401,12 @@ class Vitroven : AppCompatActivity() {
     private fun obtenerDisenoSimbolico(): String {
         return disenoSimbolicoManual.trim()
     }
+
+    /**
+     * true solo si el diseño se armó en el editor. Elegir uno de los modelos lo limpia, así que el
+     * uso normal (modelo + medidas) NO cuenta como diseño manual y conserva sus fórmulas propias.
+     */
+    private fun disenoEditadoAMano(): Boolean = disenoSimbolicoManual.isNotBlank()
 
     private fun disenoSimbolicoOperativo(): String {
         val actual = obtenerDisenoSimbolico()
@@ -543,7 +624,7 @@ class Vitroven : AppCompatActivity() {
                 sumarLinea(uMarco, anchoModulo, 2)
                 sumarLinea(uMarco, altoModulo - (2f * u), 1)
                 sumarLinea(tubo, altoModulo, 1)
-                sumarVidrio(anchoModulo - 0.6f, altoModulo - 1.8f, 1)
+                sumarVidrio(anchoModulo - 0.6f, altoModulo - descuentoAltoFijo(), 1)
             }
         }
 
@@ -558,71 +639,178 @@ class Vitroven : AppCompatActivity() {
     }
 
     //FUNCIONES DE ARCHIVO
-    private fun archivarMapas() {
-        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+    // Prefijo de los paquetes de vitroven en el proyecto (igual que "Vna"/"Vni"/"Vnp" en Nova).
+    private fun prefijoVitroven(): String = "Vit"
 
-        for (u in 1..cant) {
-            ListaCasilla.incrementarContadorVentanas(this)
+    /**
+     * Rellena las casillas que se archivan pero que la pantalla no muestra: medidas y referencias.
+     *
+     * Vitroven calculaba los materiales pero nunca escribía estos campos, así que al archivar se
+     * guardaban vacíos (o con el "0.0" del layout, que el visor descarta) y en la ficha de Producto
+     * la ventana aparecía sin sus medidas ni sus referencias. Nova y Puertas sí los llenan; esto los
+     * equipara.
+     */
+    private fun prepararCasillasArchivables() {
+        val ancho = binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f
+        val alto = binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f
+        if (ancho <= 0f || alto <= 0f) return
 
-            if (esValido(binding.lyReferencias)) {
-                ListaCasilla.procesarReferencias(this, binding.txReferencias, binding.tvReferencias, mapListas)
-            }
-            if (esValido(binding.lyJamba)) {
-                ListaCasilla.procesarArchivar(this, binding.txJamba, binding.tvJamba, mapListas)
-            }
-            if (esValido(binding.lyPlatina)) {
-                ListaCasilla.procesarArchivar(this, binding.txPlatina, binding.tvPlatina, mapListas)
-            }
-            if (esValido(binding.lyUmarco)) {
-                ListaCasilla.procesarArchivar(this, binding.txU, binding.tvU, mapListas)
-            }
-            if (esValido(binding.lyTubo)) {
-                ListaCasilla.procesarArchivar(this, binding.txTubo, binding.txTubo, mapListas)
-            }
-            if (esValido(binding.lyTope)) {
-                ListaCasilla.procesarArchivar(this, binding.txTope, binding.tvTope, mapListas)
-            }
-            if (esValido(binding.lyVidrio)) {
-                ListaCasilla.procesarArchivar(this, binding.txVidrio, binding.tvVidrio, mapListas)
-            }
-            if (esValido(binding.lyClip)) {
-                ListaCasilla.procesarArchivar(this, binding.txClip, binding.tvClip, mapListas)
-            }
-            if (esValido(binding.lyClient)) {
-                ListaCasilla.procesarArchivar(this, binding.tvC, binding.txC, mapListas)
-            }
-            if (esValido(binding.lyAncho)) {
-                ListaCasilla.procesarArchivar(this, binding.tvAncho, binding.txAncho, mapListas)
-            }
-            if (esValido(binding.lyAlto)) {
-                ListaCasilla.procesarArchivar(this, binding.tvAlto, binding.txAlto, mapListas)
-            }
-            if (esValido(binding.lyPuente)) {
-                ListaCasilla.procesarArchivar(this, binding.tvPuente, binding.txPuente, mapListas)
-            }
-            if (esValido(binding.lyDivisiones)) {
-                ListaCasilla.procesarArchivar(this, binding.tvDivisiones, binding.txDivisiones, mapListas)
-            }
-            if (esValido(binding.lyFijos)) {
-                ListaCasilla.procesarArchivar(this, binding.tvFijos, binding.txFijos, mapListas)
-            }
-            if (esValido(binding.lyCorredizas)) {
-                ListaCasilla.procesarArchivar(this, binding.tvCorredizas, binding.txCorredizas, mapListas)
-            }
-            if (esValido(binding.lyDiseno)) {
-                ListaCasilla.procesarArchivar(this, binding.txDiseno, binding.tvDiseno, mapListas)
-            }
-            if (esValido(binding.lyGrados)) {
-                ListaCasilla.procesarArchivar(this, binding.tvGrados, binding.txGrados, mapListas)
-            }
-            if (esValido(binding.lyTipo)) {
-                ListaCasilla.procesarArchivar(this, binding.tvTipo, binding.txTipo, mapListas)
+        binding.txAncho.text = df1(ancho)
+        binding.txAlto.text = df1(alto)
+
+        // Referencia con el mismo criterio que las otras calculadoras: la medida real medida, más
+        // el detalle de los módulos para saber de qué ventana se trata. El detalle se arma aquí
+        // (no se toma de tvDiseno) porque esa casilla muestra el código del modelo cuando el
+        // cálculo va por las fórmulas propias.
+        val detalleModulos = runCatching {
+            descripcionModulosSimbolicos(disenoSimbolicoOperativo())
+        }.getOrDefault("").trim()
+        binding.tvReferencias.text = buildString {
+            append("anch ${df1(ancho)} x alt ${df1(alto)}")
+            if (detalleModulos.isNotBlank()) {
+                append("\n")
+                append(detalleModulos)
             }
         }
+    }
+
+    /**
+     * Lo que se archiva aparte de los materiales: el diseño simbólico y los metadatos de producción.
+     *
+     * El diseño va con la misma clave que Nova ("DisenoSimbolicoV2"), que es la que lee la ficha de
+     * Producto para dibujar la ventana y la que usa el corte de planchas para separar por tipo de
+     * vidrio. Antes Vitroven solo archivaba los metadatos, así que la ventana quedaba sin diseño.
+     */
+    private fun paquetesArchivables(): Map<String, String> {
+        val paquetes = mutableMapOf<String, String>()
+        paquetes.putAll(metadatosProduccionPaquete())
+
+        val diseno = runCatching { disenoSimbolicoOperativo() }.getOrDefault("")
+        if (diseno.isNotBlank()) paquetes["DisenoSimbolicoV2"] = diseno
+
+        // Descriptor para redibujar la ventana en la ficha. El simbólico solo no basta: no lleva los
+        // clips ni la dirección de segmentado, y ambos cambian el dibujo.
+        val ancho = binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f
+        val alto = binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f
+        if (ancho > 0f && alto > 0f) {
+            paquetes[VitrovenDescriptor.CLAVE] = VitrovenDescriptor.serializar(
+                VitrovenDescriptor.Datos(
+                    ancho = ancho,
+                    alto = alto,
+                    clips = runCatching { clipsTotalesActuales() }.getOrDefault(0),
+                    clasificacion = texto,
+                    simbolico = diseno,
+                    direccionVertical = esDireccionVertical()
+                )
+            )
+        }
+        return paquetes
+    }
+
+    private fun archivarMapas() {
+        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        prepararCasillasArchivables()
+
+        // Cada par respeta EXACTAMENTE el orden (nombre, datos) que usaba el archivado anterior.
+        val referencias = ListaCasilla.ItemArchivable(
+            binding.txReferencias, binding.tvReferencias, esValido(binding.lyReferencias)
+        )
+        val items = listOf(
+            ListaCasilla.ItemArchivable(binding.txJamba, binding.tvJamba, esValido(binding.lyJamba)),
+            ListaCasilla.ItemArchivable(binding.txPlatina, binding.tvPlatina, esValido(binding.lyPlatina)),
+            ListaCasilla.ItemArchivable(binding.txU, binding.tvU, esValido(binding.lyUmarco)),
+            ListaCasilla.ItemArchivable(binding.txTubo, binding.txTubo, esValido(binding.lyTubo)),
+            ListaCasilla.ItemArchivable(binding.txTope, binding.tvTope, esValido(binding.lyTope)),
+            ListaCasilla.ItemArchivable(binding.txVidrio, binding.tvVidrio, esValido(binding.lyVidrio)),
+            ListaCasilla.ItemArchivable(binding.txClip, binding.tvClip, esValido(binding.lyClip)),
+            ListaCasilla.ItemArchivable(binding.tvC, binding.txC, esValido(binding.lyClient)),
+            ListaCasilla.ItemArchivable(binding.tvAncho, binding.txAncho, esValido(binding.lyAncho)),
+            ListaCasilla.ItemArchivable(binding.tvAlto, binding.txAlto, esValido(binding.lyAlto)),
+            ListaCasilla.ItemArchivable(binding.tvPuente, binding.txPuente, esValido(binding.lyPuente)),
+            ListaCasilla.ItemArchivable(binding.tvDivisiones, binding.txDivisiones, esValido(binding.lyDivisiones)),
+            ListaCasilla.ItemArchivable(binding.tvFijos, binding.txFijos, esValido(binding.lyFijos)),
+            ListaCasilla.ItemArchivable(binding.tvCorredizas, binding.txCorredizas, esValido(binding.lyCorredizas)),
+            ListaCasilla.ItemArchivable(binding.txDiseno, binding.tvDiseno, esValido(binding.lyDiseno)),
+            ListaCasilla.ItemArchivable(binding.tvGrados, binding.txGrados, esValido(binding.lyGrados)),
+            ListaCasilla.ItemArchivable(binding.tvTipo, binding.txTipo, esValido(binding.lyTipo))
+        )
+
+        val ultimoID = ListaCasilla.archivarEnProyectoActivo(
+            this, mapListas, prefijoVitroven(), cant,
+            referencias = referencias,
+            items = items,
+            // Diseño simbólico + metadato de producción por ventana (mismo formato que Nova), para
+            // que la ficha dibuje la ventana y el corte de planchas separe por tipo de vidrio.
+            paquetesPorNumero = { _ -> paquetesArchivables() }
+        )
 
         binding.txPruebas.text = mapListas.toString()
-        println(mapListas)
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+        val proyecto = ProyectoManager.getProyectoActivo()
+        val msg = when {
+            proyecto == null -> "No hay proyecto activo; datos no archivados en proyecto"
+            cant > 1 -> "Archivadas $cant unidades en proyecto: $proyecto"
+            else -> "Datos archivados como $ultimoID en proyecto: $proyecto"
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        controladorCola.ofrecerSiguiente()
     }
+    // Diálogo de metadatos de producción: color de aluminio y tipo de vidrio (igual que Nova).
+    // Al confirmar, guarda los valores y ejecuta [onContinuar] (archivar). "Omitir" archiva sin
+    // metadatos; "Cancelar" no archiva.
+    private fun mostrarDialogoMetadatosProduccion(onContinuar: () -> Unit) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val contenedor = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, 0)
+        }
+        val etColor = EditText(this).apply {
+            hint = "Color aluminio (ej: negro)"
+            setText(metaColorAluminio)
+        }
+        val etVidrio = EditText(this).apply {
+            hint = "Tipo vidrio (ej: arenado)"
+            setText(metaTipoVidrio)
+        }
+        contenedor.addView(etColor)
+        contenedor.addView(etVidrio)
+
+        AlertDialog.Builder(this)
+            .setTitle("Color de aluminio y vidrio")
+            .setView(contenedor)
+            .setPositiveButton("Guardar y archivar") { _, _ ->
+                metaColorAluminio = etColor.text?.toString()?.trim().orEmpty()
+                metaTipoVidrio = etVidrio.text?.toString()?.trim().orEmpty()
+                onContinuar()
+            }
+            .setNeutralButton("Omitir") { _, _ ->
+                onContinuar()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    // Entrada de metadatos por ventana: {"MetadatosProduccion" -> "-MAT<alu:...;vid:...>"}. La lee
+    // MetadatosProduccion.mapaPorVentana para conocer el tipo de vidrio de cada ventana archivada.
+    private fun metadatosProduccionPaquete(): Map<String, String> {
+        val alu = escaparCampoV2(metaColorAluminio.ifBlank { "null" })
+        val vid = escaparCampoV2(metaTipoVidrio.ifBlank { "null" })
+        if (alu == "null" && vid == "null") return emptyMap()
+        return mapOf("MetadatosProduccion" to "-MAT<alu:$alu;vid:$vid>")
+    }
+
+    // Sanea el texto para no romper el formato -MAT<...> (mismo criterio que Nova).
+    private fun escaparCampoV2(raw: String): String {
+        return raw
+            .replace("\n", " / ")
+            .replace("\r", " ")
+            .replace("-", "_")
+            .replace("<", "(")
+            .replace(">", ")")
+            .replace(";", ",")
+            .trim()
+    }
+
     // Función para verificar si un Layout es visible o tiene estado GONE
     private fun esValido(ly: LinearLayout): Boolean {
         return ly.visibility == View.VISIBLE || ly.visibility == View.INVISIBLE
@@ -675,6 +863,40 @@ class Vitroven : AppCompatActivity() {
         } else {
             // Si tiene decimales, formatea con un decimal
             "%.1f".format(defo).replace(",", ".")
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        procesarIntentProyecto(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refrescarProyectoActivoUI()
+    }
+
+    private fun refrescarProyectoActivoUI() {
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+    }
+
+    // Activa/crea el proyecto que venga por intent (mismo patrón que Nova/puertas/ventanas).
+    private fun procesarIntentProyecto(intent: Intent) {
+        val nombreProyecto = intent.getStringExtra("proyecto_nombre")
+        val crearNuevo = intent.getBooleanExtra("crear_proyecto", false)
+        val descripcionProyecto = intent.getStringExtra("proyecto_descripcion") ?: ""
+        if (crearNuevo && !nombreProyecto.isNullOrEmpty()) {
+            if (MapStorage.crearProyecto(this, nombreProyecto, descripcionProyecto)) {
+                ProyectoManager.setProyectoActivo(this, nombreProyecto)
+                refrescarProyectoActivoUI()
+                Toast.makeText(this, "Proyecto '$nombreProyecto' creado y activado", Toast.LENGTH_SHORT).show()
+            }
+        } else if (!nombreProyecto.isNullOrEmpty()) {
+            if (MapStorage.existeProyecto(this, nombreProyecto)) {
+                ProyectoManager.setProyectoActivo(this, nombreProyecto)
+                refrescarProyectoActivoUI()
+                Toast.makeText(this, "Proyecto '$nombreProyecto' activado", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

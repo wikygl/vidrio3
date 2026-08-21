@@ -1,0 +1,16 @@
+<!-- Canal paflón: sección en U de 8.25 de base por 2.5 de altura. Mismo estilo que el resto del
+     catálogo de perfiles: silueta sin relleno con trazo negro, y el tamaño en dp igual a los cm. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:autoMirrored="true"
+    android:width="8.3dp"
+    android:height="2.5dp"
+    android:viewportWidth="825"
+    android:viewportHeight="250">
+
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M5,5 L5,245 L820,245 L820,5 L770,5 L770,195 L55,195 L55,5 Z"
+        android:strokeColor="#000000"
+        android:strokeWidth="8"/>
+</vector>

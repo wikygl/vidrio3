@@ -17,12 +17,14 @@ object MeasuresMessageCodec {
     private const val NUMBER_PATTERN = """\d+(?:\s*[.,]\s*\d+)?"""
     private const val CONNECTOR_PATTERN = """(?:x|X|×|por)"""
 
+    // Acepta texto extra tras la cantidad (código de paquete y/o cliente), p. ej.
+    // "66.5 x 70.8 = 2 Vna7 lucia" -> ese resto se toma como nombre/variante del producto de la línea.
     private val qtyLastRegex = Regex(
-        """^\s*($NUMBER_PATTERN)\s*$CONNECTOR_PATTERN\s*($NUMBER_PATTERN)\s*(?:=|igual|-|->)\s*($NUMBER_PATTERN)\s*$""",
+        """^\s*($NUMBER_PATTERN)\s*$CONNECTOR_PATTERN\s*($NUMBER_PATTERN)\s*(?:=|igual|-|->)\s*($NUMBER_PATTERN)\s*(.*)$""",
         RegexOption.IGNORE_CASE
     )
     private val qtyFirstRegex = Regex(
-        """^\s*($NUMBER_PATTERN)\s*(?:-|->|=|igual)\s*($NUMBER_PATTERN)\s*$CONNECTOR_PATTERN\s*($NUMBER_PATTERN)\s*$""",
+        """^\s*($NUMBER_PATTERN)\s*(?:-|->|=|igual)\s*($NUMBER_PATTERN)\s*$CONNECTOR_PATTERN\s*($NUMBER_PATTERN)\s*(.*)$""",
         RegexOption.IGNORE_CASE
     )
     private val variantRegex = Regex("""^(?:[a-zA-Z]{1,3}\s*\d+|[a-zA-Z])$""")
@@ -41,9 +43,19 @@ object MeasuresMessageCodec {
         for (line in lines) {
             val parsedMeasure = parseMeasureLine(line)
             if (parsedMeasure != null) {
-                val productName = buildProductName(baseProductParts, currentVariant)
+                // Si la línea trae texto tras la cantidad (código/cliente), se usa como variante de
+                // esa línea; si no, se hereda la variante actual.
+                val variantLinea = parsedMeasure.trailing.takeIf { it.isNotBlank() }
+                    ?.let { cleanVariantLabel(it) }
+                    ?: currentVariant
+                val productName = buildProductName(baseProductParts, variantLinea)
                 if (productName.isBlank()) return null
-                parsedItems += parsedMeasure.copy(productName = productName)
+                parsedItems += ParsedMeasureLine(
+                    productName = productName,
+                    width = parsedMeasure.width,
+                    height = parsedMeasure.height,
+                    quantity = parsedMeasure.quantity
+                )
                 justCompletedMeasure = true
                 continue
             }
@@ -78,19 +90,26 @@ object MeasuresMessageCodec {
         )
     }
 
-    private fun parseMeasureLine(line: String): ParsedMeasureLine? {
+    private data class LineaMedida(
+        val width: Float,
+        val height: Float,
+        val quantity: Float,
+        val trailing: String
+    )
+
+    private fun parseMeasureLine(line: String): LineaMedida? {
         qtyLastRegex.matchEntire(line)?.let { match ->
             val width = match.groupValues[1].normalizeNumber().toFloatOrNull() ?: return null
             val height = match.groupValues[2].normalizeNumber().toFloatOrNull() ?: return null
             val quantity = match.groupValues[3].normalizeNumber().toFloatOrNull() ?: return null
-            return ParsedMeasureLine(productName = "", width = width, height = height, quantity = quantity)
+            return LineaMedida(width, height, quantity, match.groupValues[4].trim())
         }
 
         qtyFirstRegex.matchEntire(line)?.let { match ->
             val quantity = match.groupValues[1].normalizeNumber().toFloatOrNull() ?: return null
             val width = match.groupValues[2].normalizeNumber().toFloatOrNull() ?: return null
             val height = match.groupValues[3].normalizeNumber().toFloatOrNull() ?: return null
-            return ParsedMeasureLine(productName = "", width = width, height = height, quantity = quantity)
+            return LineaMedida(width, height, quantity, match.groupValues[4].trim())
         }
 
         return null

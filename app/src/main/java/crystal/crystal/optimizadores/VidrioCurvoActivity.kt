@@ -50,7 +50,8 @@ class VidrioCurvoActivity : AppCompatActivity() {
         binding.vistaCurvo.actualizarMedidas(desarrollo, cuerda, flecha, largo)
     }
 
-    private fun fmt(valor: Float): String = String.format("%.2f", valor)
+    // Un decimal: son medidas, no dinero.
+    private fun fmt(valor: Float): String = String.format(java.util.Locale.US, "%.1f", valor)
 
     private fun String.aFloat(): Float = trim().replace(",", ".").toFloatOrNull() ?: 0f
 }

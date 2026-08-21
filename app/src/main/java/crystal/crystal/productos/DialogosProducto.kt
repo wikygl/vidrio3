@@ -22,14 +22,14 @@ class DialogoAjustarStock : DialogFragment() {
     private val binding get() = _binding!!
 
     private var producto: Producto? = null
-    private var onAjustar: ((Int) -> Unit)? = null
+    private var onAjustar: ((Float) -> Unit)? = null
 
     companion object {
         private const val ARG_PRODUCTO = "producto"
 
         fun newInstance(
             producto: Producto,
-            onAjustar: (Int) -> Unit
+            onAjustar: (Float) -> Unit
         ): DialogoAjustarStock {
             return DialogoAjustarStock().apply {
                 arguments = Bundle().apply {
@@ -105,8 +105,9 @@ class DialogoAjustarStock : DialogFragment() {
             return
         }
 
-        val cantidad = cantidadTexto.toIntOrNull()
-        if (cantidad == null || cantidad <= 0) {
+        // Decimal: el vidrio se ajusta por área (p2/m2), no solo por unidades enteras.
+        val cantidad = cantidadTexto.replace(",", ".").toFloatOrNull()
+        if (cantidad == null || cantidad <= 0f) {
             Toast.makeText(requireContext(), "Cantidad inválida", Toast.LENGTH_SHORT).show()
             return
         }

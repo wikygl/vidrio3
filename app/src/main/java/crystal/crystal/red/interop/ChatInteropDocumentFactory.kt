@@ -90,7 +90,8 @@ object ChatInteropDocumentFactory {
             "medidas" -> ChatInteropMessageType.MATERIALS_REQUEST
             "presupuesto" -> ChatInteropMessageType.CRYSTAL_BUDGET
             "cotizacion" -> ChatInteropMessageType.PUNTOS_QUOTE
-            "archivo", "imagen", "video", "audio", "pdf", "medidas_crystal", "corte_crystal", "plancha_crystal" -> ChatInteropMessageType.FILE
+            "archivo", "imagen", "video", "audio", "pdf",
+            "medidas_crystal", "corte_crystal", "plancha_crystal", "proyecto_crystal" -> ChatInteropMessageType.FILE
             else -> ChatInteropMessageType.UNKNOWN
         }
     }
@@ -102,6 +103,7 @@ object ChatInteropDocumentFactory {
             "medidas_crystal" -> "Medidas Crystal: $value"
             "corte_crystal" -> "Corte Crystal: $value"
             "plancha_crystal" -> "Corte Plancha Crystal: $value"
+            "proyecto_crystal" -> "Proyecto Crystal: $value"
             "pdf" -> "PDF: $value"
             "audio" -> "Audio: $value"
             "video" -> "Video: $value"

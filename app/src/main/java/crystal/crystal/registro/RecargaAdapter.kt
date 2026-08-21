@@ -13,6 +13,7 @@ data class Recarga(
     val codigoOperacion: String = "",
     val telefono: String = "",
     val estado: String = "",
+    val tipoVoucher: String = "",
     val fecha: Date? = null
 )
 
@@ -32,12 +33,48 @@ class RecargaAdapter(
 
     override fun onBindViewHolder(holder: RecargaViewHolder, position: Int) {
         val recarga = lista[position]
+        val ctx = holder.itemView.context
         holder.binding.apply {
             tvMonto.text = "S/ %.2f".format(recarga.montoDetectado)
-            tvCodigo.text = "Código: ${recarga.codigoOperacion}"
-            tvTelefono.text = "Teléfono: ${recarga.telefono}"
-            tvEstado.text = "Estado: ${recarga.estado}"
-            tvFecha.text = "Fecha: ${recarga.fecha?.let { formatearFecha(it) } ?: "---"}"
+            tvCodigo.text = "Cód: ${recarga.codigoOperacion.ifBlank { "—" }}"
+            // Origen → destino consistente para TODOS los tipos (Yape/Plin en cualquier combinación).
+            val tipo = tipoLegible(recarga.tipoVoucher)
+            tvTelefono.text = if (tipo.isNotEmpty()) tipo else "Tel: ${recarga.telefono}"
+            tvEstado.text = estadoLegible(recarga.estado)
+            tvEstado.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                androidx.core.content.ContextCompat.getColor(ctx, estadoColor(recarga.estado))
+            )
+            tvFecha.text = recarga.fecha?.let { "· ${formatearFecha(it)}" } ?: ""
+        }
+    }
+
+    private fun estadoColor(e: String): Int {
+        val low = e.lowercase(Locale.getDefault())
+        return when {
+            low.startsWith("aprobada") || low == "aplicado" -> crystal.crystal.R.color.verde
+            low.contains("rechaz") -> crystal.crystal.R.color.rojo
+            else -> crystal.crystal.R.color.naranja
+        }
+    }
+
+    /** "plin_yape" → "Plin → Yape" (siempre origen y destino, no solo uno). */
+    private fun tipoLegible(t: String): String = when (t.lowercase(Locale.getDefault())) {
+        "yape_yape" -> "Yape → Yape"
+        "plin_yape" -> "Plin → Yape"
+        "yape_plin" -> "Yape → Plin"
+        "plin_plin" -> "Plin → Plin"
+        "reclamo_manual" -> "Reclamo manual"
+        else -> ""
+    }
+
+    /** Estado crudo del backend → chip corto. */
+    private fun estadoLegible(e: String): String {
+        val low = e.lowercase(Locale.getDefault())
+        return when {
+            low.startsWith("aprobada") && low.contains("auto") -> "✅ Auto"
+            low.startsWith("aprobada") || low == "aplicado" -> "✅ Aprobada"
+            low.contains("rechaz") -> "❌ Rechazada"
+            else -> "⏳ Pendiente"
         }
     }
 

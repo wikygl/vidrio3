@@ -212,6 +212,10 @@ class MedidaActivity : AppCompatActivity() {
             ocultarPanelesFlotantes()
             enviarAMainActivity()
         }
+        binding.btnArchivoEnviarCalc.setOnClickListener {
+            ocultarPanelesFlotantes()
+            elegirClienteParaCalculadoras()
+        }
         binding.btnHerramientaLapiz.setOnClickListener {
             seleccionarHerramienta(SketchMedidasView.Tool.FREEHAND)
             ocultarPanelesFlotantes()
@@ -868,9 +872,36 @@ class MedidaActivity : AppCompatActivity() {
 
     private fun copiarEspejoSeleccion() {
         ocultarPanelesFlotantes()
-        if (!binding.sketchMedidas.mirrorCopySelected()) {
-            mostrar("Selecciona una figura")
+        val opciones = arrayOf("Reflejar la misma", "Hacer una copia", "Varias copias")
+        AlertDialog.Builder(this)
+            .setTitle("Espejo")
+            .setItems(opciones) { _, which ->
+                when (which) {
+                    0 -> if (!binding.sketchMedidas.mirrorSelectedInPlace()) mostrar("Selecciona una figura")
+                    1 -> if (!binding.sketchMedidas.mirrorCopySelected()) mostrar("Selecciona una figura")
+                    2 -> pedirCantidadCopiasEspejo()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun pedirCantidadCopiasEspejo() {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            hint = "Cantidad (1-20)"
+            setText("2")
+            setSelectAllOnFocus(true)
         }
+        AlertDialog.Builder(this)
+            .setTitle("Varias copias")
+            .setView(input)
+            .setPositiveButton("Crear") { _, _ ->
+                val n = input.text?.toString()?.trim()?.toIntOrNull()?.coerceIn(1, 20) ?: 1
+                if (!binding.sketchMedidas.mirrorCopiesSelected(n)) mostrar("Selecciona una figura")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun duplicarSeleccion() {
@@ -1237,13 +1268,79 @@ class MedidaActivity : AppCompatActivity() {
         }
 
         val nombres = archivos.map { it.nameWithoutExtension }
-        AlertDialog.Builder(this)
-            .setTitle("Abrir medidas")
+        val dialogo = AlertDialog.Builder(this)
+            .setTitle("Abrir medidas (toque largo: eliminar)")
             .setAdapter(ArrayAdapter(this, android.R.layout.simple_list_item_1, nombres)) { _, which ->
                 abrirApunte(archivos[which])
             }
+            .setNeutralButton("Eliminar varias") { _, _ -> mostrarDialogoEliminarProyectos(archivos) }
+            .setNegativeButton("Cancelar", null)
+            .create()
+        dialogo.show()
+        dialogo.listView.setOnItemLongClickListener { _, _, posicion, _ ->
+            dialogo.dismiss()
+            confirmarEliminarProyectos(listOf(archivos[posicion]))
+            true
+        }
+    }
+
+    /** Selección múltiple para limpiar de una vez los proyectos viejos o ya terminados. */
+    private fun mostrarDialogoEliminarProyectos(archivos: List<File>) {
+        val nombres = archivos.map { it.nameWithoutExtension }.toTypedArray()
+        val marcadas = BooleanArray(archivos.size)
+        AlertDialog.Builder(this)
+            .setTitle("Eliminar medidas guardadas")
+            .setMultiChoiceItems(nombres, marcadas) { _, cual, marcada -> marcadas[cual] = marcada }
+            .setPositiveButton("Eliminar") { _, _ ->
+                val elegidos = archivos.filterIndexed { indice, _ -> marcadas[indice] }
+                if (elegidos.isEmpty()) mostrar("No marcaste ningun proyecto")
+                else confirmarEliminarProyectos(elegidos)
+            }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    private fun confirmarEliminarProyectos(archivos: List<File>) {
+        val detalle = archivos.joinToString("\n") { "• ${it.nameWithoutExtension}" }
+        AlertDialog.Builder(this)
+            .setTitle(if (archivos.size == 1) "Eliminar proyecto" else "Eliminar ${archivos.size} proyectos")
+            .setMessage("Se borran el texto guardado, el indice y todos los dibujos. No se puede deshacer.\n\n$detalle")
+            .setPositiveButton("Eliminar") { _, _ ->
+                val borrados = archivos.count { eliminarProyectoMedidas(it) }
+                mostrar(if (borrados == 1) "Proyecto eliminado" else "Eliminados: $borrados")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** Borra el .txt del proyecto, su índice de bocetos y cada dibujo asociado. */
+    private fun eliminarProyectoMedidas(txtFile: File): Boolean = runCatching {
+        val dir = txtFile.parentFile ?: obtenerDirectorioMedidas()
+        val baseName = txtFile.nameWithoutExtension
+        cargarIndiceBocetos(dir, baseName).forEach { boceto ->
+            File(dir, boceto.archivo).takeIf { it.exists() }?.delete()
+        }
+        File(dir, nombreIndiceBocetos(baseName)).takeIf { it.exists() }?.delete()
+        // Dibujos sueltos que nunca llegaron al índice: se guardan como "<baseName>_<fecha>.json".
+        dir.listFiles { f -> f.name.startsWith("${baseName}_") && f.extension.equals("json", true) }
+            ?.forEach { it.delete() }
+        txtFile.delete()
+        if (archivoActualTxt?.absolutePath == txtFile.absolutePath) limpiarProyectoEnPantalla()
+        true
+    }.getOrElse {
+        mostrar("No se pudo eliminar ${txtFile.nameWithoutExtension}: ${it.message}")
+        false
+    }
+
+    private fun limpiarProyectoEnPantalla() {
+        archivoActualTxt = null
+        productoActual = ""
+        bocetoActualDesdeArchivo = null
+        binding.etInfoProductoMedida.setText("")
+        binding.etNotasMedida.setText("")
+        actualizarPanelInformacion()
+        binding.sketchMedidas.clear()
+        seleccionarHerramienta(SketchMedidasView.Tool.NONE)
     }
 
     private fun abrirApunte(txtFile: File) {
@@ -1263,7 +1360,9 @@ class MedidaActivity : AppCompatActivity() {
             when {
                 bocetos.size > 1 -> {
                     bocetoActualDesdeArchivo = null
-                    mostrarSelectorBocetos(bocetos, txtFile.parentFile, "Elige medida")
+                    mostrarSelectorBocetos(
+                        bocetos, txtFile.parentFile, "Elige medida", txtFile.nameWithoutExtension
+                    )
                 }
                 bocetos.size == 1 -> {
                     cargarBocetoEnLienzo(bocetos.first(), txtFile.parentFile)
@@ -1293,13 +1392,20 @@ class MedidaActivity : AppCompatActivity() {
             mostrar("Este proyecto no tiene medidas archivadas")
             return
         }
-        mostrarSelectorBocetos(bocetos, txtFile.parentFile, "Medidas archivadas")
+        mostrarSelectorBocetos(
+            bocetos, txtFile.parentFile, "Medidas archivadas", txtFile.nameWithoutExtension
+        )
     }
 
-    private fun mostrarSelectorBocetos(bocetos: List<BocetoProyecto>, dir: File?, titulo: String) {
+    private fun mostrarSelectorBocetos(
+        bocetos: List<BocetoProyecto>,
+        dir: File?,
+        titulo: String,
+        baseName: String
+    ) {
         val opciones = bocetos.mapIndexed { index, boceto -> etiquetaBoceto(index, boceto) }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle(titulo)
+        val dialogo = AlertDialog.Builder(this)
+            .setTitle("$titulo (toque largo: cambiar o eliminar)")
             .setAdapter(ArrayAdapter(this, android.R.layout.simple_list_item_1, opciones)) { _, which ->
                 cargarBocetoEnLienzo(bocetos[which], dir)
             }
@@ -1307,7 +1413,212 @@ class MedidaActivity : AppCompatActivity() {
                 limpiarLienzoActual()
             }
             .setNegativeButton("Cancelar", null)
+            .create()
+        dialogo.show()
+        dialogo.listView.setOnItemLongClickListener { _, _, posicion, _ ->
+            dialogo.dismiss()
+            mostrarAccionesBoceto(bocetos, posicion, dir, baseName, titulo)
+            true
+        }
+    }
+
+    /**
+     * Acciones sobre una medida archivada. Cambiar el producto es lo que decide a qué calculadora se
+     * envía después (sirve cuando durante la venta se pasa de Nova a Ventana Aluminio, por ejemplo);
+     * eliminar saca del proyecto las medidas viejas o ya terminadas.
+     */
+    private fun mostrarAccionesBoceto(
+        bocetos: List<BocetoProyecto>,
+        posicion: Int,
+        dir: File?,
+        baseName: String,
+        tituloOrigen: String
+    ) {
+        val boceto = bocetos.getOrNull(posicion) ?: return
+        AlertDialog.Builder(this)
+            .setTitle(etiquetaBoceto(posicion, boceto))
+            .setItems(arrayOf("Cambiar producto", "Eliminar esta medida")) { _, cual ->
+                when (cual) {
+                    0 -> cambiarProductoBoceto(bocetos, posicion, dir, baseName, tituloOrigen)
+                    1 -> confirmarEliminarBoceto(bocetos, posicion, dir, baseName, tituloOrigen)
+                }
+            }
+            .setNegativeButton("Volver") { _, _ ->
+                mostrarSelectorBocetos(bocetos, dir, tituloOrigen, baseName)
+            }
             .show()
+    }
+
+    private fun confirmarEliminarBoceto(
+        bocetos: List<BocetoProyecto>,
+        posicion: Int,
+        dir: File?,
+        baseName: String,
+        tituloOrigen: String
+    ) {
+        val boceto = bocetos.getOrNull(posicion) ?: return
+        AlertDialog.Builder(this)
+            .setTitle("Eliminar medida")
+            .setMessage(
+                "Se borrara «${etiquetaBoceto(posicion, boceto)}» de este proyecto, con su dibujo. " +
+                    "No se puede deshacer."
+            )
+            .setPositiveButton("Eliminar") { _, _ ->
+                eliminarBoceto(bocetos, posicion, dir, baseName, tituloOrigen)
+            }
+            .setNegativeButton("Cancelar") { _, _ ->
+                mostrarSelectorBocetos(bocetos, dir, tituloOrigen, baseName)
+            }
+            .show()
+    }
+
+    private fun eliminarBoceto(
+        bocetos: List<BocetoProyecto>,
+        posicion: Int,
+        dir: File?,
+        baseName: String,
+        tituloOrigen: String
+    ) {
+        val boceto = bocetos.getOrNull(posicion) ?: return
+        val destino = dir ?: obtenerDirectorioMedidas()
+        val restantes = bocetos.toMutableList().apply { removeAt(posicion) }
+        val borrado = runCatching {
+            File(destino, boceto.archivo).takeIf { it.exists() }?.delete()
+            guardarIndiceBocetos(destino, baseName, restantes)
+            quitarBloqueDeNotas(File(destino, "$baseName.txt"), boceto.descripcion, baseName)
+        }
+        if (borrado.isFailure) {
+            mostrar("No se pudo eliminar la medida: ${borrado.exceptionOrNull()?.message}")
+            return
+        }
+        // Si era la medida que estaba en el lienzo, no tiene sentido seguir editando algo borrado.
+        if (bocetoActualDesdeArchivo == boceto.archivo) {
+            bocetoActualDesdeArchivo = null
+            binding.sketchMedidas.clear()
+        }
+        mostrar("Medida eliminada")
+        if (restantes.isNotEmpty()) mostrarSelectorBocetos(restantes, dir, tituloOrigen, baseName)
+    }
+
+    /**
+     * Quita del .txt el bloque de texto que se archivó junto con esa medida. Solo actúa si el bloque
+     * está tal cual quedó guardado: si las notas se editaron a mano, se dejan intactas.
+     */
+    private fun quitarBloqueDeNotas(txtFile: File, bloque: String, baseName: String) {
+        val objetivo = bloque.trim()
+        if (objetivo.isBlank() || !txtFile.exists()) return
+        val texto = txtFile.readText()
+        val notas = extraerNotas(texto)
+        if (!notas.contains(objetivo)) return
+        val nuevas = notas.split("\n\n")
+            .filter { it.trim() != objetivo }
+            .joinToString("\n\n")
+            .trim()
+        txtFile.writeText(
+            construirTextoArchivo(
+                extraerCampo(texto, "Cliente"),
+                extraerCampo(texto, "Producto"),
+                nuevas,
+                extraerCampo(texto, "Boceto"),
+                nombreIndiceBocetos(baseName)
+            )
+        )
+        if (archivoActualTxt?.absolutePath == txtFile.absolutePath) {
+            binding.etNotasMedida.setText(nuevas)
+            actualizarPanelInformacion()
+        }
+    }
+
+    private fun cambiarProductoBoceto(
+        bocetos: List<BocetoProyecto>,
+        posicion: Int,
+        dir: File?,
+        baseName: String,
+        tituloOrigen: String
+    ) {
+        val boceto = bocetos.getOrNull(posicion) ?: return
+        val opciones = productosMedida.toMutableList().apply { add("Otro (escribir)") }
+        AlertDialog.Builder(this)
+            .setTitle("Producto actual: ${boceto.producto.ifBlank { "sin producto" }}")
+            .setItems(opciones.toTypedArray()) { _, cual ->
+                if (cual == opciones.lastIndex) {
+                    pedirProductoLibre(boceto.producto) { texto ->
+                        aplicarProductoBoceto(bocetos, posicion, dir, baseName, tituloOrigen, texto, true)
+                    }
+                } else {
+                    aplicarProductoBoceto(bocetos, posicion, dir, baseName, tituloOrigen, opciones[cual], false)
+                }
+            }
+            .setNegativeButton("Volver") { _, _ ->
+                mostrarSelectorBocetos(bocetos, dir, tituloOrigen, baseName)
+            }
+            .show()
+    }
+
+    private fun pedirProductoLibre(actual: String, onListo: (String) -> Unit) {
+        val input = EditText(this).apply {
+            setText(actual)
+            setSelection(text.length)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Nombre del producto")
+            .setView(input)
+            .setPositiveButton("Guardar") { _, _ ->
+                val texto = input.text?.toString()?.trim().orEmpty()
+                if (texto.isBlank()) mostrar("El nombre no puede quedar vacio") else onListo(texto)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun aplicarProductoBoceto(
+        bocetos: List<BocetoProyecto>,
+        posicion: Int,
+        dir: File?,
+        baseName: String,
+        tituloOrigen: String,
+        nuevoProducto: String,
+        reemplazarTodo: Boolean
+    ) {
+        val boceto = bocetos.getOrNull(posicion) ?: return
+        val productoFinal = if (reemplazarTodo) nuevoProducto
+                            else reemplazarProductoBase(boceto.producto, nuevoProducto)
+        val actualizados = bocetos.toMutableList().apply {
+            this[posicion] = boceto.copy(producto = productoFinal)
+        }
+        val guardado = runCatching {
+            guardarIndiceBocetos(dir ?: obtenerDirectorioMedidas(), baseName, actualizados)
+        }
+        if (guardado.isFailure) {
+            mostrar("No se pudo guardar el producto: ${guardado.exceptionOrNull()?.message}")
+            return
+        }
+        // Si la medida editada es la que está en el lienzo, el panel debe reflejar el cambio.
+        if (bocetoActualDesdeArchivo == boceto.archivo) {
+            productoActual = nuevoProducto
+            actualizarPanelInformacion()
+        }
+        mostrar(
+            if (EnrutadorPresupuesto.destinoPara(productoFinal) == null)
+                "Producto: $productoFinal (sin calculadora asociada)"
+            else "Producto: $productoFinal"
+        )
+        mostrarSelectorBocetos(actualizados, dir, tituloOrigen, baseName)
+    }
+
+    /**
+     * Cambia solo el nombre del producto y conserva la información que lo acompaña: el índice guarda
+     * "Nova Corrediza Vna1", así que reemplazar la cadena entera perdería el "Vna1".
+     */
+    private fun reemplazarProductoBase(actual: String, nuevo: String): String {
+        val texto = actual.trim()
+        val base = productosMedida
+            .filter { !it.equals("Otro", ignoreCase = true) }
+            .sortedByDescending { it.length }
+            .firstOrNull { texto.startsWith(it, ignoreCase = true) }
+            ?: return nuevo
+        val resto = texto.substring(base.length).trim()
+        return listOf(nuevo, resto).filter { it.isNotBlank() }.joinToString(" ")
     }
 
     private fun etiquetaBoceto(index: Int, boceto: BocetoProyecto): String {
@@ -1353,6 +1664,9 @@ class MedidaActivity : AppCompatActivity() {
     }
 
     private fun enviarAMainActivity() {
+        // Candado (Fase 3): enviar las medidas al presupuesto es de pago.
+        if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                "Enviar las medidas al presupuesto es una función de pago.")) return
         val notas = binding.etNotasMedida.text?.toString()?.trim().orEmpty()
         if (notas.isBlank()) {
             mostrarDialogoProductoParaGuardar { textoGenerado ->
@@ -1372,20 +1686,180 @@ class MedidaActivity : AppCompatActivity() {
         )
     }
 
+    // ==================== ENVIAR A CALCULADORAS ====================
+    // Elige un cliente de los guardados y manda sus medidas archivadas a la calculadora que
+    // corresponde a cada una según su clasificación (nova -> Nova Corrediza, puerta -> Puertas, etc.).
+
+    private fun elegirClienteParaCalculadoras() {
+        val archivos = obtenerDirectorioMedidas()
+            .listFiles { file -> file.extension.equals("txt", ignoreCase = true) }
+            ?.sortedByDescending { it.lastModified() }
+            .orEmpty()
+
+        if (archivos.isEmpty()) {
+            mostrar("No hay medidas guardadas")
+            return
+        }
+
+        val nombres = archivos.map { it.nameWithoutExtension }
+        AlertDialog.Builder(this)
+            .setTitle("Enviar a calculadoras")
+            .setAdapter(ArrayAdapter(this, android.R.layout.simple_list_item_1, nombres)) { _, which ->
+                enviarProyectoACalculadoras(archivos[which])
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun enviarProyectoACalculadoras(txtFile: File) {
+        val dir = txtFile.parentFile ?: obtenerDirectorioMedidas()
+        val bocetos = cargarIndiceBocetos(dir, txtFile.nameWithoutExtension)
+        // Enviable = tiene calculadora asociada y conserva su archivo de boceto.
+        val enviables = bocetos.filter {
+            EnrutadorPresupuesto.destinoPara(it.producto) != null && File(dir, it.archivo).exists()
+        }
+        if (enviables.isEmpty()) {
+            mostrar("Ninguna medida se pudo enviar a una calculadora")
+            return
+        }
+        if (enviables.size == 1) {
+            lanzarColaCalculadoras(txtFile, enviables)
+            return
+        }
+        mostrarSelectorMedidasParaCalculadoras(txtFile, enviables, bocetos.size - enviables.size)
+    }
+
+    /**
+     * Deja elegir qué medidas del paquete se mandan a las calculadoras. Vienen todas marcadas: se
+     * destildan las que se quieren obviar (medida repetida, que no se cotiza ahora, etc.).
+     *
+     * Antes se enviaba el paquete completo y la cola solo avanzaba al archivar, así que la única
+     * forma de llegar a la segunda medida era archivar la primera.
+     */
+    private fun mostrarSelectorMedidasParaCalculadoras(
+        txtFile: File,
+        enviables: List<BocetoProyecto>,
+        sinCalculadora: Int
+    ) {
+        val opciones = enviables.mapIndexed { index, boceto -> etiquetaBoceto(index, boceto) }.toTypedArray()
+        val marcadas = BooleanArray(enviables.size) { true }
+        var btEnviar: android.widget.Button? = null
+
+        fun refrescarBotonEnviar() {
+            val n = marcadas.count { it }
+            btEnviar?.text = if (n > 0) "Enviar ($n)" else "Enviar"
+            btEnviar?.isEnabled = n > 0
+        }
+
+        val dialogo = AlertDialog.Builder(this)
+            .setTitle("Que medidas enviar")
+            .setMultiChoiceItems(opciones, marcadas) { _, which, checked ->
+                marcadas[which] = checked
+                refrescarBotonEnviar()
+            }
+            .setPositiveButton("Enviar") { _, _ ->
+                val elegidas = enviables.filterIndexed { index, _ -> marcadas[index] }
+                if (elegidas.isEmpty()) mostrar("No marcaste ninguna medida")
+                else lanzarColaCalculadoras(txtFile, elegidas)
+            }
+            .setNeutralButton("Ninguna", null)
+            .setNegativeButton("Cancelar", null)
+            .create()
+
+        dialogo.show()
+
+        btEnviar = dialogo.getButton(AlertDialog.BUTTON_POSITIVE)
+        refrescarBotonEnviar()
+        // "Ninguna" desmarca todo sin cerrar el diálogo (para enviar solo una de muchas): se le pone
+        // el listener después de show() justo para que no lo cierre.
+        dialogo.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+            for (i in marcadas.indices) {
+                marcadas[i] = false
+                dialogo.listView.setItemChecked(i, false)
+            }
+            refrescarBotonEnviar()
+        }
+        if (sinCalculadora > 0) {
+            mostrar("$sinCalculadora medida(s) sin calculadora quedaron fuera")
+        }
+    }
+
+    private fun lanzarColaCalculadoras(txtFile: File, seleccionadas: List<BocetoProyecto>) {
+        val cola = construirColaCalculadoras(txtFile, seleccionadas)
+        if (cola.isEmpty()) {
+            mostrar("Ninguna medida se pudo enviar a una calculadora")
+            return
+        }
+        if (!ColaCalculadoras.lanzar(this, cola, 0)) {
+            mostrar("No se pudo abrir la calculadora")
+        }
+    }
+
+    // Carga cada boceto en el lienzo para leer su medida mayor real (medidaPrincipal toma el mayor
+    // segmento horizontal y vertical) y renderiza su gráfico original a PNG para mostrarlo en ivDiseno.
+    // Solo procesa las medidas [bocetos] que se eligieron enviar: renderizar es caro y las obviadas
+    // no tienen por qué costar tiempo.
+    private fun construirColaCalculadoras(
+        txtFile: File,
+        bocetos: List<BocetoProyecto>
+    ): List<ColaCalculadoras.MedidaCalc> {
+        val dir = txtFile.parentFile ?: obtenerDirectorioMedidas()
+        val texto = runCatching { txtFile.readText() }.getOrDefault("")
+        val cliente = extraerCampo(texto, "Cliente").ifBlank { txtFile.nameWithoutExtension }
+        if (bocetos.isEmpty()) return emptyList()
+
+        val estadoActual = if (binding.sketchMedidas.hasDrawing()) binding.sketchMedidas.exportEditableState() else null
+        val graficosDir = File(cacheDir, "medidascalc").apply { mkdirs() }
+        val resultado = mutableListOf<ColaCalculadoras.MedidaCalc>()
+
+        try {
+            bocetos.forEachIndexed { index, boceto ->
+                if (EnrutadorPresupuesto.destinoPara(boceto.producto) == null) return@forEachIndexed
+                val file = File(dir, boceto.archivo)
+                if (!file.exists()) return@forEachIndexed
+
+                binding.sketchMedidas.clear()
+                val cargado = if (file.extension.equals("json", ignoreCase = true)) {
+                    binding.sketchMedidas.loadEditableState(file.readText())
+                } else {
+                    binding.sketchMedidas.loadBackground(file)
+                    true
+                }
+                if (!cargado) return@forEachIndexed
+                val medida = binding.sketchMedidas.medidaPrincipal() ?: return@forEachIndexed
+
+                val png = File(graficosDir, "orig_${System.currentTimeMillis()}_$index.png")
+                val rutaGrafico = runCatching {
+                    binding.sketchMedidas.exportBitmap().let { bmp ->
+                        png.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    }
+                    png.absolutePath
+                }.getOrDefault("")
+
+                resultado.add(
+                    ColaCalculadoras.MedidaCalc(
+                        producto = boceto.producto,
+                        ancho = medida.anchoCm,
+                        alto = medida.altoCm,
+                        cantidad = 1f,
+                        cliente = cliente,
+                        bocetoArchivo = rutaGrafico
+                    )
+                )
+            }
+        } finally {
+            binding.sketchMedidas.clear()
+            if (estadoActual != null) binding.sketchMedidas.loadEditableState(estadoActual)
+            binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
+        }
+        return resultado
+    }
+
     private fun confirmarLimpiar() {
         AlertDialog.Builder(this)
             .setTitle("Limpiar apunte")
             .setMessage("Se borrara el dibujo y las notas actuales.")
-            .setPositiveButton("Limpiar") { _, _ ->
-                archivoActualTxt = null
-                productoActual = ""
-                bocetoActualDesdeArchivo = null
-                binding.etInfoProductoMedida.setText("")
-                binding.etNotasMedida.setText("")
-                actualizarPanelInformacion()
-                binding.sketchMedidas.clear()
-                seleccionarHerramienta(SketchMedidasView.Tool.NONE)
-            }
+            .setPositiveButton("Limpiar") { _, _ -> limpiarProyectoEnPantalla() }
             .setNegativeButton("Cancelar", null)
             .show()
     }
@@ -1415,6 +1889,10 @@ class MedidaActivity : AppCompatActivity() {
     }
 
     private fun mostrarOpcionesCompartirMedida() {
+        // Candado (Fase 3): compartir medidas es de pago. Se bloquea AQUÍ (antes del intent) para que
+        // no se escape compartiendo por otras redes; el candado de servidor solo cubre crystal-crystal.
+        if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                "Compartir medidas es una función de pago.")) return
         val opciones = arrayOf("Compartir PDF", "Compartir formato Crystal")
         AlertDialog.Builder(this)
             .setTitle("Compartir medidas")

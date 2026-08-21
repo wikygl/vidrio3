@@ -17,6 +17,12 @@ import java.util.Locale
 class VendePapa : AppCompatActivity() {
 
     private lateinit var binding: ActivityVendePapaBinding
+    private val prefs by lazy { getSharedPreferences("VendePapaPrefs", MODE_PRIVATE) }
+    private val historial = mutableListOf<String>()
+
+    // IGV configurable (por defecto 18% para Perú). Se puede cambiar desde el botón IGV.
+    private fun igvPorcentaje(): Double = prefs.getFloat("igv_porcentaje", 18f).toDouble()
+    private fun igvFactor(): Double = igvPorcentaje() / 100.0
 
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,6 +33,16 @@ class VendePapa : AppCompatActivity() {
         prepararTextos()
         configurarCalculadora()
         traido()
+
+        // Los strings de datos ingresados y de operación achican su letra cuando el texto no cabe.
+        androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+            binding.resultado, 14, 34, 1, android.util.TypedValue.COMPLEX_UNIT_SP
+        )
+        androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+            binding.memo, 12, 22, 1, android.util.TypedValue.COMPLEX_UNIT_SP
+        )
+        // Tocar el historial muestra los cálculos previos.
+        binding.hist.setOnClickListener { mostrarHistorial() }
     }
 
     @SuppressLint("SetTextI18n")
@@ -100,7 +116,7 @@ class VendePapa : AppCompatActivity() {
 
         binding.desc5.setOnClickListener { aplicarDescuento(5.0) }
         binding.desc10.setOnClickListener { aplicarDescuento(10.0) }
-        binding.igv.setOnClickListener { calcularIgv() }
+        binding.igv.setOnClickListener { dialogoIgv() }
         binding.total.setOnClickListener { calcularTotalConIgv() }
         binding.sTo.setOnClickListener { calcularSubtotalDesdeTotal() }
         binding.c.setOnClickListener { mostrarDialogoArea() }
@@ -177,6 +193,8 @@ class VendePapa : AppCompatActivity() {
         val resultado = evaluarActual() ?: return
         binding.memo.text = "$expresion ="
         ponerPantalla(df(resultado))
+        historial.add(0, "$expresion = ${df(resultado)}")
+        if (historial.size > 50) historial.removeAt(historial.lastIndex)
     }
 
     private fun cambiarSigno() {
@@ -196,32 +214,32 @@ class VendePapa : AppCompatActivity() {
         val total = base - descuento
         ponerPantalla(df(total))
         binding.memo.text = "Descuento ${df(porcentaje)}%"
-        binding.hist.text = "Base = ${df(base)}\nDescuento = ${df(descuento)}\nTotal = ${df(total)}"
+        mostrarEnHist("Base = ${df(base)}\nDescuento = ${df(descuento)}\nTotal = ${df(total)}")
     }
 
     private fun calcularIgv() {
         val base = evaluarActual() ?: return
-        val igv = base * IGV
+        val igv = base * igvFactor()
         binding.memo.text = "IGV de ${df(base)}"
-        binding.hist.text = "Base = ${df(base)}\nIGV 18% = ${df(igv)}\nTotal = ${df(base + igv)}"
+        mostrarEnHist("Base = ${df(base)}\nIGV ${df(igvPorcentaje())}% = ${df(igv)}\nTotal = ${df(base + igv)}")
         ponerPantalla(df(igv))
     }
 
     private fun calcularTotalConIgv() {
         val base = evaluarActual() ?: return
-        val igv = base * IGV
+        val igv = base * igvFactor()
         val total = base + igv
         binding.memo.text = "Total con IGV"
-        binding.hist.text = "Base = ${df(base)}\nIGV 18% = ${df(igv)}\nTotal = ${df(total)}"
+        mostrarEnHist("Base = ${df(base)}\nIGV ${df(igvPorcentaje())}% = ${df(igv)}\nTotal = ${df(total)}")
         ponerPantalla(df(total))
     }
 
     private fun calcularSubtotalDesdeTotal() {
         val total = evaluarActual() ?: return
-        val base = total / (1.0 + IGV)
+        val base = total / (1.0 + igvFactor())
         val igv = total - base
         binding.memo.text = "Subtotal desde total"
-        binding.hist.text = "Subtotal = ${df(base)}\nIGV 18% = ${df(igv)}\nTotal = ${df(total)}"
+        mostrarEnHist("Subtotal = ${df(base)}\nIGV ${df(igvPorcentaje())}% = ${df(igv)}\nTotal = ${df(total)}")
         ponerPantalla(df(base))
     }
 
@@ -229,7 +247,7 @@ class VendePapa : AppCompatActivity() {
         val metros = evaluarActual() ?: return
         val pies = metros * PIES_POR_M2
         binding.memo.text = "m2 a p2"
-        binding.hist.text = "m2 = ${df(metros)}\np2 = ${df(pies)}"
+        mostrarEnHist("m2 = ${df(metros)}\np2 = ${df(pies)}")
         ponerPantalla(df(pies))
     }
 
@@ -256,14 +274,14 @@ class VendePapa : AppCompatActivity() {
                 val areaTotal = areaUnidad * cantidad
                 val piesTotal = areaTotal * PIES_POR_M2
                 binding.memo.text = "Area de vidrio"
-                binding.hist.text = buildString {
+                mostrarEnHist(buildString {
                     appendLine("Medida = ${df(ancho)} x ${df(alto)} cm")
                     if (retazo > 0.0) appendLine("Retazo = ${df(retazo)} cm por lado")
                     appendLine("Cantidad = ${df(cantidad)}")
                     appendLine("m2 unidad = ${df(areaUnidad)}")
                     appendLine("m2 total = ${df(areaTotal)}")
                     append("p2 total = ${df(piesTotal)}")
-                }
+                })
                 ponerPantalla(df(areaTotal))
             }
             .setNegativeButton("Cancelar", null)
@@ -294,7 +312,7 @@ class VendePapa : AppCompatActivity() {
                 val pesoUnidad = areaUnidad * espesor * KG_M2_POR_MM
                 val pesoTotal = pesoUnidad * cantidad
                 binding.memo.text = "Peso de vidrio"
-                binding.hist.text = buildString {
+                mostrarEnHist(buildString {
                     appendLine("Medida = ${df(ancho)} x ${df(alto)} cm")
                     if (retazo > 0.0) appendLine("Retazo = ${df(retazo)} cm por lado")
                     appendLine("Espesor = ${df(espesor)} mm")
@@ -302,7 +320,7 @@ class VendePapa : AppCompatActivity() {
                     appendLine("m2 total = ${df(areaUnidad * cantidad)}")
                     appendLine("Kg unidad = ${df(pesoUnidad)}")
                     append("Kg total = ${df(pesoTotal)}")
-                }
+                })
                 ponerPantalla(df(pesoTotal))
             }
             .setNegativeButton("Cancelar", null)
@@ -535,6 +553,55 @@ class VendePapa : AppCompatActivity() {
         private fun skipSpaces() {
             while (pos < input.length && input[pos].isWhitespace()) pos++
         }
+    }
+
+    private fun mostrarEnHist(texto: String) {
+        binding.hist.text = texto
+        if (texto.isNotBlank()) {
+            historial.add(0, texto)               // el más reciente primero
+            if (historial.size > 50) historial.removeAt(historial.lastIndex)
+        }
+    }
+
+    private fun mostrarHistorial() {
+        if (historial.isEmpty()) {
+            Toast.makeText(this, "Aún no hay cálculos en el historial", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val etiquetas = historial.map { it.replace("\n", "  ·  ") }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Historial")
+            .setItems(etiquetas) { _, i -> binding.hist.text = historial[i] }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    private fun dialogoIgv() {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(df(igvPorcentaje()))
+            hint = "Porcentaje de IGV"
+        }
+        val cont = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 8)
+            addView(input)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("IGV (%)")
+            .setMessage("Por defecto 18% (Perú). Ingresa el porcentaje a usar.")
+            .setView(cont)
+            .setPositiveButton("Guardar") { _, _ ->
+                val pct = input.text.toString().replace(",", ".").toFloatOrNull()
+                if (pct == null || pct < 0f) {
+                    Toast.makeText(this, "Porcentaje inválido", Toast.LENGTH_SHORT).show()
+                } else {
+                    prefs.edit().putFloat("igv_porcentaje", pct).apply()
+                    Toast.makeText(this, "IGV: ${df(pct.toDouble())}%", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     companion object {

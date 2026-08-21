@@ -1,0 +1,86 @@
+<!-- Lina c: el mismo armado de "Lina b" —marco, mocheta, puente, parantes y horizontales entre
+     ellos— pero con UNA sola plancha que cubre la hoja entera, sin gruma ni divisiones.
+
+     Mismo lienzo y mismos colores que pjose (Lina b): perfiles sin relleno con trazo negro, plancha
+     en #E6E7E8 y marco en #FEFEFE. -->
+<vector
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:autoMirrored="true"
+    android:height="24dp"
+    android:viewportHeight="11153"
+    android:viewportWidth="3220"
+    android:width="7dp">
+
+    <!-- Marco y mocheta -->
+    <path
+        android:fillColor="#FEFEFE"
+        android:fillType="evenOdd"
+        android:pathData="M5,5l3211,0 0,11143 -104,0 0,-9396 -3003,0 0,9396 -104,0 0,-11143 -0,0zM108,109l3003,0 0,1525 -3003,0 0,-1525z"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+
+    <!-- Puente -->
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M108,1634h3003v118h-3003z"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+
+    <!-- Bastidor de la hoja: horizontales entre los parantes -->
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M274,1775h2672v142h-2672z"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M274,10983h2672v142h-2672z"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+
+    <!-- Parantes enteros -->
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M132,1775h142v9349h-142z"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M2946,1775h142v9349h-142z"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+
+    <!-- La plancha: una sola, sobre la hoja entera. Sin gruma, así que no lleva ninguna línea de
+         junta ni divisiones. -->
+    <path
+        android:fillColor="#E6E7E8"
+        android:fillType="evenOdd"
+        android:pathData="M132,1775l2956,0 0,9349 -2956,0 0,-9349z"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+
+    <!-- Marcas del vidrio de la mocheta -->
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M1253,1262L1967,480"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M1521,1150L1975,674"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M1751,1098L1885,949"
+        android:strokeColor="#000000"
+        android:strokeWidth="45"/>
+</vector>

@@ -17,6 +17,7 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import crystal.crystal.taller.ControladorColaMedidas
 import crystal.crystal.taller.MedidaActivity
 import crystal.crystal.R
 import crystal.crystal.casilla.DialogosProyecto
@@ -27,6 +28,7 @@ import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityPuertaPanoBinding
 import crystal.crystal.taller.ModoMasivoHelper
 import crystal.crystal.taller.nova.NovaUIHelper.esValido
+import crystal.crystal.taller.puerta.datos.ConfigPuerta
 import crystal.crystal.taller.puerta.datos.PuertaRepositorio
 import crystal.crystal.taller.puerta.dibujo.DibujoPuerta
 import crystal.crystal.taller.puerta.logica.CalculosLina
@@ -47,15 +49,28 @@ class PuertasActivity : AppCompatActivity() {
         val altoPila: Float
     )
 
-    private data class MaterialInternoLina(
-        val nombre: String,
-        val anchoCm: Float
-    )
-
     // Constantes (conservadas del original)
     private val hojaRef = CalculosPuerta.HOJA_REF
-    private val marco = CalculosPuerta.MARCO
-    private val bastidor = CalculosPuerta.BASTIDOR
+    // Marco editable desde el diálogo de variantes (default CalculosPuerta.MARCO = 2.2). Aplica a
+    // todos los modelos (antes solo Lina lo cambiaba con su propio EditText).
+    private var marco = CalculosPuerta.MARCO
+    // Puente (tubo) editable desde el diálogo de variantes (default 2.5). Aplica a la mocheta.
+    private var puente = 2.5f
+    // Inox (tubo de 1") editable desde el diálogo (default 2.5). Aplica a Dora: zócalos pares
+    // y divisores de la columna izquierda. Cambia la altura de la zona de columnas y, con ella,
+    // se recalculan paflones, junquillos y vidrios.
+    private var inox = 2.5f
+    // Los dos perfiles de la hoja, editables desde el diálogo de variantes. El BASTIDOR es el cuadro
+    // exterior (paflón 8.25 por omisión) y el INTERIOR, todo lo que va dentro de él: los divisores de
+    // Viky y de Mari, la estructura de Lina, el relleno de Tere 6. Con el interior cambian el tamaño
+    // de los paños y, detrás de ellos, junquillos y vidrios. Cada variante puede arrancar con el
+    // suyo — ver [interiorPorOmision] —, y mientras sea igual al bastidor todo se cuenta junto.
+    private var bastidor = CalculosPuerta.BASTIDOR
+    private var interior = CalculosPuerta.BASTIDOR
+    // Juego entre la hoja y el marco, a lo ancho: el ancho de la hoja es el vano menos los dos
+    // marcos menos esta holgura. Era un 1 fijo escondido en la fórmula; ahora se ingresa, porque
+    // no todos los marcos ni todas las bisagras piden el mismo juego.
+    private var holgura = 1f
     private val unoMedio = CalculosPuerta.UNO_MEDIO
 
     // Estado
@@ -65,6 +80,7 @@ class PuertasActivity : AppCompatActivity() {
     private var varianteSeleccionada: String = "Mari h"
 
     private lateinit var binding: ActivityPuertaPanoBinding
+    private lateinit var controladorCola: ControladorColaMedidas
     private lateinit var proyectoCallback: DialogosProyecto.ProyectoCallback
 
     // Mapa de listas (persistido por proyecto)
@@ -83,12 +99,11 @@ class PuertasActivity : AppCompatActivity() {
     private var metaTipoVidrio: String = ""
     private var metaAcabadoSuperficial: String = ""
     private var metaObservaciones: String = ""
-    private val materialesInternosLina = listOf(
-        MaterialInternoLina("Paflon 8.25", 8.25f),
-        MaterialInternoLina("Tubo 3.8", 3.8f),
-        MaterialInternoLina("Tubo 5", 5f)
-    )
-    private var materialInternoLinaIndex = 0
+
+    // Qué lista de vidrios se archiva cuando hay dos ("Mari d": detalle y apilado). Se eligen en el
+    // diálogo de metadatos y normalmente van las dos.
+    private var archivarVidrioDetalle: Boolean = true
+    private var archivarVidrioApilado: Boolean = true
 
     @RequiresApi(Build.VERSION_CODES.O)
     @SuppressLint("SetTextI18n")
@@ -111,6 +126,7 @@ class PuertasActivity : AppCompatActivity() {
         procesarIntentProyecto(intent)
 
         // ==================== Inicialización UI ====================
+        cargarUltimaConfiguracion()
         indicePuerta = 0
         inicializarClienteYTipos()
         configurarListenersUI()
@@ -119,6 +135,22 @@ class PuertasActivity : AppCompatActivity() {
         // Pre-carga desde presupuesto
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etMed1.setText(it.toString()) }
         intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.etMed2.setText(it.toString()) }
+
+        controladorCola = ControladorColaMedidas(
+            activity = this,
+            claseActual = PuertasActivity::class.java,
+            etAncho = binding.etMed1,
+            etAlto = binding.etMed2,
+            ivDiseno = binding.ivModelo,
+            onToqueSimple = { abrirDialogoVariantes() },
+            onToqueLargo = {
+                when (puertaActual?.nombre) {
+                    "Dora", "Mari", "Viky", "Adel", "Mili", "jeny", "Taly", "Lina" -> mostrarPlano()
+                    else -> startActivity(Intent(this, MedidaActivity::class.java))
+                }
+            }
+        )
+        controladorCola.inicializar()
     }
 
     // ---------------------- Menú Proyecto ----------------------
@@ -194,6 +226,11 @@ class PuertasActivity : AppCompatActivity() {
             // Sincronizar varianteSeleccionada con la primera variante del nuevo modelo
             val primeraVariante = variantesParaPuerta(puertaActual?.nombre ?: "").firstOrNull()
             if (primeraVariante != null) varianteSeleccionada = primeraVariante.nombre
+            // Viky usa 5 divisiones horizontales por defecto.
+            if (puertaActual?.nombre == "Viky") binding.etDivi.setText("5")
+            // Lina reparte 5 paneles por omisión, que es el fallback que ya usaban sus fórmulas. Con
+            // el 1 que traía el campo salían 0 rellenos, porque los rellenos son las divisiones - 1.
+            if (puertaActual?.nombre == "Lina") binding.etDivi.setText("5")
             val imagen = when (puertaActual?.nombre) {
                 "Mari" -> R.drawable.ic_pp2
                 "Dora" -> R.drawable.pdora
@@ -212,10 +249,170 @@ class PuertasActivity : AppCompatActivity() {
         actualizarVisibilidades()
     }
 
+    private fun zonaTaly(paflon: Float) = CalculosPuerta.zonaVidrioTaly(paflon, bastidor)
+
+    /**
+     * Elige un perfil del catálogo del taller y escribe su medida en el campo.
+     *
+     * La lista es la misma que usa Nova Corrediza —`NovaSpinnerData`—, para no mantener dos
+     * catálogos. Cada perfil trae sus dos medidas: la de la CARA, que es con la que se calculan los
+     * bastidores y los rellenos —el paflón 1½ entra como 8.25 y el tubo 2⅜ x 1 como 6—, y la del
+     * CANTO, que es la que manda el puente: del mismo paflón, 3.8.
+     */
+    private fun elegirPerfil(destino: android.widget.EditText, usarCanto: Boolean, conCanales: Boolean = false) {
+        // "Múltiple" y "gorrito" son perfiles de corrediza: no entran en ninguna puerta.
+        val fueraDePuertas = setOf("Múltiple", "gorrito")
+        val tubos = crystal.crystal.taller.nova.NovaSpinnerData.obtenerOpcionesTubo()
+            .filterNot { it.text in fueraDePuertas }
+            .map { it to if (usarCanto) it.valor else it.valorEsquina }
+
+        // Los canales se AGREGAN a los tubos en el campo del marco, no los reemplazan. De ellos entra
+        // la altura de la U, que es lo que el marco le come al vano.
+        val canales = if (conCanales) canalesMarco.map { canal ->
+            crystal.crystal.taller.nova.NovaSpinnerData.SpinnerTubos(
+                canal.imagen,
+                "${canal.nombre}  ${CalculosPuerta.dato(canal.base)} x ${CalculosPuerta.dato(canal.altura)}",
+                canal.altura, canal.altura
+            ) to canal.altura
+        } else emptyList()
+
+        val opciones = tubos + canales
+        val adapter = crystal.crystal.taller.nova.NovaSpinnerData.AdaptadorSpinner(this, opciones.map { it.first })
+        AlertDialog.Builder(this)
+            .setTitle(if (usarCanto) "Perfil (canto)" else "Perfil (cara)")
+            .setAdapter(adapter) { _, i -> destino.setText(valorEditable(opciones[i].second)) }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    /**
+     * El marco no es un tubo sino un canal, así que tiene su propio catálogo: la U que recibe la
+     * hoja. Lo que entra al cálculo es su ALTURA, que es lo que el marco le come al vano — 2.2 el
+     * canal 2⅜ y 2.5 el canal paflón, justo los dos valores con los que ya trabajaba la app.
+     */
+    private data class CanalMarco(val imagen: Int, val nombre: String, val base: Float, val altura: Float)
+
+    private val canalesMarco = listOf(
+        CanalMarco(R.drawable.canaldostresochos, "canal 2⅜", 6f, 2.2f),
+        CanalMarco(R.drawable.canalpaflon, "canal paflón", 8.25f, 2.5f)
+    )
+
+    /**
+     * Interior de arranque de una variante; null = se conserva el que haya. Solo aparecen las que
+     * NO se arman con paflón adentro: las demás heredan el bastidor y así el interior no se separa
+     * en su propio renglón mientras el vidriero no lo cambie.
+     */
+    private fun interiorPorOmision(variante: String): Float? = when (variante) {
+        "Tere 6" -> 6f                    // el interior se llena con tubos de 6
+        "Lina b", "Lina c" -> 3.8f        // estructura de tubo detrás del panel
+        else -> CalculosPuerta.BASTIDOR
+    }
+
+    /**
+     * Un valor para escribir en un campo, sin perder precisión: 8.25 sigue siendo 8.25 y no 8.3.
+     * Se quitan los ceros de sobra para que 2.20 se lea 2.2 y 8 no se lea 8.00.
+     */
+    private fun valorEditable(valor: Float): String =
+        String.format(java.util.Locale.US, "%.2f", valor).trimEnd('0').trimEnd('.')
+
+    // ---------------------- Configuraciones guardadas ----------------------
+
+    /** Arranca con lo último que se usó, para no reconfigurar en cada medición. */
+    private fun cargarUltimaConfiguracion() {
+        val v = ConfigPuerta.ultima(this)
+        marco = v.marco; puente = v.puente; inox = v.inox
+        bastidor = v.bastidor; interior = v.interior; holgura = v.holgura
+    }
+
+    /**
+     * Lista las configuraciones guardadas para aplicar una. `alElegir` recibe los valores para que
+     * el diálogo de variantes los escriba en sus campos; el estado se actualiza al aceptar, como
+     * con cualquier otro cambio hecho a mano.
+     */
+    private fun elegirConfiguracion(alElegir: (ConfigPuerta.Valores) -> Unit) {
+        val guardadas = ConfigPuerta.guardadas(this)
+        // La primera de la lista es siempre la de fábrica: es la salida. Sin ella, una vez cargada
+        // una configuración no había cómo volver a los valores de siempre salvo escribirlos a mano.
+        val nombres = listOf(ConfigPuerta.PREDETERMINADA) + guardadas.keys
+        AlertDialog.Builder(this)
+            .setTitle("Configuraciones")
+            .setItems(nombres.toTypedArray()) { _, i ->
+                val elegida = if (i == 0) ConfigPuerta.Valores() else guardadas[nombres[i]]
+                elegida?.let(alElegir)
+            }
+            .apply {
+                if (guardadas.isNotEmpty()) {
+                    setNeutralButton("Borrar…") { _, _ -> borrarConfiguracion(guardadas.keys.toList()) }
+                }
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    /** Solo las guardadas: la predeterminada es de fábrica y no se borra. */
+    private fun borrarConfiguracion(nombres: List<String>) {
+        AlertDialog.Builder(this)
+            .setTitle("Borrar configuración")
+            .setItems(nombres.toTypedArray()) { _, i ->
+                ConfigPuerta.borrar(this, nombres[i])
+                android.widget.Toast.makeText(
+                    this, "Se borró \"${nombres[i]}\"", android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** Guarda con un nombre lo que hay en los campos. Con el mismo nombre, se reemplaza. */
+    private fun guardarConfiguracion(valores: ConfigPuerta.Valores) {
+        val et = android.widget.EditText(this).apply {
+            hint = "Nombre de la configuración"
+            setSingleLine()
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Guardar configuración")
+            .setMessage(
+                "Marco ${valorEditable(valores.marco)}   Puente ${valorEditable(valores.puente)}   " +
+                    "Inox ${valorEditable(valores.inox)}\n" +
+                    "Bastidor ${valorEditable(valores.bastidor)}   Interior ${valorEditable(valores.interior)}   " +
+                    "Holgura ${valorEditable(valores.holgura)}"
+            )
+            .setView(et)
+            .setPositiveButton("Guardar") { _, _ ->
+                val nombre = et.text.toString().trim()
+                if (nombre.isBlank()) return@setPositiveButton
+                ConfigPuerta.guardar(this, nombre, valores)
+                android.widget.Toast.makeText(
+                    this, "Guardada como \"$nombre\"", android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** En Taly el vidrio entra por dentro del junquillo, con 0.5 de holgura. */
+    private fun holguraVidrioTaly(junki: Float): Float = 2f * junki + 0.5f
+
+    // Rejilla de Jeny: columnas y filas que se repiten dentro de cada paño.
+    private fun rejillaCols(): Int = binding.etRejCol.text.toString().toIntOrNull()?.coerceAtLeast(1) ?: 3
+    private fun rejillaFilas(): Int = binding.etRejFil.text.toString().toIntOrNull()?.coerceAtLeast(1) ?: 3
+
+    // Variantes que usan el ángulo para generar diseño y cálculos (por ahora solo las diagonales).
+    private fun varianteUsaAngulo(): Boolean =
+        varianteSeleccionada == "Mari d" || varianteSeleccionada == "Taly d"
+
     private fun actualizarVisibilidades() {
         val nombre = puertaActual?.nombre ?: ""
-        binding.lyAD.visibility = if (nombre == "Viky" || nombre == "Adel") View.VISIBLE else View.GONE
-        binding.lyMarcoVar.visibility = if (nombre == "Lina") View.VISIBLE else View.GONE
+        // "Ancho divisiones" (lyAD) queda oculto: hoy no controla nada. Se leía y se pasaba al dibujo
+        // de Adel, que ignoraba el valor, y su etiqueta y su comentario decían cosas distintas. Vuelve
+        // cuando se decida qué mide — el candidato es el ancho de la columna de divisiones de Adel.
+        binding.lyAD.visibility = View.GONE
+        // La rejilla (columnas y filas dentro de cada paño) es propia de Jeny.
+        binding.lyRejilla.visibility = if (nombre == "jeny") View.VISIBLE else View.GONE
+        // El ángulo solo se ingresa en variantes que lo usan para diseño/cálculo (por ahora Mari d / Taly d).
+        binding.lyAngulo.visibility = if (varianteUsaAngulo()) View.VISIBLE else View.GONE
+        // El marco se edita ahora en el diálogo de variantes (para todos los modelos), no aquí.
+        binding.lyMarcoVar.visibility = View.GONE
         binding.lyPanelDelgadoLina.visibility = if (nombre == "Lina" && varianteSeleccionada in setOf("Lina h", "Lina b")) View.VISIBLE else View.GONE
         if (nombre == "Lina") {
             binding.txZocalo.text = "Gruña"
@@ -227,37 +424,6 @@ class PuertasActivity : AppCompatActivity() {
             binding.etZocalo.inputType = android.text.InputType.TYPE_CLASS_NUMBER
             if (binding.etZocalo.text?.toString()?.trim() == "0.8") binding.etZocalo.setText("1")
         }
-    }
-
-    private fun materialInternoLina(): MaterialInternoLina =
-        materialesInternosLina[materialInternoLinaIndex.coerceIn(materialesInternosLina.indices)]
-
-    private fun abrirDialogoMaterialInternoLina() {
-        if (puertaActual?.nombre != "Lina") return
-
-        val contenedor = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(32, 16, 32, 0)
-        }
-        val spinner = android.widget.Spinner(this).apply {
-            adapter = android.widget.ArrayAdapter(
-                this@PuertasActivity,
-                android.R.layout.simple_spinner_dropdown_item,
-                materialesInternosLina.map { it.nombre }
-            )
-            setSelection(materialInternoLinaIndex.coerceIn(materialesInternosLina.indices))
-        }
-        contenedor.addView(spinner)
-
-        AlertDialog.Builder(this)
-            .setTitle("Material interno")
-            .setView(contenedor)
-            .setPositiveButton("OK") { _, _ ->
-                materialInternoLinaIndex = spinner.selectedItemPosition.coerceIn(materialesInternosLina.indices)
-                if (varianteSeleccionada.startsWith("Lina")) ejecutarCalculoCompleto()
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
     }
 
     // ---------------------- Listeners de UI ----------------------
@@ -287,22 +453,30 @@ class PuertasActivity : AppCompatActivity() {
         }
 
         binding.ivModelo.setOnLongClickListener {
-            val intent = Intent(this, MedidaActivity::class.java)
-            startActivity(intent)
+            when (puertaActual?.nombre) {
+                "Dora", "Mari", "Viky", "Adel", "Mili", "jeny", "Taly", "Lina" -> mostrarPlano()
+                else -> startActivity(Intent(this, MedidaActivity::class.java))
+            }
             true
         }
 
-        binding.lyDivi.setOnClickListener {
-            if (puertaActual?.nombre == "Lina") abrirDialogoMaterialInternoLina()
-        }
-        binding.txDivi.setOnClickListener {
-            if (puertaActual?.nombre == "Lina") abrirDialogoMaterialInternoLina()
-        }
         binding.btCalcular.setOnClickListener {
+            controladorCola.onCalcular()
             ejecutarCalculoCompleto()
         }
 
         binding.btArchivar.setOnClickListener {
+            // Modelo en desarrollo: no se archiva (sus cálculos aún no son válidos, solo hay aviso).
+            if (crystal.crystal.FeaturesV1.AVISO_PUERTAS_EN_DESARROLLO &&
+                !crystal.crystal.taller.puerta.datos.PuertaRepositorio.estaTerminada(puertaActual?.nombre ?: "")) {
+                Toast.makeText(this, "Este modelo está en desarrollo; aún no se puede archivar.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            // Candado de suscripción PRIMERO: bloquear antes de avanzar numeración o dar el toast.
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeArchivar(),
+                    "Archivar es una función de pago. Renueva para guardar tus proyectos.")) {
+                return@setOnClickListener
+            }
             // Validar que se hayan ingresado nuevos datos antes de archivar
             if (binding.etMed1.text.toString().isEmpty() || binding.etMed1.text.toString() == "") {
                 Toast.makeText(this, "Haz nuevo cálculo", Toast.LENGTH_SHORT).show()
@@ -470,30 +644,33 @@ class PuertasActivity : AppCompatActivity() {
         val ancho = binding.etMed1.text.toString().toFloat()
         val alto  = binding.etMed2.text.toString().toFloat()
         val hHoja = binding.etHoja.text.toString().toFloatOrNull() ?: 0f
-        val marcoVar = binding.etMarcoVar.text.toString().toFloatOrNull() ?: 2.2f
+        val marcoVar = marco  // marco del diálogo de variantes (aplica a todos los modelos)
         val nDivLina = binding.etDivi.text.toString().toIntOrNull()?.takeIf { it > 0 } ?: 5
         val gruna = binding.etZocalo.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: 0.8f
         val junki = binding.etJunki.text.toString().toFloatOrNull() ?: 0f
         val piso = binding.etPiso.text.toString().toFloatOrNull() ?: 0f
         val panelDelgadoLina = binding.etPanelDelgadoLina.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: 0f
-        val materialInterno = materialInternoLina()
 
         val esPlegado = varianteSeleccionada == "Lina p"
-        val hH = if (varianteSeleccionada == "Lina b") {
+        // "Lina c" arma el mismo bastidor de paflón que "Lina b", así que mide la hoja igual.
+        val hH = if (varianteSeleccionada == "Lina b" || varianteSeleccionada == "Lina c") {
             CalculosLina.hojaHConPiso(alto, hHoja, piso, esPlegado, marcoVar)
         } else {
             CalculosLina.hojaH(alto, hHoja, esPlegado, marcoVar)
         }
-        val hV = CalculosLina.hojaV(ancho, marcoVar)
+        val hV = CalculosLina.hojaV(ancho, marcoVar, holgura)
         val refV = CalculosLina.panelRefV(hH)
         binding.tvTope.text = CalculosLina.topeComun(ancho, hH, marcoVar)
+        // Solo "Mari d" separa detalle, apilado y mocheta.
+        binding.lyVidriosApilado.visibility = View.GONE
+        binding.lyVidrioMocheta.visibility = View.GONE
 
         when (varianteSeleccionada) {
             "Lina h" -> {
-                val refH = CalculosLina.panelRefH_h(ancho, marcoVar, gruna, panelDelgadoLina)
+                val refH = CalculosLina.panelRefH_h(ancho, marcoVar, gruna, panelDelgadoLina, holgura)
                 binding.tvMarco.text  = CalculosLina.canal(ancho, alto, marcoVar)
                 binding.tvTubo.text   = CalculosLina.tuboPuente(ancho, marcoVar)
-                binding.tvPaflon.text = CalculosLina.tres(hH, ancho, refH, marcoVar)
+                binding.tvPaflon.text = CalculosLina.tres(hH, ancho, refH, marcoVar, holgura)
                 binding.txMel.text = "Interno"
                 binding.tvMel.text = ""
                 binding.tvJunki.text  = CalculosLina.junquilloMocheta(ancho, alto, hH, marcoVar, junki)
@@ -505,13 +682,33 @@ class PuertasActivity : AppCompatActivity() {
             "Lina b" -> {
                 binding.tvMarco.text  = CalculosLina.canal(ancho, alto, marcoVar)
                 binding.tvTubo.text   = CalculosLina.tuboPuente(ancho, marcoVar)
-                binding.tvPaflon.text = CalculosLina.paflonBBastidor(hH, ancho, marcoVar, piso)
-                binding.txMel.text = "Interno ${materialInterno.nombre}"
-                binding.tvMel.text = CalculosLina.paflonBInterno(hH, ancho, marcoVar, nDivLina, gruna, materialInterno.anchoCm, piso, panelDelgadoLina)
+                binding.tvPaflon.text = CalculosLina.paflonBBastidor(hH, ancho, marcoVar, piso, holgura)
+                binding.txMel.text = "Interior ${CalculosPuerta.df1(interior)}"
+                binding.tvMel.text = CalculosLina.paflonBInterno(
+                    hH, ancho, marcoVar, nDivLina, gruna, interior, piso, panelDelgadoLina, bastidor,
+                    holgura
+                )
                 binding.tvJunki.text  = CalculosLina.junquilloMocheta(ancho, alto, hH, marcoVar, junki)
                 val vid = CalculosLina.vidrioH(hH, ancho, alto, marcoVar)
-                binding.tvMela.text = CalculosLina.panelB(hH, ancho, marcoVar, nDivLina, gruna, piso, panelDelgadoLina)
+                binding.tvMela.text = CalculosLina.panelB(hH, ancho, marcoVar, nDivLina, gruna, piso, panelDelgadoLina, holgura)
                 binding.tvVidrios.text = vid
+                binding.lyTubo.visibility = View.VISIBLE
+            }
+            "Lina c" -> {
+                // Un panel entero sobre el bastidor: sin gruma, sin divisores y sin vidrio en la
+                // hoja. Lo único que queda del vidrio es la mocheta, si la puerta la lleva.
+                binding.tvMarco.text  = CalculosLina.canal(ancho, alto, marcoVar)
+                binding.tvTubo.text   = CalculosLina.tuboPuente(ancho, marcoVar)
+                binding.tvPaflon.text = CalculosLina.paflonBBastidor(hH, ancho, marcoVar, piso, holgura)
+                // Es contraplacada: adentro lleva travesaños, tantos como hagan falta para que
+                // ningún tramo pase de 40. La plancha los tapa, así que solo se ven en el plano.
+                binding.txMel.text = "Interior ${CalculosPuerta.df1(interior)}"
+                binding.tvMel.text = CalculosLina.estructuraContraplacado(
+                    hH, ancho, marcoVar, piso, interior, holgura = holgura
+                )
+                binding.tvJunki.text  = CalculosLina.junquilloMocheta(ancho, alto, hH, marcoVar, junki)
+                binding.tvMela.text = CalculosLina.panelCompleto(hH, ancho, marcoVar, piso, holgura)
+                binding.tvVidrios.text = CalculosLina.vidrioH(hH, ancho, alto, marcoVar)
                 binding.lyTubo.visibility = View.VISIBLE
             }
             "Lina p" -> {
@@ -528,11 +725,11 @@ class PuertasActivity : AppCompatActivity() {
             }
         }
 
-        val mochetaLina = alto - (hH + marcoVar + 2.5f)
+        val mochetaLina = alto - (hH + marcoVar + puente)
         binding.txRefe.text = if (varianteSeleccionada == "Lina b") {
             CalculosPuerta.referen(ancho, alto, hH, mochetaLina)
         } else {
-            "anch ${CalculosPuerta.df1(ancho)} x alt ${CalculosPuerta.df1(alto)}\nAlto hoja = ${CalculosPuerta.df1(hH)}"
+            "anch ${CalculosPuerta.dato(ancho)} x alt ${CalculosPuerta.dato(alto)}\nAlto hoja = ${CalculosPuerta.dato(hH)}"
         }
         binding.txCliente.text = clienteActual
         binding.tvEnsayo.text  = ""
@@ -541,6 +738,15 @@ class PuertasActivity : AppCompatActivity() {
     }
 
     private fun ejecutarCalculoCompleto() {
+        // v1: los modelos aún NO terminados muestran su diseño/plano, pero en los resultados avisan
+        // "en desarrollo" en vez de calcular. Ver FeaturesV1.AVISO_PUERTAS_EN_DESARROLLO.
+        val modeloActual = puertaActual?.nombre ?: ""
+        if (crystal.crystal.FeaturesV1.AVISO_PUERTAS_EN_DESARROLLO &&
+            !crystal.crystal.taller.puerta.datos.PuertaRepositorio.estaTerminada(modeloActual)) {
+            renderizarModeloActual()        // el diseño SÍ se dibuja
+            mostrarAvisoEnDesarrollo()      // los resultados muestran el aviso
+            return
+        }
         try {
             if (varianteSeleccionada.startsWith("Lina")) {
                 ejecutarCalculoLina()
@@ -566,10 +772,10 @@ class PuertasActivity : AppCompatActivity() {
 
             // Cálculos base
             var hPuente = CalculosPuerta.hPuente(alto, hHoja, piso, hojaRef, marco)
-            var mocheta = CalculosPuerta.mocheta(alto, hPuente, marco)
+            var mocheta = CalculosPuerta.mocheta(alto, hPuente, marco, puente)
             val marcoSup = ancho - totalMarco
             var tubo = if (mocheta > 0f) CalculosPuerta.df1(marcoSup) else ""
-            val paflon = ((ancho - totalMarco) - 1f) - (2f * bastidor)
+            val paflon = CalculosPuerta.anchoHoja(ancho, marcoIzq, marcoDer, holgura) - (2f * bastidor)
             val nZ = CalculosPuerta.nZocalo(nZocalos)
             var parante = CalculosPuerta.parante(hPuente, piso)
             var paranteInt = CalculosPuerta.paranteInterno(parante, nZ, bastidor)
@@ -588,6 +794,15 @@ class PuertasActivity : AppCompatActivity() {
             val nPfvcal = CalculosPuerta.nPfvcal(nDiv)
             val nPaflones = CalculosPuerta.nPaflones(nDiv, nZocalos)
             val zocalo = CalculosPuerta.zocalo(nZ, bastidor)
+            val esAdel = puertaActual?.nombre == "Adel"
+            val esMili = puertaActual?.nombre == "Mili"
+            val esJeny = puertaActual?.nombre == "jeny"
+            val esVikyC = varianteSeleccionada == "Viky c"
+            val esViky = puertaActual?.nombre == "Viky" && !esVikyC
+            // El aluminio del interior hace de divisor solo donde el modelo lo aprovecha. En Mari son
+            // las divisiones —horizontales, verticales o diagonales—; el resto sigue con el bastidor
+            // hasta que a cada modelo le toque su turno.
+            val interiorDivisor = if (modeloActual == "Mari") interior else bastidor
 
             // Salidas UI (materiales)
             val countMarcos = (if (!ventanaIzquierda) 1 else 0) + (if (!ventanaDerecha) 1 else 0)
@@ -609,13 +824,61 @@ class PuertasActivity : AppCompatActivity() {
                 }
             }
 
+            // Dora: zócalos alternados paflon / tubo inoxidable de 2.5 (la cantidad es siempre impar)
+            val nZdora = if (nZ % 2 == 0) maxOf(1, nZ - 1) else nZ
+            val zocaloInox = (nZdora - 1) / 2   // posiciones pares = tubos inoxidables de 2.5
+            // Inox de la columna izquierda (divisores de 2.5), controlado por "divisiones" (igual al dibujo)
+            val nInoxIzq = nDiv.takeIf { it >= 1 } ?: 9
+            // Geometría Dora: bastidores horizontales (superior + zócalos impares) y altura de la zona
+            // de columnas (resto de la hoja tras restar horizontales y tubos 2.5).
+            val paflonHDora = 1 + (nZdora + 1) / 2
+            val paranteIntDora = parante - bastidor * paflonHDora - inox * zocaloInox
+
             // Paflones según variante
-            binding.tvPaflon.text = deduplicar(when (varianteSeleccionada) {
+            // Viky: las piezas de adentro pueden ser otro aluminio. Si es el mismo perfil que el
+            // bastidor van en la misma lista (se suman); si es distinto, se muestran aparte en la
+            // fila "Interior", porque son otro material y no se pueden mezclar al pedirlos.
+            val esMari = modeloActual == "Mari"
+            val interiorPropio = (esViky || esVikyC || esMari) && interior != bastidor
+            val piezasInteriores = when {
+                esVikyC -> CalculosPuerta.textoInteriorVikyC(paflon, paranteInt, nDiv, interior)
+                esViky -> CalculosPuerta.textoInteriorViky(parante, nZ, nDiv, bastidor, interior)
+                // En Mari las piezas de adentro son las divisiones: horizontales de ancho de paflón,
+                // verticales de alto interior o las diagonales, según la variante.
+                esMari -> when (varianteSeleccionada) {
+                    "Mari h" -> if (nDiv > 1) "${CalculosPuerta.df1(paflon)} = ${nDiv - 1}" else ""
+                    "Mari v" -> if (nDiv > 1) "${CalculosPuerta.df1(paranteInt)} = ${nDiv - 1}" else ""
+                    "Mari d" -> CalculosPuerta.textoPaflonesMariD(paflon, paranteInt, nDiv, interiorDivisor, angulo)
+                    else -> ""
+                }
+                else -> ""
+            }
+            binding.tvPaflon.text = deduplicar(if (esMili) {
+                CalculosPuerta.textoPaflonMili(paflon, parante, nZ)
+            } else if (esAdel) {
+                CalculosPuerta.textoPaflonAdel(varianteSeleccionada, paflon, parante, paranteInt, nZ, nDiv, bastidor)
+            } else if (esVikyC) {
+                val marcoHoja = CalculosPuerta.textoPaflonVikyC(paflon, parante, nZ, nDiv)
+                if (interiorPropio) marcoHoja else listOf(marcoHoja, piezasInteriores).filter { it.isNotBlank() }.joinToString("\n")
+            } else if (esViky) {
+                val marcoHoja = CalculosPuerta.textoPaflonViky(paflon, parante, nZ, nDiv, bastidor)
+                if (interiorPropio) marcoHoja else listOf(marcoHoja, piezasInteriores).filter { it.isNotBlank() }.joinToString("\n")
+            } else when (varianteSeleccionada) {
                 "Tere 6" -> "${CalculosPuerta.df1(paflon)} = ${nZ + 1}\n${CalculosPuerta.df1(parante)} = 2"
-                "Mari h" -> "${CalculosPuerta.df1(paflon)} = $nPaflones\n${CalculosPuerta.df1(parante)} = 2"
-                "Mari v" -> "${CalculosPuerta.df1(paflon)} = ${nZ}\n${CalculosPuerta.df1(parante)} = 2\n${CalculosPuerta.df1(paranteInt)} = ${nDiv - 1}"
+                // Las divisiones se cuentan acá solo mientras sean del mismo perfil que el bastidor.
+                // Si el interior es otro aluminio salen en su propia fila y el cuadro se queda con
+                // lo suyo: los horizontales del marco de la hoja y los dos parantes.
+                "Mari h" -> {
+                    val horizontales = if (interiorPropio) nZ + 1 else nPaflones
+                    "${CalculosPuerta.df1(paflon)} = $horizontales\n${CalculosPuerta.df1(parante)} = 2"
+                }
+                "Mari v" -> buildString {
+                    append("${CalculosPuerta.df1(paflon)} = ${nZ}\n${CalculosPuerta.df1(parante)} = 2")
+                    if (!interiorPropio && nDiv > 1) append("\n${CalculosPuerta.df1(paranteInt)} = ${nDiv - 1}")
+                }
                 "Mari d" -> {
-                    val diagonales = CalculosPuerta.textoPaflonesMariD(paflon, paranteInt, nDiv, bastidor, angulo)
+                    val diagonales = if (interiorPropio) "" else
+                        CalculosPuerta.textoPaflonesMariD(paflon, paranteInt, nDiv, interiorDivisor, angulo)
                     buildString {
                         append("${CalculosPuerta.df1(paflon)} = ${nZ + 1}")
                         if (diagonales.isNotBlank()) append("\n$diagonales")
@@ -623,16 +886,18 @@ class PuertasActivity : AppCompatActivity() {
                     }
                 }
                 "Taly h", "Taly d" -> {
-                    // Pares de paflones laterales hasta vacío ≤ 20 cm
-                    var gapTaly = paflon
-                    var paresTaly = 0
-                    while (gapTaly > 20f && gapTaly >= bastidor * 2f) { paresTaly++; gapTaly -= 2f * bastidor }
+                    // Parantes interiores de a pares hasta que el vidrio entra en rango. Si quedan de
+                    // tubo, no van en esta lista: son otro perfil y salen en la fila "Interno".
+                    val zona = zonaTaly(paflon)
+                    val gapTaly = zona.anchoVidrio
                     val altInterno = paranteInt
                     val nDivisores = maxOf(0, nDiv - 1)
                     buildString {
                         append("${CalculosPuerta.df1(parante)} = 2\n")
                         append("${CalculosPuerta.df1(paflon)} = 2")
-                        if (paresTaly > 0) append("\n${CalculosPuerta.df1(altInterno)} = ${paresTaly * 2}")
+                        if (zona.paresPaflon > 0) {
+                            append("\n${CalculosPuerta.df1(altInterno)} = ${zona.paresPaflon * 2}")
+                        }
                         append("\n${CalculosPuerta.df1(gapTaly)} = 2")  // topInner + botInner
                         if (nZ > 1) append("\n${CalculosPuerta.df1(gapTaly)} = ${nZ - 1}")  // zócalo extra
                         if (nDivisores > 0) {
@@ -650,48 +915,102 @@ class PuertasActivity : AppCompatActivity() {
                         }
                     }
                 }
+                "Dora" -> {
+                    // Horizontales: paflones (superior + zócalos impares). Verticales internos: 2 divisores
+                    // de columna (largo paranteIntDora). Diagonales: 4 piezas a 45° = colW·√2 + un lado
+                    // (bastidor): a 45° el extra de corte de MariD (bastidor·tan(ángulo)) vale el bastidor.
+                    val colW = (paflon - 2f * bastidor) / 3f
+                    val diagonal = colW * kotlin.math.sqrt(2f) + bastidor
+                    buildString {
+                        append("${CalculosPuerta.df1(paflon)} = $paflonHDora\n")
+                        append("${CalculosPuerta.df1(parante)} = 2\n")
+                        append("${CalculosPuerta.df1(paranteIntDora)} = 2\n")
+                        append("${CalculosPuerta.df1(diagonal)} = 4")
+                    }
+                }
                 else -> "${CalculosPuerta.df1(paflon)} = $nPaflones\n${CalculosPuerta.df1(parante)} = 2"
             })
 
-            // Junkillos y vidrios
-            binding.tvJunki.text = if (varianteSeleccionada == "Mari d") {
-                CalculosPuerta.textoJunkillosMariD(paflon, paranteInt, nDiv, bastidor, junki, angulo)
-            } else if (varianteSeleccionada == "Taly h" || varianteSeleccionada == "Taly d") {
-                var gapTalyJ = paflon
-                while (gapTalyJ > 20f && gapTalyJ >= bastidor * 2f) { gapTalyJ -= 2f * bastidor }
-                val zoneHcm = paranteInt - 2f * bastidor
-                val barrasJ = maxOf(0, nDiv - 1)
-                val gapSeccion = if (nDiv > 0) (zoneHcm - barrasJ * bastidor) / nDiv else zoneHcm
+            // Jeny: la rejilla es perfil de 2.5 montado sobre el vidrio, otro material que el
+            // bastidor, así que va en su propia fila.
+            if (esJeny) {
+                val rejilla = CalculosPuerta.textoRejillaJeny(
+                    varianteSeleccionada, paflon, divisTam, nDiv, rejillaCols(), rejillaFilas()
+                )
+                binding.txMel.text = "Rejilla ${CalculosPuerta.df1(CalculosPuerta.REJILLA_JENY)}"
+                binding.tvMel.text = deduplicar(rejilla)
+            }
 
-                fun ceilFmt(v: Double): String {
-                    val c = kotlin.math.ceil(v * 10).toInt() / 10f
-                    return if (c == c.toLong().toFloat()) c.toLong().toString()
-                    else "%.1f".format(c).replace(",", ".")
+            // Taly: cuando los parantes interiores se rehacen con tubo, van en su propia fila.
+            if (varianteSeleccionada.startsWith("Taly")) {
+                val zona = zonaTaly(paflon)
+                if (zona.paresTubo > 0) {
+                    binding.txMel.text = "Interno ${CalculosPuerta.df1(zona.tubo)}"
+                    binding.tvMel.text = "${CalculosPuerta.df1(paranteInt)} = ${zona.paresTubo * 2}"
+                } else {
+                    binding.txMel.text = "Interno"
                 }
+            }
 
+            // Mili arma el molinete con tubo de 3.8, que no es el paflón del bastidor: va aparte.
+            if (esMili) {
+                binding.txMel.text = "Interno ${CalculosPuerta.df1(CalculosPuerta.TUBO_MILI)}"
+                binding.tvMel.text = deduplicar(CalculosPuerta.textoTubosMili(paflon, paranteInt))
+            }
+
+            // Fila "Interior": solo cuando el aluminio de adentro es distinto del bastidor.
+            if (interiorPropio && piezasInteriores.isNotBlank()) {
+                binding.txMel.text = "Interior ${CalculosPuerta.df1(interior)}"
+                binding.tvMel.text = deduplicar(piezasInteriores)
+            } else if (esViky || esVikyC || esMari) {
+                binding.txMel.text = "Interno"
+            }
+
+            // Inoxidable (lista propia): tubos de 2.5. (a) Zócalos pares: largo = paflon del zócalo
+            // (ocupan ese ancho). (b) Divisores de la columna izquierda: largo = ancho de columna colW.
+            binding.tvInox.text = if (varianteSeleccionada == "Dora") {
+                val colWInox = (paflon - 2f * bastidor) / 3f
+                deduplicar(buildString {
+                    if (zocaloInox > 0) append("${CalculosPuerta.df1(paflon)} = $zocaloInox")
+                    if (nInoxIzq > 0) {
+                        if (isNotEmpty()) append("\n")
+                        append("${CalculosPuerta.df1(colWInox)} = $nInoxIzq")
+                    }
+                })
+            } else ""
+
+            // Junkillos y vidrios
+            binding.tvJunki.text = if (esJeny) {
+                CalculosPuerta.textoJunkillosJeny(paflon, divisTam, nDiv, junki, mocheta, marcoSup)
+            } else if (esMili) {
+                CalculosPuerta.textoJunkillosMili(paflon, paranteInt, junki, mocheta, marcoSup)
+            } else if (esAdel) {
+                CalculosPuerta.textoJunkillosAdel(varianteSeleccionada, paflon, paranteInt, nDiv, bastidor, junki, mocheta, marcoSup)
+            } else if (esVikyC) {
+                CalculosPuerta.textoJunkillosVikyC(paflon, paranteInt, nDiv, interior, junki, mocheta, marcoSup)
+            } else if (esViky) {
+                CalculosPuerta.textoJunkillosViky(paflon, parante, nZ, nDiv, bastidor, junki, mocheta, marcoSup, interior)
+            } else if (varianteSeleccionada == "Dora") {
+                CalculosPuerta.textoJunkillosDora(paflon, paranteIntDora, bastidor, junki, nInoxIzq, mocheta, marcoSup)
+            } else if (varianteSeleccionada == "Mari d") {
+                CalculosPuerta.textoJunkillosMariD(paflon, paranteInt, nDiv, interiorDivisor, junki, angulo)
+            } else if (varianteSeleccionada == "Taly h" || varianteSeleccionada == "Taly d") {
+                val gapTalyJ = zonaTaly(paflon).anchoVidrio
+                val zoneHcm = paranteInt - 2f * bastidor
                 buildString {
-                    if (varianteSeleccionada == "Taly h") {
-                        // Horizontales (top/bot de cada sección), sin ángulo
-                        append("${CalculosPuerta.df1(gapTalyJ - 2f * junki)} = ${nDiv * 2}\n")
-                        // Parantes de cada sección
+                    if (varianteSeleccionada == "Taly d" && angulo != 0f) {
+                        // Con los paños repartidos como en Mari d, sus junquillos ya no son todos
+                        // iguales: cada tramo tiene el suyo. Se calcula con la misma geometría en vez
+                        // de repetir una medida por sección, que es lo que hacía antes.
+                        append(CalculosPuerta.textoJunkillosMariD(gapTalyJ, zoneHcm, nDiv, bastidor, junki, angulo))
+                    } else {
+                        // El par horizontal va a tope y el vertical entra entre ellos, descontando
+                        // los dos junquillos. Antes se descontaban los dos pares y el marco quedaba
+                        // corto por los cuatro lados, dejando el hueco a la vista en las esquinas.
+                        val barrasJ = maxOf(0, nDiv - 1)
+                        val gapSeccion = if (nDiv > 0) (zoneHcm - barrasJ * bastidor) / nDiv else zoneHcm
+                        append("${CalculosPuerta.df1(gapTalyJ)} = ${nDiv * 2}\n")
                         append("${CalculosPuerta.df1(gapSeccion - 2f * junki)} = ${nDiv * 2}")
-                    } else { // Taly d
-                        val rad = Math.toRadians(angulo.toDouble())
-                        val extraJ = junki.toDouble() * Math.tan(rad)
-                        // Horizontales top/bot (sin ángulo), solo 2 (extremos del vacío)
-                        append("${CalculosPuerta.df1(gapTalyJ - 2f * junki)} = 2\n")
-                        // Diagonales a lo largo de los divisores: (nDiv-1) divisores × 2 caras
-                        if (nDiv > 1) {
-                            val diagJ = gapTalyJ / Math.cos(rad) + extraJ
-                            append("${ceilFmt(diagJ)} = ${(nDiv - 1) * 2}\n")
-                        }
-                        // Parantes extremos: 2 largos (contra el bastidor) + resto con adición tangencial
-                        append("${CalculosPuerta.df1(gapSeccion - 2f * junki)} = 2\n")
-                        // Parantes cortos (extremos interiores) + ambos lados de secciones medias
-                        val countConExtra = nDiv * 2 - 2
-                        if (countConExtra > 0) {
-                            append("${ceilFmt(gapSeccion - 2.0 * junki + extraJ)} = $countConExtra")
-                        }
                     }
                     // Mocheta
                     if (mocheta > 0f) {
@@ -701,25 +1020,74 @@ class PuertasActivity : AppCompatActivity() {
                     }
                 }
             } else {
-                CalculosPuerta.textoJunkillos(varianteSeleccionada, junki, mocheta, nPfvcal, paflon, bastidor, nDiv, paranteInt, marcoSup)
+                CalculosPuerta.textoJunkillos(
+                    varianteSeleccionada, junki, mocheta, nPfvcal, paflon, bastidor, nDiv, paranteInt,
+                    marcoSup, interior = interiorDivisor
+                )
             }
-            binding.tvVidrios.text = if (varianteSeleccionada == "Taly h" || varianteSeleccionada == "Taly d") {
-                var gapTalyV = paflon
-                while (gapTalyV > 20f && gapTalyV >= bastidor * 2f) { gapTalyV -= 2f * bastidor }
+            val vidriosApilados = if (esJeny) {
+                // Jeny reparte el alto como Mari h, pero sus divisiones son de bastidor.
+                CalculosPuerta.textoVidrios("Mari h", junki, paflon, bastidor, nDiv, paranteInt, marcoSup, mocheta, angulo)
+            } else if (esMili) {
+                CalculosPuerta.textoVidriosMili(paflon, paranteInt, junki, mocheta, marcoSup)
+            } else if (esAdel) {
+                CalculosPuerta.textoVidriosAdel(varianteSeleccionada, paflon, paranteInt, nDiv, bastidor, junki, mocheta, marcoSup)
+            } else if (esVikyC) {
+                CalculosPuerta.textoVidriosVikyC(paflon, paranteInt, nDiv, interior, junki, mocheta, marcoSup)
+            } else if (esViky) {
+                CalculosPuerta.textoVidriosViky(paflon, parante, nZ, nDiv, bastidor, junki, mocheta, marcoSup, interior)
+            } else if (varianteSeleccionada == "Dora") {
+                CalculosPuerta.textoVidriosDora(paflon, paranteIntDora, bastidor, junki, nInoxIzq, mocheta, marcoSup)
+            } else if (varianteSeleccionada == "Taly d" && angulo != 0f) {
+                // Los vidrios diagonales se reparten con la geometría de Mari d: cada pieza sale del
+                // recorte real de la zona, no de una sola medida para todas. Aquí se lista el
+                // APILADO —el rectángulo del que se cortan— y el detalle va en la fila de arriba.
+                CalculosPuerta.textoVidriosMariD(
+                    zonaTaly(paflon).anchoVidrio, paranteInt - 2f * bastidor, nDiv, bastidor, angulo,
+                    holgura = holguraVidrioTaly(junki)
+                )
+            } else if (varianteSeleccionada == "Taly h" || varianteSeleccionada == "Taly d") {
+                val gapTalyV = zonaTaly(paflon).anchoVidrio
                 val zoneHv = paranteInt - 2f * bastidor
                 val barrasV = maxOf(0, nDiv - 1)
                 val gapSeccionV = if (nDiv > 0) (zoneHv - barrasV * bastidor) / nDiv else zoneHv
-                val holgura = 0.5f
-                val anchVf = gapTalyV - 2f * junki - holgura
-                val altVBase = gapSeccionV - 2f * junki - holgura
-                val altVf = if (varianteSeleccionada == "Taly d" && angulo != 0f) {
-                    val rad = Math.toRadians(angulo.toDouble())
-                    altVBase + anchVf * Math.tan(rad).toFloat()
-                } else altVBase
-                "${CalculosPuerta.df1(anchVf)} x ${CalculosPuerta.df1(altVf)} = $nDiv"
+                val descuento = holguraVidrioTaly(junki)
+                "${CalculosPuerta.df1(gapTalyV - descuento)} x ${CalculosPuerta.df1(gapSeccionV - descuento)} = $nDiv"
             } else {
-                CalculosPuerta.textoVidrios(varianteSeleccionada, junki, paflon, divisTam, bastidor, nDiv, paranteInt, marcoSup, mocheta, angulo)
+                CalculosPuerta.textoVidrios(
+                    varianteSeleccionada, junki, paflon, bastidor, nDiv, paranteInt, marcoSup, mocheta,
+                    angulo, interior = interiorDivisor
+                )
             }
+
+            // "Mari d" corta cada vidrio por separado (trapecios y paralelogramos), así que la fila
+            // de arriba lleva el detalle pieza por pieza y el apilado —lo que se compra— baja a su
+            // propia fila. En el resto de variantes solo existe una lista y la fila extra se oculta.
+            val detalleVidrios = if (varianteSeleccionada == "Taly d" && angulo != 0f) {
+                CalculosPuerta.textoVidriosDetalleMariD(
+                    zonaTaly(paflon).anchoVidrio, paranteInt - 2f * bastidor, nDiv, bastidor, angulo,
+                    holgura = holguraVidrioTaly(junki)
+                )
+            } else {
+                CalculosPuerta.textoVidriosDetalle(
+                    varianteSeleccionada, paflon, bastidor, nDiv, paranteInt, angulo, junki,
+                    interior = interiorDivisor
+                )
+            }
+            if (detalleVidrios.isNotBlank()) {
+                binding.tvVidrios.text = detalleVidrios
+                binding.tvVidriosApilado.text = vidriosApilados
+                binding.lyVidriosApilado.visibility = View.VISIBLE
+            } else {
+                binding.tvVidrios.text = vidriosApilados
+                binding.lyVidriosApilado.visibility = View.GONE
+            }
+
+            // La mocheta va aparte: es un rectángulo común, no entra en el detalle ni en el apilado
+            // y se archiva siempre, aunque se destilde alguna de las otras dos listas.
+            val vidrioMocheta = CalculosPuerta.textoVidrioMocheta(varianteSeleccionada, marcoSup, mocheta, junki)
+            binding.tvVidrioMocheta.text = vidrioMocheta
+            binding.lyVidrioMocheta.visibility = if (vidrioMocheta.isBlank()) View.GONE else View.VISIBLE
 
             // Referencias
             binding.txRefe.text = CalculosPuerta.referen(ancho, alto, hPuente, mocheta)
@@ -727,7 +1095,23 @@ class PuertasActivity : AppCompatActivity() {
 
             // Texto ensayo de paños (como original)
             binding.tvEnsayo.text = if (ajusteTere6 != null) {
-                "Tubo 6 = ${ajusteTere6.cantidadTubos}\nPila = ${CalculosPuerta.df1(ajusteTere6.altoPila)}"
+                "Tubo ${CalculosPuerta.dato(interior)} = ${ajusteTere6.cantidadTubos}\nPila = ${CalculosPuerta.df1(ajusteTere6.altoPila)}"
+            } else if (varianteSeleccionada == "Mari v") {
+                CalculosPuerta.textoPanosVertical(paflon, nDiv, bastidor)
+            } else if (varianteSeleccionada == "Mari h") {
+                CalculosPuerta.cotasPanos(parante, nZ, nDiv, bastidor).joinToString("\n") { CalculosPuerta.df1(it) }
+            } else if (varianteSeleccionada == "Mari d") {
+                val pi = CalculosPuerta.paranteInterno(parante, nZ, bastidor)
+                val cr = CalculosPuerta.cotasPanosDiagonal(paflon, pi, nZ, nDiv, bastidor, angulo)
+                val zocList = (1..nZ).map { it * bastidor }
+                val izqE = (zocList + cr.izq).sorted()
+                val derE = (zocList + cr.der).sorted()
+                buildString {
+                    append("Izq:\n"); append(izqE.joinToString("\n") { CalculosPuerta.df1(it) })
+                    append("\nDer:\n"); append(derE.joinToString("\n") { CalculosPuerta.df1(it) })
+                    if (cr.sup.isNotEmpty()) { append("\nSup:\n"); append(cr.sup.joinToString("\n") { CalculosPuerta.df1(it) }) }
+                    if (cr.inf.isNotEmpty()) { append("\nInf:\n"); append(cr.inf.joinToString("\n") { CalculosPuerta.df1(it) }) }
+                }
             } else {
                 CalculosPuerta.textoPanos(zocalo, nPfvcal, divisTam, bastidor)
             }
@@ -760,8 +1144,11 @@ class PuertasActivity : AppCompatActivity() {
         }
     }
 
-    private fun calcularAjusteTere6(alto: Float, hPuenteBase: Float, piso: Float, nZ: Int): AjusteTere6 {
-        val tubo6 = 6f
+    /**
+     * El interior se llena con tubos del RELLENO elegido en el diálogo de variantes. Por omisión son
+     * 6, que es lo que llevaba fijo antes, pero el valor ingresado manda.
+     */
+    private fun calcularAjusteTere6(alto: Float, hPuenteBase: Float, piso: Float, nZ: Int, tubo6: Float = interior): AjusteTere6 {
         val gruma = 0.5f
         val paranteBase = CalculosPuerta.parante(hPuenteBase, piso)
         val interiorBase = (CalculosPuerta.paranteInterno(paranteBase, nZ, bastidor)).coerceAtLeast(tubo6)
@@ -789,7 +1176,7 @@ class PuertasActivity : AppCompatActivity() {
             hPuenteBase - (interiorBase - pilaFinal)
         }
         val paranteFinal = CalculosPuerta.parante(hPuenteFinal, piso)
-        val mochetaFinal = CalculosPuerta.mocheta(alto, hPuenteFinal, marco)
+        val mochetaFinal = CalculosPuerta.mocheta(alto, hPuenteFinal, marco, puente)
 
         return AjusteTere6(
             hPuente = hPuenteFinal,
@@ -801,24 +1188,58 @@ class PuertasActivity : AppCompatActivity() {
         )
     }
 
+    // Plano con medidas de Dora (long-click en ivModelo): se muestra en un diálogo con scroll.
+    // Genera y muestra el plano (con cotas) del modelo actual, reusando PuertaRender.
+    private fun mostrarPlano() {
+        if (binding.etMed1.text.toString().toFloatOrNull() == null ||
+            binding.etMed2.text.toString().toFloatOrNull() == null) {
+            Toast.makeText(this, "Realice el cálculo primero", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val datos = descriptorDatosActual()
+        val bmp = PuertaRender.dibujarPlano(this, datos) ?: return
+        mostrarPlanoDialog(bmp, "Plano ${datos.variante.ifBlank { datos.modelo }}".trim())
+    }
+
+    // Muestra el plano (bitmap a alta resolución) en DisenoActivity, a pantalla completa.
+    private fun mostrarPlanoDialog(bmp: Bitmap, titulo: String) {
+        DibujoPuerta.guardarPlanoEnCache(this, bmp)
+        val intent = Intent(this, crystal.crystal.Diseno.DisenoActivity::class.java).apply {
+            putExtra(crystal.crystal.Diseno.DisenoActivity.EXTRA_PLANO, true)
+            putExtra(crystal.crystal.Diseno.DisenoActivity.EXTRA_PLANO_TITULO, titulo)
+        }
+        startActivity(intent)
+    }
+
+    // Plano con medidas originales de Mari h (long-click en ivModelo).
+    /** Modelo en desarrollo: el plano ya se dibuja, pero los resultados muestran un aviso. */
+    private fun mostrarAvisoEnDesarrollo() {
+        val aviso = "🚧 En desarrollo"
+        listOf(
+            binding.tvMarco, binding.tvTope, binding.tvTubo, binding.tvPaflon,
+            binding.tvMel, binding.tvMela, binding.tvJunki, binding.tvVidrios,
+            binding.tvInox, binding.tvEnsayo, binding.tvEnsayo2
+        ).forEach { it.text = aviso }
+        binding.lyVidriosApilado.visibility = View.GONE
+        binding.lyVidrioMocheta.visibility = View.GONE
+        binding.txMel.text = ""
+        binding.txRefe.text = "🚧 Modelo en desarrollo — el diseño ya funciona; los cálculos estarán disponibles muy pronto."
+    }
+
     private fun renderizarModeloActual() {
         // Solo los modelos con renderizado implementado generan bitmap
         val nombreModelo = puertaActual?.nombre ?: return
-        if (nombreModelo != "Mari" && nombreModelo != "Taly" && nombreModelo != "Lina" && nombreModelo != "Adel" && nombreModelo != "Mili" && nombreModelo != "jeny" && nombreModelo != "Dora" && nombreModelo != "Tere") return
+        if (nombreModelo != "Mari" && nombreModelo != "Taly" && nombreModelo != "Lina" && nombreModelo != "Adel" && nombreModelo != "Mili" && nombreModelo != "jeny" && nombreModelo != "Dora" && nombreModelo != "Tere" && nombreModelo != "Viky") return
         val anchoPuertaCm = binding.etMed1.text.toString().toFloatOrNull() ?: return
         val altoPuertaCm = binding.etMed2.text.toString().toFloatOrNull() ?: return
         val nZocalos = binding.etZocalo.text.toString().toIntOrNull() ?: 0
         val nDiv = binding.etDivi.text.toString().toIntOrNull() ?: 0
-        val tipoDivision = when (varianteSeleccionada) {
-            "Mari v" -> "V"
-            "Mari d" -> "D"
-            else -> "H"
-        }
+        val tipoDivision = PuertaRender.tipoDivision(nombreModelo, varianteSeleccionada)
 
         // Hoja — ancho depende del tipo de marco lateral (canal 2.2 o tubo 2.5)
         val marcoIzqRender = if (ventanaIzquierda) 2.5f else marco
         val marcoDerRender = if (ventanaDerecha) 2.5f else marco
-        val anchoHojaCm = anchoPuertaCm - (marcoIzqRender + marcoDerRender + 1f)
+        val anchoHojaCm = CalculosPuerta.anchoHoja(anchoPuertaCm, marcoIzqRender, marcoDerRender, holgura)
         var altoHojaCm = CalculosPuerta.hPuente(
             altoPuertaCm,
             binding.etHoja.text.toString().toFloatOrNull() ?: 0f,
@@ -845,6 +1266,8 @@ class PuertasActivity : AppCompatActivity() {
         val bmp: Bitmap = if (nombreModelo == "Tere" && varianteSeleccionada == "Tere 6" && ajusteTere6 != null) {
             DibujoPuerta.generarBitmapTere6(
                 context = this,
+                marcoCm = marco,
+                puenteCm = puente,
                 anchoCm = anchoPuertaCm,
                 altoCm = altoPuertaCm,
                 altoHojaCm = altoHojaCm,
@@ -852,11 +1275,14 @@ class PuertasActivity : AppCompatActivity() {
                 altoContenedor = altoContenedor,
                 pisoCm = gapPisoCm,
                 nZocalo = nZRender,
-                cantidadTubos = ajusteTere6.cantidadTubos
+                cantidadTubos = ajusteTere6.cantidadTubos,
+                tuboCm = interior
             )
         } else if (nombreModelo == "Tere") {
             DibujoPuerta.generarBitmapTere(
                 context = this,
+                marcoCm = marco,
+                puenteCm = puente,
                 anchoCm = anchoPuertaCm,
                 altoCm = altoPuertaCm,
                 altoHojaCm = altoHojaCm,
@@ -868,23 +1294,30 @@ class PuertasActivity : AppCompatActivity() {
         } else if (nombreModelo == "Dora") {
             DibujoPuerta.generarBitmapDora(
                 context = this,
+                marcoCm = marco,
+                puenteCm = puente,
                 anchoCm = anchoPuertaCm,
                 altoCm = altoPuertaCm,
                 altoHojaCm = altoHojaCm,
                 anchoContenedor = anchoContenedor,
                 altoContenedor = altoContenedor,
                 pisoCm = gapPisoCm,
-                nZocalo = CalculosPuerta.nZocalo(nZocalos)
+                nZocalo = CalculosPuerta.nZocalo(nZocalos),
+                nInoxIzq = nDiv.takeIf { it >= 1 } ?: 9,
+                inoxCm = inox
             )
         } else if (nombreModelo == "jeny") {
-            val nCols = nDiv.takeIf { it >= 1 } ?: 3
             DibujoPuerta.generarBitmapJeny(
                 context = this,
+                marcoCm = marco,
+                puenteCm = puente,
                 anchoCm = anchoPuertaCm,
                 altoCm = altoPuertaCm,
                 altoHojaCm = altoHojaCm,
-                nCols = nCols,
-                nRows = nCols,
+                nDivisiones = nDiv.takeIf { it >= 1 } ?: 1,
+                rejillaCols = rejillaCols(),
+                rejillaFilas = rejillaFilas(),
+                variante = varianteSeleccionada,
                 anchoContenedor = anchoContenedor,
                 altoContenedor = altoContenedor,
                 pisoCm = gapPisoCm,
@@ -893,6 +1326,8 @@ class PuertasActivity : AppCompatActivity() {
         } else if (nombreModelo == "Mili") {
             DibujoPuerta.generarBitmapMili(
                 context = this,
+                marcoCm = marco,
+                puenteCm = puente,
                 anchoCm = anchoPuertaCm,
                 altoCm = altoPuertaCm,
                 altoHojaCm = altoHojaCm,
@@ -904,22 +1339,22 @@ class PuertasActivity : AppCompatActivity() {
         } else if (nombreModelo == "Adel") {
             val hHojaAdel = CalculosLina.hojaH(altoPuertaCm, binding.etHoja.text.toString().toFloatOrNull() ?: 0f, false)
             val nDivAdel  = nDiv.takeIf { it >= 1 } ?: 3        // divisiones de vidrio (columna derecha)
-            val nPafAdel  = binding.etAD.text.toString().toIntOrNull() ?: 3  // paflones (columna izquierda)
             DibujoPuerta.generarBitmapAdel(
                 context = this,
+                marcoCm = marco,
+                puenteCm = puente,
                 anchoCm = anchoPuertaCm,
                 altoCm = altoPuertaCm,
                 altoHojaCm = hHojaAdel,
                 nDivisiones = nDivAdel,
                 variante = varianteSeleccionada,
-                nPaflones = nPafAdel,
                 anchoContenedor = anchoContenedor,
                 altoContenedor = altoContenedor,
                 pisoCm = gapPisoCm,
                 nZocalo = CalculosPuerta.nZocalo(nZocalos)
             )
         } else if (nombreModelo == "Lina") {
-            val marcoLina = binding.etMarcoVar.text.toString().toFloatOrNull() ?: 2.2f
+            val marcoLina = marco  // marco del diálogo de variantes
             val grunaLina = binding.etZocalo.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: 0.8f
             val panelDelgadoLina = binding.etPanelDelgadoLina.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: 0f
             val hHojaInputLina = binding.etHoja.text.toString().toFloatOrNull() ?: 0f
@@ -946,11 +1381,17 @@ class PuertasActivity : AppCompatActivity() {
                 pisoCm = pisoLina,
                 grumaCm = grunaLina,
                 panelDelgadoCm = panelDelgadoLina,
-                mostrarVidrioCentral = varianteSeleccionada != "Lina b"
+                mostrarVidrioCentral = varianteSeleccionada != "Lina b",
+                puenteCm = puente,
+                panelCompleto = varianteSeleccionada == "Lina c",
+                bastidorCm = bastidor,
+                estructuraCm = interior
             )
         } else if (varianteSeleccionada.startsWith("Taly")) {
             DibujoPuerta.generarBitmapTaly(
                 context = this,
+                marcoCm = marco,
+                puenteCm = puente,
                 anchoPuertaCm = anchoPuertaCm,
                 altoPuertaCm = altoPuertaCm,
                 anchoHojaCm = anchoHojaCm,
@@ -962,11 +1403,14 @@ class PuertasActivity : AppCompatActivity() {
                 marcoCmIzq = marcoIzqRender,
                 marcoCmDer = marcoDerRender,
                 nZocalo = CalculosPuerta.nZocalo(nZocalos),
-                pisoCm = gapPisoCm
+                pisoCm = gapPisoCm,
+                bastidorCm = bastidor,
             )
         } else {
             DibujoPuerta.generarBitmapPuerta(
                 context = this,
+                marcoCm = marco,
+                puenteCm = puente,
                 anchoPuertaCm = anchoPuertaCm,
                 altoPuertaCm = altoPuertaCm,
                 anchoHojaCm = anchoHojaCm,
@@ -979,7 +1423,11 @@ class PuertasActivity : AppCompatActivity() {
                 anguloGrados = angulo,
                 marcoCmIzq = marcoIzqRender,
                 marcoCmDer = marcoDerRender,
-                pisoCm = gapPisoCm
+                pisoCm = gapPisoCm,
+                bastidorCm = bastidor,
+                // Viky y Mari arman sus divisiones con el aluminio del interior. El resto de los
+                // modelos todavía los dibuja con el bastidor.
+                interiorCm = if (nombreModelo == "Viky" || nombreModelo == "Mari") interior else bastidor
             )
         }
         binding.ivModelo.setImageBitmap(bmp)
@@ -1019,16 +1467,26 @@ class PuertasActivity : AppCompatActivity() {
         "Lina" -> listOf(
             Variante("Lina h", R.drawable.pjalina),
             Variante("Lina b", R.drawable.pjose),
+            Variante("Lina c", R.drawable.pjlinac),
             Variante("Lina p", R.drawable.pjosed)
         )
         "Mili" -> listOf(Variante("Mili", R.drawable.pmili))
-        "jeny" -> listOf(Variante("Jeny", R.drawable.pjenny))
+        // Las dos variantes nuevas todavía dibujan la rejilla parametrizada; sus patrones propios
+        // entran cuando lleguen los SVG del taller.
+        "jeny" -> listOf(
+            Variante("Jeny", R.drawable.pjenny),
+            Variante("Jeny c", R.drawable.pjenyc),
+            Variante("Jeny r", R.drawable.pjenyr)
+        )
         "Dora" -> listOf(Variante("Dora", R.drawable.pdora))
         "Tere" -> listOf(
             Variante("Tere", R.drawable.ptere),
             Variante("Tere 6", R.drawable.tere6)
         )
-        "Viky" -> listOf(Variante("Variante Única", R.drawable.pvicky))
+        "Viky" -> listOf(
+            Variante("Viky", R.drawable.pvicky),
+            Variante("Viky c", R.drawable.pvickyc)
+        )
         else -> emptyList()
     }
 
@@ -1055,31 +1513,146 @@ class PuertasActivity : AppCompatActivity() {
         filaVentana.addView(ivVentana)
         filaVentana.addView(cbDer)
 
+        // Filas [ etiqueta ] [ campo corto ] [ ▾ ] para los valores que aplican a TODOS los modelos.
+        val dp = resources.displayMetrics.density
+        fun filaValor(
+            etiqueta: String, valor: Float, usarCanto: Boolean = false, esMarco: Boolean = false,
+            // La holgura no es un perfil del catálogo: no lleva desplegable, solo el hueco para que
+            // los campos sigan alineados con los demás.
+            conPerfiles: Boolean = true
+        ): Pair<android.widget.LinearLayout, android.widget.EditText> {
+            val fila = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(24, 4, 24, 4)
+            }
+            // La etiqueta se queda con el espacio libre; el número es corto y no lo necesita.
+            fila.addView(android.widget.TextView(this).apply {
+                text = etiqueta
+                setPadding(0, 0, 16, 0)
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            val et = android.widget.EditText(this).apply {
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                // Sin redondear: acá el número no se muestra, se EDITA. Con df1 el bastidor de 8.25
+                // aparecía como 8.3 y al aceptar el diálogo quedaba en 8.3, moviendo todo el cálculo.
+                setText(valorEditable(valor))
+                setEms(4)   // entra "8.25" y nada más
+                gravity = android.view.Gravity.END
+            }
+            fila.addView(et)
+            // Desplegable con los perfiles del taller: elegir uno escribe su medida en el campo.
+            fila.addView(android.widget.TextView(this).apply {
+                text = if (conPerfiles) "▾" else ""
+                textSize = 26f
+                gravity = android.view.Gravity.CENTER
+                minWidth = (48 * dp).toInt()
+                minHeight = (48 * dp).toInt()
+                if (conPerfiles) setOnClickListener { elegirPerfil(et, usarCanto, conCanales = esMarco) }
+            })
+            return fila to et
+        }
+        // En el marco y el puente manda el canto del perfil; el marco además suma los canales.
+        val (filaMarco, etMarco) = filaValor("Marco (cm)", marco, usarCanto = true, esMarco = true)
+        val (filaPuente, etPuente) = filaValor("Puente (cm)", puente, usarCanto = true)
+        val (filaInox, etInox) = filaValor("Inox (cm)", inox)
+        // Los dos perfiles de la hoja: el cuadro de afuera y lo que va adentro. Valen para todos los
+        // modelos, así que no hay filas por modelo.
+        val (filaBastidor, etBastidor) = filaValor("Bastidor (cm)", bastidor)
+        val (filaInterior, etInterior) = filaValor("Interior (cm)", interior)
+        // Juego hoja–marco: no es un perfil, es cuánto se le deja a la hoja para que entre y gire.
+        val (filaHolgura, etHolgura) = filaValor("Holgura (cm)", holgura, conPerfiles = false)
+
+        // Lo que hay escrito en los campos ahora mismo. Sirve tanto para aplicar como para guardar
+        // la configuración, así se puede guardar sin tener que aceptar el diálogo primero.
+        fun valoresDeCampos() = ConfigPuerta.Valores(
+            marco = etMarco.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: marco,
+            puente = etPuente.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: puente,
+            inox = etInox.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: inox,
+            bastidor = etBastidor.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: bastidor,
+            interior = etInterior.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: interior,
+            // La holgura sí puede ser 0: hay marcos que reciben la hoja sin juego.
+            holgura = etHolgura.text.toString().toFloatOrNull()?.takeIf { it >= 0f } ?: holgura
+        )
+
+        fun escribirEnCampos(v: ConfigPuerta.Valores) {
+            etMarco.setText(valorEditable(v.marco))
+            etPuente.setText(valorEditable(v.puente))
+            etInox.setText(valorEditable(v.inox))
+            etBastidor.setText(valorEditable(v.bastidor))
+            etInterior.setText(valorEditable(v.interior))
+            etHolgura.setText(valorEditable(v.holgura))
+        }
+
+        fun aplicarValores() {
+            val v = valoresDeCampos()
+            marco = v.marco; puente = v.puente; inox = v.inox
+            bastidor = v.bastidor; interior = v.interior; holgura = v.holgura
+            // Se recuerda lo último usado para no volver a configurarlo en la próxima medición.
+            ConfigPuerta.recordarUltima(this, v)
+        }
+
+        // Fila de configuraciones guardadas: cargar una o guardar la actual con un nombre.
+        val filaConfig = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(24, 8, 24, 8)
+            addView(android.widget.TextView(this@PuertasActivity).apply {
+                text = "Configuración ▾"
+                textSize = 16f
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setOnClickListener { elegirConfiguracion { v -> escribirEnCampos(v) } }
+            })
+            addView(android.widget.TextView(this@PuertasActivity).apply {
+                text = "Guardar"
+                textSize = 16f
+                setPadding((12 * dp).toInt(), (8 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt())
+                setOnClickListener { guardarConfiguracion(valoresDeCampos()) }
+            })
+        }
+
         val rv = androidx.recyclerview.widget.RecyclerView(this).apply {
             layoutManager = GridLayoutManager(this@PuertasActivity, 2)
             setPadding(16, 8, 16, 16)
+            // Va dentro de un ScrollView: la grilla se muestra entera y quien desplaza es el diálogo.
+            isNestedScrollingEnabled = false
         }
         val contenedor = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             addView(filaVentana)
+            addView(filaConfig)
+            addView(filaMarco)
+            addView(filaPuente)
+            addView(filaInox)
+            addView(filaBastidor)
+            addView(filaInterior)
+            addView(filaHolgura)
             addView(rv)
         }
+        // Con los campos de perfiles el diálogo ya no entra en una pantalla chica.
+        val scroll = android.widget.ScrollView(this).apply { addView(contenedor) }
 
         val dialog = AlertDialog.Builder(this)
             .setTitle("Variantes — ${puertaActual?.nombre}")
-            .setView(contenedor)
+            .setView(scroll)
             .setPositiveButton("OK") { _, _ ->
                 ventanaIzquierda = cbIzq.isChecked
                 ventanaDerecha = cbDer.isChecked
+                aplicarValores()
             }
             .setNegativeButton("Cerrar", null)
             .create()
 
         rv.adapter = VariantesAdapter(variantes) { v ->
+            val cambioDeVariante = v.nombre != varianteSeleccionada
             varianteSeleccionada = v.nombre
             binding.ivModelo.setImageResource(v.imagen)
             ventanaIzquierda = cbIzq.isChecked
             ventanaDerecha = cbDer.isChecked
+            aplicarValores()
+            // Cada variante arranca con el interior que le corresponde, pero SOLO al cambiar de
+            // variante: si se toca la que ya estaba, manda lo que el vidriero acaba de escribir.
+            if (cambioDeVariante) interiorPorOmision(v.nombre)?.let { interior = it }
             actualizarVisibilidades()
             dialog.dismiss()
         }
@@ -1126,14 +1699,9 @@ class PuertasActivity : AppCompatActivity() {
     }
 
     private fun etiquetaPaquete(prefijo: String, numero: Int): String {
-        val cliente = clienteActual.ifBlank {
-            binding.txCliente.text?.toString()?.trim().orEmpty()
-        }.ifBlank {
-            ProyectoManager.getProyectoActivo().orEmpty()
-        }.ifBlank {
-            "sin cliente"
-        }
-        return "$prefijo$numero, $cliente"
+        // El id del paquete usa el PROYECTO activo, nunca el cliente de tvTitulo/clienteActual.
+        val proyecto = ProyectoManager.getProyectoActivo().orEmpty().ifBlank { "sin proyecto" }
+        return "$prefijo$numero, $proyecto"
     }
 
     private fun sufijoMetadatosProduccion(): String {
@@ -1142,6 +1710,31 @@ class PuertasActivity : AppCompatActivity() {
             "acabado_sup:${metaAcabadoSuperficial.ifBlank { "null" }};" +
             "obs:${metaObservaciones.ifBlank { "null" }}>"
     }
+
+    // Descriptor de la puerta actual (parámetros para regenerar el gráfico/plano).
+    private fun descriptorDatosActual(): PuertaDescriptor.Datos = PuertaDescriptor.Datos(
+        modelo = puertaActual?.nombre.orEmpty(),
+        variante = varianteSeleccionada,
+        ancho = binding.etMed1.text.toString().toFloatOrNull() ?: 0f,
+        alto = binding.etMed2.text.toString().toFloatOrNull() ?: 0f,
+        hoja = binding.etHoja.text.toString().toFloatOrNull() ?: 0f,
+        piso = binding.etPiso.text.toString().toFloatOrNull() ?: 0f,
+        zocalos = binding.etZocalo.text.toString().toIntOrNull() ?: 0,
+        divisiones = binding.etDivi.text.toString().toIntOrNull() ?: 0,
+        angulo = if (varianteUsaAngulo()) binding.etAngulo.text.toString().toFloatOrNull() ?: 0f else 0f,
+        marco = marco,
+        puente = puente,
+        inox = inox,
+        ventanaIzq = ventanaIzquierda,
+        ventanaDer = ventanaDerecha,
+        cliente = ProyectoManager.getProyectoActivo().orEmpty(),
+        interior = interior,
+        rejillaCols = rejillaCols(),
+        rejillaFilas = rejillaFilas(),
+        holgura = holgura
+    )
+
+    private fun descriptorPuertaActual(): String = PuertaDescriptor.serializar(descriptorDatosActual())
 
     private fun disenoSimbolicoV2(numeroProducto: Int): String {
         val cliente = escaparCampoArchivo(
@@ -1195,6 +1788,29 @@ class PuertasActivity : AppCompatActivity() {
         contenedor.addView(etAcabadoSup)
         contenedor.addView(etObs)
 
+        // Cuando hay dos listas de vidrio (detalle pieza por pieza y apilado) se elige aquí cuál se
+        // archiva. Las dos vienen marcadas: destildar una es lo excepcional.
+        val hayDosListas = binding.lyVidriosApilado.visibility == View.VISIBLE
+        val chkDetalle = android.widget.CheckBox(this).apply {
+            text = "Archivar vidrios (detalle por pieza)"
+            isChecked = archivarVidrioDetalle
+        }
+        val chkApilado = android.widget.CheckBox(this).apply {
+            text = "Archivar vidrio apilado"
+            isChecked = archivarVidrioApilado
+        }
+        if (hayDosListas) {
+            contenedor.addView(chkDetalle)
+            contenedor.addView(chkApilado)
+        }
+
+        fun guardarSeleccionVidrios() {
+            // Sin las dos listas no hay nada que elegir: se archiva lo de siempre, para que una
+            // casilla destildada en "Mari d" no deje sin vidrios a las demás variantes.
+            archivarVidrioDetalle = !hayDosListas || chkDetalle.isChecked
+            archivarVidrioApilado = !hayDosListas || chkApilado.isChecked
+        }
+
         AlertDialog.Builder(this)
             .setTitle("Metadatos de producción")
             .setView(contenedor)
@@ -1203,9 +1819,13 @@ class PuertasActivity : AppCompatActivity() {
                 metaTipoVidrio = etVidrio.text?.toString()?.trim().orEmpty()
                 metaAcabadoSuperficial = etAcabadoSup.text?.toString()?.trim().orEmpty()
                 metaObservaciones = etObs.text?.toString()?.trim().orEmpty()
+                guardarSeleccionVidrios()
                 onContinuar()
             }
-            .setNeutralButton("Omitir") { _, _ -> onContinuar() }
+            .setNeutralButton("Omitir") { _, _ ->
+                guardarSeleccionVidrios()
+                onContinuar()
+            }
             .setNegativeButton("Cancelar", null)
             .show()
     }
@@ -1272,6 +1892,9 @@ class PuertasActivity : AppCompatActivity() {
             if (esValido(binding.lyPaflon)) {
                 ListaCasilla.procesarArchivarConPrefijo(this, binding.txPaflon, binding.tvPaflon, mapListas, identificadorPaquete)
             }
+            if (esValido(binding.lyInox)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txInox, binding.tvInox, mapListas, identificadorPaquete)
+            }
             if (esValido(binding.lyJunki)) {
                 ListaCasilla.procesarArchivarConPrefijo(this, binding.txJunki, binding.tvJunki, mapListas, identificadorPaquete)
             }
@@ -1284,12 +1907,23 @@ class PuertasActivity : AppCompatActivity() {
             if (esValido(binding.lyMel)) {
                 ListaCasilla.procesarArchivarConPrefijo(this, binding.txMel, binding.tvMel, mapListas, identificadorPaquete)
             }
-            if (esValido(binding.lyVidrios)) {
+            if (archivarVidrioDetalle && esValido(binding.lyVidrios)) {
                 ListaCasilla.procesarArchivarConPrefijo(this, binding.txVidrios, binding.tvVidrios, mapListas, identificadorPaquete)
+            }
+            if (archivarVidrioApilado && esValido(binding.lyVidriosApilado)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txVidriosApilado, binding.tvVidriosApilado, mapListas, identificadorPaquete)
+            }
+            // Sin check: la mocheta se archiva siempre que exista.
+            if (esValido(binding.lyVidrioMocheta)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txVidrioMocheta, binding.tvVidrioMocheta, mapListas, identificadorPaquete)
             }
             val paqueteV2 = disenoSimbolicoV2(siguienteNumero)
             mapListas.getOrPut("DisenoSimbolicoV2") { mutableListOf() }
                 .add(mutableListOf(paqueteV2, "", identificadorPaquete))
+
+            // Descriptor para REGENERAR el gráfico de la puerta (sin guardar imágenes).
+            mapListas.getOrPut(PuertaDescriptor.CLAVE) { mutableListOf() }
+                .add(mutableListOf(descriptorPuertaActual(), "", identificadorPaquete))
 
             ProyectoManager.actualizarContadorPorPrefijo(this, prefijo, siguienteNumero)
         }
@@ -1300,6 +1934,7 @@ class PuertasActivity : AppCompatActivity() {
         val msg = if (cant > 1) "Archivadas $cant unidades en proyecto: ${ProyectoManager.getProyectoActivo()}"
                   else "Datos archivados como $ultimoID en proyecto: ${ProyectoManager.getProyectoActivo()}"
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        controladorCola.ofrecerSiguiente()
     }
 
     @Deprecated("Deprecated in Java")
@@ -1308,7 +1943,8 @@ class PuertasActivity : AppCompatActivity() {
             val perfiles = mapOf(
                 "Marco" to ModoMasivoHelper.texto(binding.tvMarco),
                 "Tubo" to ModoMasivoHelper.texto(binding.tvTubo),
-                "Paflón" to ModoMasivoHelper.texto(binding.tvPaflon)
+                "Paflón" to ModoMasivoHelper.texto(binding.tvPaflon),
+                "Inoxidable" to ModoMasivoHelper.texto(binding.tvInox)
             ).filter { it.value.isNotBlank() }
 
             val accesorios = mapOf(

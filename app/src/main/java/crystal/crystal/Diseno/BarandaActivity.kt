@@ -88,6 +88,11 @@ class BarandaActivity : AppCompatActivity() {
             calcularYMostrar()
         }
         binding.btArchivar.setOnClickListener {
+            // Candado de suscripción PRIMERO: bloquear antes de avanzar numeración o dar el toast.
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeArchivar(),
+                    "Archivar es una función de pago. Renueva para guardar tus proyectos.")) {
+                return@setOnClickListener
+            }
             if (ultimoResultado == null && !calcularYMostrar()) return@setOnClickListener
             ejecutarFlujoArchivado()
         }

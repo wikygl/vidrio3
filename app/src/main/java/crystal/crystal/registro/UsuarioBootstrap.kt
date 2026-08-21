@@ -37,9 +37,6 @@ object UsuarioBootstrap {
                 "imagenPerfil" to foto,
                 "actualizadoEn" to FieldValue.serverTimestamp()
             ),
-            "wallet" to hashMapOf(
-                "saldo" to 0.0
-            ),
             "trial" to hashMapOf(
                 "ultimo_estado" to "BASIC",
                 "prepagos_usados" to 0
@@ -76,8 +73,7 @@ object UsuarioBootstrap {
                     "mode" to "FULL",
                     "source" to "TRIAL_1M",
                     "periodId" to periodId,
-                    "validFrom" to inicio,
-                    "validTo" to fin,
+                    "full_until" to fin,   // mismo campo que escriben los planes
                     "lastRecalcAt" to FieldValue.serverTimestamp()
                 )
             )
@@ -85,19 +81,25 @@ object UsuarioBootstrap {
             return
         }
 
-        val validTo = estado["validTo"] as? Timestamp
+        // El reloj del cliente es solo para UX; la validación real irá en reglas de Firestore (Fase 2).
         val modeActual = estado["mode"] as? String ?: "BASIC"
-        val sourceActual = estado["source"] as? String
+        val fullUntilMs = (estado["full_until"] as? Timestamp)?.toDate()?.time
+            ?: (estado["full_until"] as? Number)?.toLong()
 
-        if (validTo != null && validTo.toDate().time < ahora) {
+        // FULL es por tiempo: si su vencimiento ya pasó, o si es un FULL SIN vencimiento (dato
+        // inconsistente que antes se quedaba "vigente" para siempre), baja a BASIC. Los modos sin
+        // vencimiento distintos de FULL (p. ej. VENTAS heredado) se respetan.
+        val vencido = (fullUntilMs != null && fullUntilMs < ahora) ||
+            (modeActual == "FULL" && fullUntilMs == null)
+
+        if (vencido) {
             // Periodo vencido: si no hay un plan activo posterior, bajar a BASIC
             val nuevo = mapOf(
                 "estado_servicio" to mapOf(
                     "mode" to "BASIC",
                     "source" to "EXPIRED",
                     "periodId" to null,
-                    "validFrom" to null,
-                    "validTo" to null,
+                    "full_until" to null,
                     "lastRecalcAt" to FieldValue.serverTimestamp()
                 )
             )

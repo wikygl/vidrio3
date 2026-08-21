@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
 import crystal.crystal.R
 
 class ProductAdapter(
@@ -48,9 +49,14 @@ class ProductAdapter(
             tvDescription.text = product.nombre
             tvPrice.text = "S/ ${String.format("%.2f", product.price)}"
             tvImages.text = "Imagenes: ${imagenes.size}"
+            // Glide en vez de setImageURI: una URI content:// inaccesible (permiso perdido tras
+            // reinstalar) NO debe crashear el listado; Glide falla en silencio y muestra vacío.
             if (imagenes.isNotEmpty()) {
-                ivPreview.setImageURI(Uri.parse(imagenes.first()))
+                Glide.with(itemView)
+                    .load(Uri.parse(imagenes.first()))
+                    .into(ivPreview)
             } else {
+                Glide.with(itemView).clear(ivPreview)
                 ivPreview.setImageResource(android.R.color.transparent)
             }
         }

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_dialog_full"
+    android:gravity="center_horizontal"
+    android:paddingLeft="24dp"
+    android:paddingRight="24dp"
+    android:paddingTop="26dp"
+    android:paddingBottom="18dp">
+
+    <ImageView
+        android:layout_width="104dp"
+        android:layout_height="104dp"
+        android:src="@drawable/ic_gema_full"
+        android:contentDescription="Crystal FULL" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="✨ ¡Hazte FULL! ✨"
+        android:textColor="#4527A0"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvMensajeFull"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:textColor="#444444"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:text="" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="Con FULL nada te frena: archivar, optimizar sin límites, presupuestos, compartir, sincronizar y descontar tu inventario. ¡Todo trabajando para ti! 💪"
+        android:textColor="#777777"
+        android:textSize="13sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_badge_precio"
+        android:paddingLeft="18dp"
+        android:paddingRight="18dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:text="🚀  Arranca desde  S/ 1"
+        android:textColor="#E65100"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/btnFull"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="18dp"
+        android:background="@drawable/bg_boton_full"
+        android:text="¡Quiero FULL!  🚀"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:stateListAnimator="@null" />
+
+    <TextView
+        android:id="@+id/btnAhoraNo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:padding="10dp"
+        android:text="Ahora no"
+        android:textColor="#9E9E9E"
+        android:textSize="14sp" />
+
+</LinearLayout>

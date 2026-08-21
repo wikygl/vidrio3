@@ -35,6 +35,38 @@ import java.io.IOException
 class FichaActivity : AppCompatActivity() {
     private lateinit var binding: ActivityFichaBinding
 
+    /** Qué vista está cargada en el recycler, para titular y nombrar bien el PDF. */
+    private var vistaActual: String = "Ficha"
+
+    /**
+     * Toque largo en cualquiera de los botones = exportar a PDF lo que está en pantalla, para
+     * mandárselo a quien no tiene Crystal. Va en el toque largo porque la barra ya tiene sus cuatro
+     * botones y es el gesto que la app usa para las acciones secundarias.
+     */
+    private fun configurarExportacionPdf() {
+        val exportar = View.OnLongClickListener {
+            val adapter = binding.rvModelo.adapter
+            if (adapter == null || adapter.itemCount == 0) {
+                Toast.makeText(this, "Primero abre una lista para exportarla", Toast.LENGTH_SHORT).show()
+            } else {
+                val proyecto = ProyectoManager.getProyectoActivo().orEmpty()
+                val titulo = if (proyecto.isBlank()) vistaActual else "$vistaActual - $proyecto"
+                Toast.makeText(this, "Generando PDF...", Toast.LENGTH_SHORT).show()
+                FichaPdfExport.exportarYCompartir(
+                    context = this,
+                    adapter = adapter,
+                    titulo = titulo,
+                    nombreBase = "${vistaActual}_${proyecto.ifBlank { "crystal" }}"
+                )
+            }
+            true
+        }
+        binding.btAbrir.setOnLongClickListener(exportar)
+        binding.btCliente.setOnLongClickListener(exportar)
+        binding.btMaterial.setOnLongClickListener(exportar)
+        binding.btPlanos.setOnLongClickListener(exportar)
+    }
+
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +74,7 @@ class FichaActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         ProyectoManager.inicializarDesdeStorage(this)
+        configurarExportacionPdf()
 
         binding.btAbrir.setOnClickListener {
             val mapListas = MapStorage.cargarMap(this)
@@ -60,7 +93,11 @@ class FichaActivity : AppCompatActivity() {
                             // Filtrar valores 0 o cantidad 0 (excepto referencias/diseño/grados/diseno_paquete)
                             if (nombreLista != "Referencias" && nombreLista != "Diseño"
                                 && nombreLista != "Grados" && nombreLista != "DisenoPaquete"
-                                && nombreLista != "DisenoSimbolicoV2") {
+                                && nombreLista != "DisenoSimbolicoV2" && nombreLista != "DisenoPuerta"
+                                && nombreLista != "DisenoVentanaAl"
+                                && nombreLista != crystal.crystal.taller.VitrovenDescriptor.CLAVE
+                                && nombreLista != "Color aluminio" && nombreLista != "Tipo vidrio"
+                                && nombreLista != "DisenoMampara") {
                                 val cantNum = dato2.toIntOrNull()
                                 if (dato2.isBlank() || cantNum == null || cantNum == 0) continue
                                 val valNum = dato1.toFloatOrNull()
@@ -78,6 +115,7 @@ class FichaActivity : AppCompatActivity() {
                 val adapter = VentanaAdapter(ventanasMap, this)
                 binding.rvModelo.layoutManager = LinearLayoutManager(this)
                 binding.rvModelo.adapter = adapter
+                vistaActual = "Productos"
             } else {
                 Toast.makeText(this, "No se encontraron datos para mostrar", Toast.LENGTH_SHORT).show()
             }
@@ -97,6 +135,7 @@ class FichaActivity : AppCompatActivity() {
                     val adapter = MaterialAdapter(ordenado, this)
                     binding.rvModelo.layoutManager = LinearLayoutManager(this)
                     binding.rvModelo.adapter = adapter
+                    vistaActual = "Materiales"
                 } else {
                     Toast.makeText(this, "No se encontraron materiales que coincidan", Toast.LENGTH_SHORT).show()
                 }
@@ -115,8 +154,43 @@ class FichaActivity : AppCompatActivity() {
                     val adapter = ClienteAdapter(clientesMap, pedidoPorCliente, this)
                     binding.rvModelo.layoutManager = LinearLayoutManager(this)
                     binding.rvModelo.adapter = adapter
+                    vistaActual = "Clientes"
                 } else {
                     Toast.makeText(this, "No se encontraron datos por cliente", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        binding.btPlanos.setOnClickListener {
+            mostrarSelectorProyectos { proyectosElegidos ->
+                // Se recorre proyecto por proyecto para fijar el cliente = nombre del proyecto de forma
+                // explícita (no se usa el cliente archivado en el descriptor ni el campo 3).
+                val items = mutableListOf<PlanoItem>()
+                for (proyecto in proyectosElegidos) {
+                    val map = MapStorage.cargarProyecto(this, proyecto) ?: continue
+                    // Color de aluminio y tipo de vidrio por producto (id), desde DisenoSimbolicoV2.
+                    val colorPorId = mutableMapOf<String, Pair<String, String>>()
+                    map["DisenoSimbolicoV2"]?.forEach { l ->
+                        val paq = l.getOrNull(0)?.trim() ?: return@forEach
+                        val id = l.getOrNull(2) ?: return@forEach
+                        colorPorId[id] = extraerCampoMat(paq, "alu") to extraerCampoMat(paq, "vid")
+                    }
+                    map[crystal.crystal.taller.puerta.PuertaDescriptor.CLAVE]?.forEach { lista ->
+                        val d = lista.getOrNull(0)?.let { crystal.crystal.taller.puerta.PuertaDescriptor.parsear(it.trim()) }
+                        if (d != null) {
+                            val id = lista.getOrNull(2) ?: ""               // id completo "P10, abel" (para color)
+                            val numDisplay = id.substringBefore(",").trim() // solo el número "P10" (para mostrar)
+                            val (alu, vid) = colorPorId[id] ?: ("" to "")
+                            items.add(PlanoItem(d.copy(cliente = proyecto), numDisplay, alu, vid))
+                        }
+                    }
+                }
+                if (items.isEmpty()) {
+                    Toast.makeText(this, "No hay planos de puerta archivados", Toast.LENGTH_SHORT).show()
+                } else {
+                    binding.rvModelo.layoutManager = LinearLayoutManager(this)
+                    binding.rvModelo.adapter = PlanoAdapter(items, this)
+                    vistaActual = "Planos"
                 }
             }
         }
@@ -168,7 +242,10 @@ class FichaActivity : AppCompatActivity() {
     ): Pair<MutableMap<String, MutableMap<String, MutableList<String>>>, MutableMap<String, MutableList<String>>> {
         val clientesMap = mutableMapOf<String, MutableMap<String, MutableList<String>>>()
         val pedidoPorCliente = mutableMapOf<String, MutableList<String>>()
-        val excluidas = setOf("Referencias", "Diseño", "DisenoPaquete", "DisenoSimbolicoV2", "Grados")
+        val excluidas = setOf(
+            "Referencias", "Diseño", "DisenoPaquete", "DisenoSimbolicoV2", "Grados",
+            "DisenoMampara", "DisenoPuerta", crystal.crystal.taller.VitrovenDescriptor.CLAVE
+        )
 
         // Build ventana→color lookup for color-differentiated keys
         val ventanaColorMap = mutableMapOf<String, Pair<String, String>>()
@@ -205,11 +282,12 @@ class FichaActivity : AppCompatActivity() {
             }.forEach { lista ->
                 val dato1 = lista[0]
                 val dato2 = lista[1]
-                val ventana = lista[2]
+                val ventanaId = lista[2]                              // id completo (para color)
+                val ventana = ventanaId.split(',', ' ').first().trim() // solo el número (para mostrar)
                 val cliente = lista.getOrElse(3) { "" }.ifBlank { "Sin cliente" }
 
                 val esVidrio = nombreLista.startsWith("Vidrio", ignoreCase = true)
-                val (colorAlu, tipoVidrio) = ventanaColorMap[ventana] ?: Pair("", "")
+                val (colorAlu, tipoVidrio) = ventanaColorMap[ventanaId] ?: Pair("", "")
                 val sufijo = if (esVidrio) tipoVidrio else colorAlu
                 val clave = if (sufijo.isNotBlank() && !nombreLista.contains(sufijo, ignoreCase = true)) {
                     "$nombreLista [$sufijo]"
@@ -246,11 +324,13 @@ class FichaActivity : AppCompatActivity() {
 
         mapListas.forEach { (nombreLista, listas) ->
             if (nombreLista == "Diseño" || nombreLista == "DisenoPaquete"
-                || nombreLista == "DisenoSimbolicoV2" || nombreLista == "Grados") return@forEach
+                || nombreLista == "DisenoSimbolicoV2" || nombreLista == "Grados"
+                || nombreLista == "DisenoMampara" || nombreLista == "DisenoPuerta"
+                || nombreLista == crystal.crystal.taller.VitrovenDescriptor.CLAVE) return@forEach
 
             if (nombreLista == "Pedido" || nombreLista == "Referencias") {
                 val items = listas.filter { it.size >= 2 }.map { lista ->
-                    val ventana = lista.getOrElse(2) { "" }
+                    val ventana = lista.getOrElse(2) { "" }.split(',', ' ').first().trim()
                     val cliente = lista.getOrElse(3) { "" }
                     val partes = mutableListOf(lista[0])
                     if (ventana.isNotBlank()) partes.add(ventana)
@@ -273,11 +353,12 @@ class FichaActivity : AppCompatActivity() {
             }.forEach { lista ->
                 val dato1 = lista[0]
                 val dato2 = lista[1]
-                val ventana = lista[2]
+                val ventanaId = lista[2]                              // id completo (para color)
+                val ventana = ventanaId.split(',', ' ').first().trim() // solo el número (para mostrar)
                 val cliente = lista.getOrElse(3) { "" }
                     .ifBlank { ProyectoManager.getProyectoActivo() ?: "" }
 
-                val (colorAlu, tipoVidrio) = ventanaColorMap[ventana] ?: Pair("", "")
+                val (colorAlu, tipoVidrio) = ventanaColorMap[ventanaId] ?: Pair("", "")
                 val esVidrio = nombreLista.startsWith("Vidrio", ignoreCase = true)
                 val sufijo = if (esVidrio) tipoVidrio else colorAlu
                 val clave = if (sufijo.isNotBlank() && !nombreLista.contains(sufijo, ignoreCase = true))
@@ -356,7 +437,8 @@ class FichaActivity : AppCompatActivity() {
             val referenciasTly: TableLayout = view.findViewById(R.id.tlyReferencias)
             val disenoImageView: ImageView = view.findViewById(R.id.diseno)
             val drawableNameTextView: TextView = view.findViewById(R.id.textViewDrawableName)
-            val deleteButton: Button = view.findViewById(R.id.deleteButton) // Botón para eliminar elementos
+            // Texto clicable con el color: al tocarlo muestra el orden de módulos por tramo.
+            val tvOrdenModulos: TextView = view.findViewById(R.id.tvOrdenModulos)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VentanaViewHolder {
@@ -369,12 +451,32 @@ class FichaActivity : AppCompatActivity() {
             val ventana = ventanas.keys.toList()[position]
             val listas = ventanas[ventana]
 
-            // Mostrar el número de ventana
-            holder.ventanaTextView.text = "Ventana: $ventana"
+            // Tipo de producto (según sus listas) + número + proyecto activo (nunca el cliente).
+            // Primer token del id: descarta ", cliente" (puerta) o " proyecto" (nova).
+            val numeroProd = ventana.split(',', ' ').first().trim()
+            val proyectoActivo = crystal.crystal.casilla.ProyectoManager.getProyectoActivo().orEmpty()
+            val serieAl = listas?.firstOrNull { it.first == "DisenoVentanaAl" }
+                ?.second?.firstOrNull()?.first
+                ?.let { crystal.crystal.taller.venAl.VentanaAlDescriptor.parsear(it)?.serie }
+            val tipo = when {
+                listas?.any { it.first == "DisenoPuerta" } == true -> "Puerta"
+                serieAl != null -> "Ventana Aluminio - $serieAl"
+                listas?.any { it.first == "DisenoPaquete" } == true -> "Ventana Nova"
+                listas?.any { it.first == crystal.crystal.taller.VitrovenDescriptor.CLAVE } == true -> "Vitroventana"
+                else -> "Producto"
+            }
+            holder.ventanaTextView.text =
+                if (proyectoActivo.isNotBlank()) "$tipo: $numeroProd, $proyectoActivo"
+                else "$tipo: $numeroProd"
 
             // Limpiar los TableLayouts para evitar duplicaciones
             holder.materialesTly.removeAllViews()
             holder.referenciasTly.removeAllViews()
+            // Resetear el diseño: sin esto, el ViewHolder reciclado arrastra la imagen/el texto del
+            // item anterior (p. ej. una puerta) cuando este item no fija su propio diseño.
+            holder.disenoImageView.setImageDrawable(null)
+            holder.disenoImageView.scaleY = 1f
+            holder.drawableNameTextView.text = ""
 
             var lastNombreLista = "" // Para evitar que el nombre de la lista se repita
             grados = 0 // Reiniciar grados para cada ventana
@@ -387,6 +489,10 @@ class FichaActivity : AppCompatActivity() {
                     it.first == "Referencias" -> 1
                     it.first.startsWith("Vidrios", ignoreCase = true) -> 3
                     it.first == "DisenoPaquete" -> 4
+                    it.first == "DisenoPuerta" -> 4
+                    it.first == "DisenoMampara" -> 4
+                    it.first == crystal.crystal.taller.VitrovenDescriptor.CLAVE -> 4
+                    it.first == "DisenoVentanaAl" -> 4
                     it.first == "DisenoSimbolicoV2" -> 5
                     it.first == "Diseño" -> 6
                     it.first == "Pedido" -> 7
@@ -432,6 +538,89 @@ class FichaActivity : AppCompatActivity() {
                             }
                         }
                     }
+                } else if (nombreLista == "DisenoPuerta") {
+                    // Puerta: regenerar el gráfico desde su descriptor (sin imagen guardada).
+                    datos.forEach { (desc, _) ->
+                        val d = crystal.crystal.taller.puerta.PuertaDescriptor.parsear(desc.trim())
+                        if (d != null) {
+                            val bmp = crystal.crystal.taller.puerta.PuertaRender.dibujar(
+                                context, d, d.ancho * 4f, d.alto * 4f
+                            )
+                            if (bmp != null) {
+                                holder.disenoImageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                                holder.disenoImageView.scaleType = ImageView.ScaleType.FIT_CENTER
+                                holder.disenoImageView.setImageBitmap(bmp)
+                                holder.drawableNameTextView.text = "${d.modelo} ${d.variante}".trim()
+                                tieneDisenoPaquete = true
+                            }
+                        }
+                    }
+                } else if (nombreLista == "DisenoVentanaAl") {
+                    // Ventana de aluminio: regenerar el diseño desde su descriptor.
+                    datos.forEach { (desc, _) ->
+                        val d = crystal.crystal.taller.venAl.VentanaAlDescriptor.parsear(desc.trim())
+                        if (d != null) {
+                            val bmp = crystal.crystal.taller.venAl.VentanaAlRender.dibujar(context, d)
+                            if (bmp != null) {
+                                holder.disenoImageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                                holder.disenoImageView.scaleType = ImageView.ScaleType.FIT_CENTER
+                                holder.disenoImageView.setImageBitmap(bmp)
+                                holder.disenoImageView.scaleY = 1f
+                                holder.drawableNameTextView.text = d.serie
+                                tieneDisenoPaquete = true
+                            }
+                        }
+                    }
+                } else if (nombreLista == "DisenoMampara") {
+                    // Mampara: regenerar el dibujo desde el descriptor simbólico. Para archivados
+                    // antiguos (cuando se guardaba la ruta de un PNG) se decodifica ese archivo.
+                    datos.forEach { (valor, _) ->
+                        val v = valor.trim()
+                        val desc = crystal.crystal.taller.mamparas.MamparaPaflonDescriptor.parsear(v)
+                        val bmp = if (desc != null)
+                            crystal.crystal.taller.mamparas.MamparaPaflonRender.dibujar(context, desc)
+                        else
+                            android.graphics.BitmapFactory.decodeFile(v)
+                        if (bmp != null) {
+                            holder.disenoImageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                            holder.disenoImageView.scaleType = ImageView.ScaleType.FIT_CENTER
+                            holder.disenoImageView.setImageBitmap(bmp)
+                            holder.drawableNameTextView.text = "Mampara"
+                            tieneDisenoPaquete = true
+                        }
+                    }
+                } else if (nombreLista == crystal.crystal.taller.VitrovenDescriptor.CLAVE) {
+                    // Vitroventana: regenerar el dibujo desde su descriptor (sin imagen guardada),
+                    // igual que puerta y mampara.
+                    datos.forEach { (valor, _) ->
+                        val d = crystal.crystal.taller.VitrovenDescriptor.parsear(valor.trim())
+                        if (d != null) {
+                            runCatching {
+                                val dm = context.resources.displayMetrics
+                                val w = dm.widthPixels.coerceAtLeast(720)
+                                val h = (w * 0.75f).toInt().coerceAtLeast(480)
+                                val bmp = crystal.crystal.Diseno.vitroven.RenderVitroven().renderizarBitmap(
+                                    w, h,
+                                    crystal.crystal.Diseno.vitroven.ParametrosVitroven(
+                                        anchoTotalCm = d.ancho,
+                                        altoTotalCm = d.alto,
+                                        clips = d.clips,
+                                        clasificacion = d.clasificacion,
+                                        disenoSimbolico = d.simbolico,
+                                        direccionVertical = d.direccionVertical
+                                    )
+                                )
+                                holder.disenoImageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                                holder.disenoImageView.scaleType = ImageView.ScaleType.FIT_CENTER
+                                holder.disenoImageView.setImageBitmap(bmp)
+                                holder.disenoImageView.scaleY = if (grados == 180) -1f else 1f
+                                holder.drawableNameTextView.text = "Vitroventana"
+                                tieneDisenoPaquete = true
+                            }.onFailure {
+                                holder.drawableNameTextView.text = "Error diseño: ${it.message}"
+                            }
+                        }
+                    }
                 } else if (nombreLista == "Diseño" && !tieneDisenoPaquete) {
                     datos.forEach { (clave, _) ->
                         val diseno = clave.trim()
@@ -444,6 +633,10 @@ class FichaActivity : AppCompatActivity() {
                             holder.drawableNameTextView.text = "No se encontró: $diseno"
                         }
                     }
+                } else if (nombreLista == "DisenoSimbolicoV2") {
+                    // No se muestra crudo aquí; sus metadatos van en "Descripción" (abajo).
+                } else if (nombreLista == "Color aluminio" || nombreLista == "Tipo vidrio") {
+                    // No se muestran como fila de material; van en "Descripción".
                 } else {
                     // Procesar los datos
                     datos.forEach { (dato1, dato2) ->
@@ -487,10 +680,93 @@ class FichaActivity : AppCompatActivity() {
                 }
             }
 
-            // Botón para eliminar la ventana seleccionada
-            holder.deleteButton.setOnClickListener {
-                eliminarVentana(position)
+            // Descripción: metadatos de producción (color de aluminio, vidrio, acabado, observaciones)
+            // que se ingresan antes de archivar. Se colocan debajo de Referencias.
+            val paqueteV2 = listas?.firstOrNull { it.first == "DisenoSimbolicoV2" }
+                ?.second?.firstOrNull()?.first?.trim().orEmpty()
+            // VentanaAl guarda color/vidrio como listas propias; se usan como respaldo del formato Nova.
+            fun primerDato(nombre: String) = listas?.firstOrNull { it.first == nombre }
+                ?.second?.firstOrNull()?.first?.trim().orEmpty()
+            val campos = listOf(
+                "Aluminio" to extraerMat(paqueteV2, "alu").ifBlank { primerDato("Color aluminio") },
+                "Vidrio" to extraerMat(paqueteV2, "vid").ifBlank { primerDato("Tipo vidrio") },
+                "Acabado" to extraerMat(paqueteV2, "acabado_sup"),
+                "Observaciones" to extraerMat(paqueteV2, "obs")
+            ).filter { it.second.isNotBlank() }
+            if (campos.isNotEmpty()) {
+                val rowHeader = TableRow(context)
+                rowHeader.addView(TextView(context).apply {
+                    text = "Descripción"
+                    setTypeface(null, Typeface.BOLD)
+                    setPadding(0, 16, 0, 4)
+                    layoutParams = TRLayoutParams(0, TRLayoutParams.WRAP_CONTENT, 1f)
+                })
+                holder.referenciasTly.addView(rowHeader)
+                for ((etq, valor) in campos) {
+                    val row = TableRow(context)
+                    row.addView(TextView(context).apply {
+                        text = "$etq: $valor"
+                        layoutParams = TRLayoutParams(0, TRLayoutParams.WRAP_CONTENT, 1f)
+                    })
+                    holder.referenciasTly.addView(row)
+                }
             }
+
+            // Texto clicable (color) que muestra el orden de módulos por tramo. Solo para ventanas de
+            // aluminio con modulación (cualquier serie excepto 84); en el resto se oculta.
+            val descVAl = listas?.firstOrNull { it.first == "DisenoVentanaAl" }
+                ?.second?.firstOrNull()?.first
+            val dVAl = descVAl?.let { crystal.crystal.taller.venAl.VentanaAlDescriptor.parsear(it.trim()) }
+            val patronesTramo = dVAl?.let { crystal.crystal.taller.venAl.VentanaAlRender.patronesPorTramo(it) }.orEmpty()
+            if (dVAl != null && patronesTramo.isNotEmpty()) {
+                val color = listas?.firstOrNull { it.first == "Color aluminio" }
+                    ?.second?.firstOrNull()?.first?.trim().orEmpty()
+                holder.tvOrdenModulos.text =
+                    if (color.isNotBlank()) "$color — ver orden de módulos" else "Ver orden de módulos"
+                holder.tvOrdenModulos.visibility = View.VISIBLE
+                holder.tvOrdenModulos.setOnClickListener { mostrarOrdenTramos(context, dVAl) }
+            } else {
+                holder.tvOrdenModulos.visibility = View.GONE
+                holder.tvOrdenModulos.setOnClickListener(null)
+            }
+        }
+
+        // Diálogo con el orden de colocación de módulos por tramo (una imagen por tramo, etiquetada).
+        private fun mostrarOrdenTramos(context: android.content.Context, d: crystal.crystal.taller.venAl.VentanaAlDescriptor) {
+            val patrones = crystal.crystal.taller.venAl.VentanaAlRender.patronesPorTramo(d)
+            if (patrones.isEmpty()) return
+            val dens = context.resources.displayMetrics.density
+            val pad = (12 * dens).toInt()
+            val box = android.widget.LinearLayout(context).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding(pad, pad, pad, pad)
+            }
+            patrones.forEachIndexed { i, pat ->
+                box.addView(TextView(context).apply {
+                    text = if (patrones.size > 1) "Tramo ${i + 1}: $pat" else "Modulación: $pat"
+                    setTypeface(typeface, Typeface.BOLD)
+                    setPadding(0, (8 * dens).toInt(), 0, (2 * dens).toInt())
+                })
+                val resId = crystal.crystal.taller.venAl.VentanaAlRender.imagenOrdenModulos(context, d.serie, pat)
+                if (resId != 0) box.addView(ImageView(context).apply {
+                    setImageResource(resId); adjustViewBounds = true
+                }) else box.addView(TextView(context).apply { text = "(sin imagen para $pat)" })
+            }
+            androidx.appcompat.app.AlertDialog.Builder(context)
+                .setTitle("Orden de módulos — ${d.serie}")
+                .setView(android.widget.ScrollView(context).apply { addView(box) })
+                .setPositiveButton("Cerrar", null)
+                .show()
+        }
+
+        // Extrae un campo de los metadatos de producción "-MAT<alu:..;vid:..;...>" del paquete.
+        private fun extraerMat(paquete: String, campo: String): String {
+            if (paquete.isBlank()) return ""
+            val m = Regex("-MAT<([^>]*)>").find(paquete) ?: return ""
+            return m.groupValues[1].split(";")
+                .find { it.startsWith("$campo:", ignoreCase = true) }
+                ?.substringAfter(":")?.replace("_", " ")?.trim()
+                ?.takeIf { it != "null" } ?: ""
         }
 
         // Función para eliminar una ventana y ajustar los números
@@ -515,6 +791,59 @@ class FichaActivity : AppCompatActivity() {
 
         override fun getItemCount(): Int {
             return ventanas.size
+        }
+    }
+
+    data class PlanoItem(
+        val datos: crystal.crystal.taller.puerta.PuertaDescriptor.Datos,
+        val num: String, val alu: String, val vid: String
+    )
+
+    // Galería de planos de puertas archivadas: regenera cada plano (con cotas) desde su descriptor.
+    class PlanoAdapter(
+        private val items: List<PlanoItem>,
+        private val context: Context
+    ) : RecyclerView.Adapter<PlanoAdapter.VH>() {
+
+        class VH(view: View) : RecyclerView.ViewHolder(view) {
+            val titulo: TextView = view.findViewById(R.id.tvTituloPlano)
+            val datos: TextView = view.findViewById(R.id.tvDatosPlano)
+            val iv: ImageView = view.findViewById(R.id.ivPlano)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val v = android.view.LayoutInflater.from(context).inflate(R.layout.item_plano, parent, false)
+            return VH(v)
+        }
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val item = items[position]
+            // Texto a tamaño fijo (XML); el plano (sin cabecera) se adecúa al espacio de la imagen.
+            holder.titulo.text = crystal.crystal.taller.puerta.PuertaRender.tituloPlano(item.datos, item.num)
+            holder.datos.text = crystal.crystal.taller.puerta.PuertaRender.datosPlano(item.datos, item.alu, item.vid)
+            val plano = crystal.crystal.taller.puerta.PuertaRender.dibujarPlano(
+                context, item.datos, item.num, item.alu, item.vid, cabecera = false
+            )
+            holder.iv.setImageBitmap(plano?.let { b -> escalar(b, 1400) })
+            holder.iv.setOnClickListener {
+                // A pantalla completa: con cabecera incluida en el bitmap.
+                val bmp = crystal.crystal.taller.puerta.PuertaRender.dibujarPlano(
+                    context, item.datos, item.num, item.alu, item.vid, cabecera = true
+                ) ?: return@setOnClickListener
+                crystal.crystal.taller.puerta.dibujo.DibujoPuerta.guardarPlanoEnCache(context, bmp)
+                context.startActivity(android.content.Intent(context, crystal.crystal.Diseno.DisenoActivity::class.java).apply {
+                    putExtra(crystal.crystal.Diseno.DisenoActivity.EXTRA_PLANO, true)
+                    putExtra(crystal.crystal.Diseno.DisenoActivity.EXTRA_PLANO_TITULO, "${item.datos.variante.ifBlank { item.datos.modelo }} ${item.num}".trim())
+                })
+            }
+        }
+
+        override fun getItemCount() = items.size
+
+        private fun escalar(bm: android.graphics.Bitmap, maxDim: Int): android.graphics.Bitmap {
+            val s = maxDim.toFloat() / maxOf(bm.width, bm.height)
+            if (s >= 1f) return bm
+            return android.graphics.Bitmap.createScaledBitmap(bm, (bm.width * s).toInt(), (bm.height * s).toInt(), true)
         }
     }
 

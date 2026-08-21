@@ -14,6 +14,7 @@ class PivotAl : AppCompatActivity() {
     private lateinit var binding: ActivityPivotAlBinding
     private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
     private var primerClickArchivarRealizado = false
+    private lateinit var controladorCola: ControladorColaMedidas
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,12 +44,14 @@ class PivotAl : AppCompatActivity() {
                         archivarMapas()
                         Toast.makeText(this@PivotAl, "Archivado", Toast.LENGTH_SHORT).show()
                         binding.etAnchoP.setText(""); binding.etAltoP.setText("")
+                        controladorCola.ofrecerSiguiente()
                     }
                     override fun onProyectoCreado(nombreProyecto: String) {
                         primerClickArchivarRealizado = true
                         archivarMapas()
                         Toast.makeText(this@PivotAl, "Archivado", Toast.LENGTH_SHORT).show()
                         binding.etAnchoP.setText(""); binding.etAltoP.setText("")
+                        controladorCola.ofrecerSiguiente()
                     }
                     override fun onProyectoEliminado(nombreProyecto: String) {}
                 })
@@ -61,12 +64,22 @@ class PivotAl : AppCompatActivity() {
                 archivarMapas()
                 Toast.makeText(this, "Archivado", Toast.LENGTH_SHORT).show()
                 binding.etAnchoP.setText(""); binding.etAltoP.setText("")
+                controladorCola.ofrecerSiguiente()
             }
         }
 
         // Pre-carga desde presupuesto
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etAnchoP.setText(df1(it)) }
         intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.etAltoP.setText(df1(it)) }
+
+        controladorCola = ControladorColaMedidas(
+            activity = this,
+            claseActual = PivotAl::class.java,
+            etAncho = binding.etAnchoP,
+            etAlto = binding.etAltoP,
+            formato = ::df1
+        )
+        controladorCola.inicializar()
     }
 
     // ==================== ARCHIVAR ====================

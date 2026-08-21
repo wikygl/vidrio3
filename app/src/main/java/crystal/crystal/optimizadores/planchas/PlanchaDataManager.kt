@@ -43,6 +43,13 @@ class PlanchaDataManager(context: Context) {
     fun recuperarEspesorDisco(): Float =
         prefs.getFloat("espesor_disco_cm", 0f)
 
+    fun guardarRestringirRotacion(valor: Boolean) {
+        prefs.edit().putBoolean("restringir_rotacion", valor).apply()
+    }
+
+    fun recuperarRestringirRotacion(): Boolean =
+        prefs.getBoolean("restringir_rotacion", false)
+
     fun guardarResultado(resultado: ResultadoOptimizacionPlanchas) {
         prefs.edit().putString("resultado_planchas", gson.toJson(resultado)).apply()
     }

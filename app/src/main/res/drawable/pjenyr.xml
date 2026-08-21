@@ -1,0 +1,64 @@
+<!-- Jeny r: recuadro suspendido dentro de la hoja, amarrado al bastidor por seis piezas — una
+     arriba, una abajo y dos a cada costado, enfrentadas a la misma altura.
+
+     Mismo molde que pjenny: puerta de 80 x 240 a escala (1 cm = 0.5904), marco 2.2, mocheta
+     enmarcada de 1.5, puente 2.5, bastidor en paflón de 8.25 con los parantes enteros y los
+     horizontales entre ellos, y rejilla de 2.5. Ningún aluminio se monta sobre otro. -->
+<vector android:autoMirrored="true"
+    android:width="1.1077dp"
+    android:height="3.30762dp"
+    android:viewportWidth="47.559"
+    android:viewportHeight="142.02"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Marco: laterales, cabecera y puente -->
+    <path android:fillColor="#999999" android:fillType="evenOdd"
+        android:pathData="M0.163,0.163l1.299,0 0,141.693 -1.299,0 0,-141.693zM46.096,0.163l1.299,0 0,141.693 -1.299,0 0,-141.693z"
+        android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.327"/>
+    <path android:fillColor="#999999" android:fillType="evenOdd"
+        android:pathData="M1.462,0.163l44.634,0 0,1.299 -44.634,0 0,-1.299zM1.462,22.598l44.634,0 0,1.476 -44.634,0 0,-1.476z"
+        android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.327"/>
+
+    <!-- Mocheta: marco propio de 1.5 -->
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd"
+        android:pathData="M1.462,1.462l44.634,0 0,0.886 -44.634,0 0,-0.886zM1.462,21.712l44.634,0 0,0.886 -44.634,0 0,-0.886z"
+        android:strokeColor="#000000" android:strokeWidth="0.327"/>
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd"
+        android:pathData="M1.462,2.348l0.886,0 0,19.364 -0.886,0 0,-19.364zM45.21,2.348l0.886,0 0,19.364 -0.886,0 0,-19.364z"
+        android:strokeColor="#000000" android:strokeWidth="0.327"/>
+
+    <!-- Bastidor de la hoja: parantes enteros (198) y horizontales entre ellos (58.1) -->
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd"
+        android:pathData="M1.757,24.369l4.871,0 0,116.897 -4.871,0 0,-116.897zM40.93,24.369l4.871,0 0,116.897 -4.871,0 0,-116.897z"
+        android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.327"/>
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd"
+        android:pathData="M6.628,24.369l34.302,0 0,4.871 -34.302,0 0,-4.871zM6.628,136.395l34.302,0 0,4.871 -34.302,0 0,-4.871z"
+        android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.327"/>
+
+    <!-- Junquillo de 1.2 contra el bastidor. Va ANTES que el recuadro y los amarres: como la
+         rejilla se monta por delante en z, la tapa en los cruces y se ve recortado. -->
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd"
+        android:pathData="M6.628,29.24l0.708,0 0,107.155 -0.708,0 0,-107.155zM40.222,29.24l0.708,0 0,107.155 -0.708,0 0,-107.155zM7.336,29.24l32.886,0 0,0.708 -32.886,0 0,-0.708zM7.336,135.687l32.886,0 0,0.708 -32.886,0 0,-0.708z"
+        android:strokeColor="#000000" android:strokeWidth="0.327"/>
+
+    <!-- Recuadro: las de pie enteras y las acostadas entre ellas -->
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd"
+        android:pathData="M13.03,45.32l1.476,0 0,75 -1.476,0 0,-75zM33.054,45.32l1.476,0 0,75 -1.476,0 0,-75z"
+        android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.327"/>
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd"
+        android:pathData="M14.506,45.32l18.548,0 0,1.476 -18.548,0 0,-1.476zM14.506,118.844l18.548,0 0,1.476 -18.548,0 0,-1.476z"
+        android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.327"/>
+
+    <!-- Amarres: los de pie sobre el mismo eje, los de cada costado enfrentados -->
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd"
+        android:pathData="M23.041,29.24l1.476,0 0,16.08 -1.476,0 0,-16.08zM23.041,120.32l1.476,0 0,16.075 -1.476,0 0,-16.075z"
+        android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.327"/>
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd"
+        android:pathData="M6.628,67.82l6.402,0 0,1.476 -6.402,0 0,-1.476zM34.53,67.82l6.4,0 0,1.476 -6.4,0 0,-1.476zM6.628,97.82l6.402,0 0,1.476 -6.402,0 0,-1.476zM34.53,97.82l6.4,0 0,1.476 -6.4,0 0,-1.476z"
+        android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.327"/>
+
+    <!-- Marcas del vidrio -->
+    <path android:fillColor="#00000000" android:fillType="evenOdd"
+        android:pathData="M22.5,9.788l1.754,-2.143m-2.187,5.516l4.441,-5.537m-6.534,11.596l11.009,-13.98m-11.9,120.7l1.754,-2.143m-2.187,5.516l4.441,-5.537"
+        android:strokeColor="#000000" android:strokeWidth="0.327"/>
+</vector>

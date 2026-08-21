@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 class ProductoRepository(
     private val productoDao: ProductoDao,
     private val context: Context,
+    private val movimientoDao: MovimientoInventarioDao? = null,
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) {
@@ -105,33 +106,169 @@ class ProductoRepository(
     /**
      * Registrar venta - RESTA del stock
      */
-    suspend fun registrarVenta(productoId: String, cantidad: Int): Result<Unit> =
+    /** Descuento de un solo producto. Para una venta completa usar [prepararConsumo] + [aplicarConsumo]. */
+    suspend fun registrarVenta(
+        productoId: String,
+        cantidad: Float,
+        referencia: String = "",
+        vendedor: String = ""
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val consumos = prepararConsumo(mapOf(productoId to cantidad))
+            .getOrElse { return@withContext Result.failure(it) }
+        aplicarConsumo(consumos, referencia.ifBlank { "VENTA-${System.currentTimeMillis()}" }, vendedor)
+    }
+
+    // ========== VENTA CON DESCUENTO DE STOCK ==========
+
+    /**
+     * Lo que una línea de la venta consume del inventario. Se calcula ANTES de tocar nada, para
+     * poder rechazar la venta completa si a un solo ítem le falta stock.
+     */
+    data class ConsumoStock(
+        val productoId: String,
+        val productoNombre: String,
+        /** Cantidad en la unidad de stock (p2 para vidrio, unidades para el resto). */
+        val cantidad: Float,
+        /** Planchas que consume (solo vidrio). */
+        val planchas: Float
+    )
+
+    /**
+     * Calcula qué consume cada línea y verifica que alcance. Devuelve el detalle, o un fallo con el
+     * primer producto que no da. No modifica nada: separar el cálculo de la escritura es lo que
+     * permite abortar la venta entera sin dejar descuentos a medias.
+     *
+     * [cantidadPorProducto] va en la unidad de stock del producto: pies cuadrados para el vidrio,
+     * unidades para lo demás.
+     */
+    suspend fun prepararConsumo(
+        cantidadPorProducto: Map<String, Float>
+    ): Result<List<ConsumoStock>> = withContext(Dispatchers.IO) {
+        val consumos = mutableListOf<ConsumoStock>()
+        for ((productoId, cantidad) in cantidadPorProducto) {
+            if (cantidad <= 0f) continue
+            val producto = productoDao.obtenerPorId(productoId)
+                ?: return@withContext Result.failure(Exception("Producto no encontrado en inventario"))
+
+            if (producto.stock < cantidad) {
+                return@withContext Result.failure(
+                    Exception("Stock insuficiente de ${producto.nombre}: quedan ${formatear(producto.stock)} ${producto.unidad}")
+                )
+            }
+
+            // El vidrio además consume planchas físicas: vender 2.5 m² gasta la fracción de plancha
+            // que le corresponde. Si no se cargaron las medidas, solo se descuenta el área.
+            val planchas = if (producto.esVidrio()) producto.planchasParaArea(cantidad) else 0f
+            if (planchas > 0f && producto.stockPlanchas > 0f && producto.stockPlanchas < planchas) {
+                return@withContext Result.failure(
+                    Exception("No alcanzan las planchas de ${producto.nombre}: quedan ${formatear(producto.stockPlanchas)}")
+                )
+            }
+
+            consumos += ConsumoStock(producto.id, producto.nombre, cantidad, planchas)
+        }
+        Result.success(consumos)
+    }
+
+    /**
+     * Aplica el consumo: descuenta el stock y deja un movimiento por cada producto. Se llama después
+     * de que la venta quedó registrada, con su número de comprobante como [referencia].
+     *
+     * El descuento se hace como diferencia (`stock = stock + delta`), no fijando un total, y el
+     * movimiento guarda esa diferencia: así lo que quede pendiente de subir puede sumarse en el
+     * servidor sin importar el orden en que lleguen las terminales.
+     */
+    suspend fun aplicarConsumo(
+        consumos: List<ConsumoStock>,
+        referencia: String,
+        vendedor: String = "",
+        terminal: String? = null,
+        tipo: String = "VENTA"
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val uid = obtenerUidEmpresa().orEmpty()
+            for (consumo in consumos) {
+                val antes = productoDao.obtenerPorId(consumo.productoId) ?: continue
+                productoDao.actualizarStockYPlanchas(
+                    productoId = consumo.productoId,
+                    cantidad = -consumo.cantidad,
+                    planchas = -consumo.planchas
+                )
+                val despues = productoDao.obtenerPorId(consumo.productoId)
+
+                movimientoDao?.insertar(
+                    MovimientoInventario(
+                        productoId = consumo.productoId,
+                        productoNombre = consumo.productoNombre,
+                        tipo = tipo,
+                        cantidad = -consumo.cantidad,
+                        cantidadPlanchas = -consumo.planchas,
+                        stockAnterior = antes.stock,
+                        stockNuevo = despues?.stock ?: (antes.stock - consumo.cantidad),
+                        stockPlanchasAnterior = antes.stockPlanchas,
+                        stockPlanchasNuevo = despues?.stockPlanchas
+                            ?: (antes.stockPlanchas - consumo.planchas).coerceAtLeast(0f),
+                        referencia = referencia,
+                        vendedor = vendedor,
+                        terminal = terminal,
+                        uidPatron = uid
+                    )
+                )
+
+                productoDao.obtenerPorId(consumo.productoId)?.let { sincronizarProductoAFirestore(it) }
+            }
+            Log.d(TAG, "📦 Stock descontado por $referencia: ${consumos.size} producto(s)")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error aplicando consumo de stock", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun formatear(valor: Float): String =
+        if (valor % 1f == 0f) valor.toInt().toString() else String.format("%.2f", valor)
+
+    /**
+     * Devuelve al inventario lo que consumió una venta anulada, dejando el movimiento inverso. El
+     * movimiento original NO se borra: el libro registra los dos hechos.
+     */
+    suspend fun revertirConsumo(referencia: String, motivo: String = ""): Result<Int> =
         withContext(Dispatchers.IO) {
             try {
-                // Verificar stock disponible
-                val producto = productoDao.obtenerPorId(productoId)
-                if (producto == null) {
-                    return@withContext Result.failure(Exception("Producto no encontrado"))
-                }
+                val dao = movimientoDao ?: return@withContext Result.success(0)
+                val originales = dao.porReferencia(referencia).filter { it.tipo != "ANULACION" }
+                if (originales.isEmpty()) return@withContext Result.success(0)
+                val uid = obtenerUidEmpresa().orEmpty()
 
-                if (!producto.tieneStock(cantidad)) {
-                    return@withContext Result.failure(
-                        Exception("Stock insuficiente. Disponible: ${producto.stock}")
+                for (original in originales) {
+                    val antes = productoDao.obtenerPorId(original.productoId) ?: continue
+                    productoDao.actualizarStockYPlanchas(
+                        productoId = original.productoId,
+                        cantidad = -original.cantidad,
+                        planchas = -original.cantidadPlanchas
                     )
+                    val despues = productoDao.obtenerPorId(original.productoId)
+                    dao.insertar(
+                        MovimientoInventario(
+                            productoId = original.productoId,
+                            productoNombre = original.productoNombre,
+                            tipo = "ANULACION",
+                            cantidad = -original.cantidad,
+                            cantidadPlanchas = -original.cantidadPlanchas,
+                            stockAnterior = antes.stock,
+                            stockNuevo = despues?.stock ?: antes.stock,
+                            stockPlanchasAnterior = antes.stockPlanchas,
+                            stockPlanchasNuevo = despues?.stockPlanchas ?: antes.stockPlanchas,
+                            referencia = referencia,
+                            observaciones = motivo.ifBlank { "Anulación de $referencia" },
+                            uidPatron = uid
+                        )
+                    )
+                    productoDao.obtenerPorId(original.productoId)?.let { sincronizarProductoAFirestore(it) }
                 }
-
-                // Actualizar stock (restar)
-                productoDao.actualizarStock(productoId, -cantidad)
-
-                // Sincronizar
-                productoDao.obtenerPorId(productoId)?.let {
-                    sincronizarProductoAFirestore(it)
-                }
-
-                Log.d(TAG, "📦 Venta registrada: -$cantidad de ${producto.nombre}")
-                Result.success(Unit)
+                Result.success(originales.size)
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Error registrando venta", e)
+                Log.e(TAG, "❌ Error revirtiendo $referencia", e)
                 Result.failure(e)
             }
         }
@@ -139,7 +276,7 @@ class ProductoRepository(
     /**
      * Agregar stock - SUMA al stock
      */
-    suspend fun agregarStock(productoId: String, cantidad: Int): Result<Unit> =
+    suspend fun agregarStock(productoId: String, cantidad: Float): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
                 productoDao.actualizarStock(productoId, cantidad)

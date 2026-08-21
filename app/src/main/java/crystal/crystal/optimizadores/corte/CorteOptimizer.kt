@@ -142,8 +142,15 @@ class CorteOptimizer {
         Log.d("CorteOptimizer", "🚀 FÓRMULA 1 + MANEJO DE CORTES LARGOS + REDISTRIBUCIÓN")
         Log.d("CorteOptimizer", "🔧 GROSOR DISCO: ${grosorDisco}cm (MODELO CONSISTENTE)")
 
+        // PASO 0: Unir las filas repetidas ANTES de optimizar. Todo el algoritmo identifica un corte
+        // por "longitud + referencia" (el mapa de usados del backtracking y el descuento de
+        // cantidades), así que dos filas iguales comparten clave: el llenado se topaba en la cantidad
+        // de UNA de ellas y la varilla quedaba a medio llenar (con 28x10 dos veces solo entraban 10
+        // por varilla en vez de 21, dejando 312 cm de retazo).
+        val piezasUnificadas = unificarPiezasRepetidas(piezasRequeridas)
+
         // PASO NUEVO: Detectar y manejar cortes más largos que varillas disponibles
-        val (piezasAjustadas, varillasCompletas) = manejarCortesLargos(piezasRequeridas, varillasDisponibles, grosorDisco)
+        val (piezasAjustadas, varillasCompletas) = manejarCortesLargos(piezasUnificadas, varillasDisponibles, grosorDisco)
 
         Log.d("CortesLargos", "Piezas después del tratamiento: ${piezasAjustadas.size}")
         Log.d("CortesLargos", "Varillas completas generadas: ${varillasCompletas.size}")
@@ -654,6 +661,26 @@ class CorteOptimizer {
         nivel: Int = 5
     ): List<VarillaConReferencias> =
         optimizarCortesConConfiguracion(piezasRequeridas, varillasDisponibles, grosorDisco, nivel)
+
+    /**
+     * Suma en una sola fila las piezas que comparten longitud y referencia. Son la misma pieza para
+     * el algoritmo (esa es su clave de identidad), y tenerlas separadas hacía que solo se pudiera
+     * usar la cantidad de una fila por varilla. Se conservan el orden de aparición y el total de
+     * piezas; las de distinta referencia siguen separadas aunque midan lo mismo.
+     */
+    private fun unificarPiezasRepetidas(piezas: List<PiezaCorte>): List<PiezaCorte> {
+        val unificadas = LinkedHashMap<String, PiezaCorte>()
+        for (pieza in piezas) {
+            val clave = "${pieza.longitud}_${pieza.referencia}"
+            val previa = unificadas[clave]
+            unificadas[clave] = if (previa == null) pieza
+                                else previa.copy(cantidad = previa.cantidad + pieza.cantidad)
+        }
+        if (unificadas.size != piezas.size) {
+            Log.d("CorteOptimizer", "🔗 Filas repetidas unidas: ${piezas.size} → ${unificadas.size}")
+        }
+        return unificadas.values.toList()
+    }
 
     // ========== FÓRMULA 1 ESPECÍFICA MEJORADA - ACTIVA ==========
 

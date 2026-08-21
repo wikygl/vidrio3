@@ -1,6 +1,7 @@
 package crystal.crystal.taller
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -13,14 +14,20 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.view.drawToBitmap
 import androidx.lifecycle.lifecycleScope
 import crystal.crystal.R
+import crystal.crystal.casilla.ListaCasilla
+import crystal.crystal.casilla.MapStorage
+import crystal.crystal.casilla.ProyectoManager
+import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityPduchaBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,7 +43,7 @@ class PDuchaActivity : AppCompatActivity() {
     private var ducha: SerieDucha?=null
     private var indice = 0
 
-    private val mapDuchas: LinkedHashMap<String, MutableList<DoorData>> = LinkedHashMap()
+    private val mapDuchas: LinkedHashMap<SerieDucha, MutableList<DoorData>> = LinkedHashMap()
 // Cada vez que pulsemos “Calcular”, meteremos los datos en mapDuchas[serie], de modo
 // que cada clave (p.ej. “A005”, “A010”, “C1”…) tenga lista de DoorData acumulados.
 
@@ -47,18 +54,34 @@ class PDuchaActivity : AppCompatActivity() {
     private val archivos: MutableList<Bitmap> = mutableListOf()
 // Aquí vamos guardando copias del combinedBitmap cada vez que se pulsa (click normal) btArchivar.
 
+    // Diseño (paños + perforaciones) de cada puerta calculada; una página del PDF por entrada.
+    private val disenosPorPuerta: MutableList<Bitmap> = mutableListOf()
+
     private var ultimaSerie: String? = null
 // Para verificar si la serie que estamos añadiendo es la MISMA que antes o cambió.
 
     private lateinit var binding: ActivityPduchaBinding
+    private lateinit var controladorCola: ControladorColaMedidas
+
+    // Archivado a proyecto activo (igual que las otras calculadoras).
+    private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
+    private var metaColorAluminio: String = ""
+    private var metaTipoVidrio: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityPduchaBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Proyecto activo (mismo patrón que Nova/Vitrovén/ventanas).
+        ProyectoManager.inicializarDesdeStorage(this)
+        ProyectoUIHelper.configurarVisorProyectoActivo(this, binding.tvProyectoActivo)
+        procesarIntentProyecto(intent)
+        metaColorAluminio = intent.getStringExtra("color_aluminio")?.trim().orEmpty()
+
         // 1) Al pulsar “Calcular”
         binding.btCalcular.setOnClickListener {
+            controladorCola.onCalcular()
             // Validamos que haya ancho/alto
             if (binding.etAncho1.text.isBlank() ||
                 binding.etAlto.text.isBlank() ||
@@ -69,18 +92,26 @@ class PDuchaActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             agregarDoorToDocument()
+            limpiarMedidasConHint()
         }
 
-        // 2) Al pulsar “Archivar” (click normal)
+        // 2) Al pulsar “Archivar” (click normal): archiva al proyecto activo, igual que las otras.
         binding.btArchivar.setOnClickListener {
-            combinedBitmap?.let { archivos.add(it) }
-            Toast.makeText(this, "Documento archivado localmente", Toast.LENGTH_SHORT).show()
+            // Candado de suscripción PRIMERO.
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeArchivar(),
+                    "Archivar es una función de pago. Renueva para guardar tus proyectos.")) {
+                return@setOnClickListener
+            }
+            // Pedir color de aluminio y tipo de vidrio antes de archivar.
+            mostrarDialogoMetadatosProduccion {
+                archivarMapas()
+            }
         }
 
         // 3) Al hacer LARGO click en “Archivar” → Generar PDF con todo lo de `archivos`
         binding.btArchivar.setOnLongClickListener {
-            if (archivos.isEmpty()) {
-                Toast.makeText(this, "No hay nada que exportar.", Toast.LENGTH_SHORT).show()
+            if (mapDuchas.isEmpty()) {
+                Toast.makeText(this, "No hay nada que exportar. Calcula primero.", Toast.LENGTH_SHORT).show()
             } else {
                 generarPdfDesdeArchivos()
             }
@@ -98,6 +129,16 @@ class PDuchaActivity : AppCompatActivity() {
         // Pre-carga desde presupuesto
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etAncho1.setText(df1(it)) }
         intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.etAlto.setText(df1(it)) }
+
+        controladorCola = ControladorColaMedidas(
+            activity = this,
+            claseActual = PDuchaActivity::class.java,
+            etAncho = binding.etAncho1,
+            etAlto = binding.etAlto,
+            ivDiseno = binding.ivVidrios,
+            formato = ::df1
+        )
+        controladorCola.inicializar()
     }
 
     private fun df1(defo: Float): String {
@@ -109,86 +150,110 @@ class PDuchaActivity : AppCompatActivity() {
         return resultado.replace(",", ".")
     }
 
-    @SuppressLint("SetTextI18n")
-    private fun vidrios() {
-        val ducha = ducha ?: return
-        val p = parametrosPorSerie[ducha.nombre]
-            ?: error("Faltan parámetros para ${ducha.nombre}")
-        val altoTotal = alto()
+    /** Tras calcular: deja los EditText de medidas en blanco y pone lo borrado como hint,
+     *  para reingresar rápido viendo la medida anterior de referencia. */
+    private fun limpiarMedidasConHint() {
+        listOf(binding.etAncho1, binding.etAncho2, binding.etAlto).forEach { et ->
+            val v = et.text?.toString()?.trim().orEmpty()
+            if (v.isNotEmpty()) et.hint = v
+            et.text?.clear()
+        }
+    }
 
-        val texto = when (ducha.nombre) {
-            // P2: dos corredizos idénticos = (ancho+3)/2  x (alto-6)
+    /** Un paño de vidrio a producir: qué hoja es, y sus medidas en cm. */
+    data class PanelVidrio(val tipo: String, val anchoCm: Float, val altoCm: Float)
+
+    /**
+     * Fuente ÚNICA del despiece de vidrios: dado la serie y las medidas de vano de una puerta,
+     * devuelve los paños (fijo/corrediza) con sus medidas en cm, según las fórmulas del catálogo.
+     * Lo usan tanto el texto de resultados (`vidrios()`) como la tabla del diseño (`crearBitmapPorSerie`).
+     */
+    private fun panelesDe(serie: SerieDucha, d: DoorData): List<PanelVidrio> {
+        if (serie.marca == "Corrales") return panelesCorrales(serie.nombre, d)
+        val p = parametrosPorSerie[serie.nombre] ?: return emptyList()
+        val altoTotal = d.alto
+        val hF = altoTotal - p.altoOffsetFijo
+        val hC = altoTotal - p.altoOffsetCorrediza
+        return when (serie.nombre) {
+            // P2: dos corredizos idénticos = (ancho+3)/2 x (alto-6)
             "P2" -> {
-                val a = (ancho1() + 3f) / 2f
-                val h = altoTotal - p.altoOffsetCorrediza
-                val dim = "${df1(a)} x ${df1(h)}"
-                listOf(dim, dim).joinToString("\n")
+                val a = (d.ancho1 + 3f) / 2f
+                listOf(PanelVidrio("Corrediza", a, hC), PanelVidrio("Corrediza", a, hC))
             }
-
-            // F1: un fijo = ancho/2 x (alto-5)  y un corredizo = (ancho/2+5) x (alto-2)
-            "F1" -> {
-                val f = ancho1() / 2f
-                val hF = altoTotal - p.altoOffsetFijo
-                val c = f + 5f
-                val hC = altoTotal - p.altoOffsetCorrediza
-                "${df1(f)} x ${df1(hF)}\n${df1(c)} x ${df1(hC)}"
-            }
-
             // A010: dos corredizos iguales = (ancho+5)/2 x (alto-0.8)
             "A010" -> {
-                val a = (ancho1() + 5f) / 2f
-                val h = altoTotal - p.altoOffsetCorrediza
-                val dim = "${df1(a)} x ${df1(h)}"
-                listOf(dim, dim).joinToString("\n")
+                val a = (d.ancho1 + 5f) / 2f
+                listOf(PanelVidrio("Corrediza", a, hC), PanelVidrio("Corrediza", a, hC))
             }
-
-            // A005 y A007: un fijo = ancho/2 x (alto-0.4)  y un corredizo = (ancho/2+4) x (alto-1.3)
+            // F1: fijo = ancho/2 x (alto-5)  y corrediza = (ancho/2+5) x (alto-2)
+            "F1" -> {
+                val f = d.ancho1 / 2f
+                listOf(PanelVidrio("Fija", f, hF), PanelVidrio("Corrediza", f + 5f, hC))
+            }
+            // A005 y A007: fijo = ancho/2  y corrediza = ancho/2+4
             "A005", "A007" -> {
-                val f = ancho1() / 2f
-                val hF = altoTotal - p.altoOffsetFijo
-                val c = f + 4f
-                val hC = altoTotal - p.altoOffsetCorrediza
-                "${df1(f)} x ${df1(hF)}\n${df1(c)} x ${df1(hC)}"
+                val f = d.ancho1 / 2f
+                listOf(PanelVidrio("Fija", f, hF), PanelVidrio("Corrediza", f + 4f, hC))
             }
-
-            // A001 y C1: dos anchos distintos, cada uno fijo y corrediza
-            // Para A001: corrediza = fijo+4; para C1: corrediza = fijo+5
+            // A001 y C1: dos vanos distintos, cada uno con fijo + corrediza (A001: +4, C1: +5)
             "A001", "C1" -> {
-                val an1 = ancho1()
-                val an2 = ancho2()
-                val hF = altoTotal - p.altoOffsetFijo
-                val hC = altoTotal - p.altoOffsetCorrediza
-
-                // fijo
-                val f1 = an1 / 2f
-                val f2 = an2 / 2f
-
-                // corrediza
-                val corrOffset = if (ducha.nombre == "A001") 4f else 5f
-                val c1 = f1 + corrOffset
-                val c2 = f2 + corrOffset
-
+                val f1 = d.ancho1 / 2f
+                val f2 = d.ancho2 / 2f
+                val off = if (serie.nombre == "A001") 4f else 5f
                 listOf(
-                    "${df1(f1)} x ${df1(hF)}",
-                    "${df1(c1)} x ${df1(hC)}",
-                    "${df1(f2)} x ${df1(hF)}",
-                    "${df1(c2)} x ${df1(hC)}"
-                ).joinToString("\n")
+                    PanelVidrio("Fija", f1, hF), PanelVidrio("Corrediza", f1 + off, hC),
+                    PanelVidrio("Fija", f2, hF), PanelVidrio("Corrediza", f2 + off, hC)
+                )
             }
-
-            // El resto (ej. Plegable…): un fijo y un corrediza
+            // Resto (ej. Plegable): un fijo y un corrediza (+4 asumido)
             else -> {
-                val f = ancho1() / 2f
-                val hF = altoTotal - p.altoOffsetFijo
-                val c = f + 4f      // asumimos +4 para corrediza
-                val hC = altoTotal - p.altoOffsetCorrediza
-                "${df1(f)} x ${df1(hF)}\n${df1(c)} x ${df1(hC)}"
+                val f = d.ancho1 / 2f
+                listOf(PanelVidrio("Fija", f, hF), PanelVidrio("Corrediza", f + 4f, hC))
             }
         }
+    }
 
-        binding.tvVidrios.text = texto
-        // contar solo líneas de dimensiones
-        cant = texto.lines().size
+    /**
+     * Despiece de vidrios de las series marca CORRALES (fórmulas de las fichas Corrales).
+     * Las fichas están en mm; la app trabaja en cm, por eso: 5mm→0.5, 20mm→2.0, 22mm→2.2,
+     * 67mm→6.7, 72mm→7.2.
+     */
+    private fun panelesCorrales(nombre: String, d: DoorData): List<PanelVidrio> = when (nombre) {
+        // P2 Corrales: dos corredizos. A = ancho lado/2 + 20mm ; H = Alto - 67mm.
+        "P2" -> {
+            val a = d.ancho1 / 2f + 2.0f
+            val h = d.alto - 6.7f
+            listOf(PanelVidrio("Corrediza", a, h), PanelVidrio("Corrediza", a, h))
+        }
+        // F1 Corrales: un fijo + un corredizo. A = ancho lado/2 + 9mm (ambos);
+        //   fijo H = Alto - 72mm ; corredizo H = Alto - 22mm.
+        "F1" -> {
+            val a = d.ancho1 / 2f + 0.9f
+            listOf(PanelVidrio("Fija", a, d.alto - 7.2f), PanelVidrio("Corrediza", a, d.alto - 2.2f))
+        }
+        // C1 Corrales: esquina, dos lados (ancho1 y ancho2), cada lado con fijo + corredizo.
+        //   A = ancho lado/2 - 5mm (ambos); fijo H = Alto - 72mm ; corredizo H = Alto - 22mm.
+        "C1" -> {
+            val a1 = d.ancho1 / 2f - 0.5f
+            val a2 = d.ancho2 / 2f - 0.5f
+            listOf(
+                PanelVidrio("Fija", a1, d.alto - 7.2f), PanelVidrio("Corrediza", a1, d.alto - 2.2f),
+                PanelVidrio("Fija", a2, d.alto - 7.2f), PanelVidrio("Corrediza", a2, d.alto - 2.2f)
+            )
+        }
+        else -> emptyList()
+    }
+
+    /** DoorData con las medidas actualmente ingresadas en pantalla. */
+    private fun doorDataDeEntrada(serie: SerieDucha): DoorData =
+        DoorData(ancho1(), if (serie.nombre == "C1" || serie.nombre == "A001") ancho2() else 0f, alto())
+
+    @SuppressLint("SetTextI18n")
+    private fun vidrios() {
+        val serie = ducha ?: return
+        val paneles = panelesDe(serie, doorDataDeEntrada(serie))
+        binding.tvVidrios.text = paneles.joinToString("\n") { "${df1(it.anchoCm)} x ${df1(it.altoCm)}" }
+        cant = paneles.size
     }
 
     //FUNCIONES PARA GENRAR DISEÑO
@@ -208,29 +273,46 @@ class PDuchaActivity : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun agregarDoorToDocument() {
-        val s = ducha ?: return
-        val serie = s.nombre
+        val serie = ducha ?: return
 
-        // 1) Leer las medidas de entrada (convertir a Float)
-        val a1 = binding.etAncho1.text.toString().toFloat()
-        val h  = binding.etAlto.text.toString().toFloat()
-        // Ancho2 solo si la serie es C1 o A001, en el resto lo ignoramos
-        val a2 = if (serie == "C1" || serie == "A001") {
-            binding.etAncho2.text.toString().toFloat()
-        } else {
-            0f
-        }
+        // Acumula la puerta (medidas de vano) en el mapa: es la fuente de verdad del documento.
+        val a2 = if (serie.nombre == "C1" || serie.nombre == "A001") ancho2() else 0f
+        mapDuchas.getOrPut(serie) { mutableListOf() }.add(DoorData(ancho1(), a2, alto()))
 
-        // 2) Insertar en el map
-        val listaExistente = mapDuchas.getOrPut(serie) { mutableListOf() }
-        listaExistente.add(DoorData(a1, a2, h))
-
-        // 3) Reconstruir COMBINED bitmap: hay que iterar el mapDuchas en orden de inserción
+        // Reconstruye el resultado como antes: por cada serie, tabla de medidas de vidrio + altura de
+        // tiradores + imagen de referencia (no a escala) que da la info de producción.
         rebuildCombinedBitmap()
 
-        // 4) Mostrar texto de cuántas puertas hay en total (opcional, si lo necesitas)
-        val totalPuertas = mapDuchas.values.sumBy { it.size }
-        binding.tvParante.text = totalPuertas.toString()
+        // Y refleja el despiece de vidrios en el TextView de resultados.
+        try { vidrios() } catch (_: Exception) {}
+    }
+
+    /** Diseño de la puerta actual: título de la serie + cada paño (fijo/corrediza) con sus cotas y
+     *  perforaciones, usando las fórmulas del catálogo (obtenerLineas + crearBitmapParaLinea). */
+    private fun crearDisenoPuertaActual(): Bitmap? {
+        val serie = ducha?.nombre ?: return null
+        val (fijos, corredizas) = obtenerLineas()
+        if (fijos.isEmpty() && corredizas.isEmpty()) return null
+        val bloques = mutableListOf<Bitmap>()
+        bloques.add(crearTituloSerie(serie))
+        fijos.forEach { bloques.add(crearBitmapParaLinea(it, false)) }
+        corredizas.forEach { bloques.add(crearBitmapParaLinea(it, true)) }
+        return combinarBitmapsVerticalmente(bloques)
+    }
+
+    private fun crearTituloSerie(serie: String): Bitmap {
+        val d = resources.displayMetrics.density
+        val w = resources.displayMetrics.widthPixels
+        val h = (36f * d).toInt()
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        c.drawColor(Color.parseColor("#DDDDDD"))
+        val p = Paint().apply {
+            color = Color.BLACK; textSize = 18f * d
+            textAlign = Paint.Align.CENTER; isAntiAlias = true
+        }
+        c.drawText("Vidrio Puerta Ducha ${serie.uppercase(Locale.getDefault())}", w / 2f, h * 0.65f, p)
+        return bmp
     }
 
     private fun rebuildCombinedBitmap() {
@@ -280,207 +362,179 @@ class PDuchaActivity : AppCompatActivity() {
      */
     @SuppressLint("DefaultLocale", "SetTextI18n", "DiscouragedApi")
     private fun crearBitmapPorSerie(
-        serie: String,
+        serie: SerieDucha,
         datos: List<DoorData>
     ): Bitmap {
-        // 1) Métricas de pantalla
+        // ── Métricas y geometría ──────────────────────────────────────────────
         val d = resources.displayMetrics.density
-        val tamTxt = 14f * d
-        val labelSize = tamTxt * 1.5f
-        val margen = (8f * d).toInt()
-        val filaAltoPx = (24f * d).toInt()
-        val tick = 4f * d
-
-        // 2) Altura de cada sección
-        val tituloAlto = (32f * d).toInt()
-        val filas = datos.size
-        val espacioTabla = (8f * d).toInt()
-        val imgAlto = (80f * d).toInt()
-
-        // 3) Ancho de la tabla: ancho de pantalla menos márgenes
-        val screenW = resources.displayMetrics.widthPixels
+        val margen = (10f * d)
+        val screenW = resources.displayMetrics.widthPixels.toFloat()
         val anchoTabla = screenW - 2 * margen
+        val xL = margen                 // borde izquierdo del contenido
+        val xR = margen + anchoTabla    // borde derecho
+        val padX = 12f * d              // sangría interna de celdas
 
-        // 4) Calcular altura total: margen superior + título + espacio + (filas × altoFila) + espacio + altoImagen + margen inferior
-        val totalAlto = margen +
-                tituloAlto +
-                espacioTabla +
-                filaAltoPx * filas +
-                espacioTabla +
-                imgAlto +
-                margen
+        // Alturas de cada franja
+        val altoTitulo = 42f * d
+        val altoPuerta = 54f * d        // 2 líneas: vano en cm y en mm
+        val altoCol    = 28f * d
+        val altoFila   = 32f * d
+        val sepPuertas = 14f * d
 
-        // 5) Crear bitmap y canvas
-        val bmpW = anchoTabla + 2 * margen
-        val bmpH = totalAlto
-        val bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
+        // Paños de vidrio por puerta (fuente: cálculo de vidrios)
+        val panelesPorPuerta = datos.map { panelesDe(serie, it) }
+        // El tirador solo aplica a algunas series Alutemp; si no, no dibujamos esa columna.
+        val hayTirador = serie.nombre == "A005" || serie.nombre == "A001"
+
+        // ── Imagen de referencia: decodificar para reservar su altura REAL ────
+        val resId = when {
+            serie.marca == "Corrales" -> {
+                // Nombre propio por serie para no chocar con las imágenes Alutemp (c1/f1/p2).
+                val n = "corrales_${serie.nombre.lowercase(Locale.getDefault())}"
+                resources.getIdentifier(n, "mipmap", packageName)
+            }
+            else -> when (serie.nombre.uppercase(Locale.getDefault())) {
+                "A005" -> R.mipmap.a005
+                "A001" -> R.mipmap.a001
+                "A007" -> R.mipmap.a007
+                "A010" -> R.mipmap.a010
+                "F1"   -> R.mipmap.f1
+                "P2"   -> R.mipmap.p2
+                "C1"   -> R.mipmap.c1
+                "PLEGABLE" -> R.mipmap.plegable
+                else   -> 0
+            }
+        }
+        val icon = if (resId != 0) BitmapFactory.decodeResource(resources, resId) else null
+        var imgDrawW: Float
+        var imgDrawH: Float
+        if (icon != null) {
+            val ratio = icon.height.toFloat() / icon.width.toFloat()
+            imgDrawW = if (serie.marca == "Corrales" || ratio < 0.7f) anchoTabla else anchoTabla / 2f
+            imgDrawH = imgDrawW * ratio
+            // Tope de altura: que la imagen no domine el scroll y quede cerca del despiece.
+            val maxImgH = anchoTabla * 0.62f
+            if (imgDrawH > maxImgH) { imgDrawH = maxImgH; imgDrawW = imgDrawH / ratio }
+        } else {
+            imgDrawW = anchoTabla / 2f
+            imgDrawH = 80f * d
+        }
+
+        // ── Altura total ─────────────────────────────────────────────────────
+        var alturaTablas = 0f
+        panelesPorPuerta.forEach { alturaTablas += altoPuerta + altoCol + altoFila * it.size + sepPuertas }
+        val totalAlto = (margen + altoTitulo + alturaTablas + margen + imgDrawH + margen).toInt()
+
+        val bmp = Bitmap.createBitmap(anchoTabla.toInt() + 2 * margen.toInt(), totalAlto, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         canvas.drawColor(Color.WHITE)
 
-        // 6) Configurar paints
-        val paintTexto = Paint().apply {
-            isAntiAlias = true
-            color = Color.BLACK
-            textSize = tamTxt
+        // ── Paints ───────────────────────────────────────────────────────────
+        val bold = android.graphics.Typeface.DEFAULT_BOLD
+        val pTitulo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE; textSize = 17f * d; textAlign = Paint.Align.CENTER; typeface = bold
         }
-        val paintTitulo = Paint().apply {
-            isAntiAlias = true
-            color = Color.BLACK
-            textSize = labelSize
-            textAlign = Paint.Align.CENTER
+        val pPuerta = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#12324F"); textSize = 15f * d; typeface = bold
         }
-        val paintFondo = Paint().apply {
-            color = Color.parseColor("#DDDDDD")
+        val pMm = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#5B6B79"); textSize = 12.5f * d
         }
+        val pCol = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#5B6B79"); textSize = 12f * d; typeface = bold
+        }
+        val pDato = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#1B2A38"); textSize = 15f * d
+        }
+        val pLinea = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#C8D2DC"); strokeWidth = 1f * d
+        }
+        val fTitulo = Paint().apply { color = Color.parseColor("#2E4A62") }
+        val fPuerta = Paint().apply { color = Color.parseColor("#DCE7F0") }
+        val fCol    = Paint().apply { color = Color.parseColor("#EEF2F5") }
+        val fZebra  = Paint().apply { color = Color.parseColor("#F5F8FA") }
 
-        // 7) Dibujar TÍTULO gris con texto centrado
-        val rectTitulo = Rect(
-            margen,
-            margen,
-            margen + anchoTabla,
-            margen + tituloAlto
-        )
-        canvas.drawRect(rectTitulo, paintFondo)
-        canvas.drawText(
-            "Vidrio Puerta Ducha ${serie.toUpperCase()}",
-            rectTitulo.left + anchoTabla / 2f,
-            rectTitulo.top + tituloAlto / 2f + labelSize / 3f,
-            paintTitulo
-        )
+        // Anclas de columna: Hoja a la izquierda; Ancho/Alto/Tirador alineados a la derecha.
+        val xHoja = xL + padX
+        val xAnchoR = if (hayTirador) xL + anchoTabla * 0.52f else xL + anchoTabla * 0.60f
+        val xAltoR  = if (hayTirador) xL + anchoTabla * 0.76f else xL + anchoTabla * 0.90f
+        val xTirR   = xR - padX
 
-        // 8) Dibujar encabezado de la tabla
-        val yEncabezado = rectTitulo.bottom + espacioTabla
-        paintTexto.textAlign = Paint.Align.LEFT
-        canvas.drawText(
-            "N°   |    Hoja     |   Ancho (mm)   |   Alto (mm)   |   Tirador (mm)",
-            margen + (4f * d),
-            yEncabezado.toFloat(),
-            paintTexto
-        )
+        var y = margen
 
-        // 9) Línea separadora debajo del encabezado
-        val yLinea = yEncabezado + (4f * d)
-        canvas.drawLine(
-            margen + (4f * d),
-            yLinea,
-            margen + anchoTabla - (4f * d),
-            yLinea,
-            paintTexto
-        )
+        // ── Barra de título ──────────────────────────────────────────────────
+        canvas.drawRect(xL, y, xR, y + altoTitulo, fTitulo)
+        canvas.drawText("Ducha ${serie.nombre} · ${serie.marca}", xL + anchoTabla / 2f, y + altoTitulo * 0.64f, pTitulo)
+        y += altoTitulo
 
-        // 10) Dibujar cada fila de datos
-        var yFila = yLinea + (filaAltoPx.toFloat())
-        datos.forEachIndexed { idx, door ->
-            val sb = StringBuilder().apply {
-                append(String.format("%-4s", "${idx + 1}"))      // N°
-                append(" |  ")
-                // Determinar “Hoja” según la serie
-                when (serie) {
-                    "P2" -> append(String.format("%-10s", "Corrediza"))
-                    "F1" -> {
-                        if (door.ancho2 == 0f) append(String.format("%-10s", "Fija"))
-                        else append(String.format("%-10s", "Corrediza"))
-                    }
-                    "A010", "A005", "A007" -> {
-                        // En estos casos asumimos que siempre es “Corrediza”
-                        append(String.format("%-10s", "Corrediza"))
-                    }
-                    "A001", "C1" -> {
-                        // Una DoorData agrupa fija+móvil
-                        append(String.format("%-10s", "Fija+Móvil"))
-                    }
-                    else -> {
-                        // Cualquier otra serie no listada
-                        append(String.format("%-10s", "Corrediza"))
-                    }
+        // ── Por cada puerta: cabecera con medida de vano + tabla de paños ────
+        panelesPorPuerta.forEachIndexed { idx, paneles ->
+            val door = datos[idx]
+            val dosVanos = serie.nombre == "C1" || serie.nombre == "A001"
+
+            // Cabecera de puerta: "Puerta N" a la izquierda; vano en cm (arriba) y mm (abajo) a la derecha.
+            canvas.drawRect(xL, y, xR, y + altoPuerta, fPuerta)
+            val vanoCm = if (dosVanos)
+                "${df1(door.ancho1)} / ${df1(door.ancho2)} × ${df1(door.alto)} cm"
+            else
+                "${df1(door.ancho1)} × ${df1(door.alto)} cm"
+            val vanoMm = if (dosVanos)
+                "${df1(door.ancho1 * 10f)} / ${df1(door.ancho2 * 10f)} × ${df1(door.alto * 10f)} mm"
+            else
+                "${df1(door.ancho1 * 10f)} × ${df1(door.alto * 10f)} mm"
+            pPuerta.textAlign = Paint.Align.LEFT
+            canvas.drawText("Puerta ${idx + 1}", xL + padX, y + altoPuerta * 0.60f, pPuerta)
+            pPuerta.textAlign = Paint.Align.RIGHT
+            canvas.drawText(vanoCm, xR - padX, y + altoPuerta * 0.42f, pPuerta)
+            pMm.textAlign = Paint.Align.RIGHT
+            canvas.drawText(vanoMm, xR - padX, y + altoPuerta * 0.82f, pMm)
+            y += altoPuerta
+
+            // Encabezado de columnas
+            canvas.drawRect(xL, y, xR, y + altoCol, fCol)
+            val cyCol = y + altoCol * 0.70f
+            pCol.textAlign = Paint.Align.LEFT
+            canvas.drawText("Hoja", xHoja, cyCol, pCol)
+            pCol.textAlign = Paint.Align.RIGHT
+            canvas.drawText("Ancho (mm)", xAnchoR, cyCol, pCol)
+            canvas.drawText("Alto (mm)", xAltoR, cyCol, pCol)
+            if (hayTirador) canvas.drawText("Tirador", xTirR, cyCol, pCol)
+            y += altoCol
+
+            // Filas de paños (una por vidrio) con zebra suave
+            paneles.forEachIndexed { j, panel ->
+                if (j % 2 == 1) canvas.drawRect(xL, y, xR, y + altoFila, fZebra)
+                val cy = y + altoFila * 0.66f
+                pDato.textAlign = Paint.Align.LEFT
+                canvas.drawText(panel.tipo, xHoja, cy, pDato)
+                pDato.textAlign = Paint.Align.RIGHT
+                canvas.drawText(df1(panel.anchoCm * 10f), xAnchoR, cy, pDato)
+                canvas.drawText(df1(panel.altoCm * 10f), xAltoR, cy, pDato)
+                if (hayTirador) {
+                    canvas.drawText(if (panel.tipo == "Corrediza") "944" else "—", xTirR, cy, pDato)
                 }
-                append(" |  ")
-                // Ancho(s)
-                if (serie == "C1" || serie == "A001") {
-                    // Convertir a mm multiplicando por 10 (asumiendo que guardas en decenas de cm)
-                    append(String.format("%-13s", "${df1(door.ancho1 * 10f)}/${df1(door.ancho2 * 10f)}"))
-                    append(" |  ")
-                } else {
-                    append(String.format("%-13s", df1(door.ancho1 * 10f)))
-                    append(" |  ")
-                }
-                // Alto
-                append(String.format("%-12s", df1(door.alto * 10f)))
-                append(" |  ")
-                // Tirador
-                if (serie == "A005" || serie == "A001") {
-                    append("944")
-                } else {
-                    append("-")
-                }
-            }.toString()
+                y += altoFila
+            }
 
-            paintTexto.textAlign = Paint.Align.LEFT
-            canvas.drawText(
-                sb,
-                margen + (4f * d),
-                yFila,
-                paintTexto
-            )
-            yFila += filaAltoPx.toFloat()
+            // Separador entre puertas
+            y += sepPuertas / 2f
+            canvas.drawLine(xL, y, xR, y, pLinea)
+            y += sepPuertas / 2f
         }
 
-        // 11) Dibujar la IMAGEN real de la serie (desde drawable/) debajo de la tabla
-        val yArribaImg = yLinea + filaAltoPx * filas + espacioTabla
-
-        // 1) Mapear cada nombre de serie a un recurso drawable
-        val resId = when (serie.uppercase(Locale.getDefault())) {
-            "A005" -> R.mipmap.a005
-            "A001" -> R.mipmap.a001
-            "A007" -> R.mipmap.a007
-            "A010" -> R.mipmap.a010
-            "F1"   -> R.mipmap.f1
-
-            //"P2"   -> R.drawable.p2
-            //"C1"   -> R.drawable.c1
-            //"PLEGABLE" -> R.drawable.plegable
-            else   -> 0
-        }
-
-        // 2) Si existe el recurso, lo dibujamos; si no, dibujamos un rectángulo “Sin imagen”
-        if (resId != 0) {
-            val icon = BitmapFactory.decodeResource(resources, resId)
-            // Calcular ancho deseado: la mitad del ancho de la tabla, manteniendo proporción
-            val anchoDeseado = anchoTabla / 2
-            val relacion = icon.height.toFloat() / icon.width.toFloat()
-            val altoDeseado = (anchoDeseado * relacion).toInt()
-            // Centrar horizontalmente
-            val leftImg = margen + (anchoTabla - anchoDeseado) / 2
-            val topImg = yArribaImg.toInt()
-            val rectImg = Rect(
-                leftImg,
-                topImg,
-                leftImg + anchoDeseado,
-                topImg + altoDeseado
-            )
-            canvas.drawBitmap(icon, null, rectImg, null)
+        // ── Imagen de referencia ─────────────────────────────────────────────
+        y += margen
+        if (icon != null) {
+            val leftImg = xL + (anchoTabla - imgDrawW) / 2f
+            canvas.drawBitmap(icon, null, android.graphics.RectF(leftImg, y, leftImg + imgDrawW, y + imgDrawH), null)
         } else {
-            // Si no existe el drawable, dibujamos un rectángulo contorno con “Sin imagen”
-            val rectImg = Rect(
-                margen + (anchoTabla / 4),
-                yArribaImg.toInt(),
-                margen + anchoTabla - (anchoTabla / 4),
-                yArribaImg.toInt() + imgAlto
-            )
-            val paintMarco = Paint().apply {
-                style = Paint.Style.STROKE
-                strokeWidth = 2f * d
-                color = Color.BLACK
+            val rectImg = android.graphics.RectF(xL + anchoTabla / 4f, y, xR - anchoTabla / 4f, y + imgDrawH)
+            val paintMarco = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE; strokeWidth = 2f * d; color = Color.parseColor("#C8D2DC")
             }
             canvas.drawRect(rectImg, paintMarco)
-            paintTexto.textAlign = Paint.Align.CENTER
-            paintTexto.textSize = (16f * d)
-            canvas.drawText(
-                "Sin imagen",
-                rectImg.exactCenterX(),
-                rectImg.exactCenterY() + (8f * d),
-                paintTexto
-            )
+            pMm.textAlign = Paint.Align.CENTER
+            canvas.drawText("Sin imagen", rectImg.centerX(), rectImg.centerY(), pMm)
         }
 
 
@@ -492,9 +546,9 @@ class PDuchaActivity : AppCompatActivity() {
         // 1) Crear un objeto PdfDocument
         val pdf = PdfDocument()
 
-        // 2) Iterar cada Bitmap en `archivos` y lo ponemos en una página distinta
-        archivos.forEachIndexed { index, bmp ->
-            // Cada página tendrá el tamaño exacto del bitmap (o podrías escalarlo si quieres)
+        // 2) Una página por serie: el mismo bloque tabla de vidrios + imagen de referencia.
+        mapDuchas.entries.forEachIndexed { index, (serie, lista) ->
+            val bmp = crearBitmapPorSerie(serie, lista)
             val pageInfo = PdfDocument.PageInfo.Builder(bmp.width, bmp.height, index + 1).create()
             val page = pdf.startPage(pageInfo)
             page.canvas.drawBitmap(bmp, 0f, 0f, null)
@@ -911,7 +965,20 @@ class PDuchaActivity : AppCompatActivity() {
         if (listaDuchas.isNotEmpty()) {
             // 1) Actualiza la variable y el texto
             ducha = listaDuchas[indice]
-            binding.tvDucha.text = "Puerta Ducha ${ducha!!.nombre}"
+            binding.tvDucha.text = "Ducha ${ducha!!.nombre} [${ducha!!.marca}]"
+
+            // 1b) Ficha técnica / formatos de referencia (texto), según la serie.
+            binding.tvReferencias.text = fichaTecnicaDe(ducha!!)
+
+            // 1c) Link al PDF completo (Firebase), si la serie tiene URL cargada.
+            val pdfUrl = fichaPdfUrlDe(ducha!!)
+            if (pdfUrl != null) {
+                binding.tvFichaPdf.visibility = View.VISIBLE
+                binding.tvFichaPdf.setOnClickListener { abrirUrl(pdfUrl) }
+            } else {
+                binding.tvFichaPdf.visibility = View.GONE
+                binding.tvFichaPdf.setOnClickListener(null)
+            }
 
             // 2) Toggle visibilidad de lyAncho2 **inmediatamente** según el nombre
             binding.lyAncho2.visibility =
@@ -922,21 +989,190 @@ class PDuchaActivity : AppCompatActivity() {
             indice = (indice + 1) % listaDuchas.size
         } else {
             binding.tvDucha.text = "No disponibles"
+            binding.tvReferencias.text = ""
+            binding.tvFichaPdf.visibility = View.GONE
             binding.lyAncho2.visibility = View.GONE
+        }
+    }
+
+    /**
+     * URL del PDF de ficha técnica COMPLETA por serie (alojado en Firebase Storage). Vacío = sin
+     * link (el enlace queda oculto). Pegar aquí los enlaces de descarga que entrega Firebase Storage.
+     */
+    private fun fichaPdfUrlDe(serie: SerieDucha): String? {
+        val url = when ("${serie.marca}/${serie.nombre}") {
+            // ── Corrales ──
+            "Corrales/C1" -> ""
+            "Corrales/F1" -> ""
+            "Corrales/P2" -> ""
+            // ── Alutemp ──
+            "Alutemp/P2" -> ""
+            "Alutemp/F1" -> ""
+            "Alutemp/C1" -> ""
+            "Alutemp/A010" -> ""
+            "Alutemp/A005" -> ""
+            "Alutemp/A007" -> ""
+            "Alutemp/A001" -> ""
+            "Alutemp/Plegable" -> ""
+            else -> ""
+        }
+        return url.ifBlank { null }
+    }
+
+    /** Abre una URL (PDF de ficha) en el visor/navegador del teléfono. */
+    private fun abrirUrl(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: Exception) {
+            Toast.makeText(this, "No se pudo abrir el enlace", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Ficha técnica + Formatos de referencia por serie, siguiendo la estructura del catálogo
+     * (Formatos: modelo · espesor · medida · acabado; más la nota de Ficha Técnica). Se muestra en
+     * el recuadro de referencia al elegir la serie.
+     */
+    private fun fichaTecnicaDe(serie: SerieDucha): String = when (serie.marca) {
+        "Corrales" -> when (serie.nombre) {
+            "C1" -> "Formatos: En esquina, 2 fijos + 2 corredizos · Vidrio 6 mm · 1.20 m ancho · alto máx 1.90 m · Negro / Cromado\n" +
+                    "Ficha técnica: Perforación Ø14 mm · cristal templado 6 mm."
+            "F1" -> "Formatos: Frontal, 1 fijo + 1 móvil · Vidrio 6 mm · 1.50 m ancho · alto máx 1.90 m · Negro / Cromado\n" +
+                    "Ficha técnica: Perforación Ø14 mm · cristal templado 6 mm."
+            "P2" -> "Formatos: Frontal, 2 hojas móviles · Vidrio 8 mm · 2.00 m ancho · alto máx 1.90 m · Negro / Cromado\n" +
+                    "Ficha técnica: Perforación Ø14 mm · cristal templado 8 mm."
+            else -> ""
+        }
+        else -> when (serie.nombre) {   // Alutemp
+            "P2" -> "Formatos: Frontal, 2 hojas móviles · Vidrio 6 y 8 mm · 1.95×1.20 / 1.95×1.80 m · Plateado / Negro\n" +
+                    "Ficha técnica: Las perforaciones del gráfico son para vidrio de 6 y 8 mm."
+            "F1" -> "Formatos: Frontal, 1 fijo + 1 móvil · Vidrio 6 y 8 mm · 1.95×1.20 / 1.95×1.80 m · Plateado / Negro\n" +
+                    "Ficha técnica: Perforación del rodamiento: 12 mm (vidrio 6 mm), 14 mm (vidrio 8 mm)."
+            "C1" -> "Formatos: En esquina, 2 fijos + 2 corredizos · Vidrio 6 y 8 mm · 1.95 alto × 1.20×1.20 ancho m · Plateado / Negro\n" +
+                    "Ficha técnica: Perforaciones para vidrio de 6 mm; para 8 mm la perforación es 14 mm."
+            "A010" -> "Formatos: Frontal, 2 hojas móviles · Vidrio 8 mm · 2.00 alto × 1.50 ancho m · Plateado / Negro\n" +
+                    "Ficha técnica: Se recomienda instalar con vidrio templado de 8 mm."
+            "A005" -> "Formatos: Frontal, 1 fijo + 1 corredizo · Vidrio 8 mm · 1.20 / 2 m · Cromado / Negro / Dorado\n" +
+                    "Ficha técnica: Se recomienda instalar con vidrio de 8 mm."
+            "A007" -> "Formatos: Frontal, 1 fijo + 1 corredizo · Vidrio 8 mm · 2 m · Cromado\n" +
+                    "Ficha técnica: Se recomienda instalar con vidrio templado de 8 mm."
+            "A001" -> "Formatos: En esquina, 2 fijos + 2 corredizos · Vidrio 8 mm · 2 m · Negro / Cromado\n" +
+                    "Ficha técnica: Kit en acero #304 cromado y cristal templado."
+            "Plegable" -> "Formatos: Plegable con bisagras · Vidrio 6 y 8 mm · A medida · Acero #304 cromado\n" +
+                    "Ficha técnica: Bisagras BP-320 / BP-321 en acero #304 para vidrio de 6 y 8 mm."
+            else -> ""
+        }
+    }
+
+    // ─── Archivado a proyecto activo (igual que las otras calculadoras) ────────────────────────
+    private fun etiqueta(nombre: String) = TextView(this).apply { text = nombre }
+
+    private fun conValor(tv: TextView): Boolean {
+        val t = tv.text.toString().trim()
+        return t.isNotEmpty() && t != "0.0" && t != "0"
+    }
+
+    private fun archivarMapas() {
+        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        val referencias = ListaCasilla.ItemArchivable(
+            binding.tvReferencias, binding.tvReferencias, conValor(binding.tvReferencias)
+        )
+        val items = listOf(
+            ListaCasilla.ItemArchivable(etiqueta("Vidrios"), binding.tvVidrios, conValor(binding.tvVidrios))
+        )
+        val ultimoID = ListaCasilla.archivarEnProyectoActivo(
+            this, mapListas, "Vpd", cant,
+            referencias = referencias,
+            items = items,
+            // Metadato de producción por ventana (mismo formato que Nova), para que el corte de
+            // planchas separe las listas por tipo de vidrio.
+            paquetesPorNumero = { _ -> metadatosProduccionPaquete() }
+        )
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+        val proyecto = ProyectoManager.getProyectoActivo()
+        val msg = when {
+            proyecto == null -> "No hay proyecto activo; datos no archivados en proyecto"
+            cant > 1 -> "Archivadas $cant unidades en proyecto: $proyecto"
+            else -> "Datos archivados como $ultimoID en proyecto: $proyecto"
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        controladorCola.ofrecerSiguiente()
+    }
+
+    private fun mostrarDialogoMetadatosProduccion(onContinuar: () -> Unit) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val contenedor = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, 0)
+        }
+        val etColor = EditText(this).apply { hint = "Color aluminio (ej: negro)"; setText(metaColorAluminio) }
+        val etVidrio = EditText(this).apply { hint = "Tipo vidrio (ej: incoloro 6mm)"; setText(metaTipoVidrio) }
+        contenedor.addView(etColor)
+        contenedor.addView(etVidrio)
+        AlertDialog.Builder(this)
+            .setTitle("Color de aluminio y vidrio")
+            .setView(contenedor)
+            .setPositiveButton("Guardar y archivar") { _, _ ->
+                metaColorAluminio = etColor.text?.toString()?.trim().orEmpty()
+                metaTipoVidrio = etVidrio.text?.toString()?.trim().orEmpty()
+                onContinuar()
+            }
+            .setNeutralButton("Omitir") { _, _ -> onContinuar() }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun metadatosProduccionPaquete(): Map<String, String> {
+        val alu = escaparCampoV2(metaColorAluminio.ifBlank { "null" })
+        val vid = escaparCampoV2(metaTipoVidrio.ifBlank { "null" })
+        if (alu == "null" && vid == "null") return emptyMap()
+        return mapOf("MetadatosProduccion" to "-MAT<alu:$alu;vid:$vid>")
+    }
+
+    private fun escaparCampoV2(raw: String): String =
+        raw.replace("\n", " / ").replace("\r", " ").replace("-", "_")
+            .replace("<", "(").replace(">", ")").replace(";", ",").trim()
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        procesarIntentProyecto(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refrescarProyectoActivoUI()
+    }
+
+    private fun refrescarProyectoActivoUI() {
+        ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
+    }
+
+    private fun procesarIntentProyecto(intent: Intent) {
+        val nombreProyecto = intent.getStringExtra("proyecto_nombre")
+        val crearNuevo = intent.getBooleanExtra("crear_proyecto", false)
+        val descripcionProyecto = intent.getStringExtra("proyecto_descripcion") ?: ""
+        if (crearNuevo && !nombreProyecto.isNullOrEmpty()) {
+            if (MapStorage.crearProyecto(this, nombreProyecto, descripcionProyecto)) {
+                ProyectoManager.setProyectoActivo(this, nombreProyecto)
+                refrescarProyectoActivoUI()
+                Toast.makeText(this, "Proyecto '$nombreProyecto' creado y activado", Toast.LENGTH_SHORT).show()
+            }
+        } else if (!nombreProyecto.isNullOrEmpty()) {
+            if (MapStorage.existeProyecto(this, nombreProyecto)) {
+                ProyectoManager.setProyectoActivo(this, nombreProyecto)
+                refrescarProyectoActivoUI()
+                Toast.makeText(this, "Proyecto '$nombreProyecto' activado", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (ModoMasivoHelper.esModoMasivo(this)) {
-            val perfiles = mapOf(
-                "Parante" to ModoMasivoHelper.texto(binding.tvParante)
-            ).filter { it.value.isNotBlank() }
-
             ModoMasivoHelper.devolverResultado(
                 activity = this,
                 calculadora = "Puerta Ducha",
-                perfiles = perfiles,
+                perfiles = emptyMap(),
                 vidrios = ModoMasivoHelper.texto(binding.tvVidrios),
                 accesorios = emptyMap(),
                 referencias = ""
@@ -948,7 +1184,7 @@ class PDuchaActivity : AppCompatActivity() {
     }
 }
 
-data class SerieDucha(val nombre: String)
+data class SerieDucha(val nombre: String, val marca: String = "Alutemp")
 
 val listaDuchas= listOf(
     SerieDucha("P2"),
@@ -958,7 +1194,11 @@ val listaDuchas= listOf(
     SerieDucha("A005"),
     SerieDucha("A007"),
     SerieDucha("A001"),
-    SerieDucha("Plegable")
+    SerieDucha("Plegable"),
+    // Series marca Corrales: fórmulas e imágenes de referencia propias.
+    SerieDucha("C1", "Corrales"),
+    SerieDucha("F1", "Corrales"),
+    SerieDucha("P2", "Corrales")
 )
 
 // 0) Data class con TODAS las posiciones que necesitas

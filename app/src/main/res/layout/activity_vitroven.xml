@@ -326,22 +326,24 @@
 
             </LinearLayout>
 
-            <LinearLayout
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_weight="0.81"
-                android:orientation="vertical">
+                android:layout_weight="0.81">
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
+                    android:layout_height="0dp"
                     android:layout_marginStart="4.5dp"
                     android:layout_marginTop="9dp"
                     android:layout_marginEnd="9dp"
-                    android:layout_weight="0.18"
                     android:background="@drawable/corner"
                     android:orientation="vertical"
                     android:paddingBottom="4.5dp"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintBottom_toTopOf="@+id/tvProyectoActivo"
                     tools:ignore="NestedWeights">
 
                     <TextView
@@ -848,13 +850,32 @@
 
                 </LinearLayout>
 
-                <LinearLayout
+                <!-- Visor de proyecto activo, anclado justo sobre los botones (como en Nova). -->
+                <TextView
+                    android:id="@+id/tvProyectoActivo"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="bottom|end"
+                    android:layout_height="wrap_content"
+                    android:background="#F5F5F5"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:padding="7dp"
+                    android:text="⚠️ Sin proyecto activo"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:layout_constraintBottom_toTopOf="@+id/lyBotonesVitro"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent" />
+
+                <LinearLayout
+                    android:id="@+id/lyBotonesVitro"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:layout_marginEnd="4.5dp"
-                    android:layout_weight="1.08"
-                    android:orientation="horizontal">
+                    android:orientation="horizontal"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
 
                     <Button
                         android:id="@+id/btArchivar"
@@ -877,7 +898,7 @@
                         tools:ignore="ButtonStyle" />
                 </LinearLayout>
 
-            </LinearLayout>
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
         </LinearLayout>
 

@@ -42,6 +42,7 @@ class WalletActivity : AppCompatActivity() {
     private var walletCongelada: Boolean = false
     private var listenerWalletState: ListenerRegistration? = null
     private var listenerRecargas: ListenerRegistration? = null
+    private var listenerReserva: ListenerRegistration? = null
 
     // =================== Cronómetro de plan ===================
     private var countdownRunnable: Runnable? = null
@@ -56,19 +57,89 @@ class WalletActivity : AppCompatActivity() {
         }
     }
 
+    // Comprobante obligatorio de la recarga por monto único (evidencia para reclamos/revisión).
+    private var reservaComprobantePendiente: String? = null
+    private val pickerComprobanteReserva = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val reservaId = reservaComprobantePendiente
+        if (uri != null && reservaId != null) subirComprobanteReserva(reservaId, uri)
+        else Toast.makeText(this, "No se seleccionó imagen", Toast.LENGTH_SHORT).show()
+    }
+
+    // Comprobante para reclamar una reserva expirada.
+    private var reclamoReservaPendiente: Reserva? = null
+    private val pickerReclamo = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val r = reclamoReservaPendiente
+        reclamoReservaPendiente = null
+        if (uri != null && r != null) subirComprobanteYReclamar(r, uri)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (crystal.crystal.FeaturesV1.OCULTAR_WALLET) {
+            android.widget.Toast.makeText(this, "No disponible en esta versión", android.widget.Toast.LENGTH_SHORT).show()
+            finish(); return
+        }
         binding = ActivityWalletBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setSupportActionBar(binding.toolbarWallet)
 
         inicializarUI()
+        manejarComprobanteCompartido(intent)
+        intent.getStringExtra("abrir_reserva_id")?.let { rid ->
+            val cent = intent.getLongExtra("abrir_reserva_cent", 0L)
+            mostrarDialogoPago(rid, "S/ %.2f".format(cent / 100.0))
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        manejarComprobanteCompartido(intent)
+    }
+
+    // "Compartir → Crystal (Wallet)" desde Yape/Plin: usa el comprobante para la recarga en curso.
+    private fun manejarComprobanteCompartido(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND) return
+        if (intent.type?.startsWith("image/") != true) return
+        @Suppress("DEPRECATION")
+        val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: return
+        intent.action = null // consumir para no reprocesar al rotar
+        val uid = user?.uid ?: return
+        db.collection("reservas_recarga")
+            .whereEqualTo("uid", uid)
+            .whereEqualTo("estado", "esperando")
+            .get()
+            .addOnSuccessListener { qs ->
+                val pendientes = qs.documents
+                when {
+                    pendientes.isEmpty() -> Toast.makeText(
+                        this, "No tienes una recarga en curso. Primero toca 💳 Recargar.", Toast.LENGTH_LONG
+                    ).show()
+                    pendientes.size == 1 -> usarComprobantePara(pendientes[0].id, pendientes[0].getLong("totalCent") ?: 0L, uri)
+                    else -> {
+                        val labels = pendientes.map { "S/ %.2f".format((it.getLong("totalCent") ?: 0L) / 100.0) }.toTypedArray()
+                        androidx.appcompat.app.AlertDialog.Builder(this)
+                            .setTitle("¿A qué recarga pertenece el comprobante?")
+                            .setItems(labels) { _, w ->
+                                usarComprobantePara(pendientes[w].id, pendientes[w].getLong("totalCent") ?: 0L, uri)
+                            }
+                            .show()
+                    }
+                }
+            }
+            .addOnFailureListener { Toast.makeText(this, "Error buscando tu recarga: ${it.message}", Toast.LENGTH_LONG).show() }
+    }
+
+    private fun usarComprobantePara(reservaId: String, totalCent: Long, uri: Uri) {
+        mostrarDialogoPago(reservaId, "S/ %.2f".format(totalCent / 100.0)) // muestra el estado en vivo
+        subirComprobanteReserva(reservaId, uri)                            // sube y adjunta el comprobante
     }
 
     override fun onDestroy() {
         super.onDestroy()
         listenerWalletState?.remove()
         listenerRecargas?.remove()
+        listenerReserva?.remove()
         detenerCronometro()
     }
 
@@ -124,22 +195,27 @@ class WalletActivity : AppCompatActivity() {
                 }
             }
 
-        // --------- Lista de recargas ----------
-        val listaRecargas = mutableListOf<Recarga>()
-        val adapter = RecargaAdapter(listaRecargas)
+        // --------- Historial de recargas (por monto único) ----------
+        val listaReservas = mutableListOf<Reserva>()
+        val adapterRes = ReservaAdapter(listaReservas) { r ->
+            when (r.estado) {
+                "expirada" -> reclamarReservaExpirada(r)           // pago hecho pero venció → a revisión
+                else -> mostrarDialogoPago(r.reservaId, "S/ %.2f".format(r.totalCent / 100.0)) // reanudar
+            }
+        }
         binding.rvRecargas.layoutManager = LinearLayoutManager(this)
-        binding.rvRecargas.adapter = adapter
+        binding.rvRecargas.adapter = adapterRes
 
-        listenerRecargas = db.collection("usuarios").document(usuario.uid)
-            .collection("recargas")
-            .orderBy("ts_envio", Query.Direction.DESCENDING)
+        listenerRecargas = db.collection("reservas_recarga")
+            .whereEqualTo("uid", usuario.uid)
             .addSnapshotListener { snap, _ ->
-                listaRecargas.clear()
+                listaReservas.clear()
                 for (doc in snap?.documents ?: emptyList()) {
-                    val recarga = doc.toObject(Recarga::class.java)
-                    if (recarga != null) listaRecargas.add(recarga)
+                    val r = doc.toObject(Reserva::class.java)
+                    if (r != null) { r.reservaId = doc.id; listaReservas.add(r) }
                 }
-                adapter.notifyDataSetChanged()
+                listaReservas.sortByDescending { it.creadoMs }
+                adapterRes.notifyDataSetChanged()
             }
 
         // --------- Estado wallet_frozen ----------
@@ -179,25 +255,22 @@ class WalletActivity : AppCompatActivity() {
         } catch (_: Exception) {
         }
 
-        // --------- Botón: seleccionar comprobante ----------
+        // --------- Botón: Recargar (monto único) ----------
         binding.btnSeleccionarComprobante.setOnClickListener {
             if (walletCongelada) {
-                Toast.makeText(
-                    this,
-                    "Tu wallet está congelada. No puedes enviar comprobantes.",
-                    Toast.LENGTH_LONG
-                ).show()
+                Toast.makeText(this, "Tu wallet está congelada. No puedes recargar.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
-            try {
-                picker.launch("image/*")
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this,
-                    "Error abriendo galería: ${e.message}",
-                    Toast.LENGTH_LONG
-                ).show()
+            iniciarRecargaMontoUnico()
+        }
+        // Respaldo (long-press): subir comprobante por OCR (estrategia anterior).
+        binding.btnSeleccionarComprobante.setOnLongClickListener {
+            if (!walletCongelada) {
+                try { picker.launch("image/*") } catch (e: Exception) {
+                    Toast.makeText(this, "Error abriendo galería: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
+            true
         }
 
         // --------- Botón: recarga manual ----------
@@ -737,5 +810,223 @@ class WalletActivity : AppCompatActivity() {
                     Toast.LENGTH_LONG
                 ).show()
             }
+    }
+
+    // =================== Recarga por monto único (firma de céntimos) ===================
+
+    private fun iniciarRecargaMontoUnico() {
+        val opciones = arrayOf("S/ 1", "S/ 5", "S/ 10", "S/ 15", "S/ 20", "Otro monto…")
+        val valores = intArrayOf(1, 5, 10, 15, 20, -1)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("¿Cuánto quieres recargar?")
+            .setItems(opciones) { _, which ->
+                if (valores[which] == -1) pedirMontoPersonalizado() else reservarYMostrar(valores[which])
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun pedirMontoPersonalizado() {
+        val et = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            hint = "Soles (1 a 999)"
+            setPadding(48, 32, 48, 32)
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Monto a recargar")
+            .setView(et)
+            .setPositiveButton("Continuar") { _, _ ->
+                val s = et.text.toString().toIntOrNull() ?: 0
+                if (s in 1..999) reservarYMostrar(s)
+                else Toast.makeText(this, "Ingresa entre 1 y 999 soles.", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun reservarYMostrar(soles: Int) {
+        val cargando = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setMessage("Generando tu monto de recarga…")
+            .setCancelable(false).create()
+        cargando.show()
+        com.google.firebase.functions.FirebaseFunctions.getInstance()
+            .getHttpsCallable("reservarRecarga")
+            .call(mapOf("soles" to soles))
+            .addOnSuccessListener { res ->
+                cargando.dismiss()
+                val data = res.data as? Map<*, *>
+                val reservaId = data?.get("reservaId") as? String
+                val totalTexto = data?.get("totalTexto") as? String ?: "S/ ?"
+                if (reservaId == null) {
+                    Toast.makeText(this, "No se pudo generar la recarga.", Toast.LENGTH_LONG).show()
+                    return@addOnSuccessListener
+                }
+                mostrarDialogoPago(reservaId, totalTexto)
+            }
+            .addOnFailureListener { e ->
+                cargando.dismiss()
+                Toast.makeText(this, "No se pudo reservar: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun mostrarDialogoPago(reservaId: String, totalTexto: String) {
+        val vista = layoutInflater.inflate(crystal.crystal.R.layout.dialog_pago_monto_unico, null)
+        val tvMonto = vista.findViewById<android.widget.TextView>(crystal.crystal.R.id.tvMontoPago)
+        val tvNumero = vista.findViewById<android.widget.TextView>(crystal.crystal.R.id.tvNumeroPago)
+        val tvEstado = vista.findViewById<android.widget.TextView>(crystal.crystal.R.id.tvEstadoPago)
+        tvMonto.text = totalTexto
+
+        // Número asignado a ESTA reserva (el primario vivo, con failover). Fallback: config/pagos.
+        fun pintarNumero(num: String?) {
+            tvNumero.text = if (!num.isNullOrBlank()) "al número:  $num" else "al número del negocio"
+        }
+        db.collection("reservas_recarga").document(reservaId).get().addOnSuccessListener { r ->
+            val num = r.getString("numeroAsignado")
+            if (!num.isNullOrBlank()) pintarNumero(num)
+            else db.collection("config").document("pagos").get().addOnSuccessListener { d ->
+                pintarNumero(d.getString("numeroYape") ?: d.getString("numero"))
+            }
+        }
+
+        val dialog = android.app.Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.setContentView(vista)
+        dialog.setCancelable(false)
+        dialog.window?.setBackgroundDrawable(
+            android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
+        )
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.9f).toInt(),
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+
+        vista.findViewById<android.view.View>(crystal.crystal.R.id.btnCopiarMonto).setOnClickListener {
+            val soloNumero = totalTexto.replace("S/", "").trim()
+            val cb = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cb.setPrimaryClip(android.content.ClipData.newPlainText("monto", soloNumero))
+            Toast.makeText(this, "Monto copiado: $soloNumero", Toast.LENGTH_SHORT).show()
+        }
+        vista.findViewById<android.view.View>(crystal.crystal.R.id.btnSubirComprobante).setOnClickListener {
+            reservaComprobantePendiente = reservaId
+            try { pickerComprobanteReserva.launch("image/*") } catch (e: Exception) {
+                Toast.makeText(this, "No se pudo abrir la galería: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+        vista.findViewById<android.view.View>(crystal.crystal.R.id.btnCerrarPago).setOnClickListener {
+            listenerReserva?.remove(); listenerReserva = null
+            dialog.dismiss()
+        }
+        dialog.setOnDismissListener { listenerReserva?.remove(); listenerReserva = null }
+
+        // Escucha la reserva: acredita SOLO con pago casado por monto + comprobante adjunto.
+        listenerReserva?.remove()
+        listenerReserva = db.collection("reservas_recarga").document(reservaId)
+            .addSnapshotListener { snap, _ ->
+                snap ?: return@addSnapshotListener
+                val pago = snap.getBoolean("pagoRecibido") == true
+                val comp = snap.getBoolean("tieneComprobante") == true
+                when (snap.getString("estado")) {
+                    "aplicado" -> {
+                        tvEstado.text = "✅  ¡Saldo acreditado!"
+                        tvEstado.setTextColor(ContextCompat.getColor(this, crystal.crystal.R.color.verde))
+                        vista.findViewById<android.view.View>(crystal.crystal.R.id.btnCopiarMonto).visibility = android.view.View.GONE
+                        vista.findViewById<android.view.View>(crystal.crystal.R.id.btnSubirComprobante).visibility = android.view.View.GONE
+                    }
+                    "expirada" -> {
+                        tvEstado.text = "⌛  La reserva expiró. Vuelve a intentar."
+                        tvEstado.setTextColor(ContextCompat.getColor(this, crystal.crystal.R.color.rojo))
+                    }
+                    else -> {
+                        tvEstado.text = when {
+                            pago && !comp -> "⚠️ Aún NO acreditado.\nSube tu comprobante para acreditar tu saldo."
+                            !pago && comp -> "📎 Comprobante recibido. Esperando confirmar tu pago…"
+                            else -> "⏳  Esperando tu pago y comprobante…"
+                        }
+                        tvEstado.setTextColor(ContextCompat.getColor(this, crystal.crystal.R.color.naranja))
+                    }
+                }
+            }
+        dialog.show()
+    }
+
+    private fun subirComprobanteReserva(reservaId: String, uri: Uri) {
+        reservaComprobantePendiente = null
+        val uid = user?.uid ?: return
+        Toast.makeText(this, "Subiendo comprobante…", Toast.LENGTH_SHORT).show()
+        val ruta = "vouchers/$uid/reserva_${reservaId}_${System.currentTimeMillis()}.jpg"
+        val ref = storage.reference.child(ruta)
+        ref.putFile(uri)
+            .continueWithTask { task ->
+                if (!task.isSuccessful) throw task.exception ?: Exception("Error subiendo imagen")
+                ref.downloadUrl
+            }
+            .addOnSuccessListener { url ->
+                com.google.firebase.functions.FirebaseFunctions.getInstance()
+                    .getHttpsCallable("adjuntarComprobante")
+                    .call(mapOf("reservaId" to reservaId, "voucherPath" to ruta, "voucherUrl" to url.toString()))
+                    .addOnSuccessListener {
+                        Toast.makeText(this, "Comprobante adjuntado ✅", Toast.LENGTH_SHORT).show()
+                    }
+                    .addOnFailureListener { e ->
+                        Toast.makeText(this, "No se pudo adjuntar: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Error subiendo comprobante: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    // ====== Reclamo de reserva expirada (pago hecho pero venció la ventana) ======
+    private fun reclamarReservaExpirada(r: Reserva) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Recarga expirada")
+            .setMessage(
+                "Esta recarga de S/ %.2f expiró. Si ya pagaste, envíala a revisión con tu comprobante y el administrador la validará."
+                    .format(r.totalCent / 100.0)
+            )
+            .setPositiveButton("Enviar a revisión") { _, _ -> intentarReclamar(r) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun intentarReclamar(r: Reserva) {
+        com.google.firebase.functions.FirebaseFunctions.getInstance()
+            .getHttpsCallable("reclamarReserva")
+            .call(mapOf("reservaId" to r.reservaId))
+            .addOnSuccessListener {
+                Toast.makeText(this, "Enviado a revisión ✅. El administrador lo validará.", Toast.LENGTH_LONG).show()
+            }
+            .addOnFailureListener { e ->
+                if ((e.message ?: "").contains("SIN_COMPROBANTE")) {
+                    Toast.makeText(this, "Adjunta el comprobante del pago para reclamar.", Toast.LENGTH_LONG).show()
+                    reclamoReservaPendiente = r
+                    try { pickerReclamo.launch("image/*") } catch (ex: Exception) {
+                        Toast.makeText(this, "No se pudo abrir la galería: ${ex.message}", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    Toast.makeText(this, "No se pudo reclamar: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+    }
+
+    private fun subirComprobanteYReclamar(r: Reserva, uri: Uri) {
+        val uid = user?.uid ?: return
+        Toast.makeText(this, "Subiendo comprobante…", Toast.LENGTH_SHORT).show()
+        val ruta = "vouchers/$uid/reclamo_${r.reservaId}_${System.currentTimeMillis()}.jpg"
+        val ref = storage.reference.child(ruta)
+        ref.putFile(uri)
+            .continueWithTask { t ->
+                if (!t.isSuccessful) throw t.exception ?: Exception("Error subiendo imagen")
+                ref.downloadUrl
+            }
+            .addOnSuccessListener { url ->
+                // Adjunta el comprobante a la reserva (aunque esté expirada) y luego reclama.
+                com.google.firebase.functions.FirebaseFunctions.getInstance()
+                    .getHttpsCallable("adjuntarComprobante")
+                    .call(mapOf("reservaId" to r.reservaId, "voucherPath" to ruta, "voucherUrl" to url.toString()))
+                    .addOnSuccessListener { intentarReclamar(r) }
+                    .addOnFailureListener { e -> Toast.makeText(this, "No se pudo adjuntar: ${e.message}", Toast.LENGTH_LONG).show() }
+            }
+            .addOnFailureListener { e -> Toast.makeText(this, "Error subiendo comprobante: ${e.message}", Toast.LENGTH_LONG).show() }
     }
 }

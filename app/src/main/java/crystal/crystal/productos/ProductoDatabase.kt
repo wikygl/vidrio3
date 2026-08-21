@@ -14,13 +14,14 @@ import java.util.concurrent.TimeUnit
  * ⭐ ACTUALIZADO: Versión 2 con precioCompra y precioVenta
  */
 @Database(
-    entities = [Producto::class],
-    version = 2,  // ⭐ INCREMENTADO de 1 a 2
+    entities = [Producto::class, MovimientoInventario::class],
+    version = 3,  // v2: precioCompra/precioVenta · v3: stock decimal + planchas + movimientos
     exportSchema = false
 )
 abstract class ProductoDatabase : RoomDatabase() {
 
     abstract fun productoDao(): ProductoDao
+    abstract fun movimientoInventarioDao(): MovimientoInventarioDao
 
     companion object {
         @Volatile
@@ -85,6 +86,85 @@ abstract class ProductoDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v3: el stock pasa a decimal (el vidrio se vende por área, no por unidades enteras), se
+         * agregan las columnas de plancha y aparece el libro de movimientos.
+         *
+         * SQLite no permite cambiar el tipo de una columna, así que se recrea la tabla. Los valores
+         * existentes se conservan: INTEGER a REAL es una conversión sin pérdida.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE productos_new (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        nombre TEXT NOT NULL,
+                        categoria TEXT NOT NULL,
+                        descripcion TEXT,
+                        precioCompra REAL NOT NULL DEFAULT 0.0,
+                        precioVenta REAL NOT NULL,
+                        stock REAL NOT NULL DEFAULT 0.0,
+                        stockMinimo REAL NOT NULL DEFAULT 10.0,
+                        unidad TEXT NOT NULL DEFAULT 'm2',
+                        espesor TEXT,
+                        tipo TEXT,
+                        stockPlanchas REAL NOT NULL DEFAULT 0.0,
+                        anchoPlancha REAL NOT NULL DEFAULT 0.0,
+                        altoPlancha REAL NOT NULL DEFAULT 0.0,
+                        planchasPorCaja INTEGER NOT NULL DEFAULT 0,
+                        activo INTEGER NOT NULL DEFAULT 1,
+                        pendienteSincronizar INTEGER NOT NULL DEFAULT 0,
+                        ultimaActualizacion INTEGER NOT NULL,
+                        ultimaSincronizacion INTEGER NOT NULL DEFAULT 0,
+                        ultimaActualizacionLocal INTEGER NOT NULL
+                    )
+                """.trimIndent())
+
+                database.execSQL("""
+                    INSERT INTO productos_new (
+                        id, nombre, categoria, descripcion, precioCompra, precioVenta,
+                        stock, stockMinimo, unidad, espesor, tipo,
+                        stockPlanchas, anchoPlancha, altoPlancha, planchasPorCaja,
+                        activo, pendienteSincronizar, ultimaActualizacion,
+                        ultimaSincronizacion, ultimaActualizacionLocal
+                    )
+                    SELECT
+                        id, nombre, categoria, descripcion, precioCompra, precioVenta,
+                        CAST(stock AS REAL), CAST(stockMinimo AS REAL), unidad, espesor, tipo,
+                        0.0, 0.0, 0.0, 0,
+                        activo, pendienteSincronizar, ultimaActualizacion,
+                        ultimaSincronizacion, ultimaActualizacionLocal
+                    FROM productos
+                """.trimIndent())
+
+                database.execSQL("DROP TABLE productos")
+                database.execSQL("ALTER TABLE productos_new RENAME TO productos")
+
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS movimientos_inventario (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        productoId TEXT NOT NULL,
+                        productoNombre TEXT NOT NULL,
+                        tipo TEXT NOT NULL,
+                        cantidad REAL NOT NULL,
+                        cantidadPlanchas REAL NOT NULL DEFAULT 0.0,
+                        stockAnterior REAL NOT NULL,
+                        stockNuevo REAL NOT NULL,
+                        stockPlanchasAnterior REAL NOT NULL DEFAULT 0.0,
+                        stockPlanchasNuevo REAL NOT NULL DEFAULT 0.0,
+                        referencia TEXT NOT NULL DEFAULT '',
+                        vendedor TEXT NOT NULL DEFAULT '',
+                        terminal TEXT,
+                        observaciones TEXT NOT NULL DEFAULT '',
+                        fecha INTEGER NOT NULL,
+                        uidPatron TEXT NOT NULL DEFAULT '',
+                        pendienteSincronizar INTEGER NOT NULL DEFAULT 1,
+                        ultimaSincronizacion INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getDatabase(context: Context): ProductoDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -92,7 +172,7 @@ abstract class ProductoDatabase : RoomDatabase() {
                     ProductoDatabase::class.java,
                     "producto_database"
                 )
-                    .addMigrations(MIGRATION_1_2)  // ⭐ AGREGAR MIGRACIÓN
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                 INSTANCE = instance
                 instance
@@ -176,7 +256,8 @@ class SyncProductosWorker(
             val database = ProductoDatabase.getDatabase(applicationContext)
             val repository = ProductoRepository(
                 database.productoDao(),
-                applicationContext
+                applicationContext,
+                database.movimientoInventarioDao()
             )
 
             val resultado = repository.sincronizarCompleta()
@@ -232,7 +313,8 @@ class SyncInicialProductosWorker(
             val database = ProductoDatabase.getDatabase(applicationContext)
             val repository = ProductoRepository(
                 database.productoDao(),
-                applicationContext
+                applicationContext,
+                database.movimientoInventarioDao()
             )
 
             val resultado = repository.descargarTodoDesdeFirestore()

@@ -18,6 +18,18 @@ object ExportadorResultados {
         SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
 
     /**
+     * Guarda [contenido] como archivo [nombre] (en filesDir/exportaciones) y abre el diálogo de
+     * compartir con [mimeType]. Punto de reutilización genérico (lo usa, p. ej., Reportes de ventas)
+     * para no duplicar la fontanería de guardar/compartir.
+     */
+    fun exportarTexto(context: Context, nombre: String, contenido: String, mimeType: String) {
+        val archivo = guardarArchivo(context, nombre, contenido)
+        if (archivo != null) {
+            compartirArchivo(context, archivo, mimeType)
+        }
+    }
+
+    /**
      * Exporta como TXT agrupado por material y comparte.
      */
     fun exportarTxt(context: Context, resultados: List<ResultadoCalculo>, cliente: String) {

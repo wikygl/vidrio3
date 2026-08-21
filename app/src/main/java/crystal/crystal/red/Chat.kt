@@ -11,5 +11,6 @@ data class Chat(
     var photoUrl: String = "",
     var lastMsgDate: Date? = null,
     var unreadCount: Int = 0,
-    var lastMessageText: String = ""
+    var lastMessageText: String = "",
+    var esSoporte: Boolean = false
 )

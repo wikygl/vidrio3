@@ -42,9 +42,9 @@ class PiezaCorteAdapter(
 
         // Configurar texto según si es pieza o varilla
         if (esPieza) {
-            tvTexto.text = "${formatter.df1(pieza.longitud)} cm (${pieza.referencia}) ------ ${pieza.cantidad} uni"
+            tvTexto.text = "${formatter.mostrarConSigla(pieza.longitud)} (${pieza.referencia}) ------ ${pieza.cantidad} uni"
         } else {
-            tvTexto.text = "${formatter.df1(pieza.longitud)} cm ------ ${pieza.cantidad} uni (${pieza.referencia})"
+            tvTexto.text = "${formatter.mostrarConSigla(pieza.longitud)} ------ ${pieza.cantidad} uni (${pieza.referencia})"
         }
 
         return view

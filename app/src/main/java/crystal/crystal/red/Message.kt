@@ -13,7 +13,12 @@ data class Message(
     var deletedFor: List<String> = emptyList(),
     var deletedForEveryone: Boolean = false,
     var tipo: String = "texto",
-    var nombreArchivo: String = ""  // <-- NUEVO campo para mostrar nombre bonito
+    var nombreArchivo: String = "",  // <-- NUEVO campo para mostrar nombre bonito
+    // Pedidos en línea: un mensaje puede ser un pedido con estado "en_espera" / "cogido".
+    var esPedido: Boolean = false,
+    var estadoPedido: String = "",
+    var atendidoPor: String = "",
+    var atendidoNombre: String = ""
 ) {
     @get:Exclude
     @set:Exclude

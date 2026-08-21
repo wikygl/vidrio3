@@ -24,7 +24,7 @@ object ProyectoUIHelper {
             }
         }
     }
-    // Actualizar el TextView con la informaciÃ³n del proyecto activo
+    // Actualizar el TextView con la información del proyecto activo
     fun actualizarVisorProyectoActivo(context: Context, textView: TextView) {
         val proyectoActivo = ProyectoManager.getProyectoActivo()
 
@@ -38,7 +38,7 @@ object ProyectoUIHelper {
             textView.setTextColor(0xFFFF9800.toInt()) // Naranja
         }
     }
-    // Verificar si hay proyecto activo y mostrar diÃ¡logo si es necesario
+    // Verificar si hay proyecto activo y mostrar diálogo si es necesario
     fun verificarProyectoActivo(context: Context, callback: DialogosProyecto.ProyectoCallback): Boolean {
         if (!ProyectoManager.hayProyectoActivo()) {
             Toast.makeText(context, "Seleccione un proyecto primero", Toast.LENGTH_SHORT).show()
@@ -47,13 +47,13 @@ object ProyectoUIHelper {
         }
         return true
     }
-    // Agregar opciones de menÃº para gestiÃ³n de proyectos
+    // Agregar opciones de menú para gestión de proyectos
     fun agregarOpcionesMenuProyecto(menu: Menu) {
         menu.add(0, MENU_GESTION_PROYECTOS, 0, "Gestionar Proyectos")
         menu.add(0, MENU_INFO_PROYECTO, 1, "Info Proyecto Activo")
         menu.add(0, MENU_GESTION_AVANZADA, 2, "Gestión Avanzada") // Nueva opción
     }
-    // Manejar selecciÃ³n de opciones del menÃº
+    // Manejar selección de opciones del menú
     fun manejarSeleccionMenu(context: Context,itemId: Int,callback: DialogosProyecto.ProyectoCallback,
         onProyectoCambiado: (() -> Unit)? = null
     ): Boolean {
@@ -100,7 +100,7 @@ object ProyectoUIHelper {
             else -> false
         }
     }
-    // Callback que actualiza UI automÃ¡ticamente
+    // Callback que actualiza UI automáticamente
     fun crearCallbackConActualizacionUI(context: Context,textViewProyecto: TextView? = null,
         activity: AppCompatActivity? = null
     ): DialogosProyecto.ProyectoCallback {

@@ -1,4 +1,6 @@
-package crystal.crystal.taller
+package crystal.crystal.taller.mamparas
+import crystal.crystal.taller.ControladorColaMedidas
+import crystal.crystal.taller.ModoMasivoHelper
 
 import android.annotation.SuppressLint
 import android.os.Bundle
@@ -17,6 +19,7 @@ class MamparaFC : AppCompatActivity() {
     lateinit var binding: ActivityMamparaFcBinding
     private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
     private var primerClickArchivarRealizado = false
+    private lateinit var controladorCola: ControladorColaMedidas
 
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,12 +99,14 @@ class MamparaFC : AppCompatActivity() {
                         archivarMapas()
                         Toast.makeText(this@MamparaFC, "Archivado", Toast.LENGTH_SHORT).show()
                         binding.med1.setText(""); binding.med2.setText("")
+                        controladorCola.ofrecerSiguiente()
                     }
                     override fun onProyectoCreado(nombreProyecto: String) {
                         primerClickArchivarRealizado = true
                         archivarMapas()
                         Toast.makeText(this@MamparaFC, "Archivado", Toast.LENGTH_SHORT).show()
                         binding.med1.setText(""); binding.med2.setText("")
+                        controladorCola.ofrecerSiguiente()
                     }
                     override fun onProyectoEliminado(nombreProyecto: String) {}
                 })
@@ -114,12 +119,22 @@ class MamparaFC : AppCompatActivity() {
                 archivarMapas()
                 Toast.makeText(this, "Archivado", Toast.LENGTH_SHORT).show()
                 binding.med1.setText(""); binding.med2.setText("")
+                controladorCola.ofrecerSiguiente()
             }
         }
 
         // Pre-carga desde presupuesto
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.med1.setText(df1(it)) }
         intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.med2.setText(df1(it)) }
+
+        controladorCola = ControladorColaMedidas(
+            activity = this,
+            claseActual = MamparaFC::class.java,
+            etAncho = binding.med1,
+            etAlto = binding.med2,
+            formato = ::df1
+        )
+        controladorCola.inicializar()
     }
 
     // ==================== ARCHIVAR ====================

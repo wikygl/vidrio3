@@ -15,6 +15,11 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
+    <!-- Acceso a todos los archivos: necesario en Android 11+ (targetSdk 34) para leer/escribir en
+         la carpeta pública Descargas/Crystal (medidas, respaldo de proyectos), fuera del sandbox. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
@@ -76,6 +81,14 @@
             android:name=".productos.GestionProductosActivity"
             android:label="Gestión de Productos"
             android:screenOrientation="portrait" />
+        <activity
+            android:name=".pos.ReportesActivity"
+            android:label="Reportes de ventas"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".red.PedidosActivity"
+            android:label="Pedidos en espera"
+            android:parentActivityName=".red.ListChatActivity" />
         <activity
             android:name=".comprobantes.DisenoTicketActivity"
             android:exported="true"
@@ -152,7 +165,7 @@
             android:name=".registro.PlanSelectionActivity"
             android:exported="false" />
         <activity
-            android:name=".taller.MamparaVidrioActivity"
+            android:name=".taller.mamparas.MamparaVidrioActivity"
             android:exported="false" />
         <activity
             android:name=".taller.RejasActivity"
@@ -213,7 +226,7 @@
             android:name=".taller.PivotAl"
             android:exported="false" />
         <activity
-            android:name=".taller.VentanaAl"
+            android:name=".taller.venAl.VentanaAl"
             android:exported="false" />
         <activity
             android:name=".registro.Acliente"
@@ -226,7 +239,7 @@
         <activity android:name=".registro.Registro" />
         <activity android:name=".taller.Vitroven" />
         <activity
-            android:name=".taller.MamparaFC"
+            android:name=".taller.mamparas.MamparaFC"
             android:screenOrientation="portrait"
             tools:ignore="DiscouragedApi,LockedOrientationActivity" />
         <activity
@@ -237,7 +250,7 @@
             android:name=".catalogo.Fotos"
             android:exported="false" />
         <activity
-            android:name=".taller.MamparaPaflon"
+            android:name=".taller.mamparas.MamparaPaflon"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
         <activity

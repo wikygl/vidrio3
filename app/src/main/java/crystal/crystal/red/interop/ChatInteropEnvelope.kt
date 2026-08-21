@@ -81,7 +81,8 @@ data class ChatInteropEnvelope(
                 "medidas" -> ChatInteropMessageType.MATERIALS_REQUEST
                 "presupuesto" -> ChatInteropMessageType.CRYSTAL_BUDGET
                 "cotizacion" -> ChatInteropMessageType.PUNTOS_QUOTE
-                "archivo", "imagen", "video", "audio", "pdf", "medidas_crystal", "corte_crystal", "plancha_crystal" -> ChatInteropMessageType.FILE
+                "archivo", "imagen", "video", "audio", "pdf",
+                "medidas_crystal", "corte_crystal", "plancha_crystal", "proyecto_crystal" -> ChatInteropMessageType.FILE
                 else -> ChatInteropMessageType.UNKNOWN
             }
         }

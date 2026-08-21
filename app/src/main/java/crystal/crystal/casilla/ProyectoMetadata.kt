@@ -18,7 +18,7 @@ data class ProyectoMetadata(
         }
     }
 
-    // FunciÃ³n para actualizar la fecha de modificaciÃ³n
+    // Función para actualizar la fecha de modificación
     fun actualizarFechaModificacion() {
         fechaModificacion = obtenerFechaActual()
     }

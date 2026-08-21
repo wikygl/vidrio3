@@ -15,7 +15,20 @@ import crystal.crystal.casilla.ProyectoManager
  */
 class CorteListManager(private val context: Context) {
 
-    private val listasExcluidas = setOf("Diseño", "DisenoPaquete", "DisenoSimbolicoV2", "Grados", "Referencias")
+    // Claves que no son materiales: descripciones, diseños y metadatos. Si alguna se colara, sus
+    // textos entrarían al optimizador como si fueran medidas de corte.
+    private val listasExcluidas = setOf(
+        "Diseño", "DisenoPaquete", "DisenoSimbolicoV2", "MetadatosProduccion", "Grados", "Referencias",
+        "DisenoPuerta", "DisenoMampara", "DisenoVentanaAl", "DisenoVitroven"
+    )
+
+    // Ancho/Alto son medidas de REFERENCIA (p. ej. de muro cortina), no listas de piezas a cortar,
+    // así que no deben ofrecerse como listas cortables. Se excluyen tolerando ":" y mayúsculas.
+    private fun esListaExcluida(nombre: String): Boolean {
+        if (nombre in listasExcluidas) return true
+        val n = nombre.trim().trimEnd(':').lowercase()
+        return n == "ancho" || n == "alto"
+    }
 
     private fun ensureProjectInitialized() {
         if (!ProyectoManager.hayProyectoActivo()) {
@@ -23,30 +36,9 @@ class CorteListManager(private val context: Context) {
         }
     }
 
-    private fun construirVentanaColorMap(mapListas: Map<String, List<List<String>>>): Map<String, Pair<String, String>> {
-        val ventanaColorMap = mutableMapOf<String, Pair<String, String>>()
-        mapListas["DisenoSimbolicoV2"]?.forEach { lista ->
-            val paquete = lista.getOrNull(0)?.trim() ?: return@forEach
-            val ventana = lista.getOrElse(2) { "" }.ifBlank { null } ?: return@forEach
-            val colorAlu = extraerCampoMat(paquete, "alu")
-            val tipoVidrio = extraerCampoMat(paquete, "vid")
-            if (colorAlu.isNotBlank() || tipoVidrio.isNotBlank()) {
-                ventanaColorMap[ventana] = Pair(colorAlu, tipoVidrio)
-            }
-        }
-        return ventanaColorMap
-    }
-
-    private fun extraerCampoMat(paquete: String, campo: String): String {
-        val matMatch = Regex("-MAT<([^>]*)>").find(paquete) ?: return ""
-        val matContent = matMatch.groupValues[1]
-        return matContent.split(";")
-            .find { it.startsWith("$campo:", ignoreCase = true) }
-            ?.substringAfter(":")
-            ?.replace("_", " ")
-            ?.trim()
-            ?.takeIf { it != "null" } ?: ""
-    }
+    // idVentana -> (colorAluminio, tipoVidrio), leído desde la fuente única de metadatos de producción.
+    private fun construirVentanaColorMap(mapListas: Map<String, List<List<String>>>): Map<String, Pair<String, String>> =
+        crystal.crystal.casilla.MetadatosProduccion.mapaPorVentana(mapListas)
 
     /**
      * Muestra diálogo de selección de proyectos y luego pobla el spinner con las listas encontradas
@@ -106,7 +98,7 @@ class CorteListManager(private val context: Context) {
         val nombresListasValidas = mutableListOf<String>()
 
         merged.forEach { (nombreLista, listas) ->
-            if (nombreLista in listasExcluidas) return@forEach
+            if (esListaExcluida(nombreLista)) return@forEach
 
             val listasValidas = listas.filter { lista ->
                 if (lista.size < 3) return@filter false
@@ -172,6 +164,9 @@ class CorteListManager(private val context: Context) {
             val dato1Str = subLista[0].trim()
             val dato2Str = subLista[1].trim()
             val ventana = subLista[2].trim()
+            // Solo el número del id (primer token): los ids viejos traen ", cliente" (puerta) o
+            // " proyecto" (nova); cualquiera de los dos se descarta para no duplicar ni mostrar el cliente.
+            val ventanaNum = ventana.split(',', ' ').first().trim()
 
             if (colorFiltro != null) {
                 val (colorAlu, tipoVidrio) = ventanaColorMap[ventana] ?: Pair("", "")
@@ -183,7 +178,7 @@ class CorteListManager(private val context: Context) {
             val dato2 = dato2Str.toIntOrNull()
             if (dato1 != null && dato2 != null) {
                 val proyecto = subLista.getOrElse(3) { "" }.trim()
-                val referenciaBase = if (proyecto.isNotBlank()) "$ventana $proyecto" else ventana
+                val referenciaBase = if (proyecto.isNotBlank()) "$ventanaNum $proyecto" else ventanaNum
                 val referencia = agregarListaAReferencia(referenciaBase, nombreBase)
                 listaResultado.add(PiezaCorte(dato1, dato2, referencia, true))
             } else {
@@ -217,6 +212,6 @@ class CorteListManager(private val context: Context) {
 
     fun nombresListasDisponibles(): Set<String> =
         cachedMergedMap.keys
-            .filter { it !in listasExcluidas }
+            .filter { !esListaExcluida(it) }
             .toSet()
 }

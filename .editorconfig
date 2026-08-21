@@ -1,0 +1,8 @@
+root = true
+
+# Fija UTF-8 para todo el proyecto: evita que el editor/IDE corrompa acentos y emojis
+# (el mojibake venía de guardar archivos UTF-8 leídos como Windows-1252).
+[*]
+charset = utf-8
+trim_trailing_whitespace = false
+insert_final_newline = false

@@ -37,6 +37,18 @@ class PlanSelectionActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (crystal.crystal.FeaturesV1.OCULTAR_WALLET) {
+            android.widget.Toast.makeText(this, "No disponible en esta versión", android.widget.Toast.LENGTH_SHORT).show()
+            finish(); return
+        }
+        // Los planes los gestiona solo el administrador (patrón). Una terminal no accede a esta pantalla.
+        val prefs = getSharedPreferences("MyPrefs", MODE_PRIVATE)
+        val esTerminal = prefs.getString("session_type", null) == "TERMINAL" ||
+            prefs.getBoolean("es_terminal_pin", false)
+        if (esTerminal) {
+            Toast.makeText(this, "Acceso restringido al administrador", Toast.LENGTH_SHORT).show()
+            finish(); return
+        }
         binding = ActivityPlanSelectionBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -385,70 +397,90 @@ class PlanSelectionActivity : AppCompatActivity() {
         }
     }
 
+    // El precio y la duración los define el SERVIDOR (Cloud Function `activarPlan`), no el cliente.
+    // Así se cierra el hueco de auto-activarse FULL con saldo mínimo. `precioCent`/`duracionDias`
+    // se mantienen en la firma por compatibilidad con los botones, pero ya no se usan aquí.
+    @Suppress("UNUSED_PARAMETER")
     private fun activarPlan(
         tipo: String,
         precioCent: Long,
         duracionDias: Long?
     ) {
-        val usuario = auth.currentUser ?: run {
+        if (auth.currentUser == null) {
             Toast.makeText(this, "Inicia sesión primero.", Toast.LENGTH_LONG).show()
             return
         }
-
-        val uid = usuario.uid
-        val userRef = db.collection("usuarios").document(uid)
-
-        db.runTransaction { tx ->
-            val snap = tx.get(userRef)
-
-            // Saldo actual en céntimos
-            val saldoActual = snap.getLong("wallet_saldo_cent") ?: 0L
-
-            if (saldoActual < precioCent) {
-                throw Exception("SALDO_INSUFICIENTE")
+        com.google.firebase.functions.FirebaseFunctions.getInstance()
+            .getHttpsCallable("activarPlan")
+            .call(mapOf("tipo" to tipo))
+            .addOnSuccessListener { result ->
+                val data = result.data as? Map<*, *>
+                val fullUntil = (data?.get("full_until") as? Number)?.toLong()
+                mostrarDialogoSuscripcionActiva(tipo, fullUntil)
             }
-
-            val nuevoSaldo = saldoActual - precioCent
-
-            // Construir nuevo estado_servicio
-            val ahora = Timestamp.now()
-            val estadoServicio = mutableMapOf<String, Any>(
-                "mode" to "FULL",
-                "source" to tipo,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-
-            if (duracionDias != null) {
-                val millis = ahora.toDate().time + TimeUnit.DAYS.toMillis(duracionDias)
-                estadoServicio["full_until"] = Timestamp(Date(millis))
+            .addOnFailureListener { e ->
+                val msg = e.message ?: ""
+                if (msg.contains("SALDO_INSUFICIENTE")) {
+                    Toast.makeText(this, "Saldo insuficiente. Recarga con Yape.", Toast.LENGTH_LONG).show()
+                    startActivity(Intent(this, WalletActivity::class.java))
+                } else {
+                    Toast.makeText(this, "Error al activar plan: $msg", Toast.LENGTH_LONG).show()
+                }
             }
+    }
 
-            // Actualizar usuario
-            tx.update(userRef, mapOf(
-                "wallet_saldo_cent" to nuevoSaldo,
-                "estado_servicio" to estadoServicio
-            ))
-
-            // Registrar movimiento en wallet_movs
-            val movRef = userRef.collection("wallet_movs").document()
-            tx.set(movRef, mapOf(
-                "tipo" to "PAGO_PLAN_$tipo",
-                "monto_cent" to -precioCent,
-                "created_at" to FieldValue.serverTimestamp()
-            ))
-
-            null
-        }.addOnSuccessListener {
-            Toast.makeText(this, "Plan $tipo activado con saldo de wallet.", Toast.LENGTH_LONG).show()
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
-        }.addOnFailureListener { e ->
-            if (e.message?.contains("SALDO_INSUFICIENTE") == true) {
-                Toast.makeText(this, "Saldo insuficiente. Recarga con Yape.", Toast.LENGTH_LONG).show()
-                startActivity(Intent(this, WalletActivity::class.java))
+    // Diálogo llamativo de confirmación con la hora EXACTA de corte (usa full_until del servidor).
+    private fun mostrarDialogoSuscripcionActiva(tipo: String, fullUntilMillis: Long?) {
+        if (isFinishing || isDestroyed) {
+            startActivity(Intent(this, MainActivity::class.java)); finish(); return
+        }
+        try {
+            val vista = layoutInflater.inflate(crystal.crystal.R.layout.dialog_suscripcion_activa, null)
+            val nombrePlan = when (tipo.uppercase()) {
+                "PREPAGO" -> "Plan Prepago — 1 día"
+                "MENSUAL" -> "Plan Mensual — 30 días"
+                "ANUAL" -> "Plan Anual — 365 días"
+                else -> "Plan $tipo"
+            }
+            val duracion = when (tipo.uppercase()) {
+                "PREPAGO" -> "Dura exactamente 24 horas: se corta justo a esta hora."
+                "MENSUAL" -> "Tu acceso FULL dura 30 días."
+                "ANUAL" -> "Tu acceso FULL dura 365 días."
+                else -> "Tu acceso FULL está activo."
+            }
+            vista.findViewById<android.widget.TextView>(crystal.crystal.R.id.tvPlanNombre).text = nombrePlan
+            vista.findViewById<android.widget.TextView>(crystal.crystal.R.id.tvDuracion).text = duracion
+            val tvFecha = vista.findViewById<android.widget.TextView>(crystal.crystal.R.id.tvFechaCorte)
+            if (fullUntilMillis != null && fullUntilMillis > 0L) {
+                val fmt = java.text.SimpleDateFormat("EEEE d 'de' MMMM 'de' yyyy, h:mm a", java.util.Locale("es"))
+                val texto = fmt.format(java.util.Date(fullUntilMillis)).replaceFirstChar { it.uppercase() }
+                val horas = (fullUntilMillis - System.currentTimeMillis()) / 3600000.0
+                val restante = if (horas >= 36) "≈ ${Math.round(horas / 24.0)} días" else "≈ ${Math.round(horas)} horas"
+                tvFecha.text = "⏰ Se corta:\n$texto\n\n⏳ Tiempo activo: $restante"
             } else {
-                Toast.makeText(this, "Error al activar plan: ${e.message}", Toast.LENGTH_LONG).show()
+                tvFecha.visibility = android.view.View.GONE
             }
+
+            val dialog = android.app.Dialog(this)
+            dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+            dialog.setContentView(vista)
+            dialog.setCancelable(false)
+            dialog.window?.setBackgroundDrawable(
+                android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
+            )
+            dialog.window?.setLayout(
+                (resources.displayMetrics.widthPixels * 0.88f).toInt(),
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            vista.findViewById<android.view.View>(crystal.crystal.R.id.btnEntendido).setOnClickListener {
+                dialog.dismiss()
+                startActivity(Intent(this, MainActivity::class.java))
+                finish()
+            }
+            dialog.show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Plan $tipo activado.", Toast.LENGTH_LONG).show()
+            startActivity(Intent(this, MainActivity::class.java)); finish()
         }
     }
 }

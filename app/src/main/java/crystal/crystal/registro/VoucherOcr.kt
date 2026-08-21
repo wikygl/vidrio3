@@ -61,22 +61,41 @@ object VoucherOcr {
     // ================== parsers ==================
 
     fun parseMonto(t: String): Double? {
-        // 1) "S/ 15.00" | "S/15" | "S/. 15,50"
-        val r1 = Regex("""S[/.\s]*([0-9]{1,4}(?:[.,][0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
-        r1.find(t)?.let { m ->
-            return normalizarNumero(m.groupValues[1])
-        }
+        // Yape muestra el monto SIN decimales ("S/ 3", "S/ 50") y Plin CON 2 decimales ("S/ 1.00").
+        // Se ancla al símbolo "S/" (separador / o . obligatorio) con decimales OPCIONALES; así lee
+        // ambos formatos sin confundirse con el teléfono (928 878 578) ni el código de operación
+        // (que no llevan "S/" delante).
 
-        // 2) fallback: "Monto: 15.00" o "Importe 12,5"
-        val r2 = Regex(
-            """(monto|importe)[:\s]*([0-9]{1,4}(?:[.,][0-9]{1,2})?)""",
+        // 1) Anclado a "S/", decimales opcionales.
+        val rConSimbolo = Regex(
+            """[S$]\s*[/.]+\s*([0-9]{1,4})(?:[.,]([0-9]{1,2}))?(?![0-9])""",
             RegexOption.IGNORE_CASE
         )
-        r2.find(t)?.let { m ->
-            return normalizarNumero(m.groupValues[2])
+        rConSimbolo.find(t)?.let { m ->
+            return montoDe(m.groupValues[1], m.groupValues[2])
+        }
+
+        // 2) Etiquetado: "Monto: 15.00" / "Importe 12"
+        val rLabel = Regex(
+            """(?:monto|importe)[:\s]*(?:[S$]\s*[/.]*)?\s*([0-9]{1,4})(?:[.,]([0-9]{1,2}))?""",
+            RegexOption.IGNORE_CASE
+        )
+        rLabel.find(t)?.let { m ->
+            return montoDe(m.groupValues[1], m.groupValues[2])
+        }
+
+        // 3) Último recurso: un número con EXACTAMENTE 2 decimales (formato Plin) que no sea parte de
+        //    otro más largo (evita teléfonos/códigos). Solo aplica si el OCR perdió la "S/".
+        val rDecimal = Regex("""(?<![0-9])([0-9]{1,4})[.,]([0-9]{2})(?![0-9])""")
+        rDecimal.find(t)?.let { m ->
+            return montoDe(m.groupValues[1], m.groupValues[2])
         }
         return null
     }
+
+    private fun montoDe(entero: String, decimales: String): Double? =
+        if (decimales.isEmpty()) entero.toDoubleOrNull()
+        else "$entero.$decimales".toDoubleOrNull()
 
     /** Código operación / seguridad: después de "Operación", "Operación N°", "CÓDIGO", etc. 3-12 dígitos/alfa. */
     // ⭐ SOLO REEMPLAZAR LA FUNCIÓN parseCodigo() EN TU VoucherOcr.kt

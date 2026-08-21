@@ -1,0 +1,16 @@
+<!-- Canal 2⅜: sección en U de 6 de base por 2.2 de altura. Mismo estilo que el resto del catálogo
+     de perfiles: silueta sin relleno con trazo negro, y el tamaño en dp igual a los centímetros. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:autoMirrored="true"
+    android:width="6dp"
+    android:height="2.2dp"
+    android:viewportWidth="600"
+    android:viewportHeight="220">
+
+    <path
+        android:fillColor="#00000000"
+        android:fillType="evenOdd"
+        android:pathData="M5,5 L5,215 L595,215 L595,5 L551,5 L551,171 L49,171 L49,5 Z"
+        android:strokeColor="#000000"
+        android:strokeWidth="8"/>
+</vector>

@@ -1,4 +1,4 @@
-package crystal.crystal.taller.puerta.logica
+﻿package crystal.crystal.taller.puerta.logica
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,8 +18,8 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            110.49 = 2
-            64.96 = 2
+            110.5 = 2
+            65 = 2
             """.trimIndent(),
             resultado
         )
@@ -55,9 +55,9 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            156.46 = 2
-            106.35 = 2
-            53.17 = 2
+            156.5 = 2
+            106.4 = 2
+            53.2 = 2
             """.trimIndent(),
             resultado
         )
@@ -75,8 +75,8 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            82.81 = 1
-            78.61 = 2
+            82.8 = 1
+            78.6 = 2
             """.trimIndent(),
             resultado
         )
@@ -110,10 +110,10 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            48.10 = 2
-            68.02 = 2
-            60.86 = 2
-            108.96 = 2
+            48.1 = 2
+            68 = 2
+            60.9 = 2
+            109 = 2
             """.trimIndent(),
             resultado
         )
@@ -132,9 +132,9 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            34.58 = 10
-            48.91 = 2
-            53.88 = 6
+            34.6 = 10
+            48.9 = 2
+            53.9 = 6
             """.trimIndent(),
             resultado
         )
@@ -152,7 +152,7 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            37.7 x 139.8 = 1
+            37.7 x 140.7 = 1
             """.trimIndent(),
             resultado
         )
@@ -170,7 +170,7 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            47.7 x 156.9 = 1
+            47.7 x 157 = 1
             """.trimIndent(),
             resultado
         )
@@ -206,7 +206,7 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            47.7 x 144 = 1
+            47.7 x 144.9 = 1
             """.trimIndent(),
             resultado
         )
@@ -224,7 +224,7 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            47.7 x 136.5 = 1
+            47.7 x 137.1 = 1
             """.trimIndent(),
             resultado
         )
@@ -242,7 +242,7 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            47.7 x 155.8 = 1
+            47.7 x 156.7 = 1
             """.trimIndent(),
             resultado
         )
@@ -260,7 +260,7 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            47.7 x 119.9 = 1
+            47.7 x 120.8 = 1
             """.trimIndent(),
             resultado
         )
@@ -279,10 +279,10 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            48.10 = 2
-            69.52 = 2
-            58.74 = 2
-            105.34 = 2
+            48.1 = 2
+            69.5 = 2
+            58.7 = 2
+            105.3 = 2
             """.trimIndent(),
             resultado
         )
@@ -301,10 +301,10 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            48.10 = 2
-            56.40 = 2
-            69.74 = 2
-            96.64 = 2
+            48.1 = 2
+            56.4 = 2
+            69.7 = 2
+            96.6 = 2
             """.trimIndent(),
             resultado
         )
@@ -323,10 +323,10 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            48.10 = 2
-            98.80 = 2
-            38.94 = 2
-            119.65 = 2
+            48.1 = 2
+            98.8 = 2
+            38.9 = 2
+            119.7 = 2
             """.trimIndent(),
             resultado
         )
@@ -345,9 +345,9 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            44.09 = 2
-            168.82 = 2
-            157.27 = 2
+            44.1 = 2
+            168.8 = 2
+            157.3 = 2
             """.trimIndent(),
             resultado
         )
@@ -366,10 +366,10 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            4.12 = 2
-            35.86 = 2
-            181.52 = 2
-            178.50 = 2
+            4.1 = 2
+            35.9 = 2
+            181.5 = 2
+            178.5 = 2
             """.trimIndent(),
             resultado
         )
@@ -388,10 +388,10 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            3.77 = 2
-            36.21 = 2
-            185.58 = 2
-            182.50 = 2
+            3.8 = 2
+            36.2 = 2
+            185.6 = 2
+            182.5 = 2
             """.trimIndent(),
             resultado
         )
@@ -410,10 +410,10 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            12.85 = 2
-            39.03 = 2
-            149.53 = 2
-            147.00 = 2
+            12.9 = 2
+            39 = 2
+            149.5 = 2
+            147 = 2
             """.trimIndent(),
             resultado
         )
@@ -432,11 +432,11 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            48.10 = 2
-            69.52 = 4
-            18.53 = 2
-            65.13 = 2
-            66.01 = 2
+            48.1 = 2
+            69.5 = 4
+            18.5 = 2
+            65.1 = 2
+            66 = 2
             """.trimIndent(),
             resultado
         )
@@ -455,17 +455,17 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            5.28 = 2
-            13.18 = 2
-            12.31 = 2
-            22.90 = 2
-            45.41 = 2
-            66.58 = 2
-            89.10 = 2
-            98.80 = 4
-            11.78 = 2
-            16.83 = 2
-            17.93 = 6
+            5.3 = 2
+            13.2 = 2
+            12.3 = 2
+            22.9 = 2
+            45.4 = 2
+            66.6 = 2
+            89.1 = 2
+            98.8 = 4
+            11.8 = 2
+            16.8 = 2
+            17.9 = 6
             """.trimIndent(),
             resultado
         )
@@ -484,16 +484,16 @@ class CalculosPuertaMariDTest {
 
         assertEquals(
             """
-            6.57 = 2
-            12.81 = 2
-            12.33 = 2
-            38.33 = 2
-            71.50 = 2
-            106.30 = 2
-            139.47 = 2
-            17.47 = 2
-            31.59 = 2
-            32.86 = 2
+            6.6 = 2
+            12.8 = 2
+            12.3 = 2
+            38.3 = 2
+            71.5 = 2
+            106.3 = 2
+            139.5 = 2
+            17.5 = 2
+            31.6 = 2
+            32.9 = 2
             """.trimIndent(),
             resultado
         )
@@ -509,12 +509,12 @@ class CalculosPuertaMariDTest {
             junki = 1.5f,
             angulo = 72f
         )
-        val cantidades = Regex("""^(\d+\.\d{2}) = (\d+)$""", RegexOption.MULTILINE)
+        val cantidades = Regex("""^([\d.]+) = (\d+)$""", RegexOption.MULTILINE)
             .findAll(resultado)
             .associate { it.groupValues[1] to it.groupValues[2].toInt() }
 
-        assertEquals(4, cantidades["6.81"])
-        assertEquals(2, cantidades["6.32"])
+        assertEquals(4, cantidades["6.8"])
+        assertEquals(2, cantidades["6.3"])
     }
 
     @Test
@@ -527,11 +527,11 @@ class CalculosPuertaMariDTest {
             junki = 1.5f,
             angulo = 72f
         )
-        val cantidades = Regex("""^(\d+\.\d{2}) = (\d+)$""", RegexOption.MULTILINE)
+        val cantidades = Regex("""^([\d.]+) = (\d+)$""", RegexOption.MULTILINE)
             .findAll(resultado)
             .associate { it.groupValues[1] to it.groupValues[2].toInt() }
 
-        assertEquals(6, cantidades["6.19"])
-        assertEquals(2, cantidades["5.70"])
+        assertEquals(6, cantidades["6.2"])
+        assertEquals(2, cantidades["5.7"])
     }
 }

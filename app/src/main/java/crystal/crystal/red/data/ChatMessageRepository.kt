@@ -15,6 +15,19 @@ class ChatMessageRepository(
 
     companion object {
         private const val TAG = "ChatMessageRepository"
+
+        /**
+         * Cuántos mensajes se traen al abrir un chat.
+         *
+         * Antes se pedía la conversación ENTERA y se dejaba una escucha viva sobre todos sus
+         * mensajes: un chat con miles de mensajes los descargaba todos cada vez que se abría, y el
+         * costo crecía sin techo con el uso. Con el tope, abrir un chat cuesta lo mismo el primer
+         * día que al año.
+         *
+         * 300 cubre de sobra lo que se lee de corrido en una conversación de trabajo. Lo más viejo
+         * sigue guardado en el servidor: falta paginarlo al desplazarse hacia arriba.
+         */
+        private const val MAX_MENSAJES_VISIBLES = 300L
     }
 
     fun observeMessages(
@@ -24,9 +37,12 @@ class ChatMessageRepository(
         onResult: (List<Message>) -> Unit,
         onError: (Exception) -> Unit
     ): ListenerRegistration {
+        // Se pide DESCENDENTE con tope para quedarse con los ÚLTIMOS mensajes (con ascendente, el
+        // límite dejaría los más viejos). La lista se devuelve invertida, en el orden de siempre.
         return db.collection("chats").document(chatId)
             .collection("messages")
-            .orderBy("dob", Query.Direction.ASCENDING)
+            .orderBy("dob", Query.Direction.DESCENDING)
+            .limit(MAX_MENSAJES_VISIBLES)
             .addSnapshotListener(MetadataChanges.INCLUDE) { snap, e ->
                 if (e != null) {
                     onError(e)
@@ -46,6 +62,10 @@ class ChatMessageRepository(
                     message.hasPendingWrites = doc.metadata.hasPendingWrites()
                     message.entregado = doc.getBoolean("entregado") ?: message.entregado
                     message.leido = doc.getBoolean("leido") ?: message.leido
+                    message.esPedido = doc.getBoolean("esPedido") ?: false
+                    message.estadoPedido = doc.getString("estadoPedido") ?: ""
+                    message.atendidoPor = doc.getString("atendidoPor") ?: ""
+                    message.atendidoNombre = doc.getString("atendidoNombre") ?: ""
                     list.add(message)
 
                     if (!message.hasPendingWrites && message.from != currentUserId) {
@@ -70,6 +90,8 @@ class ChatMessageRepository(
                             Log.e(TAG, "No se pudo limpiar unreadBy del chat", error)
                         }
                 }
+                // La consulta viene del más nuevo al más viejo; la pantalla los espera al revés.
+                list.reverse()
                 onResult(list)
             }
     }

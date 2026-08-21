@@ -548,6 +548,18 @@
             android:padding="6dp"
             android:scaleType="centerInside"
             android:src="@drawable/calcul" />
+
+        <ImageButton
+            android:id="@+id/btnArchivoEnviarCalc"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Enviar a calculadoras"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_send_compact" />
     </LinearLayout>
 
     <LinearLayout

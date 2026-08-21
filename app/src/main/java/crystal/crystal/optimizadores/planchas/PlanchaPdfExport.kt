@@ -20,6 +20,9 @@ object PlanchaPdfExport {
     private val fmt = PlanchaFormatter()
 
     fun exportarYCompartir(context: Context, planchas: List<PlanchaOptimizada>, nombreBase: String) {
+        // Candado (Fase 3): exportar PDF es de pago.
+        if (!crystal.crystal.Suscripcion.exigir(context, crystal.crystal.Suscripcion.puedeExportarPdf(),
+                "Exportar/compartir PDF es una función de pago.")) return
         if (planchas.isEmpty()) {
             Toast.makeText(context, "No hay planchas para exportar", Toast.LENGTH_SHORT).show()
             return
@@ -69,7 +72,7 @@ object PlanchaPdfExport {
         val altoC = fmt.df1(p.altoMm / 10f)
         val areaTotal = p.anchoMm.toLong() * p.altoMm.toLong()
         val efic = if (areaTotal > 0) (p.areaUsadaMm2 * 100f / areaTotal) else 0f
-        val tipo = if (p.esRetazoEntrada) "retazo" else "plancha base"
+        val tipo = if (p.esRetazoEntrada) "retazo" else "plancha entera"
         c.drawText("$anchoC × $altoC cm  •  ${p.cortes.size} pieza(s)  •  $tipo  •  ${"%.1f".format(efic)}% uso", margin, y, pInfo)
         y += 14f
 

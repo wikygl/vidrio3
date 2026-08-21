@@ -109,6 +109,38 @@
 
         <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
 
+        <!-- ====== PARANTE DEL LADO AL VACÍO (aparece al desmarcar un lado) ====== -->
+        <LinearLayout
+            android:id="@+id/dgSeccionParanteVacio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Parante (lado al vacío)"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/dgParanteVacioContainer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+        </LinearLayout>
+
         <!-- ============ ACABADO ============ -->
         <TextView
             android:layout_width="wrap_content"

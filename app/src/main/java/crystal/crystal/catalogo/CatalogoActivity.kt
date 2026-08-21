@@ -14,8 +14,11 @@ import java.io.File
 class CatalogoActivity : AppCompatActivity() {
 
     private var productoSeleccionado: String? = null
+    private var modoSeleccion = false
     private lateinit var binding: ActivityCatalogoBinding
     private lateinit var storage: FirebaseStorage
+
+    companion object { private const val REQ_SELECCION_FOTO = 7321 }
 
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,6 +28,7 @@ class CatalogoActivity : AppCompatActivity() {
 
         // Inicializar Firebase Storage
         storage = FirebaseStorage.getInstance()
+        modoSeleccion = intent.getBooleanExtra("modo_seleccion", false)
 
         configureAdapter()
 
@@ -135,6 +139,20 @@ class CatalogoActivity : AppCompatActivity() {
     private fun irAFotos(nombreProducto: String) {
         val intent = Intent(this, Fotos::class.java)
         intent.putExtra("categoria", nombreProducto)
-        startActivity(intent)
+        if (modoSeleccion) {
+            intent.putExtra("modo_seleccion", true)
+            startActivityForResult(intent, REQ_SELECCION_FOTO)
+        } else {
+            startActivity(intent)
+        }
+    }
+
+    // Reenvía a quien abrió el catálogo la imagen elegida en la galería.
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_SELECCION_FOTO && resultCode == RESULT_OK) {
+            setResult(RESULT_OK, data)
+            finish()
+        }
     }
 }

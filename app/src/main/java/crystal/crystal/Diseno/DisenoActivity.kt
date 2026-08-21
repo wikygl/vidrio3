@@ -18,6 +18,11 @@ import crystal.crystal.medicion.ItemMedicionObra
 
 class DisenoActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_PLANO = "mostrar_plano"
+        const val EXTRA_PLANO_TITULO = "plano_titulo"
+    }
+
     private lateinit var binding: ActivityDisenoBinding
     private lateinit var adapter: MatAdapter
     private data class LoteMedicionRaw(
@@ -81,6 +86,35 @@ class DisenoActivity : AppCompatActivity() {
         cuadricula()
         elementoSelecto()
         actualizarEstadoMedidaAbierta(cliente = "", nombre = "")
+
+        // Si se lanzó con un plano, mostrarlo en el lienzo (con zoom/paneo) sin ocultar las herramientas.
+        if (intent.getBooleanExtra(EXTRA_PLANO, false)) {
+            mostrarPlanoEnLienzo()
+        }
+    }
+
+    // Muestra el plano en el lienzo existente (en el lugar del gridDibujo), con zoom y paneo,
+    // manteniendo visibles las herramientas de abajo.
+    private fun mostrarPlanoEnLienzo() {
+        val archivo = java.io.File(cacheDir, crystal.crystal.taller.puerta.dibujo.DibujoPuerta.ARCHIVO_PLANO)
+        val bmp = android.graphics.BitmapFactory.decodeFile(archivo.absolutePath)
+        if (bmp == null) {
+            Toast.makeText(this, "No hay plano para mostrar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val grid = binding.gridDibujo
+        val parent = grid.parent as? android.view.ViewGroup ?: return
+        val index = parent.indexOfChild(grid)
+        val lp = android.widget.LinearLayout.LayoutParams(grid.layoutParams as android.widget.LinearLayout.LayoutParams)
+        val zoomView = PlanoZoomView(this).apply {
+            layoutParams = lp
+            // Fondo del lienzo (gris) para que el plano blanco resalte con separación.
+            setBackgroundColor(androidx.core.content.ContextCompat.getColor(this@DisenoActivity, R.color.sombra2))
+        }
+        grid.visibility = View.GONE
+        parent.addView(zoomView, index)
+        zoomView.setBitmapAjustado(bmp)
+        intent.getStringExtra(EXTRA_PLANO_TITULO)?.let { binding.txTitulo.text = it }
     }
 
     private fun abrirBaul() {

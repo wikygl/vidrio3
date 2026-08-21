@@ -4,23 +4,42 @@ plugins {
     id 'kotlin-parcelize'
     id 'com.google.devtools.ksp'
     id 'com.google.gms.google-services'
+    id 'com.google.firebase.crashlytics'
+}
+
+// Firma de release: se lee de keystore.properties en la raíz del repo (NO versionado; ver
+// keystore.properties.example). Si el archivo no existe, el release cae a la firma debug para no
+// romper builds locales. Para publicar en Play crea el keystore y este archivo.
+def keystorePropsFile = rootProject.file("keystore.properties")
+def hasReleaseKeystore = keystorePropsFile.exists()
+def keystoreProps = new Properties()
+if (hasReleaseKeystore) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
 }
 
 android {
     namespace 'crystal.crystal'
-    compileSdk 34 // Bajado de 35 a 34 para asegurar compatibilidad con la versión estable actual de la mayoría de IDEs
+    compileSdk 35 // Play exige targetSdk 35; AGP 8.13 lo soporta
 
     defaultConfig {
         applicationId "crystal.crystal"
         minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        targetSdk 35
+        // SUBIR versionCode EN CADA BUILD QUE SE REPARTA. Android se niega a instalar encima de una
+        // versión mayor, y sin este número no hay forma de saber con qué build está cada probador
+        // ni de exigir una actualización mínima (ver config/app.versionMinima en Firestore).
+        // versionName es lo que ve la gente; versionCode es lo que compara el sistema.
+        versionCode 2
+        versionName "1.1.0-beta1"
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+        encoding = 'UTF-8'
+    }
+    testOptions {
+        unitTests.returnDefaultValues = true
     }
     kotlinOptions {
         jvmTarget = '17'
@@ -33,16 +52,40 @@ android {
     buildFeatures {
         viewBinding true
         compose true
+        // Necesario para leer versionCode/versionName desde el código (control de versión mínima
+        // y etiquetado de los reportes de fallo). AGP 8 no lo genera si no se pide.
+        buildConfig true
     }
 
     composeOptions {
         kotlinCompilerExtensionVersion '1.5.14'
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            release {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
-        debug { }
+        debug {
+            // Las pruebas de campo se reparten como APK debug: los fallos deben reportarse igual.
+            // No se sube el mapa de ofuscación porque debug no ofusca (y agiliza el ensamblado).
+            firebaseCrashlytics { mappingFileUploadEnabled false }
+        }
         release {
-            minifyEnabled false
+            // Sube el mapa de R8 para que las trazas lleguen con nombres legibles y no ofuscados.
+            firebaseCrashlytics { mappingFileUploadEnabled true }
+            minifyEnabled true          // R8: ofusca nombres y elimina código muerto
+            shrinkResources false        // conservador: no borrar recursos (se accede a drawables por nombre)
+            // Con keystore.properties presente firma con la clave de upload real; si no, cae a debug
+            // (solo para pruebas locales, NO válido para publicar en Play).
+            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -51,6 +94,12 @@ android {
         resources {
             excludes += ["META-INF/DEPENDENCIES", "META-INF/INDEX.LIST"]
         }
+    }
+
+    lint {
+        // No bloquear el ensamblado del release por lint (se sigue pudiendo correr `./gradlew lint`).
+        checkReleaseBuilds false
+        abortOnError false
     }
 }
 
@@ -61,8 +110,14 @@ dependencies {
     implementation "com.google.firebase:firebase-firestore-ktx"
     implementation "com.google.firebase:firebase-storage-ktx"
     implementation "com.google.firebase:firebase-analytics-ktx"
+    // Reporte de fallos: sin esto, "se me cerró la app" no trae ni el error ni el equipo ni la
+    // versión, y no hay forma de diagnosticar lo que reportan quienes prueban.
+    implementation "com.google.firebase:firebase-crashlytics-ktx"
     implementation "com.google.firebase:firebase-functions-ktx"
     implementation "com.google.firebase:firebase-messaging-ktx"
+    // App Check: verifica que las peticiones vienen de la app genuina (no scripts/APKs modificados)
+    implementation "com.google.firebase:firebase-appcheck-playintegrity"
+    debugImplementation "com.google.firebase:firebase-appcheck-debug"
 
     // Google Sign-In
     implementation "com.google.android.gms:play-services-auth:21.2.0"

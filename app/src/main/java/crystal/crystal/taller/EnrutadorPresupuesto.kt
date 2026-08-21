@@ -1,4 +1,7 @@
 package crystal.crystal.taller
+import crystal.crystal.taller.mamparas.MamparaVidrioActivity
+import crystal.crystal.taller.mamparas.MamparaFC
+import crystal.crystal.taller.mamparas.MamparaPaflon
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -9,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.Listado
 import crystal.crystal.taller.nova.NovaCorrediza
 import crystal.crystal.taller.puerta.PuertasActivity
+import crystal.crystal.taller.venAl.VentanaAl
 
 class EnrutadorPresupuesto(private val activity: AppCompatActivity) {
 
@@ -21,50 +25,70 @@ class EnrutadorPresupuesto(private val activity: AppCompatActivity) {
         var tipoVidrio: String = ""
     ) : java.io.Serializable
 
-    // Mapeo ordenado: los más específicos primero
-    private val mapeoProductos = listOf(
-        "nova aparente" to NovaCorrediza::class.java,
-        "nova apa" to NovaCorrediza::class.java,
-        "nova inaparente" to NovaCorrediza::class.java,
-        "nova ina" to NovaCorrediza::class.java,
-        "nova" to NovaCorrediza::class.java,
-        "division de bano" to DivisionBanoActivity::class.java,
-        "division de baño" to DivisionBanoActivity::class.java,
-        "division bano" to DivisionBanoActivity::class.java,
-        "division baño" to DivisionBanoActivity::class.java,
-        "puerta ducha" to PDuchaActivity::class.java,
-        "ducha" to PDuchaActivity::class.java,
-        "puerta" to PuertasActivity::class.java,
-        "mampara paflon" to MamparaPaflon::class.java,
-        "mampara paflón" to MamparaPaflon::class.java,
-        "mampara fc" to MamparaFC::class.java,
-        "mampara vidrio" to MamparaVidrioActivity::class.java,
-        "mampara" to MamparaFC::class.java,
-        "vitroventana" to Vitroven::class.java,
-        "vitroven" to Vitroven::class.java,
-        "ventana" to VentanaAl::class.java,
-        "muro cortina" to Muro::class.java,
-        "muro" to Muro::class.java,
-        "pivot" to PivotAl::class.java,
-        "reja" to RejasActivity::class.java,
-        "rejas" to RejasActivity::class.java,
-    )
+    companion object {
+        // Mapeo ordenado: los más específicos primero. En el companion para poder enrutar sin
+        // instanciar (lo usan MedidaActivity y la cola de calculadoras al avanzar entre medidas).
+        private val MAPEO_PRODUCTOS = listOf(
+            "nova aparente" to NovaCorrediza::class.java,
+            "nova apa" to NovaCorrediza::class.java,
+            "nova inaparente" to NovaCorrediza::class.java,
+            "nova ina" to NovaCorrediza::class.java,
+            "nova" to NovaCorrediza::class.java,
+            "division de bano" to DivisionBanoActivity::class.java,
+            "division de baño" to DivisionBanoActivity::class.java,
+            "division bano" to DivisionBanoActivity::class.java,
+            "division baño" to DivisionBanoActivity::class.java,
+            "puerta ducha" to PDuchaActivity::class.java,
+            "ducha" to PDuchaActivity::class.java,
+            "puerta" to PuertasActivity::class.java,
+            "mampara paflon" to MamparaPaflon::class.java,
+            "mampara paflón" to MamparaPaflon::class.java,
+            "mampara fc" to MamparaFC::class.java,
+            "mampara vidrio" to MamparaVidrioActivity::class.java,
+            "mampara" to MamparaFC::class.java,
+            "vitroventana" to Vitroven::class.java,
+            "vitroven" to Vitroven::class.java,
+            "ventana" to VentanaAl::class.java,
+            "muro cortina" to Muro::class.java,
+            "muro" to Muro::class.java,
+            "pivot" to PivotAl::class.java,
+            "reja" to RejasActivity::class.java,
+            "rejas" to RejasActivity::class.java,
+        )
+
+        // Nombres legibles de las calculadoras. En el companion para poder ofrecerlos sin instanciar
+        // (los usa el navegador de cola al cambiar el producto de una medida). Cada nombre enruta a
+        // su propia calculadora a través de destinoPara.
+        val CALCULADORAS_DISPONIBLES = listOf(
+            "Nova Corrediza" to NovaCorrediza::class.java,
+            "Puerta" to PuertasActivity::class.java,
+            "Mampara FC" to MamparaFC::class.java,
+            "Mampara Paflón" to MamparaPaflon::class.java,
+            "Mampara Vidrio" to MamparaVidrioActivity::class.java,
+            "Ventana Aluminio" to VentanaAl::class.java,
+            "Vitroven" to Vitroven::class.java,
+            "Muro" to Muro::class.java,
+            "Pivot" to PivotAl::class.java,
+            "Puerta Ducha" to PDuchaActivity::class.java,
+            "Rejas" to RejasActivity::class.java,
+            "Division Baño" to DivisionBanoActivity::class.java,
+        )
+
+        val NOMBRES_CALCULADORAS: List<String> = CALCULADORAS_DISPONIBLES.map { it.first }
+
+        /** Devuelve la calculadora que corresponde a un producto, o null si no hay coincidencia. */
+        fun destinoPara(producto: String): Class<out AppCompatActivity>? {
+            val productoLower = producto.lowercase().trim()
+            if (productoLower.isEmpty() || productoLower == "...") return null
+            for ((clave, destino) in MAPEO_PRODUCTOS) {
+                if (productoLower.contains(clave)) return destino
+            }
+            return null
+        }
+    }
 
     // Nombres legibles para el diálogo de asignación
-    private val calculadorasDisponibles = listOf(
-        "Nova Corrediza" to NovaCorrediza::class.java,
-        "Puerta" to PuertasActivity::class.java,
-        "Mampara FC" to MamparaFC::class.java,
-        "Mampara Paflón" to MamparaPaflon::class.java,
-        "Mampara Vidrio" to MamparaVidrioActivity::class.java,
-        "Ventana Aluminio" to VentanaAl::class.java,
-        "Vitroven" to Vitroven::class.java,
-        "Muro" to Muro::class.java,
-        "Pivot" to PivotAl::class.java,
-        "Puerta Ducha" to PDuchaActivity::class.java,
-        "Rejas" to RejasActivity::class.java,
-        "Division Baño" to DivisionBanoActivity::class.java,
-    )
+    private val calculadorasDisponibles = CALCULADORAS_DISPONIBLES
 
     fun clasificar(items: List<Listado>, cliente: String): List<ItemEnrutado> {
         return items.mapIndexed { indice, item ->
@@ -77,17 +101,8 @@ class EnrutadorPresupuesto(private val activity: AppCompatActivity) {
         }
     }
 
-    private fun buscarDestino(producto: String): Class<out AppCompatActivity>? {
-        val productoLower = producto.lowercase().trim()
-        if (productoLower.isEmpty() || productoLower == "...") return null
-
-        for ((clave, destino) in mapeoProductos) {
-            if (productoLower.contains(clave)) {
-                return destino
-            }
-        }
-        return null
-    }
+    private fun buscarDestino(producto: String): Class<out AppCompatActivity>? =
+        destinoPara(producto)
 
     fun obtenerSinDestino(items: List<ItemEnrutado>) = items.filter { it.destino == null }
     fun obtenerConDestino(items: List<ItemEnrutado>) = items.filter { it.destino != null }

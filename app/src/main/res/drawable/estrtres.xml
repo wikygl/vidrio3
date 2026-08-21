@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:autoMirrored="true" android:height="1.9336dp" android:viewportHeight="2.544" android:viewportWidth="3.811" android:width="2.8966dp">
+      
+    <path android:fillColor="#00000000" android:fillType="evenOdd" android:pathData="M0.786,0.508l0.376,-0.362m1.795,1.537l0.461,-0.444m-0.355,0.144l0.073,-0.068m-0.092,0.175l0.186,-0.176m-1.414,0.896l0.461,-0.444m-0.355,0.144l0.073,-0.068m-0.092,0.175l0.186,-0.176m-1.528,-0.113l0.461,-0.444m-0.355,0.144l0.073,-0.068m-0.092,0.175l0.186,-0.176m1.931,-0.856l0.376,-0.362m-0.289,0.118l0.06,-0.055m-0.075,0.143l0.152,-0.143m-2.117,0.059l0.06,-0.055m-0.075,0.143l0.152,-0.143" android:strokeColor="#000000" android:strokeWidth="0.01"/>
+      
+    <path android:fillColor="#999999" android:fillType="evenOdd" android:pathData="M3.775,2.539l0.031,0 0,-2.534 -0.031,0 0,2.534zM0.036,2.539l-0.031,0 0,-2.534 0.031,0 0,2.534zM1.89,0.592l0.031,0 0,-0.564 -0.031,0 0,0.564z" android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.01"/>
+      
+    <path android:fillColor="#999999" android:fillType="evenOdd" android:pathData="M3.775,0.028l0,-0.023 -3.739,0 0,0.023 3.739,0zM3.775,0.618l0,-0.026 -3.739,0 0,0.026 3.739,0zM0.036,2.538c1.246,0 2.493,0 3.739,0l0,-0.025 -3.739,0 0,0.025z" android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.01"/>
+      
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd" android:pathData="M0.078,2.513l1.19,0 0,-0.062 -1.19,0 0,0.062zM2.543,0.68l1.19,0 0,-0.062 -1.19,0 0,0.062zM1.31,0.68l1.19,0 0,-0.062 -1.19,0 0,0.062zM0.077,0.68l1.19,0 0,-0.062 -1.19,0 0,0.062zM2.542,2.513l1.19,0 0,-0.062 -1.19,0 0,0.062zM1.309,2.513l1.19,0 0,-0.062 -1.19,0 0,0.062z" android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.01"/>
+      
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd" android:pathData="M1.268,2.513l0.042,0 0,-1.895 -0.042,0 0,1.895zM3.733,2.513l0.042,0 0,-1.895 -0.042,0 0,1.895zM2.5,2.513l0.042,0 0,-1.895 -0.042,0 0,1.895z" android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.01"/>
+      
+    <path android:fillColor="#CCCCCC" android:fillType="evenOdd" android:pathData="M0.035,2.513l0.042,0 0,-1.895 -0.042,0 0,1.895z" android:strokeColor="#000000" android:strokeLineJoin="bevel" android:strokeWidth="0.01"/>
+    
+</vector>

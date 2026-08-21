@@ -41,12 +41,13 @@ class PresupuestoManager(
     var edicionMasivaManager: EdicionMasivaManager? = null
 
     fun mostrarMenuPresupuesto() {
+        // El menú abre libre; se bloquean ítems puntuales (cargar/guardar/compartir) en su función.
         val opciones = if (lista.isEmpty()) {
             arrayOf("Cargar presupuesto desde archivo")
         } else {
             arrayOf(
                 "Enviar por chat",
-                "🔧 Edición masiva",
+                "Edición masiva",
                 "Cargar presupuesto desde archivo",
                 "Guardar como archivo JSON",
                 "Compartir como archivo"
@@ -90,6 +91,8 @@ class PresupuestoManager(
     }
 
     fun guardarComoJSON() {
+        if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.avanzadoActivo(),
+                "Guardar el presupuesto como archivo es una función de pago.")) return
         val presupuesto = crearPresupuestoCompleto()
         val gson = Gson()
         val jsonString = gson.toJson(presupuesto)
@@ -115,6 +118,8 @@ class PresupuestoManager(
     }
 
     fun compartirPresupuesto() {
+        if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.avanzadoActivo(),
+                "Compartir el presupuesto como archivo es una función de pago.")) return
         val presupuesto = crearPresupuestoCompleto()
         val gson = Gson()
         val jsonString = gson.toJson(presupuesto)
@@ -285,6 +290,8 @@ class PresupuestoManager(
 
     @Suppress("DEPRECATION")
     fun abrirSelectorPresupuesto() {
+        if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.avanzadoActivo(),
+                "Cargar un presupuesto desde archivo es una función de pago.")) return
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/json"

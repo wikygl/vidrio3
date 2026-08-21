@@ -18,7 +18,8 @@ class ProductoViewModel(application: Application) : AndroidViewModel(application
         val database = ProductoDatabase.getDatabase(application)
         repository = ProductoRepository(
             database.productoDao(),
-            application.applicationContext
+            application.applicationContext,
+            database.movimientoInventarioDao()
         )
         todosLosProductos = repository.todosLosProductos
     }
@@ -92,14 +93,14 @@ class ProductoViewModel(application: Application) : AndroidViewModel(application
 
     // ========== STOCK ==========
 
-    fun registrarVenta(productoId: String, cantidad: Int, onResult: (Result<Unit>) -> Unit) {
+    fun registrarVenta(productoId: String, cantidad: Float, onResult: (Result<Unit>) -> Unit) {
         viewModelScope.launch {
             val result = repository.registrarVenta(productoId, cantidad)
             onResult(result)
         }
     }
 
-    fun agregarStock(productoId: String, cantidad: Int, onResult: (Result<Unit>) -> Unit) {
+    fun agregarStock(productoId: String, cantidad: Float, onResult: (Result<Unit>) -> Unit) {
         viewModelScope.launch {
             val result = repository.agregarStock(productoId, cantidad)
             onResult(result)

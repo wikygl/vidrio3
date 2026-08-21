@@ -76,7 +76,7 @@ object ListaCasilla {
         }
     }
 
-    // FunciÃ³n especial para procesar txReferencias sin el signo "="
+    // Función especial para procesar txReferencias sin el signo "="
     fun procesarReferencias(
         context: Context,
         tvNombre: TextView,
@@ -139,7 +139,11 @@ object ListaCasilla {
         mapListas: MutableMap<String, MutableList<MutableList<String>>>,
         identificadorPaquete: String
     ) {
-        val nombreLista = obtenerNombreLista(tvNombre)
+        // El recycler (FichaActivity) y todo el pipeline reconocen las referencias por el
+        // nombre literal "Referencias". Si se usara la etiqueta del título (p. ej.
+        // "Referencias y Cálculos") la lista se descarta al filtrar y no se muestra.
+        // Por eso el nombre se fija aquí, no se toma de la etiqueta del título.
+        val nombreLista = "Referencias"
         val listaProcesada = mutableListOf(mutableListOf(txReferencias.text.toString(), "", identificadorPaquete))
 
         if (mapListas.containsKey(nombreLista)) {
@@ -147,6 +151,60 @@ object ListaCasilla {
         } else {
             mapListas[nombreLista] = listaProcesada
         }
+    }
+
+    /** Un material a archivar: su etiqueta (nombre de lista), su valor y si está visible. */
+    class ItemArchivable(val tvNombre: TextView, val tvDatos: TextView, val visible: Boolean)
+
+    /**
+     * Archivado project-aware compartido (estilo Nova). Sirve para cualquier calculadora
+     * (Nova, Vitroven, ...) y evita duplicar el bucle de archivado:
+     *  1. Carga el proyecto activo en [mapListas].
+     *  2. Por cada unidad genera un identificador (prefijo + contador por prefijo).
+     *  3. Archiva referencias y cada material visible con ese identificador.
+     *  4. Añade el cliente y los paquetes de diseño que se pasen.
+     *  5. Guarda el map (que respalda a disco) y devuelve el último identificador generado.
+     */
+    fun archivarEnProyectoActivo(
+        context: Context,
+        mapListas: MutableMap<String, MutableList<MutableList<String>>>,
+        prefijo: String,
+        cantidad: Int,
+        referencias: ItemArchivable?,
+        items: List<ItemArchivable>,
+        cliente: String? = null,
+        paquetesPorNumero: (numero: Int) -> Map<String, String> = { emptyMap() }
+    ): String {
+        val proyectoActivo = ProyectoManager.getProyectoActivo()
+        if (proyectoActivo != null) {
+            val existente = MapStorage.cargarProyecto(context, proyectoActivo)
+            mapListas.clear()
+            if (existente != null) mapListas.putAll(existente)
+        }
+        var ultimoID = ""
+        val n = cantidad.coerceAtLeast(1)
+        for (u in 1..n) {
+            val numero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(context, prefijo)
+            val id = "$prefijo$numero"
+            ultimoID = id
+            referencias?.let {
+                if (it.visible) procesarReferenciasConPrefijo(context, it.tvNombre, it.tvDatos, mapListas, id)
+            }
+            for (item in items) {
+                if (item.visible) procesarArchivarConPrefijo(context, item.tvNombre, item.tvDatos, mapListas, id)
+            }
+            if (!cliente.isNullOrBlank()) {
+                mapListas.getOrPut("Cliente") { mutableListOf() }.add(mutableListOf(cliente, "", id))
+            }
+            for ((clave, valor) in paquetesPorNumero(numero)) {
+                if (valor.isNotBlank()) {
+                    mapListas.getOrPut(clave) { mutableListOf() }.add(mutableListOf(valor, "", id))
+                }
+            }
+            ProyectoManager.actualizarContadorPorPrefijo(context, prefijo, numero)
+        }
+        MapStorage.guardarMap(context, mapListas)
+        return ultimoID
     }
 
     private fun agregarIdentificadorPaquete(lista: MutableList<MutableList<String>>, identificadorPaquete: String) {

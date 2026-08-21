@@ -79,8 +79,25 @@ interface ProductoDao {
 
     // ========== STOCK ==========
 
+    // El descuento se hace SIEMPRE como diferencia (stock = stock + delta), nunca fijando un total:
+    // así dos terminales que venden a la vez no se pisan el resultado.
     @Query("UPDATE productos SET stock = stock + :cantidad, pendienteSincronizar = 1, ultimaActualizacion = :timestamp WHERE id = :productoId")
-    suspend fun actualizarStock(productoId: String, cantidad: Int, timestamp: Long = System.currentTimeMillis())
+    suspend fun actualizarStock(productoId: String, cantidad: Float, timestamp: Long = System.currentTimeMillis())
+
+    @Query("""
+        UPDATE productos
+        SET stock = stock + :cantidad,
+            stockPlanchas = MAX(0, stockPlanchas + :planchas),
+            pendienteSincronizar = 1,
+            ultimaActualizacion = :timestamp
+        WHERE id = :productoId
+    """)
+    suspend fun actualizarStockYPlanchas(
+        productoId: String,
+        cantidad: Float,
+        planchas: Float,
+        timestamp: Long = System.currentTimeMillis()
+    )
 
     @Query("SELECT * FROM productos WHERE stock <= stockMinimo AND activo = 1 ORDER BY stock ASC")
     suspend fun obtenerStockBajo(): List<Producto>

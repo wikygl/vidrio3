@@ -1,4 +1,7 @@
-package crystal.crystal.taller
+package crystal.crystal.taller.mamparas
+import crystal.crystal.taller.ControladorColaMedidas
+import crystal.crystal.taller.ModoMasivoHelper
+import crystal.crystal.taller.FichaActivity
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -23,6 +26,7 @@ private var contadorVentana: Int = 1
 private val ventanas: MutableMap<String, MutableMap<String, Any>> = LinkedHashMap()
 private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
 private var primerClickArchivarRealizado = false
+private lateinit var controladorCola: ControladorColaMedidas
 
 override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -37,6 +41,11 @@ override fun onCreate(savedInstanceState: Bundle?) {
     binding.ulayout.visibility = View.VISIBLE
 
     binding.btArchivar.setOnClickListener {
+        // Candado de suscripción PRIMERO: bloquear antes de avanzar numeración o dar el toast.
+        if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeArchivar(),
+                "Archivar es una función de pago. Renueva para guardar tus proyectos.")) {
+            return@setOnClickListener
+        }
         if (binding.txU.text.isNullOrBlank() && binding.txV.text.isNullOrBlank()) {
             Toast.makeText(this, "Haz nuevo cálculo", Toast.LENGTH_SHORT).show()
             return@setOnClickListener
@@ -51,12 +60,14 @@ override fun onCreate(savedInstanceState: Bundle?) {
                     archivarMapas()
                     Toast.makeText(this@MamparaVidrioActivity, "Archivado", Toast.LENGTH_SHORT).show()
                     binding.med1.setText(""); binding.med2.setText("")
+                    controladorCola.ofrecerSiguiente()
                 }
                 override fun onProyectoCreado(nombreProyecto: String) {
                     primerClickArchivarRealizado = true
                     archivarMapas()
                     Toast.makeText(this@MamparaVidrioActivity, "Archivado", Toast.LENGTH_SHORT).show()
                     binding.med1.setText(""); binding.med2.setText("")
+                    controladorCola.ofrecerSiguiente()
                 }
                 override fun onProyectoEliminado(nombreProyecto: String) {}
             })
@@ -69,6 +80,7 @@ override fun onCreate(savedInstanceState: Bundle?) {
             archivarMapas()
             Toast.makeText(this, "Archivado", Toast.LENGTH_SHORT).show()
             binding.med1.setText(""); binding.med2.setText("")
+            controladorCola.ofrecerSiguiente()
         }
     }
 
@@ -80,6 +92,15 @@ override fun onCreate(savedInstanceState: Bundle?) {
     // Pre-carga desde presupuesto
     intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.med1.setText(df1(it)) }
     intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.med2.setText(df1(it)) }
+
+    controladorCola = ControladorColaMedidas(
+        activity = this,
+        claseActual = MamparaVidrioActivity::class.java,
+        etAncho = binding.med1,
+        etAlto = binding.med2,
+        formato = ::df1
+    )
+    controladorCola.inicializar()
 }
 
 private fun cliente() {

@@ -87,7 +87,7 @@ class Registro : AppCompatActivity() {
                     "nombre" to nombre,
                     "nombreNormalizado" to ChatIdentity.normalizeSearchText(nombre),
                     "email" to email,
-                    "wallet" to mapOf("saldo" to 0.0),
+                    "wallet_saldo_cent" to 0L,
                     "plan" to mapOf("tipo" to "free", "estado" to "activo"),
                     "trial" to mapOf("creditos" to 5)
                 )

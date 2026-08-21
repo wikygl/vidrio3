@@ -100,6 +100,25 @@ class ListChatActivity : AppCompatActivity() {
         verificarPerfilYContinuar()
     }
 
+    private val MENU_PEDIDOS = 90201
+
+    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
+        menu.add(0, MENU_PEDIDOS, 0, "🛒 Pedidos")
+            .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_NEVER)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
+        if (item.itemId == MENU_PEDIDOS) {
+            startActivity(
+                android.content.Intent(this, PedidosActivity::class.java)
+                    .putExtra(PedidosActivity.EXTRA_UID, currentUserId)
+            )
+            return true
+        }
+        return super.onOptionsItemSelected(item)
+    }
+
     override fun onResume() {
         super.onResume()
         if (!screenInitialized && profileFlowOpened) {
@@ -150,6 +169,7 @@ class ListChatActivity : AppCompatActivity() {
 
     private fun iniciarPantallaChat() {
         screenInitialized = true
+        asegurarSelfChat()
         setupTabs()
         setupRecycler()
         mostrarChatsCacheados()
@@ -161,6 +181,36 @@ class ListChatActivity : AppCompatActivity() {
         CrystalFcmTokenManager.registerCurrentDevice(this, currentUserId)
         CrystalFcmTokenManager.flushPendingToken(this, currentUserId)
         verificarPermisoContactos()
+    }
+
+    // Garantiza que exista el chat "Mensajes guardados" (chat consigo mismo), siempre visible.
+    private fun asegurarSelfChat() {
+        val uid = currentUserId
+        if (uid.isEmpty()) return
+        db.collection("chats")
+            .whereArrayContains("users", uid)
+            .get()
+            .addOnSuccessListener { snap ->
+                val existe = snap.documents.any { d ->
+                    val users = (d.get("users") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                    d.getBoolean("esSoporte") != true && users.isNotEmpty() && users.all { it == uid }
+                }
+                if (!existe) {
+                    val chatId = db.collection("chats").document().id
+                    db.collection("chats").document(chatId).set(
+                        mapOf(
+                            "id" to chatId,
+                            "name" to "Mensajes guardados",
+                            "users" to listOf(uid, uid),
+                            "participantsKey" to uid,
+                            "lastMsgDate" to com.google.firebase.Timestamp.now(),
+                            "lastMessagePreview" to "",
+                            "lastMessageType" to "text",
+                            "unreadBy" to mapOf(uid to 0)
+                        )
+                    )
+                }
+            }
     }
 
     private fun configurarAccionesBarra() {
@@ -235,7 +285,6 @@ class ListChatActivity : AppCompatActivity() {
 
     private fun cargarChats() {
         val aliases = ChatIdentity.resolveChatIdentityAliases(this, auth, currentUserId)
-        val firestoreActorUid = ChatIdentity.resolveFirestoreChatActorUid(this, auth, currentUserId)
         if (aliases.isEmpty()) {
             chatsActivos.clear()
             (binding.rvChatList.adapter as ChatAdapter).setData(emptyList())
@@ -244,7 +293,9 @@ class ListChatActivity : AppCompatActivity() {
 
         chatsListener?.remove()
         chatsListener = chatListRepository.observeChats(
-            queryUserId = firestoreActorUid,
+            // Identidad de chat (para una terminal = uid del patrón), así ve la bandeja del patrón.
+            // Las reglas lo permiten vía el custom claim patronUid. Para usuarios normales == auth uid.
+            queryUserId = currentUserId,
             currentUserId = currentUserId,
             aliases = aliases,
             onResult = { chats ->
@@ -570,7 +621,6 @@ class ListChatActivity : AppCompatActivity() {
 
     private fun buscarOCrearChat(otherUid: String) {
         val aliases = ChatIdentity.resolveChatIdentityAliases(this, auth, currentUserId)
-        val firestoreActorUid = ChatIdentity.resolveFirestoreChatActorUid(this, auth, currentUserId)
         lifecycleScope.launch {
             try {
                 val otherUser = chatDirectoryRepository.getUser(otherUid)
@@ -580,7 +630,8 @@ class ListChatActivity : AppCompatActivity() {
                 }
 
                 val chatId = chatConversationRepository.getOrCreateDirectChat(
-                    queryUserId = firestoreActorUid,
+                    // Identidad de chat (terminal = patrón) para operar sobre la bandeja del patrón.
+                    queryUserId = currentUserId,
                     currentUserId = currentUserId,
                     aliases = aliases,
                     otherUser = otherUser

@@ -73,6 +73,8 @@
     <string name="med_cdza">Med.Cdza</string>
     <string name="junkillo">Junkillo</string>
     <string name="_1">1</string>
+    <string name="_3">3</string>
+    <string name="rejilla_col_fil">Rejilla col / fil</string>
     <string name="referencias_y_c_lculos">Referencias y Cálculos</string>
     <string name="c_lculos">Cálculos</string>
     <string name="marco">Marco</string>
@@ -80,6 +82,8 @@
     <string name="bastidor">Bastidor</string>
     <string name="riel">Riel</string>
     <string name="vidrios">Vidrios</string>
+    <string name="vidrios_apilado">Vidrio apilado</string>
+    <string name="vidrio_mocheta">Vidrio mocheta</string>
     <string name="archivar">archivar</string>
     <string name="portafelpa">Portafelpa</string>
     <string name="puerta_de_aluminio_e">Puerta de Aluminio E</string>

@@ -209,11 +209,12 @@
                         android:id="@+id/txPuntoV"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
+                        android:layout_weight="1"
                         android:gravity="center"
-                        android:padding="8dp"
-                        android:text="🛒 PUNTO DE VENTA"
+                        android:padding="4dp"
+                        android:text="🛒 PV"
                         android:textColor="@color/blanco"
-                        android:textSize="18sp"
+                        android:textSize="14sp"
                         android:textStyle="bold"
                         android:visibility="gone" />
                 </LinearLayout>

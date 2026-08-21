@@ -18,6 +18,7 @@ import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import android.widget.EditText
+import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -73,7 +74,10 @@ class SketchMedidasView @JvmOverloads constructor(
             var heightCm: Float,
             val contours: MutableList<MutableList<PointF>>,
             val sideCms: MutableList<MutableList<Float>>,
-            val template: String? = null
+            val template: String? = null,
+            var rotationDeg: Float = 0f,   // ángulo acumulado; para editar cotas en el marco local
+            val bloqueados: MutableSet<Long> = mutableSetOf(),  // lados bloqueados (clave contorno+lado)
+            var reflejado: Boolean = false  // reflejada horizontalmente (orden de vértices invertido)
         ) : Element()
         data class Shape(
             val tool: Tool,
@@ -156,6 +160,20 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private val elementos = mutableListOf<Element>()
     private val rehacerElementos = mutableListOf<Element>()
+
+    // ===== Historial de UNDO/REDO por snapshots (cada acción, no solo inserciones) =====
+    private var estadoPrevio: List<Element> = emptyList()  // estado antes de la acción en curso
+    private val historia = ArrayDeque<List<Element>>()
+    private val futuro = ArrayDeque<List<Element>>()
+    private val maxHistorial = 80
+
+    // Long-press sobre una cota → bloquear/desbloquear ese lado (tap normal = editar).
+    private var cotaPendiente: CotaHit? = null
+    private var cotaDownXY = PointF()
+    private var longPressFired = false
+    private val longPressRunnable = Runnable {
+        cotaPendiente?.let { longPressFired = true; alternarBloqueoLado(it) }
+    }
     private val cotaHits = mutableListOf<CotaHit>()
     private val cotaTextRects = mutableListOf<RectF>()
     private val selectedIndices = mutableListOf<Int>()
@@ -197,6 +215,13 @@ class SketchMedidasView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeWidth = 3f
         pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 8f), 0f)
+    }
+
+    private val ladoBloqueadoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(229, 57, 53)   // rojo: lado bloqueado
+        style = Paint.Style.STROKE
+        strokeWidth = 8f
+        strokeCap = Paint.Cap.ROUND
     }
 
     private val cotaLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -245,14 +270,40 @@ class SketchMedidasView @JvmOverloads constructor(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.pointerCount >= 2 || viewportGesture) {
+            removeCallbacks(longPressRunnable); cotaPendiente = null
             manejarViewportGesture(event)
             return true
         }
-        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            val p = screenToWorld(event.x, event.y)
-            cotaEn(p.x, p.y)?.let {
-                editarCota(it)
-                return true
+        // Cota: tap = editar; mantener presionado = bloquear/desbloquear el lado.
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val p = screenToWorld(event.x, event.y)
+                val hit = cotaEn(p.x, p.y)
+                if (hit != null) {
+                    cotaPendiente = hit
+                    cotaDownXY = PointF(event.x, event.y)
+                    longPressFired = false
+                    postDelayed(longPressRunnable, 450L)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (cotaPendiente != null) {
+                    val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+                    if (kotlin.math.hypot((event.x - cotaDownXY.x).toDouble(), (event.y - cotaDownXY.y).toDouble()) > slop) {
+                        removeCallbacks(longPressRunnable); cotaPendiente = null
+                    }
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (cotaPendiente != null) {
+                    removeCallbacks(longPressRunnable)
+                    val h = cotaPendiente
+                    cotaPendiente = null
+                    if (!longPressFired && event.actionMasked == MotionEvent.ACTION_UP && h != null) editarCota(h)
+                    return true
+                }
             }
         }
         if (herramienta == Tool.NONE) {
@@ -306,7 +357,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     actualizarTrazo(p.x, p.y)
                     crearElemento(p.x, p.y)?.let {
                         elementos.add(it)
-                        rehacerElementos.clear()
+                        registrarAccion()
                     }
                     trazoActual.reset()
                     dibujando = false
@@ -482,7 +533,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.add(Element.Symbol(drawableName, rect))
         selectedIndices.clear()
         selectedIndices.add(elementos.lastIndex)
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -499,7 +550,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.add(Element.Symbol(drawableName, rect))
         selectedIndices.clear()
         selectedIndices.add(elementos.lastIndex)
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -527,7 +578,7 @@ class SketchMedidasView @JvmOverloads constructor(
         selectedIndices.clear()
         selectedIndices.add(symbolIndex)
         selectedIndices.add(elementos.lastIndex)
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -549,7 +600,7 @@ class SketchMedidasView @JvmOverloads constructor(
         ))
         elementos.add(Element.Symbol(drawableName, rect))
         selectedIndices.add(elementos.lastIndex)
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -579,7 +630,7 @@ class SketchMedidasView @JvmOverloads constructor(
             ocupados.add(RectF(rect))
             selectedIndices.add(elementos.lastIndex)
         }
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -743,7 +794,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.add(Element.InfoBox(texto, rect, spToPx(12f)))
         selectedIndices.clear()
         selectedIndices.add(elementos.lastIndex)
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -752,7 +803,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.addAll(nuevos)
         selectedIndices.clear()
         nuevos.indices.forEach { selectedIndices.add(startIndex + it) }
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -868,7 +919,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 val texto = input.text?.toString()?.trim().orEmpty()
                 if (texto.isNotBlank()) {
                     elementos.add(Element.TextLabel(texto, x, y, spToPx(12f)))
-                    rehacerElementos.clear()
+                    registrarAccion()
                     invalidate()
                 }
             }
@@ -884,8 +935,8 @@ class SketchMedidasView @JvmOverloads constructor(
         val pathB = pathForElement(elementos.getOrNull(bIndex) ?: return false)
         val result = Path(pathA)
         result.op(pathB, Path.Op.UNION)
-        rehacerElementos.clear()
         reemplazarSeleccionCon(compositeFromPath(result))
+        registrarAccion()
         return true
     }
 
@@ -899,8 +950,8 @@ class SketchMedidasView @JvmOverloads constructor(
         val base = pathForElement(baseElement)
         val result = Path(base)
         result.op(cutter, Path.Op.DIFFERENCE)
-        rehacerElementos.clear()
         reemplazarSeleccionCon(compositeFromDifference(result, baseElement, cutterElement))
+        registrarAccion()
         return true
     }
 
@@ -913,7 +964,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.add(copy)
         selectedIndices.clear()
         selectedIndices.add(elementos.lastIndex)
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
         return true
     }
@@ -929,7 +980,40 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.add(copy)
         selectedIndices.clear()
         selectedIndices.add(elementos.lastIndex)
-        rehacerElementos.clear()
+        registrarAccion()
+        invalidate()
+        return true
+    }
+
+    // Refleja la figura seleccionada EN SU SITIO (sin crear copia).
+    fun mirrorSelectedInPlace(): Boolean {
+        if (selectedIndices.size != 1) return false
+        val element = elementos.getOrNull(selectedIndices.first()) ?: return false
+        mirrorElementHorizontally(element, boundsForElement(element).centerX())
+        registrarAccion()
+        invalidate()
+        return true
+    }
+
+    // Crea varias copias reflejadas en fila, contiguas hacia la derecha.
+    fun mirrorCopiesSelected(count: Int): Boolean {
+        if (selectedIndices.size != 1) return false
+        val original = elementos.getOrNull(selectedIndices.first()) ?: return false
+        val total = count.coerceIn(1, 20)
+        var refBounds = boundsForElement(original)
+        var lastIndex = selectedIndices.first()
+        for (k in 0 until total) {
+            val copy = cloneElement(original)
+            mirrorElementHorizontally(copy, refBounds.centerX())
+            val mb = boundsForElement(copy)
+            translateElement(copy, refBounds.right + snapThresholdPx() - mb.left, 0f)
+            elementos.add(copy)
+            lastIndex = elementos.lastIndex
+            refBounds = boundsForElement(copy)
+        }
+        selectedIndices.clear()
+        selectedIndices.add(lastIndex)
+        registrarAccion()
         invalidate()
         return true
     }
@@ -945,7 +1029,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.add(Element.Group(children))
         selectedIndices.clear()
         selectedIndices.add(elementos.lastIndex)
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
         return true
     }
@@ -960,7 +1044,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.addAll(insertAt, children)
         selectedIndices.clear()
         children.indices.forEach { selectedIndices.add(insertAt + it) }
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
         return true
     }
@@ -971,7 +1055,7 @@ class SketchMedidasView @JvmOverloads constructor(
             if (index in elementos.indices) elementos.removeAt(index)
         }
         selectedIndices.clear()
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
         return true
     }
@@ -983,7 +1067,7 @@ class SketchMedidasView @JvmOverloads constructor(
         selectedIndices.forEach { index ->
             elementos.getOrNull(index)?.let { scaleElement(it, factor, pivot) }
         }
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
         return true
     }
@@ -995,7 +1079,7 @@ class SketchMedidasView @JvmOverloads constructor(
         selectedIndices.forEach { index ->
             elementos.getOrNull(index)?.let { rotateElement(it, degrees, pivot) }
         }
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
         return true
     }
@@ -1017,28 +1101,79 @@ class SketchMedidasView @JvmOverloads constructor(
             sideCms = sideCmsRoundedCorners(dims),
             template = TEMPLATE_ROUNDED
         )
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
         return true
     }
 
+    // Copia PROFUNDA de un elemento (Path, puntos, contornos…) para que el snapshot sea independiente.
+    private fun copyElement(e: Element): Element = when (e) {
+        is Element.Freehand -> Element.Freehand(Path(e.path))
+        is Element.Composite -> Element.Composite(
+            Path(e.path), e.widthCm, e.heightCm,
+            e.contours.map { c -> c.map { PointF(it.x, it.y) }.toMutableList() }.toMutableList(),
+            e.sideCms.map { it.toMutableList() }.toMutableList(),
+            e.template, e.rotationDeg, e.bloqueados.toMutableSet(), e.reflejado
+        )
+        is Element.Shape -> Element.Shape(
+            e.tool, RectF(e.rect), PointF(e.start.x, e.start.y), PointF(e.end.x, e.end.y),
+            e.widthCm, e.heightCm, e.diameterCm, e.lengthCm,
+            PointF(e.topLeft.x, e.topLeft.y), PointF(e.topRight.x, e.topRight.y),
+            PointF(e.bottomRight.x, e.bottomRight.y), PointF(e.bottomLeft.x, e.bottomLeft.y),
+            e.topCm, e.rightCm, e.bottomCm, e.leftCm, e.cotaHint
+        )
+        is Element.Group -> Element.Group(e.children.map { copyElement(it) }.toMutableList())
+        is Element.TextLabel -> Element.TextLabel(e.text, e.x, e.y, e.textSize)
+        is Element.InfoBox -> Element.InfoBox(e.text, RectF(e.rect), e.textSize)
+        is Element.Symbol -> Element.Symbol(e.drawableName, RectF(e.rect))
+    }
+
+    private fun snapshot(): List<Element> = elementos.map { copyElement(it) }
+
+    // Marca una acción YA realizada: guarda en el historial el estado que había ANTES, y toma como
+    // nuevo "previo" el estado actual (post-mutación). Debe llamarse DESPUÉS de mutar los elementos.
+    private fun registrarAccion() {
+        historia.addLast(estadoPrevio)
+        while (historia.size > maxHistorial) historia.removeFirst()
+        estadoPrevio = snapshot()
+        futuro.clear()
+    }
+
+    private fun restaurar(snap: List<Element>) {
+        elementos.clear()
+        elementos.addAll(snap.map { copyElement(it) })
+        selectedIndices.clear()
+        cotaHits.clear()
+    }
+
+    // Fija el estado actual como base del historial (p. ej. al cargar un sketch): undo no va antes de aquí.
+    private fun establecerBaseline() {
+        estadoPrevio = snapshot()
+        historia.clear()
+        futuro.clear()
+    }
+
     fun undo() {
-        if (elementos.isNotEmpty()) {
-            rehacerElementos.add(elementos.removeAt(elementos.lastIndex))
-            invalidate()
-        }
+        if (historia.isEmpty()) return
+        futuro.addLast(estadoPrevio)
+        val prev = historia.removeLast()
+        estadoPrevio = prev
+        restaurar(prev)
+        invalidate()
     }
 
     fun redo() {
-        if (rehacerElementos.isNotEmpty()) {
-            elementos.add(rehacerElementos.removeAt(rehacerElementos.lastIndex))
-            invalidate()
-        }
+        if (futuro.isEmpty()) return
+        historia.addLast(estadoPrevio)
+        val next = futuro.removeLast()
+        estadoPrevio = next
+        restaurar(next)
+        invalidate()
     }
 
     fun clear() {
         elementos.clear()
-        rehacerElementos.clear()
+        registrarAccion()
         cotaHits.clear()
         trazoActual.reset()
         fondo = null
@@ -1059,7 +1194,7 @@ class SketchMedidasView @JvmOverloads constructor(
         val left = maxOf(24f, screenToWorld(width * 0.5f, height * 0.5f).x - cmToPx(ancho) / 2f)
         val top = maxOf(24f, screenToWorld(width * 0.5f, height * 0.5f).y - cmToPx(alto) / 2f)
         elementos.add(crearRecurrenteF1(left, top, ancho, alto, corteAncho, corteAlto))
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -1072,7 +1207,7 @@ class SketchMedidasView @JvmOverloads constructor(
         val left = maxOf(24f, center.x - cmToPx(ancho) / 2f)
         val top = maxOf(24f, center.y - cmToPx(alto) / 2f)
         elementos.add(crearRecurrenteF2(left, top, ancho, alto, corteAncho, corteAlto))
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -1084,7 +1219,7 @@ class SketchMedidasView @JvmOverloads constructor(
         val left = maxOf(24f, center.x - cmToPx(anchoSuperior) / 2f)
         val top = maxOf(24f, center.y - cmToPx(alto) / 2f)
         elementos.add(crearRecurrenteF3(left, top, anchoSuperior, anchoInferior, alto))
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -1114,7 +1249,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 conDerecho = conDerecho
             )
         )
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -1125,7 +1260,7 @@ class SketchMedidasView @JvmOverloads constructor(
         val left = maxOf(24f, center.x - cmToPx(rectAncho) / 2f)
         val top = maxOf(24f, center.y - cmToPx(rectAlto) / 2f)
         elementos.add(crearRecurrenteF5(left, top, rectAncho, rectAlto))
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
@@ -1142,11 +1277,23 @@ class SketchMedidasView @JvmOverloads constructor(
             crearRectanguloConEsquinasRedondeadas(rect, esquinas, radioCm)
         }
         elementos.add(element)
-        rehacerElementos.clear()
+        registrarAccion()
         invalidate()
     }
 
+    /**
+     * Medida mayor del apunte: el lado horizontal y el vertical más grandes.
+     *
+     * Se leen primero los centímetros que cada figura guarda, porque son independientes del equipo.
+     * Reconstruirlos desde los píxeles falla cuando el apunte se dibujó en un celular con otra
+     * densidad de pantalla: las coordenadas se guardan en píxeles de quien dibujó, así que un
+     * rectángulo de 101 cm trazado a densidad 2.75 se leía como 158.7 cm en un equipo de 1.75
+     * (todas las medidas escaladas por el mismo factor). El cálculo por píxeles queda de reserva
+     * para apuntes sin figuras acotadas, como los que solo tienen trazo libre o una imagen de fondo.
+     */
     fun medidaPrincipal(): MedidaPrincipal? {
+        medidaPrincipalEnCm()?.let { return it }
+
         val segmentos = segmentosExistentes()
         val horizontal = segmentos
             .filter { (a, b) -> abs(a.y - b.y) <= maxOf(4f, abs(a.x - b.x) * 0.08f) }
@@ -1164,10 +1311,135 @@ class SketchMedidasView @JvmOverloads constructor(
         return MedidaPrincipal(pxToCm(bounds.width()), pxToCm(bounds.height()))
     }
 
+    /**
+     * Ajusta un boceto recién cargado a la densidad de ESTE equipo.
+     *
+     * Las coordenadas se guardan en píxeles del celular que dibujó, mientras que la medida real vive
+     * en los centímetros acotados de cada figura. Si el apunte viene de un equipo con otra densidad,
+     * el trazo queda a otra escala: se ve distinto y, sobre todo, cualquier edición recalcularía las
+     * cotas con la densidad de aquí y CAMBIARÍA medidas reales (un rectángulo de 101 cm dibujado a
+     * 2.75 pasaba a 158.7 cm en un equipo de 1.75, y al reeditarlo se encogía).
+     *
+     * Se deduce la densidad con que se dibujó comparando píxeles contra centímetros acotados, se
+     * reescala el trazo y se reponen los centímetros originales tal cual: el dibujo se adapta, la
+     * medida no se toca. El tamaño exacto del gráfico no importa; la medida en cm sí.
+     */
+    private fun normalizarDensidad(cargados: List<Element>) {
+        val pxPorCmDibujo = pxPorCmDelDibujo(cargados) ?: return
+        if (pxPorCmDibujo <= 0.01f) return
+        val factor = resources.displayMetrics.density / pxPorCmDibujo
+        if (!factor.isFinite() || factor <= 0f || abs(factor - 1f) < 0.01f) return
+        val cotas = capturarCotas(cargados)
+        val origen = PointF(0f, 0f)
+        cargados.forEach { scaleElement(it, factor, origen) }
+        restaurarCotas(cargados, cotas)
+    }
+
+    /** Píxeles por centímetro con que se dibujó el apunte (mediana de las figuras acotadas). */
+    private fun pxPorCmDelDibujo(cargados: List<Element>): Float? {
+        val muestras = mutableListOf<Float>()
+        fun considerar(element: Element) {
+            when (element) {
+                is Element.Group -> element.children.forEach { considerar(it) }
+                is Element.Shape -> when (element.tool) {
+                    Tool.RECTANGLE, Tool.TRIANGLE, Tool.CIRCLE -> {
+                        val ancho = abs(element.rect.width())
+                        val alto = abs(element.rect.height())
+                        if (element.widthCm > 0.5f && ancho > 1f) muestras += ancho / element.widthCm
+                        if (element.heightCm > 0.5f && alto > 1f) muestras += alto / element.heightCm
+                    }
+                    Tool.LINE, Tool.ORTHO_LINE -> {
+                        val largo = distancia(element.start, element.end)
+                        if (element.lengthCm > 0.5f && largo > 1f) muestras += largo / element.lengthCm
+                    }
+                    Tool.NONE, Tool.FREEHAND, Tool.TEXT, Tool.SELECT -> Unit
+                }
+                else -> Unit
+            }
+        }
+        cargados.forEach { considerar(it) }
+        if (muestras.isEmpty()) return null
+        return muestras.sorted()[muestras.size / 2]
+    }
+
+    private fun capturarCotas(cargados: List<Element>): List<FloatArray> {
+        val cotas = mutableListOf<FloatArray>()
+        fun recorrer(element: Element) {
+            when (element) {
+                is Element.Group -> element.children.forEach { recorrer(it) }
+                is Element.Shape -> cotas += floatArrayOf(
+                    element.widthCm, element.heightCm, element.diameterCm, element.lengthCm,
+                    element.topCm, element.rightCm, element.bottomCm, element.leftCm
+                )
+                is Element.Composite -> cotas += floatArrayOf(element.widthCm, element.heightCm)
+                else -> Unit
+            }
+        }
+        cargados.forEach { recorrer(it) }
+        return cotas
+    }
+
+    private fun restaurarCotas(cargados: List<Element>, cotas: List<FloatArray>) {
+        var indice = 0
+        fun recorrer(element: Element) {
+            when (element) {
+                is Element.Group -> element.children.forEach { recorrer(it) }
+                is Element.Shape -> {
+                    val c = cotas.getOrNull(indice++) ?: return
+                    element.widthCm = c[0]; element.heightCm = c[1]
+                    element.diameterCm = c[2]; element.lengthCm = c[3]
+                    element.topCm = c[4]; element.rightCm = c[5]
+                    element.bottomCm = c[6]; element.leftCm = c[7]
+                }
+                is Element.Composite -> {
+                    val c = cotas.getOrNull(indice++) ?: return
+                    element.widthCm = c[0]; element.heightCm = c[1]
+                }
+                else -> Unit
+            }
+        }
+        cargados.forEach { recorrer(it) }
+    }
+
+    /** Mayor ancho y mayor alto según los centímetros acotados en las figuras, o null si no hay. */
+    private fun medidaPrincipalEnCm(): MedidaPrincipal? {
+        var horizontal = 0f
+        var vertical = 0f
+
+        fun considerar(element: Element) {
+            when (element) {
+                is Element.Group -> element.children.forEach { considerar(it) }
+                is Element.Shape -> when (element.tool) {
+                    Tool.RECTANGLE -> {
+                        horizontal = maxOf(horizontal, element.widthCm, element.topCm, element.bottomCm)
+                        vertical = maxOf(vertical, element.heightCm, element.leftCm, element.rightCm)
+                    }
+                    Tool.TRIANGLE, Tool.CIRCLE -> {
+                        horizontal = maxOf(horizontal, element.widthCm)
+                        vertical = maxOf(vertical, element.heightCm)
+                    }
+                    Tool.LINE, Tool.ORTHO_LINE -> {
+                        // Una línea suma a lo ancho o a lo alto según hacia dónde corre.
+                        if (abs(element.end.x - element.start.x) >= abs(element.end.y - element.start.y)) {
+                            horizontal = maxOf(horizontal, element.lengthCm)
+                        } else {
+                            vertical = maxOf(vertical, element.lengthCm)
+                        }
+                    }
+                    Tool.NONE, Tool.FREEHAND, Tool.TEXT, Tool.SELECT -> Unit
+                }
+                else -> Unit
+            }
+        }
+
+        elementos.forEach { considerar(it) }
+        return if (horizontal > 0f && vertical > 0f) MedidaPrincipal(horizontal, vertical) else null
+    }
+
     fun loadBackground(file: File?) {
         fondo = file?.let { BitmapFactory.decodeFile(it.absolutePath) }
         elementos.clear()
-        rehacerElementos.clear()
+        registrarAccion()
         cotaHits.clear()
         trazoActual.reset()
         dibujando = false
@@ -1193,9 +1465,10 @@ class SketchMedidasView @JvmOverloads constructor(
                 val obj = items.getJSONObject(i)
                 readElementJson(obj)?.let { cargados.add(it) }
             }
+            normalizarDensidad(cargados)
             elementos.clear()
             elementos.addAll(cargados)
-            rehacerElementos.clear()
+            establecerBaseline()   // el sketch cargado es la BASE del historial (undo no lo borra)
             cotaHits.clear()
             selectedIndices.clear()
             trazoActual.reset()
@@ -1295,6 +1568,8 @@ class SketchMedidasView @JvmOverloads constructor(
                 .put("heightCm", element.heightCm)
                 .put("contours", contoursJson(element.contours))
                 .put("sideCms", floatMatrixJson(element.sideCms))
+                .put("rotationDeg", element.rotationDeg)
+                .put("reflejado", element.reflejado)
             is Element.Shape -> JSONObject()
                 .put("type", "shape")
                 .put("tool", element.tool.name)
@@ -1363,7 +1638,9 @@ class SketchMedidasView @JvmOverloads constructor(
                     heightCm = obj.optDouble("heightCm", pxToCm(bounds.height()).toDouble()).toFloat(),
                     contours = contours,
                     sideCms = sideCms,
-                    template = template
+                    template = template,
+                    rotationDeg = obj.optDouble("rotationDeg", 0.0).toFloat(),
+                    reflejado = obj.optBoolean("reflejado", false)
                 )
             }
             "shape" -> {
@@ -1649,6 +1926,7 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun finalizarMoverSeleccion() {
         if (movedSelection) {
             aplicarImanASeleccion()
+            registrarAccion()   // el arrastre completo es UNA acción reversible
         }
         dragIndex = null
         movedSelection = false
@@ -2038,6 +2316,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 val bounds = boundsForElement(element)
                 element.widthCm = pxToCm(bounds.width())
                 element.heightCm = pxToCm(bounds.height())
+                element.rotationDeg = ((element.rotationDeg + degrees) % 360f + 360f) % 360f
             }
             is Element.Shape -> {
                 transformPoint(element.start, matrix)
@@ -2109,7 +2388,9 @@ class SketchMedidasView @JvmOverloads constructor(
                     contour.map { PointF(it.x, it.y) }.toMutableList()
                 }.toMutableList(),
                 sideCms = element.sideCms.map { it.toMutableList() }.toMutableList(),
-                template = element.template
+                template = element.template,
+                rotationDeg = element.rotationDeg,
+                reflejado = element.reflejado
             )
             is Element.Shape -> Element.Shape(
                 tool = element.tool,
@@ -2158,6 +2439,10 @@ class SketchMedidasView @JvmOverloads constructor(
                 element.path.transform(matrix)
                 transformCompositePoints(element, matrix)
                 element.contours.forEach { it.reverse() }
+                // Reflejar invierte el sentido de la rotación: así el ángulo guardado sigue siendo
+                // el que hay que des-rotar para normalizar (importa al combinar rotar + reflejar).
+                element.rotationDeg = ((360f - element.rotationDeg) % 360f + 360f) % 360f
+                element.reflejado = !element.reflejado
                 rebuildCompositePath(element)
                 refreshCompositeSides(element)
             }
@@ -2573,6 +2858,10 @@ class SketchMedidasView @JvmOverloads constructor(
         collectHits: Boolean
     ) {
         if (distancia(a, b) < 5f) return
+        // Resaltar el borde si el lado está bloqueado.
+        (elementos.getOrNull(index) as? Element.Composite)?.let {
+            if (ladoBloqueado(it, contourIndex, sideIndex)) canvas.drawLine(a.x, a.y, b.x, b.y, ladoBloqueadoPaint)
+        }
         val dx = b.x - a.x
         val dy = b.y - a.y
         if (abs(dx) > 4f && abs(dy) > 4f) {
@@ -2879,18 +3168,19 @@ class SketchMedidasView @JvmOverloads constructor(
             }
         }
         val input = EditText(context).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or
+                InputType.TYPE_NUMBER_FLAG_SIGNED
             setText(formatCm(actual))
             setSelectAllOnFocus(true)
         }
         AlertDialog.Builder(context)
-            .setTitle("Editar cota")
+            .setTitle("Editar cota (negativo = izquierda/abajo)")
             .setView(input)
             .setPositiveButton("Aceptar") { _, _ ->
                 val nuevo = input.text?.toString()?.replace(",", ".")?.toFloatOrNull()
-                if (nuevo != null && nuevo > 0f) {
-                    rehacerElementos.clear()
+                if (nuevo != null && nuevo != 0f) {
                     aplicarNuevaCota(element, hit, nuevo)
+                    registrarAccion()
                     invalidate()
                 }
             }
@@ -2898,10 +3188,96 @@ class SketchMedidasView @JvmOverloads constructor(
             .show()
     }
 
+    private fun ladoKey(contour: Int, side: Int): Long = contour.toLong() * 100000L + side.toLong()
+
+    private fun ladoBloqueado(composite: Element.Composite, contour: Int, side: Int): Boolean =
+        composite.bloqueados.contains(ladoKey(contour, side))
+
+    // Long-press sobre una cota de lado → bloquear/desbloquear ese lado (queda inmune a ediciones).
+    private fun alternarBloqueoLado(hit: CotaHit) {
+        val el = elementos.getOrNull(hit.elementIndex) as? Element.Composite ?: run {
+            Toast.makeText(context, "Solo se bloquean lados de formas recurrentes", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val c = hit.contourIndex ?: 0
+        val s = hit.sideIndex ?: run {
+            Toast.makeText(context, "Ese no es un lado individual", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val key = ladoKey(c, s)
+        if (el.bloqueados.remove(key)) {
+            Toast.makeText(context, "Lado desbloqueado 🔓", Toast.LENGTH_SHORT).show()
+        } else {
+            el.bloqueados.add(key)
+            Toast.makeText(context, "Lado bloqueado 🔒 (no se moverá al editar otros)", Toast.LENGTH_SHORT).show()
+        }
+        registrarAccion()
+        invalidate()
+    }
+
+    // Aplica una matriz a un Composite (path + contornos + reconstrucción + lados). Se usa para
+    // des-rotar/re-rotar al editar cotas de formas rotadas, sin deformarlas.
+    private fun transformarComposite(composite: Element.Composite, matrix: Matrix, actualizarCm: Boolean) {
+        composite.path.transform(matrix)
+        transformCompositePoints(composite, matrix)
+        rebuildCompositePath(composite)
+        refreshCompositeSides(composite)
+        if (actualizarCm) {
+            val b = boundsForElement(composite)
+            composite.widthCm = pxToCm(b.width())
+            composite.heightCm = pxToCm(b.height())
+        }
+    }
+
+    // Plantillas poligonales cuya edición lee diferencias de vértices con signo (sensibles a la
+    // reflexión). Las paramétricas (F5/F6/redondeados) se editan por límites y no lo necesitan.
+    private val TEMPLATES_POLIGONALES = setOf(TEMPLATE_F1, TEMPLATE_F2, TEMPLATE_F3, TEMPLATE_F4)
+
+    // El espejo hace flip + reverse (que conserva el signo del área), así que la reflexión no se
+    // puede detectar por geometría: se rastrea con la bandera `reflejado` que alterna el espejo.
+    private fun compositeReflejado(element: Element.Composite): Boolean =
+        element.template in TEMPLATES_POLIGONALES && element.reflejado
+
     private fun aplicarNuevaCota(element: Element, hit: CotaHit, valueCm: Float) {
         when (element) {
             is Element.Shape -> aplicarNuevaCotaShape(element, hit.type, valueCm, hit.elementIndex)
-            is Element.Composite -> aplicarNuevaCotaComposite(element, hit, valueCm)
+            is Element.Composite -> {
+                val ang = element.rotationDeg
+                val reflejado = compositeReflejado(element)
+                if (ang == 0f && !reflejado) {
+                    aplicarNuevaCotaComposite(element, hit, valueCm)
+                } else {
+                    // La lógica de edición asume ejes de pantalla y el orden canónico de vértices.
+                    // Normalizo: des-roto y, si está reflejada, la des-reflejo (esto invierte el orden,
+                    // así que remapeo el lado tocado). Edito en canónico y vuelvo a reflejar/rotar en el
+                    // mismo lugar: se respeta la posición actual (rotada/reflejada) sin deformar.
+                    val c0 = boundsForElement(element).let { PointF(it.centerX(), it.centerY()) }
+                    if (ang != 0f) {
+                        transformarComposite(element, Matrix().apply { setRotate(-ang, c0.x, c0.y) }, actualizarCm = true)
+                    }
+                    var hitCanonico = hit
+                    val axisX = boundsForElement(element).centerX()
+                    if (reflejado) {
+                        mirrorElementHorizontally(element, axisX)  // des-reflejar (eje fijo)
+                        val n = element.contours.getOrNull(hit.contourIndex ?: 0)?.size
+                        val s = hit.sideIndex
+                        if (n != null && s != null) {
+                            hitCanonico = hit.copy(sideIndex = ((n - 2 - s) % n + n) % n)
+                        }
+                    }
+                    aplicarNuevaCotaComposite(element, hitCanonico, valueCm)
+                    if (reflejado) {
+                        mirrorElementHorizontally(element, axisX)  // volver a reflejar (mismo eje)
+                    }
+                    if (ang != 0f) {
+                        val c1 = boundsForElement(element).let { PointF(it.centerX(), it.centerY()) }
+                        transformarComposite(element, Matrix().apply {
+                            postTranslate(c0.x - c1.x, c0.y - c1.y) // re-centrar en el mismo punto
+                            postRotate(ang, c0.x, c0.y)             // volver a rotar
+                        }, actualizarCm = false)
+                    }
+                }
+            }
             is Element.Freehand -> Unit
             is Element.Group -> Unit
             is Element.TextLabel -> Unit
@@ -3100,7 +3476,9 @@ class SketchMedidasView @JvmOverloads constructor(
         shape.leftCm = shape.heightCm
     }
 
-    private fun aplicarNuevaCotaComposite(composite: Element.Composite, hit: CotaHit, valueCm: Float) {
+    private fun aplicarNuevaCotaComposite(composite: Element.Composite, hit: CotaHit, valueCmRaw: Float) {
+        // El signo (dirección) SOLO aplica a lados individuales; el resto usa el valor absoluto.
+        val valueCm = if (hit.type == CotaType.COMPOSITE_SIDE) valueCmRaw else kotlin.math.abs(valueCmRaw)
         val bounds = boundsForElement(composite)
         when (hit.type) {
             CotaType.WIDTH -> {
@@ -3188,6 +3566,9 @@ class SketchMedidasView @JvmOverloads constructor(
             aplicarNuevaCotaRecurrenteF1(composite, sideIndex, valueCm)
             return
         }
+        // F2 (forma en "U"): los tres lados paralelos a la base (2 armes de arriba + fondo del
+        // corte) suman la base. Editar la base reparte el cambio entre los tres; editar un
+        // paralelo lo fija y reparte su diferencia entre los otros aún libres.
         if (composite.template == TEMPLATE_F2) {
             aplicarNuevaCotaRecurrenteF2(composite, contourIndex, sideIndex, valueCm)
             return
@@ -3201,20 +3582,60 @@ class SketchMedidasView @JvmOverloads constructor(
             return
         }
         val contour = composite.contours.getOrNull(contourIndex) ?: return
-        if (contour.size < 2 || sideIndex !in contour.indices) return
+        val n = contour.size
+        if (n < 2 || sideIndex !in contour.indices) return
 
-        val a = contour[sideIndex]
-        val nextIndex = (sideIndex + 1) % contour.size
-        val b = contour[nextIndex]
-        val dx = b.x - a.x
-        val dy = b.y - a.y
-        val currentLength = hypot(dx.toDouble(), dy.toDouble()).toFloat().coerceAtLeast(1f)
-        val newLength = cmToPx(valueCm)
+        // Si el propio lado está bloqueado, no se edita.
+        if (ladoBloqueado(composite, contourIndex, sideIndex)) {
+            Toast.makeText(context, "Ese lado está bloqueado 🔒", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val i0 = sideIndex
+        val i1 = (sideIndex + 1) % n
+        val p0 = contour[i0]; val p1 = contour[i1]
+        val horizontal = abs(p1.x - p0.x) >= abs(p1.y - p0.y)
+        val negativo = valueCm < 0f
+        val largo = cmToPx(abs(valueCm)).coerceAtLeast(cmToPx(0.1f))
 
-        b.x = a.x + (dx / currentLength) * newLength
-        b.y = a.y + (dy / currentLength) * newLength
+        // El SIGNO decide la dirección (absoluta): horizontal +→derecha / -→izquierda;
+        // vertical +→arriba / -→abajo. Se mueve ese vértice y se ancla el opuesto.
+        val idxMover: Int
+        val idxAncla: Int
+        if (horizontal) {
+            val der = if (p0.x >= p1.x) i0 else i1
+            val izq = if (der == i0) i1 else i0
+            if (!negativo) { idxMover = der; idxAncla = izq } else { idxMover = izq; idxAncla = der }
+        } else {
+            val arriba = if (p0.y <= p1.y) i0 else i1
+            val abajo = if (arriba == i0) i1 else i0
+            if (!negativo) { idxMover = arriba; idxAncla = abajo } else { idxMover = abajo; idxAncla = arriba }
+        }
+
+        // Bloqueo: el vértice a mover está pinchado si su OTRO lado vecino está bloqueado.
+        val moverPinchado =
+            (idxMover == i0 && ladoBloqueado(composite, contourIndex, (sideIndex - 1 + n) % n)) ||
+            (idxMover == i1 && ladoBloqueado(composite, contourIndex, (sideIndex + 1) % n))
+        if (moverPinchado) {
+            Toast.makeText(context, "Ese lado empuja hacia un lado bloqueado. Usa el signo contrario.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val ancla = contour[idxAncla]
+        val movil = contour[idxMover]
+        if (horizontal) {
+            val dir = if (movil.x >= ancla.x) 1f else -1f
+            movil.x = ancla.x + dir * largo
+            movil.y = ancla.y
+        } else {
+            val dir = if (movil.y >= ancla.y) 1f else -1f
+            movil.y = ancla.y + dir * largo
+            movil.x = ancla.x
+        }
         rebuildCompositePath(composite)
         refreshCompositeSides(composite)
+        val bnds = boundsForElement(composite)
+        composite.widthCm = pxToCm(bnds.width())
+        composite.heightCm = pxToCm(bnds.height())
     }
 
     private fun crearRecurrenteF1(
@@ -3241,52 +3662,84 @@ class SketchMedidasView @JvmOverloads constructor(
         )
     }
 
+    // F1 (rectángulo con esquina superior derecha cortada). Misma lógica de paralelos que F2, en
+    // dos grupos independientes:
+    //   - horizontal: paralelos {0 = tramo superior, 2 = fondo del corte}; completo = 4 (ancho).
+    //   - vertical:   paralelos {1 = vertical del corte, 3 = lado bajo el corte}; completo = 5 (alto).
+    // Editar el completo reparte proporcionalmente entre sus paralelos; editar un paralelo lo fija y
+    // reparte al otro; una vez ambos fijados, el editado toma su valor y la figura se deforma.
     private fun aplicarNuevaCotaRecurrenteF1(composite: Element.Composite, sideIndex: Int, valueCm: Float) {
         val contour = composite.contours.firstOrNull()?.takeIf { it.size == 6 } ?: return
-        val minSize = cmToPx(5f)
-        val left = contour.minOf { it.x }
-        val top = contour.minOf { it.y }
-        val right = contour.maxOf { it.x }
-        val bottom = contour.maxOf { it.y }
-        val cutX = (contour[1].x + contour[2].x) / 2f
-        val cutY = (contour[2].y + contour[3].y) / 2f
+        val minSize = cmToPx(0.1f)  // todos los lados aceptan medidas menores a 5
+        val nuevo = cmToPx(kotlin.math.abs(valueCm)).coerceAtLeast(minSize)
 
-        var topRun = (cutX - left).coerceAtLeast(minSize)
-        var cutW = (right - cutX).coerceAtLeast(minSize)
-        var cutH = (cutY - top).coerceAtLeast(minSize)
-        var totalW = (right - left).coerceAtLeast(minSize * 2f)
-        var totalH = (bottom - top).coerceAtLeast(minSize * 2f)
-        val nuevo = cmToPx(valueCm).coerceAtLeast(minSize)
+        fun corto() = Toast.makeText(context, "Ese cambio dejaría un lado demasiado corto.", Toast.LENGTH_SHORT).show()
+        fun fijado(lado: Int) {
+            composite.bloqueados.add(ladoKey(0, lado))
+            Toast.makeText(context, "Lado fijado 🔒", Toast.LENGTH_SHORT).show()
+        }
 
         when (sideIndex) {
-            0 -> {
-                topRun = nuevo
-                totalW = topRun + cutW
-            }
-            1 -> {
-                cutH = nuevo.coerceAtMost(totalH - minSize)
-            }
-            2 -> {
-                cutW = nuevo
-                totalW = topRun + cutW
-            }
-            3 -> {
-                totalH = cutH + nuevo
+            0, 2 -> {
+                val actuales = floatArrayOf(contour[1].x - contour[0].x, contour[3].x - contour[2].x)
+                val idx = if (sideIndex == 0) 0 else 1
+                val res = resolverParaleloEditado(actuales, idx, nuevo,
+                    { i -> !ladoBloqueado(composite, 0, if (i == 0) 0 else 2) }, minSize) ?: return corto()
+                aplicarHorizontalF1(contour, res.valores, res.irregular)
+                fijado(sideIndex)
             }
             4 -> {
-                totalW = nuevo.coerceAtLeast(cutW + minSize)
+                val actuales = floatArrayOf(contour[1].x - contour[0].x, contour[3].x - contour[2].x)
+                val v = distribuirProporcional(actuales, nuevo, minSize) ?: return corto()
+                aplicarHorizontalF1(contour, v, irregular = false)
+            }
+            1, 3 -> {
+                val actuales = floatArrayOf(contour[2].y - contour[1].y, contour[4].y - contour[3].y)
+                val idx = if (sideIndex == 1) 0 else 1
+                val res = resolverParaleloEditado(actuales, idx, nuevo,
+                    { i -> !ladoBloqueado(composite, 0, if (i == 0) 1 else 3) }, minSize) ?: return corto()
+                aplicarVerticalF1(contour, res.valores, res.irregular)
+                fijado(sideIndex)
             }
             5 -> {
-                totalH = nuevo.coerceAtLeast(cutH + minSize)
+                val actuales = floatArrayOf(contour[2].y - contour[1].y, contour[4].y - contour[3].y)
+                val v = distribuirProporcional(actuales, nuevo, minSize) ?: return corto()
+                aplicarVerticalF1(contour, v, irregular = false)
             }
             else -> return
         }
 
-        val updated = contourRecurrenteF1(left, top, totalW, totalH, cutW, cutH)
-        contour.clear()
-        contour.addAll(updated)
         rebuildCompositePath(composite)
         refreshCompositeSides(composite)
+        val b = boundsForElement(composite)
+        composite.widthCm = pxToCm(b.width())
+        composite.heightCm = pxToCm(b.height())
+    }
+
+    // Recoloca los vértices horizontales de F1 (x). Con regular=true la base inferior sigue al total;
+    // con regular=false la base queda fija y el costado derecho se inclina (deformación).
+    private fun aplicarHorizontalF1(contour: MutableList<PointF>, valores: FloatArray, irregular: Boolean) {
+        val left = contour[0].x
+        val innerX = left + valores[0]        // fin del tramo superior / vertical del corte
+        val outerX = innerX + valores[1]      // fin del fondo del corte
+        contour[1].x = innerX
+        contour[2].x = innerX
+        contour[3].x = outerX
+        if (!irregular) contour[4].x = outerX // base inferior derecha sigue al total
+        // contour[0].x y contour[5].x (izquierda) se mantienen
+    }
+
+    // Recoloca los vértices verticales de F1 (y). Con regular=true la base inferior sigue al total;
+    // con regular=false el lado izquierdo queda fijo y la base se inclina (deformación).
+    private fun aplicarVerticalF1(contour: MutableList<PointF>, valores: FloatArray, irregular: Boolean) {
+        val top = contour[0].y
+        val cutY = top + valores[0]           // altura del fondo del corte
+        val bottom = cutY + valores[1]
+        contour[2].y = cutY
+        contour[3].y = cutY
+        contour[4].y = bottom                 // lado derecho inferior
+        if (!irregular) contour[5].y = bottom // base izquierda sigue al total
+        // contour[0].y y contour[1].y (borde superior) se mantienen
     }
 
     private fun contourRecurrenteF1(
@@ -3334,6 +3787,12 @@ class SketchMedidasView @JvmOverloads constructor(
         )
     }
 
+    // Índices de lado (contorno de 8 puntos) de los tres lados paralelos a la base:
+    //   0 = arme izquierdo (arriba)   2 = fondo del corte   4 = arme derecho (arriba)
+    // Su suma es siempre igual a la base (lado 6). La base es el lado 6; los verticales
+    // del corte son 1 y 3; los laterales (alto) son 5 y 7.
+    private val F2_LADOS_PARALELOS = intArrayOf(0, 2, 4)
+
     private fun aplicarNuevaCotaRecurrenteF2(
         composite: Element.Composite,
         contourIndex: Int,
@@ -3342,36 +3801,179 @@ class SketchMedidasView @JvmOverloads constructor(
     ) {
         if (contourIndex != 0) return
         val contour = composite.contours.getOrNull(0)?.takeIf { it.size == 8 } ?: return
-        val minSize = cmToPx(5f)
-        val minMargin = cmToPx(5f)
-        val left = contour.minOf { it.x }
-        val top = contour.minOf { it.y }
-        val right = contour.maxOf { it.x }
-        val bottom = contour.maxOf { it.y }
-        val notchLeft = contour[1].x
-        val notchRight = contour[4].x
-        val notchBottom = contour[2].y
+        // Mínimo mínimo: todos los lados aceptan medidas menores a 5; solo se evita 0/negativo.
+        val minSize = cmToPx(0.1f)
+        val top = contour[0].y
+        val nuevo = cmToPx(kotlin.math.abs(valueCm)).coerceAtLeast(minSize)
 
-        var totalW = (right - left).coerceAtLeast(minSize * 3f)
-        var totalH = (bottom - top).coerceAtLeast(minSize * 3f)
-        var cutW = (notchRight - notchLeft).coerceAtLeast(minSize)
-        var cutH = (notchBottom - top).coerceAtLeast(minSize)
-        val nuevo = cmToPx(valueCm).coerceAtLeast(minSize)
-
+        // Edición por mutación directa de vértices: así se conserva la geometría aunque la forma
+        // haya quedado irregular (parte superior más ancha que la base).
         when (sideIndex) {
-            0, 4 -> totalW = (nuevo * 2f + cutW).coerceAtLeast(cutW + minMargin * 2f)
-            1, 3 -> cutH = nuevo.coerceAtMost(totalH - minMargin)
-            2 -> cutW = nuevo.coerceAtMost(totalW - minMargin * 2f)
-            5, 7 -> totalH = nuevo.coerceAtLeast(cutH + minMargin)
-            6 -> totalW = nuevo.coerceAtLeast(cutW + minMargin * 2f)
+            0, 2, 4 -> if (!editarLadoParaleloF2(composite, sideIndex, nuevo, minSize)) return
+            1, 3 -> {
+                // Verticales del corte (se introducen hacia la forma), paralelos entre sí.
+                // Si ninguno fue editado aún, ambos se mueven juntos (corte simétrico); una vez uno
+                // fue editado, el otro puede tomar una profundidad distinta (fondo del corte inclinado).
+                val totalH = contour[7].y - top
+                val cutH = nuevo.coerceAtMost(totalH - minSize)
+                val notchY = top + cutH
+                val juntos = !ladoBloqueado(composite, 0, 1) && !ladoBloqueado(composite, 0, 3)
+                if (sideIndex == 1 || juntos) contour[2].y = notchY
+                if (sideIndex == 3 || juntos) contour[3].y = notchY
+                composite.bloqueados.add(ladoKey(0, sideIndex))
+            }
+            5, 7 -> {
+                // Alto (laterales): mueve la base inferior sin tocar la parte superior ni el corte.
+                val cutH = contour[2].y - top
+                val totalH = nuevo.coerceAtLeast(cutH + minSize)
+                val bottomY = top + totalH
+                contour[6].y = bottomY
+                contour[7].y = bottomY
+            }
+            6 -> if (!editarBaseF2(composite, nuevo, minSize)) return
             else -> return
         }
 
-        val updated = contoursRecurrenteF2(left, top, totalW, totalH, cutW, cutH)
-        composite.contours.clear()
-        composite.contours.addAll(updated)
         rebuildCompositePath(composite)
         refreshCompositeSides(composite)
+        val bnds = boundsForElement(composite)
+        composite.widthCm = pxToCm(bnds.width())
+        composite.heightCm = pxToCm(bnds.height())
+    }
+
+    // Edición de un lado paralelo a la base (armes de arriba o fondo del corte).
+    //  - Si queda algún OTRO paralelo libre: fija el editado, reparte su diferencia entre los
+    //    libres y la base inferior no cambia (la U se mantiene recta).
+    //  - Si los otros dos ya están fijados: se permite igualmente; el editado toma su valor, los
+    //    otros no se tocan y la base inferior queda FIJA, de modo que el total de arriba crece y
+    //    la forma queda irregular (el lado editado sobresale, ese costado queda inclinado).
+    // El lado editado siempre queda fijado. Un lado fijado sigue siendo editable directamente;
+    // "fijado" solo significa que no se moverá al repartir la edición de otro lado.
+    // ---- Lógica de paralelos reutilizable (extraída de F2, usada también por F1 y las demás) ----
+    // Un grupo de lados "paralelos" normalmente suma un lado completo (ancho o alto). Al editar uno:
+    //   - si queda algún otro paralelo libre, se reparte la diferencia entre los libres a partes
+    //     iguales y el total no cambia (forma recta);
+    //   - si los demás ya están fijados, el editado toma su valor y el total crece o mengua
+    //     (forma deformada / irregular).
+    private class ParaleloEdit(val valores: FloatArray, val irregular: Boolean)
+
+    private fun resolverParaleloEditado(
+        actuales: FloatArray,
+        indice: Int,
+        nuevo: Float,
+        libre: (Int) -> Boolean,
+        minSize: Float
+    ): ParaleloEdit? {
+        val valores = actuales.copyOf()
+        val libres = actuales.indices.filter { it != indice && libre(it) }
+        val irregular = libres.isEmpty()
+        if (irregular) {
+            valores[indice] = nuevo
+        } else {
+            val reparto = (nuevo - valores[indice]) / libres.size
+            valores[indice] = nuevo
+            libres.forEach { valores[it] = valores[it] - reparto }
+        }
+        return if (valores.any { it < minSize }) null else ParaleloEdit(valores, irregular)
+    }
+
+    // Al editar el lado "completo": los paralelos crecen proporcionalmente para sumar el nuevo total.
+    private fun distribuirProporcional(actuales: FloatArray, nuevoTotal: Float, minSize: Float): FloatArray? {
+        val suma = actuales.sum()
+        if (suma <= 0f) return null
+        val escala = nuevoTotal / suma
+        val v = FloatArray(actuales.size) { actuales[it] * escala }
+        return if (v.any { it < minSize }) null else v
+    }
+
+    private fun editarLadoParaleloF2(
+        composite: Element.Composite,
+        sideIndex: Int,
+        nuevoPx: Float,
+        minSize: Float
+    ): Boolean {
+        val contour = composite.contours[0]
+        val actuales = floatArrayOf(
+            contour[1].x - contour[0].x,   // paralelo 0 -> lado 0 (arme izq)
+            contour[4].x - contour[1].x,   // paralelo 1 -> lado 2 (fondo del corte)
+            contour[5].x - contour[4].x    // paralelo 2 -> lado 4 (arme der)
+        )
+        val p = when (sideIndex) { 0 -> 0; 2 -> 1; else -> 2 }
+        val res = resolverParaleloEditado(actuales, p, nuevoPx,
+            { i -> !ladoBloqueado(composite, 0, F2_LADOS_PARALELOS[i]) }, minSize)
+        if (res == null) {
+            Toast.makeText(context, "Ese cambio dejaría un lado demasiado corto.", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        val v = res.valores
+        val bottomLeft = contour[7].x
+        val bottomRight = contour[6].x
+        if (!res.irregular) {
+            // Reparto: la base inferior se mantiene, forma recta.
+            reconstruirTopF2(contour, bottomLeft, v[0], v[1], v[2], regular = true)
+        } else {
+            // Todos los demás fijados: crece el total de arriba y la base inferior no cambia.
+            val total = v[0] + v[1] + v[2]
+            val leftTopX = when (sideIndex) {
+                0 -> bottomRight - total                            // arme izq: sobresale a la izquierda
+                4 -> bottomLeft                                     // arme der: sobresale a la derecha
+                else -> (bottomLeft + bottomRight) / 2f - total / 2f // fondo: centrado
+            }
+            reconstruirTopF2(contour, leftTopX, v[0], v[1], v[2], regular = false)
+        }
+        composite.bloqueados.add(ladoKey(0, sideIndex))
+        Toast.makeText(context, "Lado fijado 🔒", Toast.LENGTH_SHORT).show()
+        return true
+    }
+
+    // Edición de la base: reparte el cambio entre los paralelos libres (o los tres si no hay
+    // libres) y devuelve la forma a una U recta con ese ancho inferior.
+    private fun editarBaseF2(composite: Element.Composite, nuevaBasePx: Float, minSize: Float): Boolean {
+        val contour = composite.contours[0]
+        val valores = floatArrayOf(
+            contour[1].x - contour[0].x,
+            contour[4].x - contour[1].x,
+            contour[5].x - contour[4].x
+        )
+        val nuevaBase = nuevaBasePx.coerceAtLeast(minSize * 3f)
+        val delta = nuevaBase - valores.sum()
+        val libres = (0..2).filter { !ladoBloqueado(composite, 0, F2_LADOS_PARALELOS[it]) }
+        val destino = if (libres.isEmpty()) listOf(0, 1, 2) else libres
+        val reparto = delta / destino.size
+        destino.forEach { valores[it] = valores[it] + reparto }
+        if (valores.any { it < minSize }) {
+            Toast.makeText(context, "Esa base dejaría un lado demasiado corto.", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        reconstruirTopF2(contour, contour[7].x, valores[0], valores[1], valores[2], regular = true)
+        return true
+    }
+
+    // Recoloca la parte superior (vértices 0..5) a partir de un origen izquierdo y los tres anchos
+    // paralelos, conservando la altura del corte (y de p2/p3). Con regular=true la base inferior
+    // (p6/p7) sigue a la parte superior; con regular=false la base queda intacta (forma irregular).
+    private fun reconstruirTopF2(
+        contour: MutableList<PointF>,
+        leftTopX: Float,
+        armeIzq: Float,
+        fondo: Float,
+        armeDer: Float,
+        regular: Boolean
+    ) {
+        val topY = contour[0].y
+        val notchLeft = leftTopX + armeIzq
+        val notchRight = notchLeft + fondo
+        val topRight = notchRight + armeDer
+        contour[0].x = leftTopX;   contour[0].y = topY
+        contour[1].x = notchLeft;  contour[1].y = topY
+        contour[2].x = notchLeft   // y (fondo del corte) se conserva
+        contour[3].x = notchRight
+        contour[4].x = notchRight; contour[4].y = topY
+        contour[5].x = topRight;   contour[5].y = topY
+        if (regular) {
+            contour[7].x = leftTopX
+            contour[6].x = topRight
+        }
     }
 
     private fun contoursRecurrenteF2(
@@ -3382,11 +3984,24 @@ class SketchMedidasView @JvmOverloads constructor(
         cutW: Float,
         cutH: Float
     ): MutableList<MutableList<PointF>> {
-        val right = left + totalW
+        val armeIzq = ((totalW - cutW) / 2f).coerceAtLeast(cmToPx(5f))
+        val armeDer = (totalW - cutW - armeIzq).coerceAtLeast(cmToPx(5f))
+        return contoursRecurrenteF2Asimetrico(left, top, armeIzq, cutW, armeDer, cutH, totalH)
+    }
+
+    private fun contoursRecurrenteF2Asimetrico(
+        left: Float,
+        top: Float,
+        armeIzq: Float,
+        fondo: Float,
+        armeDer: Float,
+        cutH: Float,
+        totalH: Float
+    ): MutableList<MutableList<PointF>> {
+        val notchLeft = left + armeIzq
+        val notchRight = notchLeft + fondo
+        val right = notchRight + armeDer
         val bottom = top + totalH
-        val centerX = left + totalW / 2f
-        val notchLeft = centerX - cutW / 2f
-        val notchRight = centerX + cutW / 2f
         val notchBottom = top + cutH
         return mutableListOf(
             mutableListOf(
@@ -3431,7 +4046,7 @@ class SketchMedidasView @JvmOverloads constructor(
     ) {
         if (contourIndex != 0) return
         val contour = composite.contours.getOrNull(0)?.takeIf { it.size == 4 } ?: return
-        val minSize = cmToPx(5f)
+        val minSize = cmToPx(0.1f)  // todos los lados aceptan medidas menores a 5
         val left = contour.minOf { it.x }
         val top = contour.minOf { it.y }
         var topW = (contour[1].x - contour[0].x).coerceAtLeast(minSize * 2f)
@@ -3515,7 +4130,7 @@ class SketchMedidasView @JvmOverloads constructor(
     ) {
         if (contourIndex != 0) return
         val dims = dimsRecurrenteF4(composite.contours.getOrNull(0) ?: return) ?: return
-        val minSize = cmToPx(5f)
+        val minSize = cmToPx(0.1f)  // todos los lados aceptan medidas menores a 5
         var centralW = dims.centralW.coerceAtLeast(minSize)
         var centralH = dims.centralH.coerceAtLeast(minSize * 2f)
         var leftW = dims.leftW
@@ -3564,7 +4179,7 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun aplicarAlturaTotalRecurrenteF4(composite: Element.Composite, valueCm: Float) {
         val dims = dimsRecurrenteF4(composite.contours.getOrNull(0) ?: return) ?: return
-        val minSize = cmToPx(5f)
+        val minSize = cmToPx(0.1f)  // todos los lados aceptan medidas menores a 5
         val centralH = cmToPx(valueCm).coerceAtLeast(dims.addonH + minSize)
         val addonH = dims.addonH.coerceAtMost(centralH - minSize)
         val contour = composite.contours.first()
@@ -3693,7 +4308,7 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun aplicarMedidasRecurrenteF5(composite: Element.Composite, anchoCm: Float?, altoCm: Float?) {
         val dims = dimsRecurrenteF5(composite.contours.firstOrNull() ?: return, composite.sideCms) ?: return
-        val minSize = cmToPx(5f)
+        val minSize = cmToPx(0.1f)  // todos los lados aceptan medidas menores a 5
         val newW = anchoCm?.let { cmToPx(it).coerceAtLeast(minSize) } ?: dims.rectW
         val newH = altoCm?.let { cmToPx(it).coerceAtLeast(minSize) } ?: dims.rectH
         val centerX = dims.left + dims.rectW / 2f
@@ -3807,7 +4422,7 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun aplicarMedidasRecurrenteF6(composite: Element.Composite, anchoCm: Float?, altoCm: Float?) {
         val dims = dimsRecurrenteF6(composite.contours.firstOrNull() ?: return, composite.sideCms) ?: return
-        val minSize = cmToPx(5f)
+        val minSize = cmToPx(0.1f)  // todos los lados aceptan medidas menores a 5
         val newW = anchoCm?.let { cmToPx(it).coerceAtLeast(minSize) } ?: dims.rectW
         val newH = altoCm?.let { cmToPx(it).coerceAtLeast(minSize) } ?: dims.rectH
         val centerX = dims.left + dims.rectW / 2f
@@ -3932,7 +4547,7 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun aplicarMedidasRoundedCorners(composite: Element.Composite, anchoCm: Float?, altoCm: Float?) {
         val dims = dimsRoundedCorners(composite.contours.firstOrNull() ?: return, composite.sideCms) ?: return
-        val minSize = cmToPx(5f)
+        val minSize = cmToPx(0.1f)  // todos los lados aceptan medidas menores a 5
         val newW = anchoCm?.let { cmToPx(it).coerceAtLeast(minSize) } ?: dims.rectW
         val newH = altoCm?.let { cmToPx(it).coerceAtLeast(minSize) } ?: dims.rectH
         val centerX = dims.left + dims.rectW / 2f
@@ -4462,7 +5077,9 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun pxToCm(px: Float): Float {
         val dp = px / resources.displayMetrics.density
-        return (dp * 10f).toInt() / 10f
+        // Redondear, no truncar: truncando, un ida y vuelta cm → px → cm perdía hasta 1 mm en cada
+        // edición (143.6 volvía como 143.5) y la medida se iba corriendo sola.
+        return Math.round(dp * 10f) / 10f
     }
 
     private fun cmToPx(cm: Float): Float {

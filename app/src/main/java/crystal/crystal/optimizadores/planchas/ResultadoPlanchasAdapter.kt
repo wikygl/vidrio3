@@ -18,23 +18,97 @@ class ResultadoPlanchasAdapter(
     private val context: Context,
     val planchas: MutableList<PlanchaOptimizada>,
     private val onExportarPdf: ((PlanchaOptimizada) -> Unit)? = null
-) : RecyclerView.Adapter<ResultadoPlanchasAdapter.VH>() {
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private val formatter = PlanchaFormatter()
     private var zoom = 1.0f
+
+    // Cortes que NO caben en las planchas disponibles; se muestran como pie de la lista.
+    private var faltantes: List<PiezaPlancha> = emptyList()
+
+    fun setFaltantes(lista: List<PiezaPlancha>) {
+        faltantes = lista
+        notifyDataSetChanged()
+    }
+
+    private val hayFooter get() = faltantes.isNotEmpty()
 
     fun setZoom(nuevoZoom: Float) {
         zoom = nuevoZoom.coerceIn(0.75f, 2.0f)
         notifyDataSetChanged()
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+    override fun getItemViewType(position: Int): Int =
+        if (hayFooter && position == planchas.size) TIPO_FOOTER else TIPO_PLANCHA
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        if (viewType == TIPO_FOOTER) return FooterVH(crearVistaFooter())
         val v = LayoutInflater.from(context).inflate(R.layout.item_plancha_resultado, parent, false)
         return VH(v)
     }
 
-    override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(planchas[position])
-    override fun getItemCount() = planchas.size
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (holder) {
+            is VH -> holder.bind(planchas[position])
+            is FooterVH -> holder.bind()
+        }
+    }
+
+    override fun getItemCount() = planchas.size + if (hayFooter) 1 else 0
+
+    // ── Footer: título rojo + lista de faltantes en letra normal ──────────────
+    private fun crearVistaFooter(): View {
+        val cont = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = RecyclerView.LayoutParams(
+                RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT
+            )
+            val p = (16 * context.resources.displayMetrics.density).toInt()
+            setPadding(p, p, p, p)
+        }
+        val titulo = TextView(context).apply {
+            id = View.generateViewId()
+            textSize = 15f
+            setTextColor(ContextCompat.getColor(context, R.color.rojo))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+        val cuerpo = TextView(context).apply {
+            id = View.generateViewId()
+            textSize = 13f
+            setTextColor(Color.parseColor("#37474F"))
+            val t = (4 * context.resources.displayMetrics.density).toInt()
+            setPadding(0, t, 0, 0)
+        }
+        cont.addView(titulo)
+        cont.addView(cuerpo)
+        cont.tag = titulo.id to cuerpo.id
+        return cont
+    }
+
+    inner class FooterVH(v: View) : RecyclerView.ViewHolder(v) {
+        @Suppress("UNCHECKED_CAST")
+        fun bind() {
+            val (idT, idC) = itemView.tag as Pair<Int, Int>
+            val titulo = itemView.findViewById<TextView>(idT)
+            val cuerpo = itemView.findViewById<TextView>(idC)
+            titulo.text = "⚠ ${faltantes.size} corte(s) NO caben en las planchas disponibles"
+            cuerpo.text = faltantes
+                .groupingBy {
+                    val a = formatter.df1(it.anchoMm / 10f)
+                    val b = formatter.df1(it.altoMm / 10f)
+                    val nom = it.descripcion.trim()
+                    "$a × $b cm${if (nom.isNotBlank()) "  ($nom)" else ""}"
+                }
+                .eachCount()
+                .entries
+                .joinToString("\n") { "• ${it.key} = ${it.value}" }
+        }
+    }
+
+    companion object {
+        private const val TIPO_PLANCHA = 0
+        private const val TIPO_FOOTER = 1
+    }
 
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
         private val tvNombre: TextView = v.findViewById(R.id.tvNombrePlancha)
@@ -64,7 +138,7 @@ class ResultadoPlanchasAdapter(
 
             tvNombre.text = p.nombre
 
-            val tipo = if (p.esRetazoEntrada) "retazo" else "plancha base"
+            val tipo = if (p.esRetazoEntrada) "retazo" else "plancha entera"
             val anchoC = formatter.df1(p.anchoMm / 10f)
             val altoC = formatter.df1(p.altoMm / 10f)
             tvInfo.text = "$anchoC × $altoC cm  •  ${p.cortes.size} pieza(s)  •  $tipo"

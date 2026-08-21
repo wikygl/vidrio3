@@ -3,8 +3,8 @@ package crystal.crystal.taller.nova
 import android.annotation.SuppressLint
 
 /**
- * Clase que maneja todos los cÃ¡lculos relacionados con perfiles de aluminio
- * Centraliza la lÃ³gica comÃºn entre NovaApa y NovaIna
+ * Clase que maneja todos los cálculos relacionados con perfiles de aluminio
+ * Centraliza la lógica común entre NovaApa y NovaIna
  */
 object NovaPerfilesHelper {
 
@@ -71,7 +71,7 @@ object NovaPerfilesHelper {
         nPuentes: Int,
         puente: String = "Múltiple"
     ): String {
-        val valorFinal = if (puente == "MÃºltiple" || puente == "gorrito") 1 else 2
+        val valorFinal = if (puente == "Múltiple" || puente == "gorrito") 1 else 2
 
         return when (texto) {
             "nn", "nl" -> {
@@ -220,7 +220,7 @@ object NovaPerfilesHelper {
 
     private fun esPuenteMultipleOGorrito(puente: String): Boolean {
         val p = puente.lowercase().trim()
-        return p.contains("multi") || p.contains("múlt") || p.contains("mÃºlt") || p.contains("ltiple") || p.contains("gorrito")
+        return p.contains("multi") || p.contains("múlt") || p.contains("múlt") || p.contains("ltiple") || p.contains("gorrito")
     }
 
     fun calcularTe(altoMocheta: Float, us: Float, puente: String): Float {
@@ -314,7 +314,7 @@ object NovaPerfilesHelper {
         )
     }
 
-    // ==================== FUNCIÃ“N DE ETIQUETA U ====================
+    // ==================== FUNCIÓN DE ETIQUETA U ====================
 
     @SuppressLint("SetTextI18n")
     fun obtenerEtiquetaU(us: Float): String {
@@ -325,7 +325,7 @@ object NovaPerfilesHelper {
         }
     }
 
-    // ==================== FUNCIÃ“N DE ETIQUETA U MEJORADA ====================
+    // ==================== FUNCIÓN DE ETIQUETA U MEJORADA ====================
 
     @SuppressLint("SetTextI18n")
     fun configurarEtiquetaYTextoU(
@@ -334,7 +334,7 @@ object NovaPerfilesHelper {
         txU: android.widget.TextView,
         textoUCalculado: String
     ) {
-        // Configurar la etiqueta del TextView segÃºn el valor de U
+        // Configurar la etiqueta del TextView según el valor de U
         tvU.text = when (us) {
             1f -> "u-3/8"
             1.5f -> "u-13"
@@ -345,7 +345,7 @@ object NovaPerfilesHelper {
         txU.text = textoUCalculado
     }
 
-    // ==================== FUNCIÃ“N UNIFICADA PARA MANEJAR TODOS LOS TIPOS DE U ====================
+    // ==================== FUNCIÓN UNIFICADA PARA MANEJAR TODOS LOS TIPOS DE U ====================
 
     @SuppressLint("SetTextI18n")
     fun calcularYConfigurarTextosU(
@@ -377,7 +377,7 @@ object NovaPerfilesHelper {
             0f // NovaApa no usa uParante2
         }
 
-        // Calcular texto comÃºn para todos los tipos de U
+        // Calcular texto común para todos los tipos de U
         val textoU = calcularTextoU(
             alto, altoHoja, us, divisiones, uFijos, uParante, uParante2, uSuperior,
             nFijos, fijoUParante, tipoVentana
@@ -386,7 +386,7 @@ object NovaPerfilesHelper {
         // Configurar SOLO los TextViews principales (como en NovaApa)
         configurarEtiquetaYTextoU(us, bindings.tvU, bindings.txU, textoU)
 
-        // Ya no necesitamos configurar u38 ni uOtros - solo UN layout dinÃ¡mico
+        // Ya no necesitamos configurar u38 ni uOtros - solo UN layout dinámico
     }
 
     private fun calcularTextoU(
@@ -452,7 +452,7 @@ object NovaPerfilesHelper {
         val txU: android.widget.TextView    // TextView para los valores calculados
     )
 
-    // ==================== FUNCIÃ“N PARA GENERAR TEXTO COMPLETO DE PERFILES ====================
+    // ==================== FUNCIÓN PARA GENERAR TEXTO COMPLETO DE PERFILES ====================
 
     @SuppressLint("SetTextI18n")
     fun generarTextoOtrosAluminios(

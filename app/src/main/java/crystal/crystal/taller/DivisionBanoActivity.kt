@@ -2,6 +2,11 @@ package crystal.crystal.taller
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -19,6 +24,7 @@ import crystal.crystal.databinding.ActivityDivisionBanoBinding
 class DivisionBanoActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityDivisionBanoBinding
+    private lateinit var controladorCola: ControladorColaMedidas
     private lateinit var proyectoCallback: DialogosProyecto.ProyectoCallback
     private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
     private var primerClickArchivarRealizado = false
@@ -54,6 +60,16 @@ class DivisionBanoActivity : AppCompatActivity() {
         // Pre-carga desde presupuesto
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etAncho.setText(df1(it)) }
         intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.etAltoTotal.setText(df1(it)) }
+
+        controladorCola = ControladorColaMedidas(
+            activity = this,
+            claseActual = DivisionBanoActivity::class.java,
+            etAncho = binding.etAncho,
+            etAlto = binding.etAltoTotal,
+            ivDiseno = binding.ivDiseno,
+            formato = ::df1
+        )
+        controladorCola.inicializar()
     }
 
     // ==================== OBTENER VALORES ====================
@@ -80,6 +96,7 @@ class DivisionBanoActivity : AppCompatActivity() {
     private fun configurarCalcular() {
         binding.btCalcular.setOnClickListener {
             try {
+                controladorCola.onCalcular()
                 if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) return@setOnClickListener
 
                 val entrada = leerEntradaCalculo()
@@ -112,6 +129,7 @@ class DivisionBanoActivity : AppCompatActivity() {
                     alturaDesague = entrada.alturaDesague,
                     medidaAluminio = entrada.uMarco
                 )
+                generarDisenoTop(entrada)
             } catch (e: Exception) {
                 Toast.makeText(this, "Ingrese dato válido", Toast.LENGTH_SHORT).show()
             }
@@ -202,6 +220,135 @@ class DivisionBanoActivity : AppCompatActivity() {
                 "Cubículo:${df(anchoCubiculo)} x ${df(profundidadCubiculo)}"
     }
 
+    // ==================== DISEÑO TOP (vista superior) ====================
+
+    /**
+     * Vista en planta de la división de baño. Cada cubículo aloja un inodoro; los separa un muro de
+     * aluminio de 3.8 que se une, al frente, a columnas del mismo ancho. Si la puerta es >= al ancho
+     * del cubículo va una sola columna (la puerta ocupa el frente); si es menor, se agrega una columna
+     * intermedia y un panel fijo que completa el frente.
+     */
+    private fun generarDisenoTop(e: EntradaCalculo) {
+        val muro = ANCHO_PARANTE            // 3.8 (aluminio)
+        val n = e.nCubiculos
+        if (n <= 0 || e.ancho <= 0 || e.profundidad <= 0) { binding.ivDiseno.setImageResource(crystal.crystal.R.drawable.divbano); return }
+        val anchoCub = (e.ancho - (n + 1) * muro) / n
+        if (anchoCub <= 0) { binding.ivDiseno.setImageResource(crystal.crystal.R.drawable.divbano); return }
+        val sep = muro                       // 3.8: columna/espacio entre la separación y la puerta
+        val dispo = anchoCub - sep           // frente disponible desde la columna de bisagra
+        val fixedW = dispo - e.anchoPuerta - sep
+        val conFijo = e.anchoPuerta < anchoCub && fixedW > 2f
+        val puertaW = if (conFijo) minOf(e.anchoPuerta, dispo) else dispo
+
+        val d = resources.displayMetrics.density
+        val margen = 10f * d
+        val padLbl = 40f * d
+        val titAlto = 34f * d
+        val screenW = resources.displayMetrics.widthPixels.toFloat()
+        val availW = screenW - 2 * margen - 2 * padLbl
+        val maxDepthPx = screenW * 0.70f
+        val scale = minOf(availW / e.ancho, maxDepthPx / e.profundidad)
+        val planW = e.ancho * scale
+        val planH = e.profundidad * scale
+
+        val bmpW = (planW + 2 * padLbl + 2 * margen).toInt().coerceAtLeast(1)
+        val bmpH = (titAlto + planH + 2 * padLbl + margen).toInt().coerceAtLeast(1)
+        val bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
+        val cv = Canvas(bmp); cv.drawColor(Color.WHITE)
+
+        val ox = margen + padLbl
+        val oy = titAlto + padLbl * 0.4f
+        fun px(x: Float) = ox + x * scale
+        fun py(y: Float) = oy + y * scale     // y=0 fondo (arriba), y=prof frente (abajo)
+        val yFront = e.profundidad
+
+        // Paints
+        val pTit = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#2E4A62"); textSize = 15f * d; typeface = android.graphics.Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
+        val pFloor = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F5F8FA") }
+        val pAlum = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#AEB6BD") }
+        val pAlumBorde = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#6B7580"); style = Paint.Style.STROKE; strokeWidth = 1f * d }
+        val pCol = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#54606B") }
+        val pDoor = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1565C0"); style = Paint.Style.STROKE; strokeWidth = 2.4f * d }
+        val pArc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#90CAF9"); style = Paint.Style.STROKE; strokeWidth = 1.2f * d }
+        val pFijo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#2E7D32"); style = Paint.Style.STROKE; strokeWidth = 3.6f * d }
+        val pToi = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#ECEFF1") }
+        val pToiB = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#78909C"); style = Paint.Style.STROKE; strokeWidth = 1.6f * d }
+        val pBorde = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#90A4AE"); style = Paint.Style.STROKE; strokeWidth = 1.4f * d }
+        val pDim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#37474F"); strokeWidth = 1f * d; textSize = 11f * d }
+
+        cv.drawText("División de baño · vista superior", bmpW / 2f, titAlto * 0.62f, pTit)
+
+        // Cubículos: piso + inodoro
+        for (i in 0 until n) {
+            val cubL = (i + 1) * muro + i * anchoCub
+            cv.drawRect(px(cubL), py(0f), px(cubL + anchoCub), py(yFront), pFloor)
+            dibujarInodoro(cv, px(cubL + anchoCub / 2f), py(0f), scale, anchoCub, e.profundidad, pToi, pToiB)
+        }
+
+        // Muros (divisores) a toda la profundidad + columna al frente
+        for (j in 0..n) {
+            val wL = j * (anchoCub + muro)
+            cv.drawRect(px(wL), py(0f), px(wL + muro), py(yFront), pAlum)
+            cv.drawRect(px(wL), py(0f), px(wL + muro), py(yFront), pAlumBorde)
+            cv.drawRect(px(wL), py(yFront - muro), px(wL + muro), py(yFront), pCol)  // columna
+        }
+
+        // Borde del contorno (fondo + laterales; el frente lo definen columnas/puerta/panel)
+        cv.drawLine(px(0f), py(0f), px(e.ancho), py(0f), pBorde)
+        cv.drawLine(px(0f), py(0f), px(0f), py(yFront), pBorde)
+        cv.drawLine(px(e.ancho), py(0f), px(e.ancho), py(yFront), pBorde)
+
+        // Columna de 3.8 entre la separación y la puerta; puerta con arco de giro; y (si la puerta es
+        // menor que el cubículo) columna intermedia + panel fijo que completa el frente.
+        val rDraw = minOf(puertaW, e.profundidad * 0.85f) * scale
+        for (i in 0 until n) {
+            val cubL = (i + 1) * muro + i * anchoCub
+            val doorL = cubL + sep
+            cv.drawRect(px(cubL), py(yFront - muro), px(cubL + muro), py(yFront), pCol) // columna de bisagra (3.8)
+            val hx = px(doorL); val hy = py(yFront)
+            cv.drawArc(RectF(hx - rDraw, hy - rDraw, hx + rDraw, hy + rDraw), 0f, -90f, false, pArc)
+            cv.drawLine(hx, hy, hx, hy - rDraw, pDoor) // hoja abierta hacia adentro
+            if (conFijo) {
+                val colIx = doorL + puertaW
+                cv.drawRect(px(colIx), py(yFront - muro), px(colIx + muro), py(yFront), pCol) // columna intermedia
+                cv.drawLine(px(colIx + muro), py(yFront), px(cubL + anchoCub), py(yFront), pFijo) // panel fijo
+            }
+        }
+
+        // ── Cotas ──
+        pDim.textAlign = Paint.Align.CENTER
+        val c0L = muro; val c0R = muro + anchoCub
+        val yc = py(yFront) + 16f * d
+        cv.drawLine(px(c0L), yc, px(c0R), yc, pDim)
+        cv.drawText("Cubículo ${df1(anchoCub)}", (px(c0L) + px(c0R)) / 2f, yc + 13f * d, pDim)
+        val yp = py(yFront) + 32f * d
+        val d0 = muro + sep   // inicio de la puerta del primer cubículo
+        cv.drawLine(px(d0), yp, px(d0 + puertaW), yp, pDim)
+        cv.drawText("Puerta ${df1(puertaW)}", (px(d0) + px(d0 + puertaW)) / 2f, yp + 13f * d, pDim)
+        val xd = px(0f) - 16f * d
+        val midY = (py(0f) + py(yFront)) / 2f
+        cv.drawLine(xd, py(0f), xd, py(yFront), pDim)
+        cv.save(); cv.rotate(-90f, xd, midY)
+        cv.drawText("Prof ${df1(e.profundidad)}", xd, midY - 5f * d, pDim)
+        cv.restore()
+
+        binding.ivDiseno.setImageBitmap(bmp)
+    }
+
+    /** Inodoro en vista superior (tanque + taza), escalado para caber en el cubículo. */
+    private fun dibujarInodoro(cv: Canvas, cx: Float, backY: Float, sc: Float, cubAncho: Float, prof: Float, fill: Paint, borde: Paint) {
+        val gapCm = 6f; val tanqueCm = 15f; val tazaCm = 40f
+        val ts = minOf(1f, (cubAncho * 0.62f) / 36f, (prof * 0.82f) / (gapCm + tanqueCm + tazaCm))
+        if (ts <= 0f) return
+        val tanqueW = 36f * sc * ts; val tanqueH = tanqueCm * sc * ts
+        val tazaW = 33f * sc * ts; val tazaH = tazaCm * sc * ts
+        val top = backY + gapCm * sc * ts
+        val tq = RectF(cx - tanqueW / 2f, top, cx + tanqueW / 2f, top + tanqueH)
+        cv.drawRoundRect(tq, 4f, 4f, fill); cv.drawRoundRect(tq, 4f, 4f, borde)
+        val tz = RectF(cx - tazaW / 2f, top + tanqueH, cx + tazaW / 2f, top + tanqueH + tazaH)
+        cv.drawOval(tz, fill); cv.drawOval(tz, borde)
+    }
+
     // ==================== ARCHIVAR ====================
     private fun callbackSeleccionProyectoParaArchivar(): DialogosProyecto.ProyectoCallback {
         return object : DialogosProyecto.ProyectoCallback {
@@ -232,6 +379,11 @@ class DivisionBanoActivity : AppCompatActivity() {
 
     private fun configurarArchivar() {
         binding.btArchivar.setOnClickListener {
+            // Candado de suscripción PRIMERO: bloquear antes de avanzar numeración o dar el toast.
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeArchivar(),
+                    "Archivar es una función de pago. Renueva para guardar tus proyectos.")) {
+                return@setOnClickListener
+            }
             if (binding.etAncho.text.toString().isEmpty()) {
                 Toast.makeText(this, "Haz nuevo cálculo", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -260,6 +412,7 @@ class DivisionBanoActivity : AppCompatActivity() {
         refrescarProyectoActivoUI()
         Toast.makeText(this, "Archivado", Toast.LENGTH_SHORT).show()
         binding.etAncho.setText("")
+        controladorCola.ofrecerSiguiente()
     }
 
     private fun procesarLineaArchivado(

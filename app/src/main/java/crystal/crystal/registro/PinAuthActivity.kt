@@ -63,6 +63,10 @@ class PinAuthActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (crystal.crystal.FeaturesV1.OCULTAR_WALLET) {
+            android.widget.Toast.makeText(this, "No disponible en esta versión", android.widget.Toast.LENGTH_SHORT).show()
+            finish(); return
+        }
         binding = ActivityPinAuthBinding.inflate(layoutInflater)
         setContentView(binding.root)
 

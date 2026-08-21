@@ -50,6 +50,7 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
     private lateinit var listManager: PlanchaListManager
 
     private var espesorDiscoCm = 0f
+    private var restringirRotacion = false
     private var proyectoOptimizadorActual: String = ""
     private var nombreListaActual: String = ""
     private var bloqueandoCargaSpinner = false
@@ -76,11 +77,16 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
         actualizarListaPlanchas()
         configurarEntradaPlanchas()
         manejarIntentEntrada(intent)
+        cargarPiezasDesdeIntent(intent)
 
         binding.listadoTxt.setOnClickListener {
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                    "Guardar proyectos del optimizador es una función de pago.")) return@setOnClickListener
             mostrarDialogoGuardarProyectoOptimizador()
         }
         binding.listadoTxt.setOnLongClickListener {
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                    "Abrir proyectos guardados es una función de pago.")) return@setOnLongClickListener true
             mostrarDialogoAbrirProyectoOptimizador()
             true
         }
@@ -100,6 +106,8 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
 
         // Long click en Añadir: recuperar vidrios de proyectos archivados
         binding.btAnadir.setOnLongClickListener {
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                    "Cargar listas guardadas es una función de pago.")) return@setOnLongClickListener true
             if (listManager.hayListasDisponibles()) {
                 spinnerConProyectosOptimizador = false
                 spinnerProyectoKeys = emptyList()
@@ -174,6 +182,9 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
             compartirContextoPlanchas()
             true
         }
+
+        // Botón de mensajería (cabecera): desplegable con ir a chat / enviar Crystal / enviar SVC.
+        binding.imageButton.setOnClickListener { mostrarMenuMensajeriaPlanchas() }
 
         // Agregar plancha disponible
         binding.btAgregar.setOnClickListener { abrirDialogoPlancha() }
@@ -338,8 +349,9 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
     // ─── Optimización ───────────────────────────────────────────────────────
 
     private fun optimizar() {
+        // Optimizar con medidas manuales es GRATIS; importar/cargar/guardar es de pago (gateado aparte).
         val vidrios = lista.filter { it.activo && it.ancho > 0f && it.alto > 0f }
-        val planchasActivas = lista2.filter { it.activa }
+        val planchasActivas = lista2.filter { it.activa && it.ancho > 0f && it.alto > 0f }
 
         if (vidrios.isEmpty()) {
             Toast.makeText(this, "No hay vidrios seleccionados para optimizar", Toast.LENGTH_SHORT).show()
@@ -350,26 +362,33 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
             return
         }
 
-        // Tomamos la primera plancha activa como medida base
-        val planchaBase = planchasActivas.first()
-        val anchoBase = (planchaBase.ancho * 10).toInt()   // mm si ingresaron en cm
-        val altoBase = (planchaBase.alto * 10).toInt()
-
         val piezas = vidrios.map { v ->
             PiezaPlancha(
                 id = "p-${System.nanoTime()}",
                 descripcion = v.info,
                 anchoMm = (v.ancho * 10).toInt(),
                 altoMm = (v.alto * 10).toInt(),
-                cantidad = v.cantidad
+                cantidad = v.cantidad,
+                // Si el usuario restringe la rotación, ninguna pieza puede rotar; si no, todas pueden.
+                rotacionPermitida = !restringirRotacion
             )
         }
 
-        val retazos = planchasActivas.drop(1).map { p ->
-            RetazoPlancha(
-                nombre = p.nombre,
-                anchoMm = (p.ancho * 10).toInt(),
-                altoMm = (p.alto * 10).toInt()
+        // INVENTARIO de material del que se puede cortar. Toda la lista es stock: cada fila aporta
+        // sus unidades y ninguna manda por estar primera (antes la primera fila era la "plancha
+        // base", con planchas ilimitadas, y el resto retazos; el orden de escritura cambiaba el
+        // resultado y podía reportar más cortes faltantes al agregar material).
+        //
+        // La medida de mayor área es la plancha entera (lo que se compra); todo lo menor se marca
+        // como retazo, material sobrante que conviene gastar primero.
+        val areaMayor = planchasActivas.maxOf { it.ancho.toDouble() * it.alto }
+        val stock = planchasActivas.map { p ->
+            PlanchaStock(
+                nombre = p.nombre.ifBlank { "Plancha" },
+                anchoMm = (p.ancho * 10).toInt(),   // mm si ingresaron en cm
+                altoMm = (p.alto * 10).toInt(),
+                cantidad = p.cantidad.coerceAtLeast(1),
+                esRetazo = p.ancho.toDouble() * p.alto < areaMayor
             )
         }
 
@@ -384,11 +403,11 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
         binding.btOpti.text = "Calculando..."
 
         Thread {
+            // Los cortes que no entran salen del propio cálculo (no de un recorte posterior): el
+            // optimizador solo abre unidades que existen en el inventario.
             val resultado = OptimizadorPlanchas.optimizar(
                 piezas = piezas,
-                anchoPlanchaMm = anchoBase,
-                altoPlanchaMm = altoBase,
-                retazos = retazos,
+                stock = stock,
                 intensidad = intensidad,
                 separacionCorteMm = espesorDiscoMm
             )
@@ -403,7 +422,8 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
                 if (sinUbicar > 0) {
                     Toast.makeText(
                         this,
-                        "Cálculo listo. Planchas: ${resultado.planchas.size}. Sin ubicar: $sinUbicar",
+                        "No alcanza el material disponible: faltan $sinUbicar corte(s). " +
+                            "Se muestran abajo.",
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -580,6 +600,7 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
         lista = soloPiezasPlanchas(items).toMutableList()
         lista2 = planchas
         espesorDiscoCm = dataManager.recuperarEspesorDisco()
+        restringirRotacion = dataManager.recuperarRestringirRotacion()
     }
 
     private fun soloPiezasPlanchas(items: List<ItemListaPlanchas>): List<ItemListaPlanchas> =
@@ -932,9 +953,26 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
     private fun mostrarMenuAjustesPlanchas() {
         android.widget.PopupMenu(this, binding.btnCatalogo).apply {
             menu.add("Seleccionar medidas iguales")
+            menu.add("Descargar SVC (CSV)")
+            menu.add(0, 1, 2, "Restringir rotación (no rotar piezas)").apply {
+                isCheckable = true
+                isChecked = restringirRotacion
+            }
             setOnMenuItemClickListener { item ->
-                when (item.title.toString()) {
-                    "Seleccionar medidas iguales" -> { mostrarDialogoMedidasIgualesPlanchas(); true }
+                when {
+                    item.itemId == 1 -> {
+                        restringirRotacion = !restringirRotacion
+                        dataManager.guardarRestringirRotacion(restringirRotacion)
+                        Toast.makeText(
+                            this@OptimizacionPlanchasActivity,
+                            if (restringirRotacion) "Rotación restringida: las piezas NO se rotarán"
+                            else "Rotación permitida: las piezas pueden rotar para acomodar mejor",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        true
+                    }
+                    item.title == "Seleccionar medidas iguales" -> { mostrarDialogoMedidasIgualesPlanchas(); true }
+                    item.title == "Descargar SVC (CSV)" -> { descargarSvcPlanchas(); true }
                     else -> false
                 }
             }
@@ -1101,6 +1139,114 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
         }
     }
 
+    private fun mostrarMenuMensajeriaPlanchas() {
+        android.widget.PopupMenu(this, binding.imageButton).apply {
+            menu.add(0, 1, 0, "Ir a chat")
+            menu.add(0, 2, 1, "Enviar formato Crystal")
+            menu.add(0, 3, 2, "Enviar medidas como texto")
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    1 -> {
+                        startActivity(Intent(this@OptimizacionPlanchasActivity, ListChatActivity::class.java))
+                        true
+                    }
+                    2 -> { compartirContextoPlanchas(); true }
+                    3 -> { enviarMedidasTextoPlanchas(); true }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    // Envía las medidas ACTIVAS como TEXTO por la mensajería de Crystal (queda como mensaje, para
+    // copiar y pegar). Solo va a Crystal, no al compartir general de Android.
+    private fun enviarMedidasTextoPlanchas() {
+        val texto = crearTextoMedidasActivasPlanchas()
+        if (texto.isBlank()) {
+            Toast.makeText(this, "No hay medidas activas para enviar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(this, ListChatActivity::class.java).apply {
+            putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_TEXT, texto)
+        }
+        startActivity(intent)
+    }
+
+    /**
+     * Texto simple de las medidas ACTIVAS para copiar/pegar. Encabeza con el material (nombre de la
+     * plancha activa) y una línea por vidrio: "ancho x alto = cantidad info".
+     *
+     * Ejemplo:
+     *   bronce Polarizado
+     *   67.4 x 153.4 = 2 Adan,Vna1
+     *   66.4 x 107 = 3 Adan,Vna2
+     */
+    private fun crearTextoMedidasActivasPlanchas(): String {
+        val vidrios = soloPiezasPlanchas(lista).filter { it.activo }
+        if (vidrios.isEmpty()) return ""
+        // El encabezado es el nombre de la lista cargada (p. ej. "Vidrios [arenado]"), que ya trae
+        // el tipo de vidrio. Solo si no hay lista/proyecto se usa el nombre de la plancha.
+        val material = nombreListaActual
+            .ifBlank { proyectoOptimizadorActual }
+            .ifBlank { (lista2.firstOrNull { it.activa } ?: lista2.firstOrNull())?.nombre?.trim().orEmpty() }
+        return buildString {
+            if (material.isNotBlank()) appendLine(material)
+            vidrios.forEach { item ->
+                appendLine("${formatter.df1(item.ancho)} x ${formatter.df1(item.alto)} = ${item.cantidad} ${item.info}")
+            }
+        }.trim()
+    }
+
+    /** Carpeta pública Descargas/Crystal/svc (con reserva al almacenamiento de la app). */
+    private fun carpetaSvc(): File {
+        val publico = File(
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+            "Crystal/svc"
+        )
+        return if (publico.exists() || publico.mkdirs()) publico
+        else File(getExternalFilesDir(null), "Crystal/svc").apply { mkdirs() }
+    }
+
+    // Descarga la lista de cortes activa como CSV en Descargas/Crystal/svc para cargarla en otras
+    // apps de optimización. Una pieza por línea: alto,ancho,cantidad,etiqueta,seleccionado
+    // (seleccionado = 1 si la pieza está activa, 0 si no).
+    private fun descargarSvcPlanchas() {
+        val piezas = soloPiezasPlanchas(lista)
+        if (piezas.isEmpty()) {
+            Toast.makeText(this, "No hay medidas para descargar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val csv = buildString {
+            piezas.forEach { item ->
+                append(formatter.df1(item.alto)).append(',')
+                append(formatter.df1(item.ancho)).append(',')
+                append(item.cantidad).append(',')
+                append(item.info).append(',')
+                append(if (item.activo) 1 else 0)
+                append('\n')
+            }
+        }
+
+        val proyecto = proyectoOptimizadorActual.ifBlank { nombreListaActual }.ifBlank { "planchas" }
+        val nombreArchivo = "Planchas_${sanitizarNombreArchivo(proyecto)}_${
+            SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        }.csv"
+        val file = File(carpetaSvc(), nombreArchivo)
+
+        runCatching {
+            file.writeText(csv)
+            // Registrar en MediaStore: sin esto el archivo existe en disco pero los exploradores
+            // y apps que leen vía MediaStore (Files, Descargas) no lo muestran hasta un re-escaneo.
+            android.media.MediaScannerConnection.scanFile(
+                this, arrayOf(file.absolutePath), arrayOf("text/csv"), null
+            )
+            Toast.makeText(this, "Guardado en ${file.parentFile?.name}/${file.name}", Toast.LENGTH_LONG).show()
+        }.onFailure {
+            Toast.makeText(this, "No se pudo descargar SVC: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun construirPaquetePlanchaCrystal(texto: String, proyecto: String): JSONObject {
         val piezas = JSONArray().also { arr ->
             lista.forEach { item ->
@@ -1156,6 +1302,8 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
             val texto = contentResolver.openInputStream(uri)?.bufferedReader().use { it?.readText() }.orEmpty()
             val root = JSONObject(texto)
             if (root.optString("format") != FORMAT_PLANCHA_CRYSTAL) return
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                    "Importar una Plancha Crystal es una función de pago.")) return
             confirmarImportarPlanchaCrystal(root)
             intent.action = null
             intent.data = null
@@ -1292,6 +1440,109 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
                 }
             }
         }.trim()
+    }
+
+    // Recibe medidas de vidrio (ya convertidas a cm) desde MainActivity. Si ya hay una lista cargada
+    // (queda guardada en preferences entre sesiones), pregunta qué hacer en vez de sumar en silencio:
+    // sumar, reemplazar, o revisar antes lo que hay.
+    private fun cargarPiezasDesdeIntent(intent: Intent?) {
+        val json = intent?.getStringExtra("piezas_planchas_json") ?: return
+        val entrantes = runCatching { leerPiezasEntrantes(json) }.getOrElse {
+            Toast.makeText(this, "No se pudieron cargar las medidas: ${it.message}", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (entrantes.isEmpty()) return
+        intent.removeExtra("piezas_planchas_json")
+
+        if (lista.isEmpty()) {
+            aplicarPiezasEntrantes(entrantes, reemplazar = false)
+            return
+        }
+        preguntarComoCargarPiezas(entrantes)
+    }
+
+    private fun leerPiezasEntrantes(json: String): List<ItemListaPlanchas> {
+        val arr = JSONArray(json)
+        val piezas = mutableListOf<ItemListaPlanchas>()
+        for (idx in 0 until arr.length()) {
+            val o = arr.optJSONObject(idx) ?: continue
+            val ancho = o.optDouble("a", 0.0).toFloat()
+            val alto = o.optDouble("h", 0.0).toFloat()
+            if (ancho <= 0f || alto <= 0f) continue
+            piezas.add(
+                ItemListaPlanchas(
+                    ancho = ancho,
+                    alto = alto,
+                    cantidad = o.optInt("c", 1).coerceAtLeast(1),
+                    info = o.optString("r", "-")
+                )
+            )
+        }
+        return piezas
+    }
+
+    private fun preguntarComoCargarPiezas(entrantes: List<ItemListaPlanchas>) {
+        val uniActual = lista.sumOf { it.cantidad }
+        val uniEntrantes = entrantes.sumOf { it.cantidad }
+        // Todo el detalle va en el título y en las opciones: un AlertDialog con setMessage descarta
+        // la lista de setItems, así que no se pueden usar los dos a la vez.
+        val opciones = arrayOf(
+            "Sumar a lo que hay  →  ${lista.size + entrantes.size} filas",
+            "Reemplazar la lista actual  →  ${entrantes.size} filas",
+            "Ver la lista actual"
+        )
+        AlertDialog.Builder(this)
+            .setTitle(
+                "Llegan ${entrantes.size} fila(s) / $uniEntrantes uni\n" +
+                    "Ya hay ${lista.size} fila(s) / $uniActual uni"
+            )
+            .setItems(opciones) { _, cual ->
+                when (cual) {
+                    0 -> aplicarPiezasEntrantes(entrantes, reemplazar = false)
+                    1 -> confirmarReemplazarLista(entrantes)
+                    2 -> mostrarListaActual { preguntarComoCargarPiezas(entrantes) }
+                }
+            }
+            .setNegativeButton("Descartar lo que llega", null)
+            .show()
+    }
+
+    private fun confirmarReemplazarLista(entrantes: List<ItemListaPlanchas>) {
+        AlertDialog.Builder(this)
+            .setTitle("Reemplazar la lista")
+            .setMessage("Se borran las ${lista.size} fila(s) que hay ahora y quedan solo las ${entrantes.size} que llegan.")
+            .setPositiveButton("Reemplazar") { _, _ ->
+                aplicarPiezasEntrantes(entrantes, reemplazar = true)
+            }
+            .setNegativeButton("Volver") { _, _ -> preguntarComoCargarPiezas(entrantes) }
+            .show()
+    }
+
+    /** Muestra las medidas que hay ahora en la lista, para decidir con la información a la vista. */
+    private fun mostrarListaActual(alCerrar: () -> Unit) {
+        val filas = lista.map { item ->
+            val estado = if (item.activo) "" else "  [inactiva]"
+            "${item.textoMostrar(formatter)}$estado"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Lista actual (${lista.size} filas, ${lista.sumOf { it.cantidad }} uni)")
+            .setItems(filas, null)
+            .setPositiveButton("Volver") { _, _ -> alCerrar() }
+            .setOnCancelListener { alCerrar() }
+            .show()
+    }
+
+    private fun aplicarPiezasEntrantes(entrantes: List<ItemListaPlanchas>, reemplazar: Boolean) {
+        if (reemplazar) lista.clear()
+        lista.addAll(entrantes)
+        dataManager.guardarItems(lista)
+        actualizarListaItems()
+        val accion = if (reemplazar) "reemplazaron" else "cargaron"
+        Toast.makeText(
+            this,
+            "Se $accion ${entrantes.size} medida(s) en planchas (cm)",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun limpiarCamposEntrada() {

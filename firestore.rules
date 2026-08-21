@@ -1,0 +1,415 @@
+rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
+
+      // ===== Helpers generales =====
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      // Panel: crystalAdmin (admin / operador)
+      function isPanelRole() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid))
+          && get(/databases/$(database)/documents/admin_roles/$(request.auth.uid)).data.role in ["admin","operador"];
+      }
+
+      function isAdmin() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid))
+          && get(/databases/$(database)/documents/admin_roles/$(request.auth.uid)).data.role == "admin";
+      }
+
+      // CrystalServer (nodos capturadores) — USA SOLO admin_roles
+      function isServerRole() {
+        return isSignedIn()
+          && exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid))
+          && get(/databases/$(database)/documents/admin_roles/$(request.auth.uid)).data.role == "server";
+      }
+
+      // Usuario dueño de un recurso
+      function isOwner(uid) {
+        return isSignedIn() && request.auth.uid == uid;
+      }
+
+      // Custom claim `patronUid`: una TERMINAL autorizada lo lleva para actuar como su patrón en el
+      // chat (lo asigna la Cloud Function asignarClaimPatron). Devuelve '' si no lo tiene.
+      function claimPatron() {
+        return request.auth != null && 'patronUid' in request.auth.token
+          ? request.auth.token.patronUid : '';
+      }
+
+      // Modo desarrollo (bandera opcional en Firestore)
+      function isDevMode() {
+        return exists(/databases/$(database)/documents/config/flags)
+          && (get(/databases/$(database)/documents/config/flags).data.devMode == true);
+      }
+
+      // === Helpers específicos para usuarios/{uid} ===
+      function isOwnerProfileUpdate(uid) {
+        return isOwner(uid)
+          && !(
+            request.resource.data
+              .diff(resource.data)
+              .affectedKeys()
+              .hasAny(['wallet','wallet_saldo_cent','estado_servicio'])
+          );
+      }
+
+      // El cliente NUNCA activa un plan de pago por su cuenta: comprar FULL va por la Cloud
+      // Function `activarPlan` (admin SDK, ignora estas reglas). El cliente solo puede hacer dos
+      // cambios seguros sobre estado_servicio, y sin tocar el saldo/wallet:
+
+      // 1) Bajar a BASIC (recálculo al vencer). No otorga nada, así que siempre es seguro.
+      function isOwnerServiceDowngrade(uid) {
+        return isOwner(uid)
+          && !(
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['wallet','wallet_saldo_cent'])
+          )
+          && request.resource.data.estado_servicio.mode == 'BASIC';
+      }
+
+      // 2) Crear el trial inicial gratis: SOLO si antes no existía estado_servicio (una sola vez),
+      //    con mode FULL de origen TRIAL_1M y un vencimiento ACOTADO por el reloj del servidor
+      //    (máx. ~32 días). Impide el hueco de "FULL para siempre" y que se repita el trial.
+      function isOwnerTrialCreation(uid) {
+        return isOwner(uid)
+          && !('estado_servicio' in resource.data)
+          && !(
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['wallet','wallet_saldo_cent'])
+          )
+          && request.resource.data.estado_servicio.mode == 'FULL'
+          && request.resource.data.estado_servicio.source == 'TRIAL_1M'
+          && request.resource.data.estado_servicio.full_until is timestamp
+          && request.resource.data.estado_servicio.full_until < request.time + duration.value(32, 'd');
+      }
+
+      // ===== config =====
+      match /config/{docId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+
+      // ===== Roles (admin_roles) =====
+      match /admin_roles/{uid} {
+        allow read: if isAdmin();
+        allow write: if isAdmin();
+      }
+
+      // ===== Usuarios =====
+      match /usuarios/{uid} {
+        allow read: if isSignedIn() || isOwner(uid) || isPanelRole();
+        allow create: if isOwner(uid) || isPanelRole();
+        allow update: if
+          isPanelRole()
+          || isOwnerProfileUpdate(uid)
+          || isOwnerServiceDowngrade(uid)
+          || isOwnerTrialCreation(uid);
+        allow delete: if isAdmin();
+
+        match /dispositivos/{deviceId} {
+          allow read, write: if isOwner(uid) || isPanelRole();
+        }
+
+        match /security {
+          match /pin_reset {
+            allow read: if isOwner(uid) || isPanelRole();
+            allow write: if false;
+          }
+
+          match /walletPin {
+            allow read: if isOwner(uid) || isPanelRole();
+            allow create, update: if isOwner(uid) || isPanelRole();
+            allow delete: if isAdmin();
+          }
+
+          match /wallet_state {
+            allow read: if isOwner(uid) || isPanelRole();
+            allow create, update: if isOwner(uid) || isPanelRole();
+            allow delete: if isAdmin();
+          }
+
+          match /{secDocId} {
+            allow read: if isOwner(uid) || isPanelRole();
+            allow create: if (
+                isOwner(uid) && secDocId.matches("^walletPin_audit_.*$")
+              ) || isPanelRole();
+            allow update, delete: if isPanelRole();
+          }
+        }
+
+        // Subcolecciones de usuarios
+        match /{sub=**}/{doc} {
+          allow read: if isSignedIn() || isOwner(uid) || isPanelRole();
+          allow write: if isOwner(uid) || isPanelRole();
+        }
+      }
+
+      // ===== Vouchers (legacy) =====
+      match /vouchers/{voucherId} {
+        allow read: if isPanelRole()
+          || (isSignedIn() && resource != null && resource.data.uid == request.auth.uid);
+        allow create: if isSignedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.estado == "pendiente";
+        allow update: if isPanelRole() || isServerRole();
+        allow delete: if isAdmin();
+      }
+
+      // ===== Depósitos confirmados =====
+      match /depositos_confirmados/{codigo} {
+        allow read: if isPanelRole()
+          || (isSignedIn()
+              && resource != null
+              && "uid" in resource.data
+              && resource.data.uid == request.auth.uid);
+        // Solo CrystalServer (rol server) o el panel pueden confirmar un depósito. El usuario NO
+        // puede crearlo: así el pago solo se marca cuando el servidor detectó dinero real.
+        allow create, update: if isPanelRole() || isServerRole();
+        allow delete: if isAdmin();
+      }
+
+      // ===== CrystalServer: notificaciones Yape / PLIN =====
+      match /notificaciones_servidor/{deviceId} {
+        allow read: if isPanelRole() || isServerRole();
+        allow write: if isServerRole() || isPanelRole();
+
+        match /registros/{regId} {
+          allow read: if isPanelRole();
+          allow create, update, delete: if isServerRole() || isPanelRole();
+        }
+
+        match /ocurrencias/{occId} {
+          allow read: if isPanelRole();
+          allow create, update, delete: if isServerRole() || isPanelRole();
+        }
+      }
+
+      // ⭐ NUEVA REGLA: Permitir collectionGroup para "registros"
+      match /{path=**}/registros/{regId} {
+        allow read: if isPanelRole();
+      }
+
+      // Permitir collectionGroup para "ocurrencias" (crystalAdmin las lista globalmente)
+      match /{path=**}/ocurrencias/{occId} {
+        allow read: if isPanelRole();
+      }
+
+      // Permitir collectionGroup para "recargas" (el panel puede listar recargas de usuarios)
+      match /{path=**}/recargas/{recId} {
+        allow read: if isPanelRole();
+      }
+
+      // ===== RECARGAS PENDIENTES =====
+      match /recargas_pendientes/{recargaId} {
+        allow read: if isPanelRole();
+        allow create: if isPanelRole();
+        allow update: if isPanelRole();
+        allow delete: if isAdmin();
+      }
+
+      // ===== Reservas de recarga por monto único =====
+      // El dueño solo LEE su reserva (para escuchar cuándo se acredita). Escriben solo las
+      // Cloud Functions (admin), que crean la reserva y la marcan aplicada al llegar el pago.
+      match /reservas_recarga/{reservaId} {
+        allow read: if isPanelRole()
+          || (isSignedIn() && resource != null && resource.data.uid == request.auth.uid);
+        allow write: if isPanelRole();
+      }
+
+      // ===== Tickets de soporte =====
+      match /tickets/{ticketId} {
+        function ownerUid() {
+          return (resource != null && "ownerUid" in resource.data) ? resource.data.ownerUid
+                 : (request.resource.data.ownerUid);
+        }
+        allow read: if isPanelRole() || (isSignedIn() && ownerUid() == request.auth.uid);
+        allow create: if (isSignedIn() && request.resource.data.ownerUid == request.auth.uid) || isPanelRole();
+        allow update: if isPanelRole() || (isSignedIn() && ownerUid() == request.auth.uid);
+        allow delete: if isAdmin();
+
+        match /mensajes/{msgId} {
+          allow read: if isPanelRole()
+            || (isSignedIn()
+                && get(/databases/$(database)/documents/tickets/$(ticketId)).data.ownerUid == request.auth.uid);
+          allow create: if isPanelRole()
+            || (isSignedIn()
+                && get(/databases/$(database)/documents/tickets/$(ticketId)).data.ownerUid == request.auth.uid);
+          allow update, delete: if isAdmin();
+        }
+      }
+
+      // ===== Salud de servidores =====
+      match /servidores/{deviceId} {
+        allow read: if isPanelRole();
+        allow write: if isServerRole() || isPanelRole();
+        allow delete: if isAdmin();
+      }
+
+      // ⭐⭐⭐ NUEVA REGLA 1: Permitir leer y marcar códigos temporales sin autenticación ⭐⭐⭐
+      match /{path=**}/codigos_temporales/{codigoId} {
+        allow read: if true;
+        allow update: if request.resource.data.usado == true && resource.data.usado == false;
+        allow create, delete: if false;
+      }
+
+      // ⭐⭐⭐ REGLA: Terminales pueden leer su propio documento ⭐⭐⭐
+      match /{path=**}/autorizados/{deviceId} {
+        allow read: if true;
+        allow create: if
+          request.resource.data.deviceId == deviceId
+          && request.resource.data.rol == "TERMINAL"
+          && request.resource.data.activo == true;
+        allow update, delete: if false;
+      }
+
+      // Datos de negocio de una cuenta: los ve su dueño y las TERMINALES autorizadas de esa cuenta
+      // (llevan el custom claim `patronUid`, que asigna asignarClaimPatron al arrancar).
+      //
+      // Antes estas rutas decían solo `isSignedIn()`, así que CUALQUIER usuario con sesión podía
+      // leer la cartera de clientes y el catálogo de otro. Con pocos usuarios que se conocen no se
+      // nota; con muchos es una fuga entre competidores.
+      function esDeLaCuenta(uid) {
+        return isOwner(uid) || claimPatron() == uid;
+      }
+
+      // ===== CLIENTES (Base de datos local + Firestore) =====
+      match /usuarios/{uid}/clientes/{clienteId} {
+        allow read: if esDeLaCuenta(uid);
+        allow create: if esDeLaCuenta(uid)
+          && request.resource.data.keys().hasAll([
+            'id',
+            'numeroDocumento',
+            'nombreCompleto',
+            'ultimaActualizacion'
+          ])
+          && request.resource.data.id is string
+          && request.resource.data.numeroDocumento is string
+          && request.resource.data.nombreCompleto is string
+          && request.resource.data.ultimaActualizacion is number;
+        allow update: if esDeLaCuenta(uid)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.numeroDocumento is string
+          && request.resource.data.nombreCompleto is string
+          && request.resource.data.ultimaActualizacion is number;
+        allow delete: if esDeLaCuenta(uid);
+      }
+
+      // ===== PRODUCTOS (Base de datos local + Firestore) =====
+      match /usuarios/{uid}/productos/{productoId} {
+        // El precio se renombró a precioVenta (con precioCompra aparte), pero la regla seguía
+        // exigiendo el campo viejo `precio`: con eso, crear un producto quedaba RECHAZADO y la
+        // sincronización del catálogo no subía nada. Se acepta cualquiera de los dos nombres para
+        // que los datos antiguos sigan siendo válidos.
+        allow read: if esDeLaCuenta(uid);
+        allow create: if esDeLaCuenta(uid)
+          && request.resource.data.keys().hasAll([
+            'id',
+            'nombre',
+            'categoria',
+            'stock',
+            'ultimaActualizacion'
+          ])
+          && request.resource.data.keys().hasAny(['precio', 'precioVenta'])
+          && request.resource.data.id is string
+          && request.resource.data.nombre is string
+          && request.resource.data.categoria is string
+          && request.resource.data.stock is number
+          && request.resource.data.ultimaActualizacion is number;
+        allow update: if esDeLaCuenta(uid)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.nombre is string
+          && request.resource.data.stock is number
+          && request.resource.data.ultimaActualizacion is number;
+        allow delete: if esDeLaCuenta(uid);
+      }
+
+      // ===== CHATS (colección global) =====
+      match /chats/{chatId} {
+        function chatUsers() {
+          return resource.data.users;
+        }
+
+        function isChatParticipant() {
+          return isSignedIn() && (
+            request.auth.uid in chatUsers() || claimPatron() in chatUsers()
+          );
+        }
+
+        allow read: if isChatParticipant();
+
+        allow create: if isSignedIn()
+          && request.auth.uid in request.resource.data.users
+          && request.resource.data.keys().hasAll(['id', 'name', 'users', 'lastMsgDate'])
+          && request.resource.data.users is list
+          && request.resource.data.users.size() == 2;
+
+        allow update: if isChatParticipant()
+          && request.resource.data.users == resource.data.users;
+
+        allow delete: if isAdmin();
+
+        match /messages/{msgId} {
+          function chatUsersForMessage() {
+            return get(/databases/$(database)/documents/chats/$(chatId)).data.users;
+          }
+
+          function isMessageParticipant() {
+            return isSignedIn() && (
+              request.auth.uid in chatUsersForMessage() || claimPatron() in chatUsersForMessage()
+            );
+          }
+
+          function senderUid() {
+            return resource.data.from;
+          }
+
+          function senderCanEditOwnMessage() {
+            return isSignedIn()
+              && (senderUid() == request.auth.uid || senderUid() == claimPatron());
+          }
+
+          function participantCanOnlyUpdateStatus() {
+            return isMessageParticipant()
+              && request.resource.data.from == resource.data.from
+              && request.resource.data.fromUid == resource.data.fromUid
+              && request.resource.data.id == resource.data.id
+              && request.resource.data.dob == resource.data.dob
+              && request.resource.data.message == resource.data.message
+              && request.resource.data.tipo == resource.data.tipo
+              && request.resource.data.type == resource.data.type
+              && request.resource.data.nombreArchivo == resource.data.nombreArchivo
+              && request.resource.data.fileName == resource.data.fileName
+              && request.resource.data.schemaVersion == resource.data.schemaVersion
+              && request.resource.data.sourceApp == resource.data.sourceApp
+              && request.resource.data.targetApp == resource.data.targetApp
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'entregado',
+                'leido'
+              ]);
+          }
+
+          allow read: if isMessageParticipant();
+
+          allow create: if isMessageParticipant()
+            && (request.resource.data.from == request.auth.uid
+                || request.resource.data.from == claimPatron());
+
+          allow update: if senderCanEditOwnMessage() || participantCanOnlyUpdateStatus();
+
+          allow delete: if isSignedIn()
+            && (resource.data.from == request.auth.uid
+                || resource.data.from == claimPatron()
+                || isAdmin());
+        }
+      }
+
+      // ===== Regla catch-all (dev) =====
+      match /{document=**} {
+        allow read: if isDevMode() && isSignedIn();
+        allow write: if isDevMode() && isPanelRole();
+      }
+    }
+  }

@@ -1,4 +1,8 @@
-package crystal.crystal.taller
+package crystal.crystal.taller.mamparas
+import crystal.crystal.taller.ControladorColaMedidas
+import crystal.crystal.taller.MaterialesTexto
+import crystal.crystal.taller.ModoMasivoHelper
+import crystal.crystal.taller.FichaActivity
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -47,6 +51,7 @@ class MamparaPaflon : AppCompatActivity() {
   private lateinit var canvas: Canvas
 
   private lateinit var binding: ActivityMamparaPaflonBinding
+  private lateinit var controladorCola: ControladorColaMedidas
 
   // ==================== NUEVAS VARIABLES PARA SISTEMA DE PROYECTOS ====================R
   private lateinit var proyectoCallback: DialogosProyecto.ProyectoCallback
@@ -82,6 +87,7 @@ class MamparaPaflon : AppCompatActivity() {
     // ==================== LISTENERS ORIGINALES CON VERIFICACIONES DE PROYECTO ====================
 
     binding.btCalcular.setOnClickListener {
+      controladorCola.onCalcular()
       // Verificar proyecto activo antes de calcular
       if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) {
         return@setOnClickListener
@@ -94,25 +100,33 @@ class MamparaPaflon : AppCompatActivity() {
         referencias()
         diseno()
 
+        // Diseño simbólico: única fuente de geometría para todos los materiales.
+        val g = geomActual() ?: throw IllegalStateException("Sin geometría")
 
         binding.txMarco.text = "${df1(alto)} = 2\n${df1(anchoUtil())} = 1"
 
-        binding.txRiel.text = "${df1(anchoUtil())} = 1"
+        // Riel superior, uno por tramo (su propio ancho); se agrupan los de igual medida.
+        binding.txRiel.text = MaterialesTexto.agrupar(
+          g.tramos.joinToString("\n") { "${df1(g.anchoTramo(it))} = 1" }
+        )
 
-        binding.txTope.text = "${df1(anchoUtil())} = 2\n${altoHoja() - (jun+0.3)} = 1"
+        // Ang tope: igual al riel pero doble (2 por tramo). El parante de tope solo va donde la
+        // corrediza colinda con otra corrediza o el marco (no con un fijo).
+        binding.txTope.text = MaterialesTexto.agrupar(buildString {
+          g.tramos.forEach { append("${df1(g.anchoTramo(it))} = 2\n") }
+          if (g.nTopeParante > 0) append("${df1(altoHoja() - (jun + 0.3f))} = ${g.nTopeParante}")
+        })
 
-        binding.txPorta.text = "${altoHoja() - 1.5} = 2"
+        // Portafelpa: uno por cada lado de corrediza que colinda con un fijo (= uniones fijo-corrediza).
+        binding.txPorta.text = if (g.nUnionesFC > 0) "${df1(altoHoja() - 1.5f)} = ${g.nUnionesFC}" else ""
 
-        paflon()
-        vidrio()
-        junkillo()
-
-        binding.txCalculo.text = diviMocheta(ancho()).toString()
-        binding.btDiseno.text = anchoMocheta().toString()
+        paflon(g)
+        vidrio(g)
+        junkillo(g)
 
         // datos para archivar
         binding.txAncho.text= "${df1(ancho())} = 0r"
-        binding.txAlto.text= "${alto()} = 0r"
+        binding.txAlto.text= "${df1(alto())} = 0r"
         binding.txPuente.text= "${df1(altoHoja())} = 1r"
         binding.txDivisiones.text= "${df1(divisiones().toFloat())} = ${df1(divisiones().toFloat())}r "
         binding.txFijos.text= "${df1(nFijos().toFloat())} = ${df1(nFijos().toFloat())}r"
@@ -140,8 +154,13 @@ class MamparaPaflon : AppCompatActivity() {
     }
 
     binding.btArchivar.setOnClickListener {
+      // Candado de suscripción PRIMERO: bloquear antes de avanzar numeración o dar el toast.
+      if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeArchivar(),
+              "Archivar es una función de pago. Renueva para guardar tus proyectos.")) {
+        return@setOnClickListener
+      }
       if (binding.med1.text.toString().isEmpty()) {
-        Toast.makeText(this, "Haz nuevo cÃ¡lculo", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Haz nuevo cálculo", Toast.LENGTH_SHORT).show()
         return@setOnClickListener
       }
 
@@ -223,10 +242,38 @@ class MamparaPaflon : AppCompatActivity() {
     binding.imgV.setOnClickListener {
       startActivity(Intent(this, FichaActivity::class.java))
     }
+    // Igual que en puerta: con click largo sobre el diseño se abre DisenoActivity para verlo
+    // en grande (con zoom y paneo), reusando el plano cacheado.
+    binding.imgV.setOnLongClickListener {
+      val bmp = (binding.imgV.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+      if (bmp == null) {
+        Toast.makeText(this, "Calcule primero para ver el diseño", Toast.LENGTH_SHORT).show()
+        return@setOnLongClickListener true
+      }
+      crystal.crystal.taller.puerta.dibujo.DibujoPuerta.guardarPlanoEnCache(this, bmp)
+      val intent = android.content.Intent(this, crystal.crystal.Diseno.DisenoActivity::class.java).apply {
+        putExtra(crystal.crystal.Diseno.DisenoActivity.EXTRA_PLANO, true)
+        putExtra(crystal.crystal.Diseno.DisenoActivity.EXTRA_PLANO_TITULO, "Mampara paflón")
+      }
+      startActivity(intent)
+      true
+    }
 
     // Pre-carga desde presupuesto
     intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.med1.setText(df1(it)) }
     intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.med2.setText(df1(it)) }
+
+    controladorCola = ControladorColaMedidas(
+      activity = this,
+      claseActual = MamparaPaflon::class.java,
+      etAncho = binding.med1,
+      etAlto = binding.med2,
+      ivDiseno = binding.imgV,
+      onToqueSimple = { binding.imgV.performClick() },
+      onToqueLargo = { binding.imgV.performLongClick() },
+      formato = ::df1
+    )
+    controladorCola.inicializar()
   }
 
   // ==================== NUEVO MENÚ DE OPCIONES ====================
@@ -287,94 +334,76 @@ class MamparaPaflon : AppCompatActivity() {
 
   // ==================== FUNCIONES REDONDEOS (SIN CAMBIOS) ====================
   private fun df1(defo: Float): String {
-    return if (defo % 1 == 0f) {
-      // Si es un número entero, muestra sin decimales
-      defo.toInt().toString()
-    } else {
-      // Si tiene decimales, formatea con un decimal
-      "%.1f".format(defo).replace(",", ".")
-    }
+    // Se redondea a 1 decimal y, si queda entero (".0"), se muestra sin decimales. Se formatea
+    // primero para evitar que la imprecisión del Float (p. ej. 48.00001) deje el ".0".
+    val s = "%.1f".format(defo).replace(",", ".")
+    return if (s.endsWith(".0")) s.dropLast(2) else s
   }
   // FUNCIONES REFERENCIAS
 
   @SuppressLint("SetTextI18n")
   private fun referencias(){
-    val ancho = binding.med1.text.toString().toFloat()
-    val alto = binding.med2.text.toString().toFloat()
-    binding.tvReferencias.text= "Ancho ${df1(ancho)}; Alto ${df1(alto)}\n Altura de puente ${df1(altoHoja())}" +
-            "\nPartes ${divisiones()}"
+    val ancho = binding.med1.text.toString().toFloatOrNull() ?: return
+    val alto = binding.med2.text.toString().toFloatOrNull() ?: return
+    val hHoja = runCatching { altoHoja() }.getOrNull()
+    val puente = if (alto > hoja && hHoja != null) df1(hHoja) else "sin puente"
+    val divs = runCatching { divisiones() }.getOrNull()
+    val fijos = runCatching { nFijos() }.getOrNull()
+    val corr = runCatching { nCorredizas() }.getOrNull()
+    binding.tvReferencias.text = buildString {
+      append("Ancho ${df1(ancho)}   ·   Alto ${df1(alto)}\n")
+      append("Altura de puente: $puente\n")
+      append("Divisiones ${divs ?: "-"}   →   Fijos ${fijos ?: "-"} · Corredizas ${corr ?: "-"}")
+    }
   }
   //FUNCIONES ALUMINIOS
 
+  // ===== Diseño simbólico: única fuente de geometría (compartida con el dibujo) =====
+  private fun geomActual(): MamparaModulos? = descriptorActual()?.let { MamparaModulos.desde(it) }
+
   @SuppressLint("SetTextI18n")
-  private fun paflon() {
-    val z = if (paranteMocheta() > 0) "c" else "s"  // z será "c" o "s"
-
-    // Funciones helper para generar las líneas con menos repetición
-    fun lineAnchoUtil() = "${df1(anchoUtil())} = 1"
-    fun lineZocaloFijo(n: Int) = "${df1(zocaloFijo())} = $n"
-    fun lineZocaloCorrediza(n: Int) = "${df1(zocaloCorrediza())} = $n"
-    fun lineParanteFijo(n: Int) = "${df1(paranteFijo())} = $n"
-    fun lineParanteCorredizo(n: Int) = "${df1(paranteCorredizo())} = $n"
-    fun lineParanteMocheta() = "${df1(paranteMocheta())} = ${diviMocheta(ancho())-1}"
-
-    // Determinamos las líneas base dependiendo del número
-    val baseLines = when (divisiones()) {
-      1 -> listOf(lineAnchoUtil()) // caso "1s" y "1c"
-      2 -> listOf(                  // caso "2s" y "2c"
-        lineZocaloFijo(1),
-        lineZocaloCorrediza(2),
-        lineParanteFijo(1),
-        lineParanteCorredizo(2),
-      )
-      3 -> listOf(                  // solo aparece con "3c" en tu código
-        lineZocaloFijo(2),
-        lineZocaloCorrediza(2),
-        lineParanteCorredizo(2),
-        lineParanteFijo(2),
-      )
-      4 -> listOf(                  // solo aparece con "4c"
-        lineZocaloFijo(2),
-        "${df1(zocaloCorrediza())} = 4", // si quisieras uniformidad, podrías crear una función análoga lineZocaloCorrediza(4)
-        lineParanteFijo(2),
-        "${df1(paranteCorredizo())} = 4",
-      )
-      5 -> listOf(                  // solo aparece con "5c"
-        lineZocaloFijo(3),
-        "${df1(zocaloCorrediza())} = 4",
-        lineParanteFijo(4),
-        lineParanteCorredizo(4),
-      )
-      else -> emptyList()
+  private fun paflon(g: MamparaModulos) {
+    val lines = mutableListOf<String>()
+    // Zócalos (travesaños horizontales), todos del ancho del vidrio: el fijo lleva 1 (inferior) y
+    // la corrediza 2 (superior e inferior).
+    val nZocalos = g.nFijos + 2 * g.nCorredizas
+    if (nZocalos > 0) lines += "${df1(g.vidrioAncho)} = $nZocalos"
+    // Parantes de fijo (alto de hoja): uno por cada unión fijo-corrediza.
+    if (g.nUnionesFC > 0) lines += "${df1(paranteFijo())} = ${g.nUnionesFC}"
+    // Parantes de corrediza (alto de hoja - 2.1): dos por corrediza.
+    if (g.nCorredizas > 0) lines += "${df1(paranteCorredizo())} = ${2 * g.nCorredizas}"
+    // Parante estructural de paflón entre tramos (de piso a techo): largo = alto - marco.
+    if (g.nParantesTramo > 0) lines += "${df1(alto() - marco())} = ${g.nParantesTramo}"
+    // Puente (mochetas): divisores verticales por tramo (el riel base va en txRiel).
+    if (paranteMocheta() > 0f) {
+      val nDiv = g.tramos.sumOf { (diviMocheta(g.anchoTramo(it)) - 1).coerceAtLeast(0) }
+      if (nDiv > 0) lines += "${df1(paranteMocheta())} = $nDiv"
     }
-
-    // Si es "c" agregamos la línea extra
-    val finalLines = if (z == "c"&& diviMocheta(ancho())!=1) baseLines + lineAnchoUtil() + lineParanteMocheta()
-    else if (z == "c"&& diviMocheta(ancho())==1) baseLines + lineAnchoUtil()
-    else baseLines
-
-    // Unimos todas las líneas en un solo texto
-    binding.txPaflon.text = finalLines.joinToString("\n")
+    binding.txPaflon.text = MaterialesTexto.agrupar(lines.joinToString("\n"))
   }
+
   @SuppressLint("SetTextI18n")
-  private fun junkillo(){
-    val jun = binding.etJunki.text.toString().toFloat()
-    val bast = binding.etBasti.text.toString().toFloat()
-    if (jun == 0f) {
-      binding.txJunki.text = "${df1(zocaloFijo())} = ${nFijos()*2}" +
-              "\n${df1(zocaloCorrediza())} = 4" +
-              "\n${df1(paranteCorredizo() - (2 * bast))} = 4" +
-              "\n${df1(paranteFijo() - bast)} = 4" +
-              "\n${df1(paranteMocheta())} = 4" +
-              "\n${df1(anchoMocheta())}= 4"
-    } else {
-      binding.txJunki.text = "${df1(zocaloFijo())} = ${nFijos()*2}" +
-              "\n${df1(zocaloCorrediza())} = ${nCorredizas()*2}" +
-              "\n${df1((paranteCorredizo() - (2 * bast)) - (2 * jun))} = ${nCorredizas()*2}" +
-              "\n${df1((paranteFijo() - bast) - (2 * jun))} = ${nFijos()*2}" +
-              "\n${df1(paranteMocheta() - (2 * jun))} = ${diviMocheta(anchoUtil())*2}"+
-              "\n${df1(anchoMocheta())}= ${diviMocheta(ancho())*2}"
+  private fun junkillo(g: MamparaModulos) {
+    val jun = binding.etJunki.text.toString().toFloatOrNull() ?: 0f
+    val bast = g.bastidor
+    val lines = mutableListOf<String>()
+    // Horizontales (ancho del vidrio): 2 por hoja.
+    val nHoriz = 2 * (g.nFijos + g.nCorredizas)
+    if (nHoriz > 0) lines += "${df1(g.vidrioAncho)} = $nHoriz"
+    // Verticales (alto del vidrio menos junquillo): 2 por hoja.
+    if (g.nFijos > 0) lines += "${df1((paranteFijo() - bast) - 2 * jun)} = ${2 * g.nFijos}"
+    if (g.nCorredizas > 0) lines += "${df1((paranteCorredizo() - 2 * bast) - 2 * jun)} = ${2 * g.nCorredizas}"
+    // Mocheta (puente): verticales (alto) y horizontales (ancho) por tramo.
+    if (paranteMocheta() > 0f) {
+      val nMoTotal = g.tramos.sumOf { diviMocheta(g.anchoTramo(it)).coerceAtLeast(1) }
+      lines += "${df1(paranteMocheta() - 2 * jun)} = ${2 * nMoTotal}"
+      g.tramos.forEach { tramo ->
+        val nMo = diviMocheta(g.anchoTramo(tramo)).coerceAtLeast(1)
+        val anchoMoch = (g.anchoTramo(tramo) - pAlt * (nMo - 1)) / nMo
+        lines += "${df1(anchoMoch)} = ${2 * nMo}"
+      }
     }
+    binding.txJunki.text = MaterialesTexto.agrupar(lines.joinToString("\n"))
   }
   private fun zocaloFijo(): Float {
     return when(divisiones()){
@@ -422,39 +451,22 @@ class MamparaPaflon : AppCompatActivity() {
 
   //FUNCIONES VIDRIOS
   @SuppressLint("SetTextI18n")
-  private fun vidrio(){
-    val z = if (paranteMocheta() > 0) "c" else "s"
-    val control = "${divisiones()}$z"
-    binding.txVidrio.text = when (control){
-      "1c"->
-        "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
-                "${df1(paranteMocheta() - 0.6f)} x " +
-                "${df1(anchoMocheta()-0.6f)} = ${diviMocheta(ancho())}"
-      "1s"->
-        "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n"
-      "2c"->
-        "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
-                "${df1(zocaloCorrediza() - 0.6f)} x" +
-                " ${df1(altoVidrioCorredizo())} = ${nCorredizas()}\n" +
-                "${df1(paranteMocheta() - 0.6f)} x " +
-                "${df1(anchoMocheta()-0.6f)} = ${diviMocheta(ancho())}"
-      "2s"->
-        "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
-                "${df1(zocaloCorrediza() - 0.6f)} x" +
-                " ${df1(altoVidrioCorredizo())} = ${nCorredizas()}\n"
-
-      else -> {
-        val base = "${df1(zocaloFijo() - 0.6f)} x ${df1(altoVidrioFijo())} = ${nFijos()}\n" +
-                "${df1(zocaloCorrediza() - 0.6f)} x ${df1(altoVidrioCorredizo())} = ${nCorredizas()}\n"
-
-        if (paranteMocheta() > 0) {
-          base + "${df1(paranteMocheta() - 0.6f)} x " +
-                  "${df1(anchoMocheta()-0.6f)} = ${diviMocheta(ancho())}"
-        } else {
-          base
-        }
+  private fun vidrio(g: MamparaModulos) {
+    val vw = g.vidrioAncho - 0.6f
+    val lines = mutableListOf<String>()
+    // Vidrios de hoja: mismo ancho para todos; alto distinto fijo/corrediza.
+    if (g.nFijos > 0) lines += "${df1(vw)} x ${df1(altoVidrioFijo())} = ${g.nFijos}"
+    if (g.nCorredizas > 0) lines += "${df1(vw)} x ${df1(altoVidrioCorredizo())} = ${g.nCorredizas}"
+    // Vidrios de mocheta (puente), por tramo.
+    if (paranteMocheta() > 0f) {
+      val altoMoch = paranteMocheta() - 0.6f
+      g.tramos.forEach { tramo ->
+        val nMo = diviMocheta(g.anchoTramo(tramo)).coerceAtLeast(1)
+        val anchoMoch = (g.anchoTramo(tramo) - pAlt * (nMo - 1)) / nMo - 0.6f
+        lines += "${df1(anchoMoch)} x ${df1(altoMoch)} = $nMo"
       }
     }
+    binding.txVidrio.text = MaterialesTexto.agrupar(lines.joinToString("\n"))
   }
   private fun altoVidrioFijo(): Float {
     val bastidor= binding.etBasti.text.toString().toFloat()
@@ -482,6 +494,7 @@ class MamparaPaflon : AppCompatActivity() {
       archivarMapas()
       binding.med1.setText("")
       binding.med2.setText("")
+      controladorCola.ofrecerSiguiente()
     }
   }
 
@@ -519,7 +532,7 @@ class MamparaPaflon : AppCompatActivity() {
     contenedor.addView(etObs)
 
     AlertDialog.Builder(this)
-      .setTitle("Metadatos de producciÃ³n")
+      .setTitle("Metadatos de producción")
       .setView(contenedor)
       .setPositiveButton("Guardar y archivar") { _, _ ->
         metaColorAluminio = etColor.text?.toString()?.trim().orEmpty()
@@ -651,6 +664,13 @@ class MamparaPaflon : AppCompatActivity() {
       mapListas.getOrPut("DisenoSimbolicoV2") { mutableListOf() }
         .add(mutableListOf(paqueteV2, "", identificadorPaquete))
 
+      // Diseño de la mampara como descriptor simbólico: el recycler (FichaActivity) regenera el
+      // dibujo con MamparaPaflonRender, sin guardar PNG.
+      descriptorActual()?.let { dsc ->
+        mapListas.getOrPut(MamparaPaflonDescriptor.CLAVE) { mutableListOf() }
+          .add(mutableListOf(dsc.serializar(), "", identificadorPaquete))
+      }
+
       ProyectoManager.actualizarContadorPorPrefijo(this, prefijo, siguienteNumero)
     }
 
@@ -667,105 +687,25 @@ class MamparaPaflon : AppCompatActivity() {
   }
 
   //FUNCIONES DE DISEÑO (SIN CAMBIOS)
+  // El diseño se arma como descriptor simbólico y se regenera con MamparaPaflonRender (igual que
+  // puerta/Nova): no se guarda PNG, así el archivado siempre se ve con la última lógica de dibujo.
   private fun diseno() {
-    val anchoCm = ancho()
-    val altoCm = alto()
-    val altoHojaCm = altoHoja()
-    val nPaneles = divisiones().coerceAtLeast(1)
-    val nMochetas = if (paranteMocheta() > 0f) diviMocheta(anchoCm).coerceAtLeast(1) else 0
+    val d = descriptorActual() ?: return
+    MamparaPaflonRender.dibujar(this, d)?.let { binding.imgV.setImageBitmap(it) }
+  }
 
-    val bmpW = (anchoCm * 3f).toInt().coerceAtLeast(600)
-    val bmpH = (altoCm * 3f).toInt().coerceAtLeast(600)
-    val escala = minOf(bmpW / anchoCm, bmpH / altoCm)
-    val w = anchoCm * escala
-    val h = altoCm * escala
-    val x0 = (bmpW - w) / 2f
-    val y0 = (bmpH - h) / 2f
-    val marcoPx = marco() * escala
-    val bastidorPx = (binding.etBasti.text.toString().toFloatOrNull() ?: pAnch) * escala
-    val rielPx = pAlt * escala
-    val altoHojaPx = altoHojaCm * escala
-
-    val bitmap = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
-    val c = Canvas(bitmap)
-    c.drawColor(Color.WHITE)
-
-    val pMarco = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      color = Color.rgb(120, 120, 120)
-      style = Paint.Style.FILL
-    }
-    val pPaflon = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      color = ContextCompat.getColor(this@MamparaPaflon, R.color.aluminio)
-      style = Paint.Style.FILL
-    }
-    val pVidrio = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      color = Color.rgb(235, 248, 255)
-      style = Paint.Style.FILL
-    }
-    val pLinea = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      color = Color.BLACK
-      style = Paint.Style.STROKE
-      strokeWidth = 2.5f
-    }
-    val pLineaFina = Paint(pLinea).apply { strokeWidth = 1.5f }
-
-    fun rect(r: RectF, paint: Paint) {
-      c.drawRect(r, paint)
-      c.drawRect(r, pLinea)
-    }
-
-    c.drawRect(RectF(x0, y0, x0 + w, y0 + h), pLinea)
-    rect(RectF(x0, y0, x0 + marcoPx, y0 + h), pMarco)
-    rect(RectF(x0 + w - marcoPx, y0, x0 + w, y0 + h), pMarco)
-    rect(RectF(x0 + marcoPx, y0, x0 + w - marcoPx, y0 + marcoPx), pMarco)
-
-    val hojaBottom = y0 + h
-    val hojaTop = (hojaBottom - altoHojaPx).coerceAtLeast(y0 + marcoPx + rielPx)
-    val vanoLeft = x0 + marcoPx
-    val vanoRight = x0 + w - marcoPx
-
-    if (nMochetas > 0 && hojaTop > y0 + marcoPx + rielPx) {
-      val mTop = y0 + marcoPx
-      val mBottom = hojaTop - rielPx
-      val mW = (vanoRight - vanoLeft - (nMochetas - 1) * rielPx) / nMochetas
-      var x = vanoLeft
-      repeat(nMochetas) { idx ->
-        val vidrio = RectF(x, mTop, x + mW, mBottom)
-        c.drawRect(vidrio, pVidrio)
-        c.drawRect(vidrio, pLineaFina)
-        if (idx < nMochetas - 1) {
-          rect(RectF(x + mW, mTop, x + mW + rielPx, mBottom), pPaflon)
-        }
-        x += mW + rielPx
-      }
-      rect(RectF(vanoLeft, mBottom, vanoRight, mBottom + rielPx), pPaflon)
-    }
-
-    rect(RectF(vanoLeft, hojaTop, vanoRight, hojaTop + rielPx), pPaflon)
-    rect(RectF(vanoLeft, hojaBottom - rielPx, vanoRight, hojaBottom), pPaflon)
-
-    val panelAreaTop = hojaTop + rielPx
-    val panelAreaBottom = hojaBottom - rielPx
-    val panelW = (vanoRight - vanoLeft) / nPaneles
-    for (idx in 0 until nPaneles) {
-      val left = vanoLeft + idx * panelW
-      val right = left + panelW
-      val offset = if (idx % 2 == 0) 0f else minOf(bastidorPx * 0.35f, panelW * 0.12f)
-      val panel = RectF(left + offset, panelAreaTop, (right + offset).coerceAtMost(vanoRight), panelAreaBottom)
-      if (panel.width() <= bastidorPx * 2f || panel.height() <= bastidorPx * 2f) continue
-
-      c.drawRect(panel, pVidrio)
-      rect(RectF(panel.left, panel.top, panel.left + bastidorPx, panel.bottom), pPaflon)
-      rect(RectF(panel.right - bastidorPx, panel.top, panel.right, panel.bottom), pPaflon)
-      rect(RectF(panel.left + bastidorPx, panel.top, panel.right - bastidorPx, panel.top + bastidorPx), pPaflon)
-      rect(RectF(panel.left + bastidorPx, panel.bottom - bastidorPx, panel.right - bastidorPx, panel.bottom), pPaflon)
-      c.drawRect(panel, pLinea)
-      if (idx % 2 == 1) {
-        c.drawLine(panel.left + bastidorPx * 0.5f, panel.top, panel.left + bastidorPx * 0.5f, panel.bottom, pLineaFina)
-      }
-    }
-
-    binding.imgV.setImageBitmap(bitmap)
+  private fun descriptorActual(): MamparaPaflonDescriptor? {
+    val anchoVal = binding.med1.text.toString().toFloatOrNull() ?: return null
+    val altoVal = binding.med2.text.toString().toFloatOrNull() ?: return null
+    return MamparaPaflonDescriptor(
+      ancho = anchoVal,
+      alto = altoVal,
+      altoHoja = runCatching { altoHoja() }.getOrNull() ?: return null,
+      divisiones = (runCatching { divisiones() }.getOrNull() ?: 1).coerceAtLeast(1),
+      bastidor = binding.etBasti.text.toString().toFloatOrNull() ?: pAnch,
+      marco = marco(),
+      nMochetas = binding.etNmochetas.text.toString().toIntOrNull() ?: 0
+    )
   }
 
   private fun disenoAnterior() {

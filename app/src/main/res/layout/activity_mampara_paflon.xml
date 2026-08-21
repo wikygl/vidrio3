@@ -57,7 +57,7 @@
                         android:layout_height="match_parent"
                         android:layout_margin="3.6dp"
                         android:layout_weight="1"
-                        app:srcCompat="@drawable/ic_mamparafccfss"
+                        app:srcCompat="@drawable/mampara"
                         tools:ignore="ContentDescription,ImageContrastCheck" />
 
                 </LinearLayout>
@@ -231,7 +231,7 @@
                                 android:layout_marginStart="3dp"
                                 android:layout_weight="0.81"
                                 android:paddingStart="6dp"
-                                android:text="@string/bastidor"
+                                android:text="Paflón"
                                 tools:ignore="RtlSymmetry" />
 
                             <EditText
@@ -370,8 +370,10 @@
                         <TextView
                             android:id="@+id/tvReferencias"
                             android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:layout_weight="0.5"
+                            android:layout_height="wrap_content"
+                            android:minLines="3"
+                            android:padding="4dp"
+                            android:textSize="13sp"
                             android:gravity="center" />
 
                         <TextView
@@ -406,7 +408,7 @@
                                         android:layout_width="match_parent"
                                         android:layout_height="wrap_content"
                                         android:layout_weight="1"
-                                        android:text="marco 3&quot;" />
+                                        android:text="marco" />
 
                                     <TextView
                                         android:id="@+id/txMarco"
@@ -429,7 +431,7 @@
                                         android:layout_width="match_parent"
                                         android:layout_height="wrap_content"
                                         android:layout_weight="1"
-                                        android:text="@string/bastidor" />
+                                        android:text="Paflón" />
 
                                     <TextView
                                         android:id="@+id/txPaflon"

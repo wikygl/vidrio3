@@ -161,6 +161,20 @@
                     tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
 
                 <Button
+                    android:id="@+id/btnCortes"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/naranja"
+                    android:minWidth="96dp"
+                    android:text="cortes"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
+
+                <Button
                     android:id="@+id/btnDiaOk"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"

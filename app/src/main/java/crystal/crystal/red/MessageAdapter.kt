@@ -19,7 +19,8 @@ class MessageAdapter(
     private val usuario: String,
     private val onEditar: (Message) -> Unit,
     private val onEliminar: (Message) -> Unit,
-    private val onMostrarArchivo: (Message) -> Unit
+    private val onMostrarArchivo: (Message) -> Unit,
+    private val onOpciones: (Message, Boolean) -> Unit = { _, _ -> }
 ) : RecyclerView.Adapter<MessageAdapter.MessageViewHolder>() {
 
     private val mensajes = mutableListOf<Message>()
@@ -43,9 +44,30 @@ class MessageAdapter(
 
     override fun getItemCount(): Int = mensajes.size
 
+    /**
+     * Tipo con el que se pinta el mensaje. Los archivos Crystal enviados antes de que su tipo se
+     * detectara llegaron marcados como "texto": se mostraban como el enlace pelado de Firebase y no
+     * se podían abrir. Se reconocen por la extensión del archivo para que sigan sirviendo.
+     */
+    private fun tipoEfectivo(mensaje: Message): String {
+        if (mensaje.tipo != "texto") return mensaje.tipo
+        val nombre = mensaje.nombreArchivo
+        if (nombre.isBlank()) return mensaje.tipo
+        return when {
+            nombre.endsWith(".crystalproyecto", ignoreCase = true) -> "proyecto_crystal"
+            nombre.endsWith(".crystalmedidas", ignoreCase = true) -> "medidas_crystal"
+            nombre.endsWith(".crystalcorte", ignoreCase = true) -> "corte_crystal"
+            nombre.endsWith(".crystalplancha", ignoreCase = true) -> "plancha_crystal"
+            else -> mensaje.tipo
+        }
+    }
+
     @SuppressLint("SetTextI18n")
     override fun onBindViewHolder(holder: MessageViewHolder, position: Int) {
         val mensaje = mensajes[position]
+        // No se copia el mensaje (perdería hasPendingWrites, que no viaja en el constructor): el tipo
+        // corregido se usa como variable local para pintar.
+        val tipo = tipoEfectivo(mensaje)
         val b = holder.binding
         val esMio = mensaje.from == usuario
 
@@ -69,7 +91,7 @@ class MessageAdapter(
         contenedor.background = null
         contenedor.backgroundTintList = null
 
-        if (mensaje.tipo in listOf("imagen", "video", "audio", "pdf", "presupuesto", "archivo", "medidas_crystal", "corte_crystal", "plancha_crystal")) {
+        if (tipo in listOf("imagen", "video", "audio", "pdf", "presupuesto", "archivo", "medidas_crystal", "corte_crystal", "plancha_crystal", "proyecto_crystal")) {
             if (esMio) {
                 contenedor.setBackgroundResource(R.drawable.corner)
                 contenedor.backgroundTintList =
@@ -85,7 +107,7 @@ class MessageAdapter(
             textView.visibility = View.VISIBLE
             textView.text = "mensaje borrado."
         } else {
-            when (mensaje.tipo) {
+            when (tipo) {
                 "texto", "medidas" -> {
                     textView.visibility = View.VISIBLE
                     val parsedMeasures = MeasuresMessageCodec.parse(mensaje.message)
@@ -130,22 +152,27 @@ class MessageAdapter(
                         .into(imageView)
                     frameLayout.setOnClickListener { onMostrarArchivo(mensaje) }
                 }
-                "audio", "pdf", "archivo", "medidas_crystal", "corte_crystal", "plancha_crystal" -> {
+                "audio", "pdf", "archivo", "medidas_crystal", "corte_crystal", "plancha_crystal", "proyecto_crystal" -> {
                     fileButton.visibility = View.VISIBLE
                     val nombreMostrar = mensaje.nombreArchivo.takeIf { it.isNotEmpty() }
                         ?: extraerNombreDesdeUrl(mensaje.message)
-                    fileButton.text = when (mensaje.tipo) {
+                    fileButton.text = when (tipo) {
                         "audio" -> "Musica $nombreMostrar"
                         "pdf" -> "PDF $nombreMostrar"
                         "medidas_crystal" -> "Medidas Crystal\n$nombreMostrar\nToca para abrir"
                         "corte_crystal" -> "Corte Crystal\n$nombreMostrar\nToca para abrir"
                         "plancha_crystal" -> "Corte Plancha Crystal\n$nombreMostrar\nToca para abrir"
+                        "proyecto_crystal" -> "Proyecto Crystal\n$nombreMostrar\nToca para abrir"
+                        // Los mensajes viejos llegaron como "archivo" (o incluso como texto) porque el
+                        // tipo no se detectaba; se reconocen por la extensión para que sigan abriendo.
                         "archivo" -> if (nombreMostrar.endsWith(".crystalmedidas", ignoreCase = true)) {
                             "Medidas Crystal\n$nombreMostrar\nToca para abrir"
                         } else if (nombreMostrar.endsWith(".crystalcorte", ignoreCase = true)) {
                             "Corte Crystal\n$nombreMostrar\nToca para abrir"
                         } else if (nombreMostrar.endsWith(".crystalplancha", ignoreCase = true)) {
                             "Corte Plancha Crystal\n$nombreMostrar\nToca para abrir"
+                        } else if (nombreMostrar.endsWith(".crystalproyecto", ignoreCase = true)) {
+                            "Proyecto Crystal\n$nombreMostrar\nToca para abrir"
                         } else {
                             "Archivo $nombreMostrar"
                         }
@@ -207,6 +234,18 @@ class MessageAdapter(
             check.visibility = View.GONE
         }
 
+        // Indicador de pedido en línea (en espera / atendido).
+        if (mensaje.esPedido && !mensaje.deletedForEveryone) {
+            val tag = when (mensaje.estadoPedido) {
+                "en_espera" -> "🛒 PEDIDO · EN ESPERA"
+                "cogido" -> "🛒 PEDIDO · Atendido por ${mensaje.atendidoNombre.ifBlank { "alguien" }}"
+                else -> "🛒 PEDIDO"
+            }
+            textView.visibility = View.VISIBLE
+            val base = textView.text?.toString().orEmpty()
+            textView.text = if (base.isBlank()) tag else "$tag\n$base"
+        }
+
         attachLongPressMenu(holder.itemView, mensaje, esMio)
         attachLongPressMenu(contenedor, mensaje, esMio)
         attachLongPressMenu(textView, mensaje, esMio)
@@ -215,28 +254,9 @@ class MessageAdapter(
     }
 
     private fun attachLongPressMenu(target: View, mensaje: Message, esMio: Boolean) {
-        target.setOnLongClickListener { v ->
-            if (!esMio) return@setOnLongClickListener false
-            val popup = PopupMenu(v.context, v)
-            popup.menuInflater.inflate(R.menu.menu_mensaje, popup.menu)
-            popup.menu.findItem(R.id.action_editar).isVisible =
-                !mensaje.deletedForEveryone && mensaje.tipo !in listOf("presupuesto", "medidas")
-            popup.setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    R.id.action_editar -> {
-                        if (!mensaje.deletedForEveryone && mensaje.tipo !in listOf("presupuesto", "medidas")) {
-                            onEditar(mensaje)
-                        }
-                        true
-                    }
-                    R.id.action_eliminar -> {
-                        onEliminar(mensaje)
-                        true
-                    }
-                    else -> false
-                }
-            }
-            popup.show()
+        target.setOnLongClickListener {
+            if (mensaje.deletedForEveryone) return@setOnLongClickListener false
+            onOpciones(mensaje, esMio)
             true
         }
     }

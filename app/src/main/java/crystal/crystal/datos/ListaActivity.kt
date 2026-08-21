@@ -5,9 +5,13 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.bumptech.glide.Glide
+import com.google.firebase.auth.FirebaseAuth
 import crystal.crystal.databinding.ActivityListaBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +27,8 @@ class ListaActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_IMAGES = 410
+        private const val MENU_RESPALDAR = 9001
+        private const val MENU_RESTAURAR = 9002
     }
 
     @SuppressLint("SetTextI18n")
@@ -48,7 +54,7 @@ class ListaActivity : AppCompatActivity() {
         binding.btnImages.setOnClickListener { seleccionarImagenes() }
 
         actualizarResumenImagenes()
-        listAllProducts()
+        cargarInicial()
     }
 
     private fun addProduct() {
@@ -60,20 +66,25 @@ class ListaActivity : AppCompatActivity() {
                 clearCrudFields()
                 listAllProducts()
             }
+            BaseLocalBackup.respaldarProducto(this@ListaActivity, product)  // auto-respaldo
         }
     }
 
     private fun updateProduct() {
         val product = leerProductoFormulario() ?: return
+        val anterior = selectedProduct
         CoroutineScope(Dispatchers.IO).launch {
             val dao = DatabaseProvider.getInstance(this@ListaActivity).productDao()
-            selectedProduct?.takeIf { it.nombre != product.nombre }?.let { dao.deleteProduct(it) }
+            anterior?.takeIf { it.nombre != product.nombre }?.let { dao.deleteProduct(it) }
             dao.insertProduct(product)
             withContext(Dispatchers.Main) {
                 Toast.makeText(this@ListaActivity, "Actualizado", Toast.LENGTH_SHORT).show()
                 clearCrudFields()
                 listAllProducts()
             }
+            // Auto-respaldo: si se renombró, borra el remoto viejo; luego respalda el nuevo.
+            anterior?.takeIf { it.nombre != product.nombre }?.let { BaseLocalBackup.eliminarRemoto(it.nombre) }
+            BaseLocalBackup.respaldarProducto(this@ListaActivity, product)
         }
     }
 
@@ -100,6 +111,7 @@ class ListaActivity : AppCompatActivity() {
                             clearCrudFields()
                             listAllProducts()
                         }
+                        BaseLocalBackup.eliminarRemoto(productToDelete.nombre)  // auto-respaldo
                     }
                 }
             }
@@ -210,8 +222,9 @@ class ListaActivity : AppCompatActivity() {
             "Imagenes seleccionadas: ${selectedImages.size}"
         }
         if (selectedImages.isNotEmpty()) {
-            binding.img.setImageURI(Uri.parse(selectedImages.first()))
+            Glide.with(this).load(Uri.parse(selectedImages.first())).into(binding.img)
         } else {
+            Glide.with(this).clear(binding.img)
             binding.img.setImageDrawable(null)
         }
     }
@@ -225,5 +238,76 @@ class ListaActivity : AppCompatActivity() {
         binding.tvNombre.text = "Sin seleccion"
         binding.tvPrecio.text = "S/ 0.00"
         actualizarResumenImagenes()
+    }
+
+    // ==================== RESPALDO EN FIREBASE ====================
+
+    /** Carga inicial: si la base local está vacía y hay sesión, la restaura desde la nube. */
+    private fun cargarInicial() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val dao = DatabaseProvider.getInstance(this@ListaActivity).productDao()
+            var productos = dao.getAllProducts()
+            var restaurados = 0
+            if (productos.isEmpty() && FirebaseAuth.getInstance().currentUser != null) {
+                restaurados = BaseLocalBackup.restaurar(this@ListaActivity)
+                if (restaurados > 0) productos = dao.getAllProducts()
+            }
+            withContext(Dispatchers.Main) {
+                productAdapter.setData(productos)
+                if (restaurados > 0) {
+                    Toast.makeText(this@ListaActivity, "Restaurados $restaurados productos desde la nube", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menu?.add(0, MENU_RESPALDAR, 0, "☁ Respaldar en nube")
+        menu?.add(0, MENU_RESTAURAR, 1, "⬇ Restaurar de nube")
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            MENU_RESPALDAR -> { respaldarTodoManual(); true }
+            MENU_RESTAURAR -> { restaurarManual(); true }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun respaldarTodoManual() {
+        if (FirebaseAuth.getInstance().currentUser == null) {
+            Toast.makeText(this, "Inicia sesión para respaldar", Toast.LENGTH_SHORT).show(); return
+        }
+        Toast.makeText(this, "Respaldando…", Toast.LENGTH_SHORT).show()
+        CoroutineScope(Dispatchers.IO).launch {
+            val n = BaseLocalBackup.respaldarTodo(this@ListaActivity)
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    this@ListaActivity,
+                    if (n >= 0) "Respaldados $n productos" else "No se pudo respaldar",
+                    Toast.LENGTH_SHORT
+                ).show()
+                listAllProducts()
+            }
+        }
+    }
+
+    private fun restaurarManual() {
+        if (FirebaseAuth.getInstance().currentUser == null) {
+            Toast.makeText(this, "Inicia sesión para restaurar", Toast.LENGTH_SHORT).show(); return
+        }
+        Toast.makeText(this, "Restaurando…", Toast.LENGTH_SHORT).show()
+        CoroutineScope(Dispatchers.IO).launch {
+            val n = BaseLocalBackup.restaurar(this@ListaActivity)
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    this@ListaActivity,
+                    if (n >= 0) "Restaurados $n productos" else "No se pudo restaurar",
+                    Toast.LENGTH_SHORT
+                ).show()
+                listAllProducts()
+            }
+        }
     }
 }

@@ -12,7 +12,7 @@ import crystal.crystal.casilla.ProyectoManager
 
 /**
  * Clase helper para funciones de UI comunes entre NovaApa y NovaIna
- * Mantiene la lÃ³gica original pero centralizada
+ * Mantiene la lógica original pero centralizada
  */
 object NovaUIHelper {
 
@@ -57,16 +57,16 @@ object NovaUIHelper {
         }
     }
 
-    // ==================== FUNCIONES DE DISEÃ‘O ====================
+    // ==================== FUNCIONES DE DISEÑO ====================
 
 
     fun obtenerNombreDiseno(divisiones: Int, siNoMoch: Int, tipoVentana: String = "apa", prefijo: String = "ic_fichad"): String {
-        // LÃ“GICA ORIGINAL: siNoMoch = 1 â†’ sin sufijo, siNoMoch = 0 â†’ sufijo "c"
+        // LÓGICA ORIGINAL: siNoMoch = 1 → sin sufijo, siNoMoch = 0 → sufijo "c"
         // Esto es igual para AMBAS ventanas (NovaApa y NovaIna)
 
         return when (siNoMoch) {
             1 -> {
-                // Con mocheta - segÃºn cÃ³digo original
+                // Con mocheta - según código original
                 when (tipoVentana) {
                     "apa" -> "$prefijo${divisiones}a"  // NovaApa: ic_fichad3a
                     "ina" -> "$prefijo$divisiones"     // NovaIna: ic_fichad3
@@ -81,7 +81,7 @@ object NovaUIHelper {
         }
     }
 
-    // ==================== FUNCIÃ“N DE PROCESAMIENTO DE PROYECTO ====================
+    // ==================== FUNCIÓN DE PROCESAMIENTO DE PROYECTO ====================
 
     fun procesarIntentProyecto(
         context: Context,
@@ -107,7 +107,7 @@ object NovaUIHelper {
         }
     }
 
-    // ==================== FUNCIÃ“N DE REFERENCIAS ====================
+    // ==================== FUNCIÓN DE REFERENCIAS ====================
 
     @SuppressLint("SetTextI18n")
     fun generarReferencias(
@@ -121,7 +121,12 @@ object NovaUIHelper {
         puntosU: String = "",
         modelo: String = "nn",
         alturaPuente: Float = 2.5f,
-        mochetaInferior: Float = 0f
+        mochetaInferior: Float = 0f,
+        // Medida REAL para mostrar en la referencia. El ancho/alto de arriba puede venir con el
+        // descuento de encuentro (ancho útil) para los cálculos de corte, pero la referencia debe
+        // mostrar la medida real que se midió (y que se archiva). Por defecto = ancho/alto.
+        anchoReal: Float = ancho,
+        altoReal: Float = alto
     ): String {
         val altoPuenteTexto = if (siNoMoch == 1) {
             NovaCalculos.df1(altoHoja)
@@ -149,7 +154,7 @@ object NovaUIHelper {
             }
         }
 
-        val referenciasBase = "An: ${NovaCalculos.df1(ancho)}  x  Al: ${NovaCalculos.df1(alto)}\n" +
+        val referenciasBase = "An: ${NovaCalculos.df1(anchoReal)}  x  Al: ${NovaCalculos.df1(altoReal)}\n" +
                 "Altura de puente: $altoPuenteTexto\n" +
                 "mocheta inf: ${NovaCalculos.df1(mochetaInf)}\n" +
                 "mocheta sup: ${NovaCalculos.df1(mochetaSup)}\n" +
@@ -392,7 +397,11 @@ object NovaUIHelper {
         mochetaInferior: Float = 0f,
         remate: String = texto
     ): String {
-        val diseno = generarDiseno(ancho, alto, altoHoja, divisiones, siNoMoch = 1, texto, mochetaInferior, remate)
+        // El puente (hoja) puede igualar o superar el alto: en ese caso no hay mocheta y la
+        // franja sistema ocupa todo el alto. Antes se forzaba siNoMoch = 1, lo que dibujaba una
+        // mocheta fantasma (el puente "subido" arriba como línea gruesa) y su U de fijos fantasma.
+        val siNoMoch = if (altoHoja >= alto) 0 else 1
+        val diseno = generarDiseno(ancho, alto, altoHoja, divisiones, siNoMoch, texto, mochetaInferior, remate)
         return "{nova,$tipoNova,[$diseno]}"
     }
 }

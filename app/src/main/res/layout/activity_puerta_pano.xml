@@ -352,6 +352,45 @@
                         </LinearLayout>
 
                         <LinearLayout
+                            android:id="@+id/lyRejilla"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="@string/rejilla_col_fil"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etRejCol"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="0.5"
+                                android:autofillHints="@string/todo"
+                                android:hint="@string/_1"
+                                android:inputType="number"
+                                android:text="@string/_3"
+                                tools:ignore="LabelFor" />
+
+                            <EditText
+                                android:id="@+id/etRejFil"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="0.5"
+                                android:autofillHints="@string/todo"
+                                android:hint="@string/_1"
+                                android:inputType="number"
+                                android:text="@string/_3"
+                                tools:ignore="LabelFor" />
+                        </LinearLayout>
+
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
@@ -715,6 +754,30 @@
                                 </LinearLayout>
 
                                 <LinearLayout
+                                    android:id="@+id/lyInox"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:id="@+id/txInox"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="Inoxidable" />
+
+                                    <TextView
+                                        android:id="@+id/tvInox"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
                                     android:id="@+id/lyJunki"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
@@ -781,6 +844,58 @@
 
                                     <TextView
                                         android:id="@+id/tvVidrios"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/lyVidriosApilado"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra2"
+                                    android:orientation="horizontal"
+                                    android:visibility="gone">
+
+                                    <TextView
+                                        android:id="@+id/txVidriosApilado"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/vidrios_apilado"
+                                        tools:ignore="TooManyViews" />
+
+                                    <TextView
+                                        android:id="@+id/tvVidriosApilado"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="0.72"
+                                        android:text="@string/_0_0" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/lyVidrioMocheta"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="4.5dp"
+                                    android:layout_marginEnd="4.5dp"
+                                    android:background="@color/sombra3"
+                                    android:orientation="horizontal"
+                                    android:visibility="gone">
+
+                                    <TextView
+                                        android:id="@+id/txVidrioMocheta"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="@string/vidrio_mocheta"
+                                        tools:ignore="TooManyViews" />
+
+                                    <TextView
+                                        android:id="@+id/tvVidrioMocheta"
                                         android:layout_width="match_parent"
                                         android:layout_height="wrap_content"
                                         android:layout_weight="0.72"

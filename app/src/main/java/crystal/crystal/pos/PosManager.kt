@@ -1,8 +1,12 @@
 package crystal.crystal.pos
 
+import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
+import android.print.PrintManager
+import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.widget.AdapterView
@@ -17,12 +21,16 @@ import androidx.lifecycle.lifecycleScope
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.gson.Gson
 
 import crystal.crystal.Listado
 import crystal.crystal.comprobantes.*
 import crystal.crystal.databinding.ActivityMainBinding
+import crystal.crystal.productos.P2_POR_M2
+import crystal.crystal.productos.ProductoDatabase
+import crystal.crystal.productos.ProductoRepository
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -139,7 +147,15 @@ class PosManager(
         }
 
         binding.btnReportes.setOnClickListener {
-            Toast.makeText(activity, "Reportes - Próximamente", Toast.LENGTH_SHORT).show()
+            val uid = obtenerUidParaConsulta()
+            if (uid == null) {
+                Toast.makeText(activity, "Inicia sesión para ver reportes", Toast.LENGTH_SHORT).show()
+            } else {
+                activity.startActivity(
+                    Intent(activity, ReportesActivity::class.java)
+                        .putExtra(ReportesActivity.EXTRA_UID, uid)
+                )
+            }
         }
     }
 
@@ -221,7 +237,61 @@ class PosManager(
         }
     }
 
+    // ─── Inventario ─────────────────────────────────────────────────────────────
+
+    private val repoProductos by lazy {
+        val db = ProductoDatabase.getDatabase(activity)
+        ProductoRepository(db.productoDao(), activity, db.movimientoInventarioDao())
+    }
+
+    private fun repositorioProductos() = repoProductos
+
+    /**
+     * Cuánto stock consume cada línea, en la unidad en que se lleva el inventario. El vidrio se
+     * guarda en pies cuadrados, así que las líneas en m² se convierten; lo que se vende por unidad
+     * o por metro lineal consume su propia cantidad.
+     */
+    private fun cantidadParaStock(item: Listado): Float = when (item.escala) {
+        "p2" -> item.piescua
+        "m2" -> item.metcua * P2_POR_M2
+        "ml" -> item.metli
+        "m3" -> item.metcub
+        else -> item.canti
+    }.takeIf { it > 0f } ?: item.canti
+
+    /**
+     * Verifica el inventario para toda la venta. Devuelve los consumos a aplicar, o null si algo no
+     * alcanza (ahí ya avisó al usuario y la venta no debe continuar). Las líneas sin producto del
+     * catálogo —trabajos a medida— simplemente no consumen stock.
+     */
+    private suspend fun prepararConsumoStock(lista: List<Listado>): List<ProductoRepository.ConsumoStock>? {
+        val porProducto = mutableMapOf<String, Float>()
+        lista.forEach { item ->
+            val id = item.productoId ?: return@forEach
+            porProducto[id] = (porProducto[id] ?: 0f) + cantidadParaStock(item)
+        }
+        if (porProducto.isEmpty()) return emptyList()
+
+        return repositorioProductos().prepararConsumo(porProducto).fold(
+            onSuccess = { it },
+            onFailure = { error ->
+                withContext(Dispatchers.Main) {
+                    AlertDialog.Builder(activity)
+                        .setTitle("No hay stock suficiente")
+                        .setMessage("${error.message}\n\nCorrige la cantidad o repone el inventario antes de emitir el comprobante.")
+                        .setPositiveButton("Entendido", null)
+                        .show()
+                }
+                null
+            }
+        )
+    }
+
+    @SuppressLint("HardwareIds")
     fun generarTicketVenta(cliente: String, total: String) {
+        // Candado (Fase 3): generar comprobante/ticket es de pago.
+        if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.puedeExportarPdf(),
+                "Generar comprobantes es una función de pago.")) return
         if (configuracionTicket == null || datosEmpresa == null) {
             Toast.makeText(activity, "Cargando configuración...", Toast.LENGTH_SHORT).show()
             return
@@ -271,8 +341,66 @@ class PosManager(
                     "TICKET", "RECIBO" -> "T001"
                     else -> "T001"
                 }
-                val numero = System.currentTimeMillis() % 100000000
-                val numeroComprobante = "$serie-${numero.toString().padStart(8, '0')}"
+                // Registro UNIFICADO en el servidor: la Cloud Function `registrarVenta` valida que el
+                // equipo esté autorizado y activo, asigna el correlativo atómico por serie y guarda la
+                // venta bajo el patrón. Así todas las terminales comparten numeración y registro. Si no
+                // hay red o falla, se usa correlativo/registro LOCAL de respaldo (puede dejar un hueco
+                // en la numeración del servidor).
+                val uidVenta = obtenerUidParaConsulta() ?: "local"
+                val fechaVenta = System.currentTimeMillis()
+                val deviceId = Settings.Secure.getString(
+                    activity.contentResolver, Settings.Secure.ANDROID_ID
+                )
+                val itemsJson = Gson().toJson(itemsVenta)
+
+                val payloadVenta = hashMapOf(
+                    "serie" to serie,
+                    "tipoComprobante" to tipoReciboSeleccionado.uppercase(),
+                    "cliente" to cliente,
+                    "subtotal" to subtotal.toDouble(),
+                    "igv" to igv.toDouble(),
+                    "total" to totalVenta.toDouble(),
+                    "formaPago" to formaPagoSeleccionada,
+                    "vendedor" to nombreVendedor,
+                    "terminal" to (if (esPatron) null else Build.MODEL),
+                    "itemsJson" to itemsJson,
+                    "fecha" to fechaVenta
+                )
+
+                // Antes de emitir nada: verificar que el inventario alcance. Si a un solo ítem le
+                // falta stock se aborta la venta completa, en vez de descontar a medias.
+                val consumos = prepararConsumoStock(lista)
+                if (consumos == null) return@launch
+
+                var numeroComprobante: String
+                var numero: Long
+                var ventaId: String
+                var registradaEnServidor: Boolean
+                try {
+                    val res = FirebaseFunctions.getInstance()
+                        .getHttpsCallable("registrarVenta")
+                        .call(
+                            hashMapOf(
+                                "patronUid" to uidVenta,
+                                "deviceId" to deviceId,
+                                "venta" to payloadVenta
+                            )
+                        )
+                        .await()
+                    val resp = res.data as? Map<*, *>
+                    numeroComprobante = resp?.get("numeroComprobante") as? String
+                        ?: throw IllegalStateException("Respuesta sin número de comprobante")
+                    numero = (resp["numero"] as? Number)?.toLong() ?: 0L
+                    ventaId = resp["id"] as? String ?: java.util.UUID.randomUUID().toString()
+                    registradaEnServidor = true
+                } catch (e: Exception) {
+                    Log.w("PosManager", "registrarVenta falló; correlativo/registro local de respaldo: ${e.message}")
+                    val dao = VentaDatabase.getDatabase(activity).ventaDao()
+                    numero = (dao.ultimoNumero(uidVenta, serie) ?: 0L) + 1L
+                    numeroComprobante = "$serie-${numero.toString().padStart(8, '0')}"
+                    ventaId = java.util.UUID.randomUUID().toString()
+                    registradaEnServidor = false
+                }
 
                 Log.d("PosManager", "=== DATOS PARA PDF ===")
                 Log.d("PosManager", "Logo URL: ${datosEmpresa?.logoUrl}")
@@ -295,6 +423,46 @@ class PosManager(
                     terminal = if (esPatron) null else Build.MODEL,
                     formaPago = formaPagoSeleccionada
                 )
+
+                // Copia local (respaldo offline / caché para reportes sin red). Si el servidor ya la
+                // registró queda como sincronizada; si fue respaldo local, queda pendiente.
+                runCatching {
+                    val venta = Venta(
+                        id = ventaId,
+                        numeroComprobante = numeroComprobante,
+                        serie = serie,
+                        numero = numero,
+                        tipoComprobante = tipoReciboSeleccionado.uppercase(),
+                        cliente = cliente,
+                        subtotal = subtotal,
+                        igv = igv,
+                        total = totalVenta,
+                        formaPago = formaPagoSeleccionada,
+                        vendedor = nombreVendedor,
+                        terminal = if (esPatron) null else Build.MODEL,
+                        itemsJson = itemsJson,
+                        fecha = fechaVenta,
+                        uidPatron = uidVenta,
+                        pendienteSincronizar = !registradaEnServidor,
+                        ultimaSincronizacion = if (registradaEnServidor) System.currentTimeMillis() else 0L
+                    )
+                    VentaDatabase.getDatabase(activity).ventaDao().insertar(venta)
+                }.onFailure {
+                    Log.e("PosManager", "No se pudo guardar copia local de la venta: ${it.message}", it)
+                }
+
+                // Recién ahora se descuenta el inventario, con el comprobante ya emitido como
+                // referencia del movimiento. Cada descuento queda asentado en el libro.
+                if (consumos.isNotEmpty()) {
+                    repositorioProductos().aplicarConsumo(
+                        consumos = consumos,
+                        referencia = "VENTA-$numeroComprobante",
+                        vendedor = nombreVendedor,
+                        terminal = if (esPatron) null else Build.MODEL
+                    ).onFailure {
+                        Log.e("PosManager", "No se pudo descontar stock: ${it.message}", it)
+                    }
+                }
 
                 withContext(Dispatchers.Main) {
                     mostrarOpcionesComprobante(archivoPDF, tipoReciboSeleccionado, numeroComprobante)
@@ -354,8 +522,19 @@ class PosManager(
         }
     }
 
-    private fun imprimirPDF(archivo: File) =
-        Toast.makeText(activity, "🖨️ Función de impresión Bluetooth - Próximamente", Toast.LENGTH_SHORT).show()
+    private fun imprimirPDF(archivo: File) {
+        try {
+            val printManager = activity.getSystemService(Context.PRINT_SERVICE) as PrintManager
+            printManager.print(
+                "Comprobante Crystal ${archivo.nameWithoutExtension}",
+                PdfFilePrintAdapter(archivo),
+                null
+            )
+        } catch (e: Exception) {
+            Log.e("PosManager", "Error al imprimir: ${e.message}", e)
+            Toast.makeText(activity, "No se pudo imprimir: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private fun abrirPDF(archivo: File) {
         try {

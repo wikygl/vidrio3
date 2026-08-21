@@ -4,61 +4,82 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="8dp"
-    app:cardCornerRadius="10dp"
-    app:cardElevation="3dp"
+    android:layout_marginBottom="10dp"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="2dp"
     app:cardUseCompatPadding="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="14dp">
 
-        <TextView
-            android:id="@+id/tvMonto"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="S/ 0.00"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="@color/verde" />
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/tvCodigo"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Código: ---"
-            android:textSize="14sp"
-            android:layout_marginTop="4dp"
-            android:textColor="@color/negro" />
+            <TextView
+                android:id="@+id/tvMonto"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="S/ 0.00"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorPrimary" />
 
-        <TextView
-            android:id="@+id/tvTelefono"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Teléfono: ---"
-            android:textSize="14sp"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/negro" />
+            <TextView
+                android:id="@+id/tvTelefono"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Plin → Yape"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/gris" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="3dp">
+
+                <TextView
+                    android:id="@+id/tvCodigo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Código: —"
+                    android:textSize="11sp"
+                    android:textColor="#9AA0A6" />
+
+                <TextView
+                    android:id="@+id/tvFecha"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="Fecha: —"
+                    android:textSize="11sp"
+                    android:textColor="#9AA0A6" />
+            </LinearLayout>
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tvEstado"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Estado: pendiente"
-            android:textSize="14sp"
-            android:layout_marginTop="4dp"
-            android:textColor="@color/fucsia" />
-
-        <TextView
-            android:id="@+id/tvFecha"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Fecha: ---"
-            android:textSize="12sp"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/gris" />
+            android:background="@drawable/bg_chip_estado"
+            android:backgroundTint="@color/verde"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:text="Pendiente"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="@color/blanco" />
 
     </LinearLayout>
 </androidx.cardview.widget.CardView>

@@ -196,8 +196,9 @@ class DialogoNuevoProducto : DialogFragment() {
             ).show()
         }
 
-        val stock = binding.etStock.text.toString().toIntOrNull() ?: 0
-        val stockMinimo = binding.etStockMinimo.text.toString().toIntOrNull() ?: 10
+        // Decimal: el vidrio se lleva en área (p2/m2), no en unidades enteras.
+        val stock = binding.etStock.text.toString().replace(",", ".").toFloatOrNull() ?: 0f
+        val stockMinimo = binding.etStockMinimo.text.toString().replace(",", ".").toFloatOrNull() ?: 10f
 
         // ⭐ CREAR PRODUCTO CON AMBOS PRECIOS
         val productoNuevo = Producto(

@@ -9,6 +9,18 @@ import android.widget.ListView
  */
 class CorteFormatter(private val context: Context) {
 
+    /** Escala activa (el cálculo interno siempre es en cm). */
+    var escala: EscalaCorte = EscalaCorte.cargar(context)
+
+    /** Sigla de la escala activa (m, cm, mm, in). */
+    val sigla: String get() = escala.sigla
+
+    /** Formatea un valor en cm convertido a la escala activa (sin sigla). */
+    fun mostrar(cm: Float): String = df1(escala.desdeCm(cm))
+
+    /** Formatea un valor en cm a la escala activa, con sigla. Ej: "3 m". */
+    fun mostrarConSigla(cm: Float): String = "${mostrar(cm)} ${escala.sigla}"
+
     /**
      * Función para formatear números con un decimal - exactamente como en el código original
      * Función pública para usar desde otras clases

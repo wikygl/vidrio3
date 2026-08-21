@@ -11,7 +11,12 @@ import crystal.crystal.casilla.ProyectoManager
 
 class PlanchaListManager(private val context: Context) {
 
-    private val listasExcluidas = setOf("Diseño", "DisenoPaquete", "DisenoSimbolicoV2", "Grados", "Referencias")
+    // Claves que no son materiales: descripciones, diseños y metadatos. Si alguna se colara, sus
+    // textos entrarían al optimizador como si fueran medidas de vidrio.
+    private val listasExcluidas = setOf(
+        "Diseño", "DisenoPaquete", "DisenoSimbolicoV2", "Grados", "Referencias",
+        "DisenoPuerta", "DisenoMampara", "DisenoVentanaAl", "DisenoVitroven"
+    )
     // Acepta "120 x 80", "120x80", "120 X 80", "120×80", "120*80" (x/X/×/* con o sin espacios).
     private val patronDosD = Regex("""^\d+(?:[.,]\d+)?\s*[xX×*]\s*\d+(?:[.,]\d+)?$""")
     private val separadorDosD = Regex("""\s*[xX×*]\s*""")
@@ -25,29 +30,11 @@ class PlanchaListManager(private val context: Context) {
         }
     }
 
-    private fun construirVentanaColorMap(mapListas: Map<String, List<List<String>>>): Map<String, String> {
-        val ventanaColorMap = mutableMapOf<String, String>()
-        mapListas["DisenoSimbolicoV2"]?.forEach { lista ->
-            val paquete = lista.getOrNull(0)?.trim() ?: return@forEach
-            val ventana = lista.getOrElse(2) { "" }.ifBlank { null } ?: return@forEach
-            val tipoVidrio = extraerCampoMat(paquete, "vid")
-            if (tipoVidrio.isNotBlank()) {
-                ventanaColorMap[ventana] = tipoVidrio
-            }
-        }
-        return ventanaColorMap
-    }
-
-    private fun extraerCampoMat(paquete: String, campo: String): String {
-        val matMatch = Regex("-MAT<([^>]*)>").find(paquete) ?: return ""
-        val matContent = matMatch.groupValues[1]
-        return matContent.split(";")
-            .find { it.startsWith("$campo:", ignoreCase = true) }
-            ?.substringAfter(":")
-            ?.replace("_", " ")
-            ?.trim()
-            ?.takeIf { it != "null" } ?: ""
-    }
+    // idVentana -> tipo de vidrio, leído desde la fuente única de metadatos de producción.
+    private fun construirVentanaColorMap(mapListas: Map<String, List<List<String>>>): Map<String, String> =
+        crystal.crystal.casilla.MetadatosProduccion.mapaPorVentana(mapListas)
+            .mapValues { it.value.second }
+            .filterValues { it.isNotBlank() }
 
     fun hayListasDisponibles(): Boolean {
         val map = MapStorage.cargarMap(context)
@@ -180,7 +167,10 @@ class PlanchaListManager(private val context: Context) {
             val alto = partes[1].replace(",", ".").toFloatOrNull() ?: return@forEach
             val cant = subLista[1].trim().toIntOrNull() ?: return@forEach
             val proyecto = subLista.getOrElse(3) { "" }.trim()
-            val info = if (proyecto.isNotBlank()) "$ventana $proyecto" else ventana
+            // Solo el número del id (primer token): los ids viejos traen ", cliente" (puerta) o
+            // " proyecto" (nova); cualquiera se descarta para no duplicar ni mostrar el cliente.
+            val ventanaNum = ventana.split(',', ' ').first().trim()
+            val info = if (proyecto.isNotBlank()) "$ventanaNum $proyecto" else ventanaNum
             resultado.add(ItemListaPlanchas(ancho = ancho, alto = alto, cantidad = cant, info = info))
         }
 

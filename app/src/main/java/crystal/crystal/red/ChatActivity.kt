@@ -13,6 +13,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.text.format.DateFormat
 import android.widget.EditText
+import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -142,6 +143,9 @@ class ChatActivity : AppCompatActivity() {
 
     // Función para enviar presupuesto:
     private fun enviarPresupuesto() {
+        // Candado (Fase 3): enviar presupuesto por el chat es de pago.
+        if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeEnviarFormato(),
+                "Enviar presupuestos por el chat es una función de pago.")) return
         presupuestoParaEnviar?.let { uriString ->
             val uri = Uri.parse(uriString)
             subirYEnviarPresupuesto(uri)
@@ -167,6 +171,9 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun enviarArchivoCompartido() {
+        // Candado (Fase 3): enviar archivos por el chat es de pago.
+        if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeEnviarFormato(),
+                "Enviar archivos por el chat es una función de pago.")) return
         archivoCompartidoParaEnviar?.let { uri ->
             subirYEnviar(uri)
             archivoCompartidoParaEnviar = null
@@ -293,6 +300,14 @@ class ChatActivity : AppCompatActivity() {
             onEliminar = { mostrarEliminar(it) },
             onMostrarArchivo = { mensaje ->
                 val uri = Uri.parse(mensaje.message)
+                // Los formatos Crystal se resuelven SIEMPRE por [abrirArchivoMensaje], que es la única
+                // implementación (la usa también el menú de toque largo). Va antes del when porque el
+                // tipo del mensaje depende de la versión que lo envió: un proyecto podía llegar como
+                // "texto" o "archivo" y caía en el visor genérico con "Tipo no soportado".
+                if (esMensajeCrystal(mensaje)) {
+                    abrirArchivoMensaje(mensaje)
+                    return@MessageAdapter
+                }
                 when (mensaje.tipo) {
                     "presupuesto" -> {
                         // Descargar contenido y abrir con MainActivity
@@ -358,22 +373,12 @@ class ChatActivity : AppCompatActivity() {
                                 startActivity(Intent.createChooser(intent, "Abrir con"))
                             }
                     }
-                    else -> {
-                        if (esMensajePlanchaCrystal(mensaje)) {
-                            abrirPlanchaCrystalDesdeChat(mensaje)
-                        } else if (esMensajeCorteCrystal(mensaje)) {
-                            abrirCorteCrystalDesdeChat(mensaje)
-                        } else if (esMensajeMedidasCrystal(mensaje)) {
-                            abrirMedidasCrystalDesdeChat(mensaje)
-                        } else if (mensaje.tipo == "pdf") {
-                            abrirPdfExterno(uri)
-                        } else {
-                            // Imagen y audio -> visor interno
-                            VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
-                        }
-                    }
+                    // Imagen, audio, pdf y cualquier archivo suelto: los resuelve abrirArchivoMensaje,
+                    // que además intenta reconocer por contenido lo que no viene bien etiquetado.
+                    else -> abrirArchivoMensaje(mensaje)
                 }
-            }
+            },
+            onOpciones = { m, esMio -> mostrarOpcionesMensaje(m, esMio) }
         )
         binding.rvMensajes.layoutManager =
             LinearLayoutManager(this).apply { stackFromEnd = true }
@@ -400,6 +405,12 @@ class ChatActivity : AppCompatActivity() {
             .addOnSuccessListener { doc ->
                 peerPlatform = ChatPlatform.fromWireValue(doc.getString("peerPlatform"))
                 peerExternalUserId = doc.getString("peerExternalUserId").orEmpty()
+                if (doc.getBoolean("esSoporte") == true) {
+                    tvNombre.text = "Soporte Crystal"
+                    tvEstado.text = ""
+                    ivFoto.setImageResource(R.drawable.ic_chckr)
+                    return@addOnSuccessListener
+                }
                 val users = doc.get("users") as? List<*> ?: emptyList<Any>()
                 val otroId = users.firstOrNull { it != usuario }?.toString()
                 if (otroId == null) {
@@ -470,6 +481,9 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun subirYEnviar(uri: Uri) {
+        // Candado (Fase 3, red de seguridad): enviar archivos por el chat es de pago.
+        if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.puedeEnviarFormato(),
+                "Enviar archivos por el chat es una función de pago.")) return
         val chatRef = db.collection("chats").document(chatId)
         val mensajesRef = chatRef.collection("messages")
         val nuevoMensajeRef = mensajesRef.document()
@@ -615,6 +629,8 @@ class ChatActivity : AppCompatActivity() {
                 fileName.endsWith(".${CorteActivity.EXTENSION_CORTE_CRYSTAL}", ignoreCase = true) -> "corte_crystal"
             t == MedidaActivity.MIME_MEDIDAS_CRYSTAL ||
                 fileName.endsWith(".${MedidaActivity.EXTENSION_MEDIDAS_CRYSTAL}", ignoreCase = true) -> "medidas_crystal"
+            t == crystal.crystal.taller.Taller.MIME_PROYECTO_CRYSTAL ||
+                fileName.endsWith(".${crystal.crystal.taller.Taller.EXTENSION_PROYECTO_CRYSTAL}", ignoreCase = true) -> "proyecto_crystal"
             fileName.startsWith("presupuesto_") && fileName.endsWith(".json") -> "presupuesto"
             t.startsWith("image")   -> "imagen"
             t.startsWith("video")   -> "video"
@@ -626,6 +642,14 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun enviarMensaje(texto: String, tipo: String = "texto") {
+        // Candado (Fase 3): el texto libre es gratis; enviar formatos (presupuesto/medidas/archivo) es
+        // de pago. El candado duro está en las reglas de Firestore; esto es el aviso/UX en el cliente.
+        if (tipo != "texto" && !crystal.crystal.Suscripcion.exigir(
+                this,
+                crystal.crystal.Suscripcion.puedeEnviarFormato(),
+                "Enviar presupuestos/medidas por el chat es una función de pago."
+            )
+        ) return
         val ahora   = Date()
         chatSendRepository.sendTextMessage(
             chatId = chatId,
@@ -687,6 +711,457 @@ class ChatActivity : AppCompatActivity() {
     private fun esMensajePlanchaCrystal(mensaje: Message): Boolean {
         return mensaje.tipo == "plancha_crystal" ||
             mensaje.nombreArchivo.endsWith(".${OptimizacionPlanchasActivity.EXTENSION_PLANCHA_CRYSTAL}", ignoreCase = true)
+    }
+
+    // ====== Atajo: usar un comprobante recibido por chat para la recarga en curso ======
+    private fun esImagenComprobante(mensaje: Message): Boolean {
+        val t = mensaje.tipo.lowercase()
+        if (t == "imagen" || t == "image") return true
+        val n = mensaje.nombreArchivo.lowercase()
+        return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp")
+    }
+
+    private fun mostrarOpcionesImagenComprobante(mensaje: Message, uri: Uri) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setItems(arrayOf("👁️ Ver imagen", "💳 Usar para mi recarga")) { _, w ->
+                if (w == 0) VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
+                else usarComprobanteChatParaRecarga(mensaje)
+            }
+            .show()
+    }
+
+    // ===== Menú de opciones al mantener presionado un mensaje =====
+    private fun mostrarOpcionesMensaje(mensaje: Message, esMio: Boolean) {
+        val opciones = mutableListOf<Pair<String, () -> Unit>>()
+        when {
+            mensaje.tipo == "texto" -> {
+                opciones += "📋 Copiar texto" to { copiarTexto(mensaje.message) }
+                opciones += "↗️ Compartir" to { compartirTexto(mensaje.message) }
+            }
+            esImagenComprobante(mensaje) -> {
+                opciones += "👁️ Ver" to { VisorArchivoActivity.abrir(this, Uri.parse(mensaje.message), mensaje.tipo) }
+                opciones += "↗️ Compartir imagen" to { compartirArchivoRemoto(mensaje, "image/*") }
+                opciones += "⬇️ Descargar imagen" to { descargarImagen(mensaje) }
+                opciones += "📋 Copiar imagen" to { copiarImagen(mensaje) }
+                opciones += "💳 Usar para mi recarga" to { usarComprobanteChatParaRecarga(mensaje) }
+            }
+            mensaje.tipo in listOf("pdf", "video", "audio", "archivo", "file",
+                "medidas_crystal", "corte_crystal", "plancha_crystal", "presupuesto") -> {
+                opciones += "📂 Abrir" to { abrirArchivoMensaje(mensaje) }
+                opciones += "↗️ Compartir" to { compartirArchivoRemoto(mensaje, mimeDeTipo(mensaje.tipo)) }
+                opciones += "⬇️ Descargar" to { descargarArchivoRemoto(mensaje) }
+            }
+            else -> {
+                opciones += "📋 Copiar" to { copiarTexto(mensaje.message) }
+                opciones += "↗️ Compartir" to { compartirTexto(mensaje.message) }
+            }
+        }
+        if (esMio && !mensaje.deletedForEveryone) {
+            if (mensaje.tipo == "texto") opciones += "✏️ Editar" to { mostrarEditar(mensaje) }
+            opciones += "🗑️ Eliminar" to { mostrarEliminar(mensaje) }
+        }
+
+        // Pedidos en línea: marcar / tomar / ver quién atiende.
+        if (!mensaje.deletedForEveryone) {
+            when {
+                !mensaje.esPedido ->
+                    opciones += "🛒 Marcar como pedido" to { marcarComoPedido(mensaje) }
+                mensaje.estadoPedido == "en_espera" ->
+                    opciones += "✋ Tomar pedido" to { tomarPedido(mensaje) }
+                mensaje.estadoPedido == "cogido" ->
+                    opciones += "🛒 Atendido por ${mensaje.atendidoNombre.ifBlank { "alguien" }}" to {
+                        Toast.makeText(this, "Pedido ya atendido por ${mensaje.atendidoNombre.ifBlank { "alguien" }}", Toast.LENGTH_SHORT).show()
+                    }
+            }
+        }
+
+        val labels = opciones.map { it.first }.toTypedArray()
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setItems(labels) { _, w -> opciones[w].second() }
+            .show()
+    }
+
+    // ==================== PEDIDOS EN LÍNEA ====================
+    // patronUid = identidad del negocio (para una terminal, el uid del patrón; para el patrón, el suyo).
+    private fun patronUidPedido(): String {
+        val prefs = getSharedPreferences("MyPrefs", MODE_PRIVATE)
+        return prefs.getString("patron_uid", null)?.takeIf { it.isNotBlank() }
+            ?: FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    }
+
+    @SuppressLint("HardwareIds")
+    private fun deviceIdPedido(): String =
+        android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+
+    private fun nombreVendedorPedido(): String {
+        val prefs = getSharedPreferences("MyPrefs", MODE_PRIVATE)
+        return prefs.getString("nombre_vendedor", null)?.takeIf { it.isNotBlank() }
+            ?: FirebaseAuth.getInstance().currentUser?.displayName?.takeIf { it.isNotBlank() }
+            ?: "Vendedor"
+    }
+
+    private fun contactoNombreChat(): String =
+        binding.root.findViewById<android.widget.TextView?>(R.id.chatNameText)?.text?.toString()?.trim().orEmpty()
+
+    private fun resumenPedido(mensaje: Message): String {
+        val etiqueta = when (mensaje.tipo) {
+            "presupuesto" -> "Presupuesto"
+            "medidas", "medidas_crystal" -> "Medidas"
+            "texto" -> ""
+            else -> mensaje.tipo.replaceFirstChar { it.uppercase() }
+        }
+        val cuerpo = if (mensaje.tipo == "texto") mensaje.message
+        else mensaje.nombreArchivo.ifBlank { mensaje.message }
+        return listOf(etiqueta, cuerpo.trim()).filter { it.isNotBlank() }.joinToString(": ").take(160)
+    }
+
+    private fun marcarComoPedido(mensaje: Message) {
+        val data = hashMapOf(
+            "patronUid" to patronUidPedido(),
+            "deviceId" to deviceIdPedido(),
+            "chatId" to chatId,
+            "msgId" to mensaje.id,
+            "contactoNombre" to contactoNombreChat(),
+            "mensajeTipo" to mensaje.tipo,
+            "resumen" to resumenPedido(mensaje),
+            "contenidoMensaje" to mensaje.message
+        )
+        com.google.firebase.functions.FirebaseFunctions.getInstance()
+            .getHttpsCallable("marcarPedido").call(data)
+            .addOnSuccessListener {
+                Toast.makeText(this, "Pedido creado (en espera)", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "No se pudo marcar: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun tomarPedido(mensaje: Message) {
+        val data = hashMapOf(
+            "patronUid" to patronUidPedido(),
+            "deviceId" to deviceIdPedido(),
+            "chatId" to chatId,
+            "msgId" to mensaje.id,
+            "atendidoNombre" to nombreVendedorPedido()
+        )
+        com.google.firebase.functions.FirebaseFunctions.getInstance()
+            .getHttpsCallable("tomarPedido").call(data)
+            .addOnSuccessListener { res ->
+                val m = res.data as? Map<*, *>
+                if (m?.get("ok") == true) {
+                    Toast.makeText(this, "Pedido tomado ✅", Toast.LENGTH_SHORT).show()
+                } else {
+                    val motivo = m?.get("motivo")?.toString()
+                    val quien = m?.get("atendidoNombre")?.toString().orEmpty()
+                    val msg = if (motivo == "ya_tomado")
+                        "Ese pedido ya lo tomó ${quien.ifBlank { "otro vendedor" }}"
+                    else "No se pudo tomar el pedido"
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                }
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "No se pudo tomar: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun abrirArchivoMensaje(mensaje: Message) {
+        val uri = Uri.parse(mensaje.message)
+        android.util.Log.d(
+            "CrystalAbrir",
+            "tipo='${mensaje.tipo}' nombre='${mensaje.nombreArchivo}' msg='${mensaje.message.take(140)}'"
+        )
+        when {
+            esMensajePlanchaCrystal(mensaje) -> abrirPlanchaCrystalDesdeChat(mensaje)
+            esMensajeCorteCrystal(mensaje) -> abrirCorteCrystalDesdeChat(mensaje)
+            esMensajeMedidasCrystal(mensaje) -> abrirMedidasCrystalDesdeChat(mensaje)
+            esMensajeProyectoCrystal(mensaje) -> abrirProyectoCrystalDesdeChat(mensaje)
+            mensaje.tipo == "pdf" -> abrirPdfExterno(uri)
+            // El multimedia va derecho al visor; no tiene sentido descargarlo para inspeccionarlo.
+            mensaje.tipo in listOf("imagen", "image", "video", "audio") ->
+                VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
+            // Antes de rendirse con "Tipo no soportado": el tipo y el nombre del archivo dependen de
+            // la versión que lo envió, así que si el mensaje trae un archivo de Storage se mira su
+            // CONTENIDO. El campo "format" del JSON dice qué es, sin importar cómo llegó etiquetado.
+            isFirebaseStorageUrl(mensaje.message) -> abrirArchivoPorContenido(mensaje, uri)
+            else -> VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
+        }
+    }
+
+    /** Descarga el archivo y decide por su campo "format" a qué módulo mandarlo. */
+    private fun abrirArchivoPorContenido(mensaje: Message, uri: Uri) {
+        FirebaseStorage.getInstance().getReferenceFromUrl(mensaje.message)
+            .getBytes(20L * 1024L * 1024L)
+            .addOnSuccessListener { bytes ->
+                val texto = runCatching { String(bytes, Charsets.UTF_8) }.getOrDefault("")
+                val formato = runCatching {
+                    com.google.gson.JsonParser.parseString(texto).asJsonObject.get("format")?.asString
+                }.getOrNull()
+                android.util.Log.d(
+                    "CrystalAbrir",
+                    "descargado ${bytes.size} bytes, format='$formato', inicio='${texto.take(120)}'"
+                )
+                when (formato) {
+                    crystal.crystal.taller.Taller.FORMAT_PROYECTO_CRYSTAL -> importarProyectoCrystal(texto)
+                    OptimizacionPlanchasActivity.FORMAT_PLANCHA_CRYSTAL ->
+                        abrirCrystalDesdeBytes(bytes, "planchas", OptimizacionPlanchasActivity.EXTENSION_PLANCHA_CRYSTAL) {
+                            abrirPlanchaCrystalUri(it)
+                        }
+                    CorteActivity.FORMAT_CORTE_CRYSTAL ->
+                        abrirCrystalDesdeBytes(bytes, "corte", CorteActivity.EXTENSION_CORTE_CRYSTAL) {
+                            abrirCorteCrystalUri(it)
+                        }
+                    "crystal.medidas" ->
+                        abrirCrystalDesdeBytes(bytes, "medidas", MedidaActivity.EXTENSION_MEDIDAS_CRYSTAL) {
+                            abrirMedidasCrystalUri(it)
+                        }
+                    else -> VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
+                }
+            }
+            .addOnFailureListener { e ->
+                android.util.Log.e("CrystalAbrir", "fallo la descarga: ${e.message}", e)
+                VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
+            }
+    }
+
+    private fun abrirCrystalDesdeBytes(
+        bytes: ByteArray,
+        prefijo: String,
+        extension: String,
+        abrir: (Uri) -> Unit
+    ) {
+        runCatching {
+            val file = File(cacheDir, "${prefijo}_${System.currentTimeMillis()}.$extension")
+            file.writeBytes(bytes)
+            abrir(FileProvider.getUriForFile(this, "${packageName}.fileprovider", file))
+        }.onFailure {
+            Toast.makeText(this, "No se pudo preparar el archivo: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** ¿El mensaje es alguno de los formatos propios de Crystal (proyecto, plancha, corte, medidas)? */
+    private fun esMensajeCrystal(mensaje: Message): Boolean =
+        esMensajeProyectoCrystal(mensaje) || esMensajePlanchaCrystal(mensaje) ||
+            esMensajeCorteCrystal(mensaje) || esMensajeMedidasCrystal(mensaje)
+
+    private fun esMensajeProyectoCrystal(mensaje: Message): Boolean {
+        return mensaje.tipo == "proyecto_crystal" ||
+            mensaje.nombreArchivo.endsWith(".${crystal.crystal.taller.Taller.EXTENSION_PROYECTO_CRYSTAL}", ignoreCase = true)
+    }
+
+    private fun abrirProyectoCrystalDesdeChat(mensaje: Message) {
+        if (!isFirebaseStorageUrl(mensaje.message)) {
+            importarProyectoCrystalDesdeUri(Uri.parse(mensaje.message))
+            return
+        }
+        Toast.makeText(this, "Descargando proyecto...", Toast.LENGTH_SHORT).show()
+        FirebaseStorage.getInstance().getReferenceFromUrl(mensaje.message)
+            .getBytes(20L * 1024L * 1024L)
+            .addOnSuccessListener { bytes -> importarProyectoCrystal(String(bytes, Charsets.UTF_8)) }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Error al descargar proyecto: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun importarProyectoCrystalDesdeUri(uri: Uri) {
+        runCatching {
+            val texto = contentResolver.openInputStream(uri)?.bufferedReader().use { it?.readText() }.orEmpty()
+            importarProyectoCrystal(texto)
+        }.onFailure {
+            Toast.makeText(this, "No se pudo leer el proyecto: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun importarProyectoCrystal(json: String) {
+        runCatching {
+            val root = com.google.gson.JsonParser.parseString(json).asJsonObject
+            if (root.get("format")?.asString != crystal.crystal.taller.Taller.FORMAT_PROYECTO_CRYSTAL) {
+                Toast.makeText(this, "El archivo no es un proyecto Crystal válido", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val nombreOrig = root.get("proyecto")?.asString?.trim().takeUnless { it.isNullOrBlank() } ?: "Proyecto compartido"
+            val tipo = object : com.google.gson.reflect.TypeToken<MutableMap<String, MutableList<MutableList<String>>>>() {}.type
+            val mapa: MutableMap<String, MutableList<MutableList<String>>> =
+                com.google.gson.Gson().fromJson(root.get("data"), tipo) ?: mutableMapOf()
+            if (mapa.isEmpty()) {
+                Toast.makeText(this, "El proyecto recibido está vacío", Toast.LENGTH_SHORT).show()
+                return
+            }
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Proyecto recibido")
+                .setMessage("¿Agregar \"$nombreOrig\" a tus proyectos?")
+                .setPositiveButton("Agregar") { _, _ -> guardarProyectoImportado(nombreOrig, mapa) }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }.onFailure {
+            Toast.makeText(this, "No se pudo importar el proyecto: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun guardarProyectoImportado(
+        nombreOrig: String,
+        mapa: MutableMap<String, MutableList<MutableList<String>>>
+    ) {
+        var nombre = nombreOrig
+        var i = 2
+        while (crystal.crystal.casilla.MapStorage.existeProyecto(this, nombre)) {
+            nombre = "$nombreOrig ($i)"; i++
+        }
+        crystal.crystal.casilla.MapStorage.crearProyecto(this, nombre, "Recibido por chat")
+        crystal.crystal.casilla.MapStorage.guardarProyecto(this, nombre, mapa)
+        Toast.makeText(this, "Proyecto agregado: $nombre", Toast.LENGTH_LONG).show()
+    }
+
+    private fun copiarTexto(texto: String) {
+        val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("mensaje", texto))
+        Toast.makeText(this, "Texto copiado", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun compartirTexto(texto: String) {
+        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, texto)
+        }, "Compartir"))
+    }
+
+    private fun nombreArchivoDe(mensaje: Message): String {
+        val n = mensaje.nombreArchivo
+        if (n.isNotBlank()) return n
+        val ext = when (mensaje.tipo) {
+            "pdf" -> "pdf"; "video" -> "mp4"; "audio" -> "m4a"
+            "imagen", "image" -> "jpg"; else -> "dat"
+        }
+        return "crystal_${System.currentTimeMillis()}.$ext"
+    }
+
+    private fun mimeDeTipo(tipo: String): String = when (tipo) {
+        "pdf" -> "application/pdf"; "video" -> "video/*"; "audio" -> "audio/*"
+        "imagen", "image" -> "image/*"; else -> "*/*"
+    }
+
+    private fun descargarBytesMensaje(mensaje: Message, onOk: (ByteArray) -> Unit) {
+        Toast.makeText(this, "Procesando…", Toast.LENGTH_SHORT).show()
+        if (isFirebaseStorageUrl(mensaje.message)) {
+            FirebaseStorage.getInstance().getReferenceFromUrl(mensaje.message)
+                .getBytes(50L * 1024 * 1024)
+                .addOnSuccessListener { onOk(it) }
+                .addOnFailureListener { Toast.makeText(this, "Error: ${it.message}", Toast.LENGTH_SHORT).show() }
+        } else {
+            Thread {
+                runCatching { java.net.URL(mensaje.message).openStream().use { it.readBytes() } }
+                    .onSuccess { b -> runOnUiThread { onOk(b) } }
+                    .onFailure { e -> runOnUiThread { Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show() } }
+            }.start()
+        }
+    }
+
+    private fun uriCacheDeBytes(bytes: ByteArray, nombre: String): Uri {
+        val file = File(cacheDir, nombre)
+        file.writeBytes(bytes)
+        return FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+    }
+
+    private fun compartirArchivoRemoto(mensaje: Message, mime: String) {
+        descargarBytesMensaje(mensaje) { bytes ->
+            runCatching {
+                val uri = uriCacheDeBytes(bytes, nombreArchivoDe(mensaje))
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = mime
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }, "Compartir"))
+            }.onFailure { Toast.makeText(this, "No se pudo compartir: ${it.message}", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    private fun copiarImagen(mensaje: Message) {
+        descargarBytesMensaje(mensaje) { bytes ->
+            runCatching {
+                val uri = uriCacheDeBytes(bytes, nombreArchivoDe(mensaje))
+                val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newUri(contentResolver, "imagen", uri))
+                Toast.makeText(this, "Imagen copiada", Toast.LENGTH_SHORT).show()
+            }.onFailure { Toast.makeText(this, "No se pudo copiar: ${it.message}", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    private fun descargarImagen(mensaje: Message) {
+        descargarBytesMensaje(mensaje) { bytes ->
+            runCatching {
+                val nombre = nombreArchivoDe(mensaje)
+                val mime = if (nombre.endsWith(".png", true)) "image/png" else "image/jpeg"
+                val values = android.content.ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, nombre)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                    if (android.os.Build.VERSION.SDK_INT >= 29)
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Crystal")
+                }
+                val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("No se pudo crear el archivo")
+                contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                Toast.makeText(this, "Imagen guardada en Galería (Crystal)", Toast.LENGTH_LONG).show()
+            }.onFailure { Toast.makeText(this, "No se pudo descargar: ${it.message}", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    private fun descargarArchivoRemoto(mensaje: Message) {
+        descargarBytesMensaje(mensaje) { bytes ->
+            runCatching {
+                val nombre = nombreArchivoDe(mensaje)
+                val values = android.content.ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, nombre)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mimeDeTipo(mensaje.tipo))
+                    if (android.os.Build.VERSION.SDK_INT >= 29)
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Crystal")
+                }
+                val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("No se pudo crear el archivo")
+                contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                Toast.makeText(this, "Descargado en Descargas/Crystal", Toast.LENGTH_LONG).show()
+            }.onFailure { Toast.makeText(this, "No se pudo descargar: ${it.message}", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    private fun usarComprobanteChatParaRecarga(mensaje: Message) {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val voucherUrl = mensaje.message
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("reservas_recarga")
+            .whereEqualTo("uid", uid)
+            .whereEqualTo("estado", "esperando")
+            .get()
+            .addOnSuccessListener { qs ->
+                val pend = qs.documents
+                when {
+                    pend.isEmpty() -> Toast.makeText(
+                        this, "No tienes una recarga en curso. Primero toca 💳 Recargar en el Wallet.", Toast.LENGTH_LONG
+                    ).show()
+                    pend.size == 1 -> adjuntarComprobanteAReserva(pend[0].id, pend[0].getLong("totalCent") ?: 0L, voucherUrl)
+                    else -> {
+                        val labels = pend.map { "S/ %.2f".format((it.getLong("totalCent") ?: 0L) / 100.0) }.toTypedArray()
+                        androidx.appcompat.app.AlertDialog.Builder(this)
+                            .setTitle("¿A qué recarga pertenece?")
+                            .setItems(labels) { _, i -> adjuntarComprobanteAReserva(pend[i].id, pend[i].getLong("totalCent") ?: 0L, voucherUrl) }
+                            .show()
+                    }
+                }
+            }
+            .addOnFailureListener { Toast.makeText(this, "Error buscando tu recarga: ${it.message}", Toast.LENGTH_LONG).show() }
+    }
+
+    private fun adjuntarComprobanteAReserva(reservaId: String, totalCent: Long, voucherUrl: String) {
+        com.google.firebase.functions.FirebaseFunctions.getInstance()
+            .getHttpsCallable("adjuntarComprobante")
+            .call(mapOf("reservaId" to reservaId, "voucherPath" to "", "voucherUrl" to voucherUrl))
+            .addOnSuccessListener {
+                Toast.makeText(this, "Comprobante adjuntado ✅. Abriendo tu Wallet…", Toast.LENGTH_SHORT).show()
+                startActivity(
+                    Intent(this, crystal.crystal.registro.WalletActivity::class.java).apply {
+                        putExtra("abrir_reserva_id", reservaId)
+                        putExtra("abrir_reserva_cent", totalCent)
+                    }
+                )
+            }
+            .addOnFailureListener { e -> Toast.makeText(this, "No se pudo adjuntar: ${e.message}", Toast.LENGTH_LONG).show() }
     }
 
     private fun abrirMedidasCrystalDesdeChat(mensaje: Message) {

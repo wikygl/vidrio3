@@ -92,13 +92,19 @@ class CorteActivity: AppCompatActivity() {
         mostrarDialogo2()
         actualizar()
         actualizar2()
+        actualizarLabelEscala()
         manejarIntentEntrada(intent)
+        cargarPiezasDesdeIntent(intent)
 
         binding.etMedida.requestFocus()
         binding.listadoTxt.setOnClickListener {
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                    "Guardar proyectos del optimizador es una función de pago.")) return@setOnClickListener
             mostrarDialogoGuardarProyectoOptimizador()
         }
         binding.listadoTxt.setOnLongClickListener {
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                    "Abrir proyectos guardados es una función de pago.")) return@setOnLongClickListener true
             mostrarDialogoAbrirProyectoOptimizador()
             true
         }
@@ -122,6 +128,8 @@ class CorteActivity: AppCompatActivity() {
         }
 
         binding.btAnadir.setOnLongClickListener {
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                    "Cargar listas guardadas es una función de pago.")) return@setOnLongClickListener true
             // Llamar a la función para poblar el Spinner usando la clase especializada
             if (listManager.hayListasDisponibles()) {
                 spinnerConProyectosOptimizador = false
@@ -137,6 +145,8 @@ class CorteActivity: AppCompatActivity() {
 
         // CORREGIDO: Método de optimización
         binding.btOpti.setOnClickListener {
+            // Optimizar con medidas ingresadas a mano es GRATIS. Lo de pago es importar/cargar/guardar
+            // piezas (proyectos guardados, listas guardadas, entrada por intent), gateado en su punto.
             try {
                 // Filtrar solo las piezas que están marcadas como true (entran en optimización)
                 val piezasParaOptimizar = lista.filter { it.cortada }
@@ -197,6 +207,9 @@ class CorteActivity: AppCompatActivity() {
             compartirContextoCorte()
             true
         }
+
+        // Botón de mensajería (cabecera): desplegable con ir a chat / enviar Crystal / enviar texto.
+        binding.imageButton.setOnClickListener { mostrarMenuMensajeriaCorte() }
 
         binding.tvResultado.setOnClickListener {
             abrirUltimoResultadoGuardado(mostrarAvisoSiNoExiste = true)
@@ -322,10 +335,15 @@ class CorteActivity: AppCompatActivity() {
     private fun mostrarMenuAjustes() {
         PopupMenu(this, binding.btAjustes).apply {
             menu.add("Seleccionar medidas iguales")
+            menu.add("Escala de medida")
             setOnMenuItemClickListener { item ->
                 when (item.title.toString()) {
                     "Seleccionar medidas iguales" -> {
                         mostrarDialogoMedidasIguales()
+                        true
+                    }
+                    "Escala de medida" -> {
+                        mostrarDialogoEscala()
                         true
                     }
                     else -> false
@@ -333,6 +351,51 @@ class CorteActivity: AppCompatActivity() {
             }
             show()
         }
+    }
+
+    private fun mostrarDialogoEscala() {
+        val escalas = EscalaCorte.entries.toTypedArray()
+        val nombres = escalas.map { it.etiqueta }.toTypedArray()
+        var seleccion = escalas.indexOf(formatter.escala).coerceAtLeast(0)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Escala (actual: ${formatter.escala.sigla})")
+            .setSingleChoiceItems(nombres, seleccion) { _, which -> seleccion = which }
+            .setPositiveButton("Cambiar de escala") { _, _ -> cambiarEscala(escalas[seleccion]) }
+            .setNeutralButton("Elegir escala") { _, _ -> reinterpretarEscala(escalas[seleccion]) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    // "Cambiar de escala": cambia la unidad y CONVIERTE conservando el tamaño real (200 cm → 2 m).
+    private fun cambiarEscala(nueva: EscalaCorte) {
+        formatter.escala = nueva
+        EscalaCorte.guardar(this, nueva)
+        actualizarLabelEscala()
+        actualizar()
+        actualizar2()
+        Toast.makeText(this, "Escala: ${nueva.etiqueta} (tamaño conservado)", Toast.LENGTH_SHORT).show()
+    }
+
+    // "Elegir escala": REINTERPRETA. Detecta la escala actual y mantiene el número, cambiando la unidad
+    // (200 cm → 200 m). Recalcula los valores almacenados (en cm).
+    private fun reinterpretarEscala(nueva: EscalaCorte) {
+        val anterior = formatter.escala
+        if (nueva == anterior) { cambiarEscala(nueva); return }
+        val factor = nueva.factorACm / anterior.factorACm
+        for (i in lista.indices) lista[i] = lista[i].copy(longitud = lista[i].longitud * factor)
+        for (i in lista2.indices) lista2[i] = lista2[i].copy(longitud = lista2[i].longitud * factor)
+        formatter.escala = nueva
+        EscalaCorte.guardar(this, nueva)
+        dataManager.guardarPiezas(lista)
+        dataManager.guardarVarillas(lista2)
+        actualizarLabelEscala()
+        actualizar()
+        actualizar2()
+        Toast.makeText(this, "Reinterpretado a ${nueva.etiqueta} (número conservado)", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun actualizarLabelEscala() {
+        binding.tvMedidasCant.text = "${getString(R.string.medidas_y_cantidades)} (${formatter.escala.sigla})"
     }
 
     private data class GrupoMedidaIgual(
@@ -365,7 +428,7 @@ class CorteActivity: AppCompatActivity() {
                 grupo.indices.none { lista[it].cortada } -> "inactivas"
                 else -> "mixtas"
             }
-            "${formatter.df1(grupo.longitud)} cm - $cantidadPiezas filas, $cantidadUnidades uni ($estado)"
+            "${formatter.mostrarConSigla(grupo.longitud)} - $cantidadPiezas filas, $cantidadUnidades uni ($estado)"
         }
         val etiquetas = listOf("Todos los grupos") + etiquetasGrupos
         val seleccionados = BooleanArray(etiquetas.size)
@@ -895,7 +958,7 @@ class CorteActivity: AppCompatActivity() {
         val refe = binding.etRefe.text.toString()
 
         if (medi != null && cant != null && refe.isNotEmpty()) {
-            lista.add(PiezaCorte(medi, cant, refe, true)) // true por defecto
+            lista.add(PiezaCorte(formatter.escala.aCm(medi), cant, refe, true)) // guardar en cm
             actualizar()
             dataManager.guardarPiezas(lista)
 
@@ -1235,6 +1298,63 @@ class CorteActivity: AppCompatActivity() {
         }
     }
 
+    private fun mostrarMenuMensajeriaCorte() {
+        android.widget.PopupMenu(this, binding.imageButton).apply {
+            menu.add(0, 1, 0, "Ir a chat")
+            menu.add(0, 2, 1, "Enviar formato Crystal")
+            menu.add(0, 3, 2, "Enviar medidas como texto")
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    1 -> {
+                        startActivity(Intent(this@CorteActivity, ListChatActivity::class.java))
+                        true
+                    }
+                    2 -> { compartirContextoCorte(); true }
+                    3 -> { enviarMedidasTextoCorte(); true }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    // Envía las medidas ACTIVAS como TEXTO por la mensajería de Crystal (queda como mensaje, para
+    // copiar y pegar). Solo va a Crystal, no al compartir general de Android.
+    private fun enviarMedidasTextoCorte() {
+        val texto = crearTextoMedidasActivasCorte()
+        if (texto.isBlank()) {
+            Toast.makeText(this, "No hay medidas activas para enviar", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(this, ListChatActivity::class.java).apply {
+            putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_TEXT, texto)
+        }
+        startActivity(intent)
+    }
+
+    /**
+     * Texto simple de las piezas ACTIVAS para copiar/pegar. Encabeza con el nombre de la lista o
+     * proyecto (que suele traer el perfil) y una línea por corte: "longitud = cantidad referencia".
+     *
+     * Ejemplo:
+     *   Junkillo [madera]
+     *   62.8 cm = 1 P1 Isabel Med,Ang.tope
+     *   28 cm = 20 P1 Isabel Med,Junkillo
+     */
+    private fun crearTextoMedidasActivasCorte(): String {
+        val piezas = lista.filter { it.cortada && it.longitud > 0f }
+        if (piezas.isEmpty()) return ""
+        val encabezado = nombreListaActual
+            .ifBlank { proyectoOptimizadorActual }
+            .ifBlank { lista2.firstOrNull { it.cortada }?.referencia?.trim().orEmpty() }
+        return buildString {
+            if (encabezado.isNotBlank()) appendLine(encabezado)
+            piezas.forEach { pieza ->
+                appendLine("${formatter.mostrarConSigla(pieza.longitud)} = ${pieza.cantidad} ${pieza.referencia}")
+            }
+        }.trim()
+    }
+
     private fun compartirContextoCorte() {
         val texto = crearTextoCompartirCorte()
         if (texto.isBlank()) {
@@ -1306,6 +1426,103 @@ class CorteActivity: AppCompatActivity() {
             .trim('_')
             .ifBlank { "corte" }
 
+    // Recibe piezas en metro lineal (ya convertidas a cm) desde MainActivity y las carga en la lista.
+    // Recibe medidas en metro lineal desde MainActivity. Si ya hay una lista cargada (queda guardada
+    // en preferences entre sesiones), pregunta qué hacer en vez de sumar en silencio: sumar,
+    // reemplazar, o revisar antes lo que hay.
+    private fun cargarPiezasDesdeIntent(intent: Intent?) {
+        val json = intent?.getStringExtra("piezas_cortes_json") ?: return
+        val entrantes = runCatching {
+            val arr = org.json.JSONArray(json)
+            val piezas = mutableListOf<PiezaCorte>()
+            for (idx in 0 until arr.length()) {
+                val o = arr.optJSONObject(idx) ?: continue
+                val cm = o.optDouble("l", 0.0).toFloat()
+                if (cm > 0f) piezas.add(PiezaCorte(cm, o.optInt("c", 1), o.optString("r", "-"), true))
+            }
+            piezas
+        }.getOrElse {
+            Toast.makeText(this, "No se pudieron cargar las medidas: ${it.message}", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (entrantes.isEmpty()) return
+        intent.removeExtra("piezas_cortes_json")
+
+        if (lista.isEmpty()) {
+            aplicarPiezasEntrantes(entrantes, reemplazar = false)
+            return
+        }
+        preguntarComoCargarPiezas(entrantes)
+    }
+
+    private fun preguntarComoCargarPiezas(entrantes: List<PiezaCorte>) {
+        val uniActual = lista.sumOf { it.cantidad }
+        val uniEntrantes = entrantes.sumOf { it.cantidad }
+        // Todo el detalle va en el título y en las opciones: un AlertDialog con setMessage descarta
+        // la lista de setItems, así que no se pueden usar los dos a la vez.
+        val opciones = arrayOf(
+            "Sumar a lo que hay  →  ${lista.size + entrantes.size} filas",
+            "Reemplazar la lista actual  →  ${entrantes.size} filas",
+            "Ver la lista actual"
+        )
+        AlertDialog.Builder(this)
+            .setTitle(
+                "Llegan ${entrantes.size} fila(s) / $uniEntrantes uni\n" +
+                    "Ya hay ${lista.size} fila(s) / $uniActual uni"
+            )
+            .setItems(opciones) { _, cual ->
+                when (cual) {
+                    0 -> aplicarPiezasEntrantes(entrantes, reemplazar = false)
+                    1 -> confirmarReemplazarLista(entrantes)
+                    2 -> mostrarListaActual { preguntarComoCargarPiezas(entrantes) }
+                }
+            }
+            .setNegativeButton("Descartar lo que llega", null)
+            .show()
+    }
+
+    private fun confirmarReemplazarLista(entrantes: List<PiezaCorte>) {
+        AlertDialog.Builder(this)
+            .setTitle("Reemplazar la lista")
+            .setMessage("Se borran las ${lista.size} fila(s) que hay ahora y quedan solo las ${entrantes.size} que llegan.")
+            .setPositiveButton("Reemplazar") { _, _ ->
+                aplicarPiezasEntrantes(entrantes, reemplazar = true)
+            }
+            .setNegativeButton("Volver") { _, _ -> preguntarComoCargarPiezas(entrantes) }
+            .show()
+    }
+
+    /** Muestra las medidas que hay ahora en la lista, para decidir con la información a la vista. */
+    private fun mostrarListaActual(alCerrar: () -> Unit) {
+        val filas = lista.map { pieza ->
+            val estado = if (pieza.cortada) "" else "  [inactiva]"
+            "${formatter.mostrarConSigla(pieza.longitud)} = ${pieza.cantidad} (${pieza.referencia})$estado"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Lista actual (${lista.size} filas, ${lista.sumOf { it.cantidad }} uni)")
+            .setItems(filas, null)
+            .setPositiveButton("Volver") { _, _ -> alCerrar() }
+            .setOnCancelListener { alCerrar() }
+            .show()
+    }
+
+    private fun aplicarPiezasEntrantes(entrantes: List<PiezaCorte>, reemplazar: Boolean) {
+        // Vienen en metro lineal → mostrar en metros
+        formatter.escala = EscalaCorte.METRO
+        EscalaCorte.guardar(this, EscalaCorte.METRO)
+        if (reemplazar) lista.clear()
+        lista.addAll(entrantes)
+        dataManager.guardarPiezas(lista)
+        actualizar()
+        actualizarLabelEscala()
+        val accion = if (reemplazar) "reemplazaron" else "cargaron"
+        Toast.makeText(
+            this,
+            "Se $accion ${entrantes.size} medida(s) en cortes (metros)",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
     private fun manejarIntentEntrada(intent: Intent?) {
         if (intent == null) return
         val uri = when (intent.action) {
@@ -1318,6 +1535,8 @@ class CorteActivity: AppCompatActivity() {
             val texto = contentResolver.openInputStream(uri)?.bufferedReader().use { it?.readText() }.orEmpty()
             val root = JSONObject(texto)
             if (root.optString("format") != FORMAT_CORTE_CRYSTAL) return
+            if (!crystal.crystal.Suscripcion.exigir(this, crystal.crystal.Suscripcion.avanzadoActivo(),
+                    "Importar un Corte Crystal es una función de pago.")) return
             confirmarImportarCorteCrystal(root)
             intent.action = null
             intent.data = null
@@ -1412,7 +1631,7 @@ class CorteActivity: AppCompatActivity() {
             if (hayFormulario) {
                 appendLine()
                 appendLine("Medida en formulario:")
-                appendLine("Medida: ${medida.ifBlank { "-" }} cm")
+                appendLine("Medida: ${medida.ifBlank { "-" }} ${formatter.sigla}")
                 appendLine("Cantidad: ${cantidad.ifBlank { "-" }}")
                 appendLine("Referencia: ${referencia.ifBlank { "-" }}")
             }
@@ -1422,7 +1641,7 @@ class CorteActivity: AppCompatActivity() {
                 appendLine("Piezas:")
                 lista.forEachIndexed { index, pieza ->
                     val estado = if (pieza.cortada) "" else " [inactiva]"
-                    appendLine("${index + 1}. ${formatter.df1(pieza.longitud)} cm = ${pieza.cantidad} (${pieza.referencia})$estado")
+                    appendLine("${index + 1}. ${formatter.mostrarConSigla(pieza.longitud)} = ${pieza.cantidad} (${pieza.referencia})$estado")
                 }
             }
 
@@ -1431,7 +1650,7 @@ class CorteActivity: AppCompatActivity() {
                 appendLine("Varillas y retazos:")
                 lista2.forEachIndexed { index, varilla ->
                     val estado = if (varilla.cortada) "" else " [inactiva]"
-                    appendLine("${index + 1}. ${formatter.df1(varilla.longitud)} cm = ${varilla.cantidad} (${varilla.referencia})$estado")
+                    appendLine("${index + 1}. ${formatter.mostrarConSigla(varilla.longitud)} = ${varilla.cantidad} (${varilla.referencia})$estado")
                 }
             }
         }.trim()
@@ -1470,7 +1689,7 @@ class CorteActivity: AppCompatActivity() {
                 val producto = etdProducto.text.toString()
 
                 if (med1 != null && cant != null && producto.isNotEmpty()) {
-                    lista2.add(PiezaCorte(med1, cant, producto, true)) // true por defecto
+                    lista2.add(PiezaCorte(formatter.escala.aCm(med1), cant, producto, true)) // guardar en cm
                     actualizar2()
                     dataManager.guardarVarillas(lista2)
                     dialogoCortes.dismiss()
@@ -1512,7 +1731,7 @@ class CorteActivity: AppCompatActivity() {
 
                 val pieza = lista[position]
 
-                etdMed1.setText(pieza.longitud.toString())
+                etdMed1.setText(formatter.mostrar(pieza.longitud))
                 etdCant.setText(pieza.cantidad.toString())
                 etdProducto.setText(pieza.referencia)
 
@@ -1536,7 +1755,7 @@ class CorteActivity: AppCompatActivity() {
                     val nuevaReferencia = etdProducto.text.toString()
 
                     if (nuevaLongitud != null && nuevaCantidad != null && nuevaReferencia.isNotEmpty()) {
-                        lista[position] = PiezaCorte(nuevaLongitud, nuevaCantidad, nuevaReferencia, lista[position].cortada)
+                        lista[position] = PiezaCorte(formatter.escala.aCm(nuevaLongitud), nuevaCantidad, nuevaReferencia, lista[position].cortada)
                         actualizar()
                         dataManager.guardarPiezas(lista)
                         dialogo.dismiss()
@@ -1581,7 +1800,7 @@ class CorteActivity: AppCompatActivity() {
 
                 val pieza = lista2[position]
 
-                etdMed1.setText(pieza.longitud.toString())
+                etdMed1.setText(formatter.mostrar(pieza.longitud))
                 etdCant.setText(pieza.cantidad.toString())
                 etdProducto.setText(pieza.referencia)
 
@@ -1605,7 +1824,7 @@ class CorteActivity: AppCompatActivity() {
                     val nuevaReferencia = etdProducto.text.toString()
 
                     if (nuevaLongitud != null && nuevaCantidad != null && nuevaReferencia.isNotEmpty()) {
-                        lista2[position] = PiezaCorte(nuevaLongitud, nuevaCantidad, nuevaReferencia, lista2[position].cortada)
+                        lista2[position] = PiezaCorte(formatter.escala.aCm(nuevaLongitud), nuevaCantidad, nuevaReferencia, lista2[position].cortada)
                         actualizar2()
                         dataManager.guardarVarillas(lista2)
                         dialogo.dismiss()

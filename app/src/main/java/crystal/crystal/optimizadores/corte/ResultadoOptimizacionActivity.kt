@@ -117,8 +117,7 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
 
     private fun configurarEventos() {
         btnVolver.setOnClickListener {
-            procesarVarillasCortadas()
-            finish() // Cierra esta activity y vuelve a la anterior
+            if (procesarVarillasCortadas()) finish() // Cierra y vuelve; si mostró la invitación, cierra al cerrarla
         }
     }
 
@@ -126,7 +125,8 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
         val detalle = resultado.cortesFaltantes
             .take(12)
             .joinToString("\n") { faltante ->
-                "${formatearNumero(faltante.longitud)} cm = ${faltante.cantidad} (${faltante.referencia})"
+                val esc = EscalaCorte.cargar(this)
+                "${formatearNumero(esc.desdeCm(faltante.longitud))} ${esc.sigla} = ${faltante.cantidad} (${faltante.referencia})"
             }
         val extra = if (resultado.cortesFaltantes.size > 12) {
             "\n... y ${resultado.cortesFaltantes.size - 12} medidas mas"
@@ -185,33 +185,41 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
     /**
      * Procesa las varillas que fueron marcadas como cortadas y las guarda
      */
-    private fun procesarVarillasCortadas() {
+    // Devuelve true si se puede cerrar la actividad ahora; false si se mostró la invitación a FULL
+    // (en ese caso la actividad se cierra al cerrar el diálogo, vía el callback).
+    private fun procesarVarillasCortadas(): Boolean {
         guardarResultadoActual()
-        val adapter = recyclerResultados.adapter as? ResultadoAdapter
-        if (adapter != null) {
-            val varillasResultado = adapter.resultados
-            val cortesEjecutados = mutableListOf<VarillaCortada>()
+        val adapter = recyclerResultados.adapter as? ResultadoAdapter ?: return true
+        val cortesEjecutados = mutableListOf<VarillaCortada>()
 
-            // Procesar cada varilla del resultado
-            varillasResultado.forEach { varillaResultado ->
-                if (varillaResultado.cortada) { // Si está marcada como cortada
-                    // Agrupar los cortes por referencia y cantidad
-                    val cortesAgrupados = agruparCortesPorReferencia(varillaResultado.cortesConReferencias)
-
-                    val varillaCortada = VarillaCortada(
+        // Procesar cada varilla del resultado
+        adapter.resultados.forEach { varillaResultado ->
+            if (varillaResultado.cortada) { // Si está marcada como cortada
+                val cortesAgrupados = agruparCortesPorReferencia(varillaResultado.cortesConReferencias)
+                cortesEjecutados.add(
+                    VarillaCortada(
                         longitudVarilla = varillaResultado.longitudVarilla,
                         cortesEjecutados = cortesAgrupados
                     )
-                    cortesEjecutados.add(varillaCortada)
-                }
-            }
-
-            // DEBUG: Log de los cortes ejecutados
-            if (cortesEjecutados.isNotEmpty()) {
-                DebugHelper.logCortesEjecutados(cortesEjecutados)
-                dataManager.guardarCortesEjecutados(cortesEjecutados)
+                )
             }
         }
+
+        if (cortesEjecutados.isEmpty()) return true
+
+        // Candado (Fase 3): descontar de la lista lo ya cortado es de pago. Muestra la invitación y,
+        // al cerrarla, vuelve igual (sin descontar). No cierra la actividad antes de tiempo.
+        if (!crystal.crystal.Suscripcion.avanzadoActivo()) {
+            crystal.crystal.Suscripcion.invitarFull(
+                this,
+                "Descontar de la lista las piezas cortadas es una función de pago."
+            ) { finish() }
+            return false
+        }
+
+        DebugHelper.logCortesEjecutados(cortesEjecutados)
+        dataManager.guardarCortesEjecutados(cortesEjecutados)
+        return true
     }
 
     /**
@@ -232,8 +240,7 @@ class ResultadoOptimizacionActivity : AppCompatActivity() {
     }
 
     override fun onSupportNavigateUp(): Boolean {
-        procesarVarillasCortadas()
-        finish()
+        if (procesarVarillasCortadas()) finish()
         return true
     }
 }

@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import crystal.crystal.R
 import crystal.crystal.databinding.ActivityMainBinding
 import crystal.crystal.registro.GestionDispositivosActivity
@@ -86,7 +87,13 @@ class RoleConfigManager(
             .addOnSuccessListener { documento ->
                 if (documento.exists()) {
                     val estadoServicio = documento.get("estado_servicio") as? Map<*, *>
-                    val modo = estadoServicio?.get("mode") as? String ?: "BASIC"
+                    val modoCrudo = estadoServicio?.get("mode") as? String ?: "BASIC"
+                    // Modo efectivo: un FULL vencido (o sin full_until válido) se muestra como BASIC,
+                    // para que la cabecera no siga anunciando FULL tras expirar el periodo.
+                    val modo = crystal.crystal.Suscripcion.modoEfectivo(
+                        modoCrudo,
+                        crystal.crystal.Suscripcion.fullUntilMillisDe(estadoServicio)
+                    )
 
                     sharedPreferences.edit()
                         .putString("usuario_estado", modo)
@@ -473,11 +480,15 @@ class RoleConfigManager(
         binding.txPuntoV.visibility = View.VISIBLE
 
         binding.btUser.visibility = View.VISIBLE
-        binding.btnChat.visibility = View.GONE
+        // La terminal SÍ accede al chat del patrón (bandeja compartida de pedidos en línea).
+        binding.btnChat.visibility = View.VISIBLE
         binding.tallerCal.visibility = View.GONE
         binding.btWallet.visibility = View.GONE
         binding.btnCatalogo.visibility = View.VISIBLE
         binding.btAyuda.visibility = View.VISIBLE
+
+        // Asegurar el custom claim `patronUid` para que las reglas dejen a la terminal usar el chat.
+        asegurarClaimPatron()
 
         binding.txUser.text = nombreVendedor
         binding.txModo.text = "TERMINAL"
@@ -531,7 +542,7 @@ class RoleConfigManager(
         if (esTerminalPIN) {
             if (firebaseAuth.currentUser == null) {
                 firebaseAuth.signInAnonymously()
-                    .addOnSuccessListener { }
+                    .addOnSuccessListener { asegurarClaimPatron() }
                     .addOnFailureListener {
                         Toast.makeText(
                             activity,
@@ -541,9 +552,40 @@ class RoleConfigManager(
                     }
             } else {
                 Log.d("RoleConfigManager", "✅ Terminal ya autenticado (Auth UID: ${firebaseAuth.currentUser?.uid})")
+                asegurarClaimPatron()
             }
         } else {
             Log.d("RoleConfigManager", "ℹ️ Usuario patrón, no requiere verificación de terminal")
+        }
+    }
+
+    /**
+     * Pide al servidor el custom claim `patronUid` para esta terminal (Cloud Function
+     * asignarClaimPatron) y refresca el token para que tome efecto, de modo que las reglas dejen a la
+     * terminal usar el chat del patrón. Idempotente y silencioso: si no es terminal, no hay auth o
+     * falla la red, no hace nada (se reintenta en el próximo arranque).
+     */
+    @SuppressLint("HardwareIds")
+    fun asegurarClaimPatron() {
+        val esTerminal = sharedPreferences.getString("session_type", null) == "TERMINAL" ||
+            sharedPreferences.getBoolean("es_terminal_pin", false)
+        if (!esTerminal) return
+        if (auth.currentUser == null) return
+        val patronUid = sharedPreferences.getString("patron_uid", null) ?: return
+        val deviceId = Settings.Secure.getString(activity.contentResolver, Settings.Secure.ANDROID_ID)
+
+        activity.lifecycleScope.launch {
+            try {
+                FirebaseFunctions.getInstance()
+                    .getHttpsCallable("asignarClaimPatron")
+                    .call(hashMapOf("patronUid" to patronUid, "deviceId" to deviceId))
+                    .await()
+                // Refrescar el token para que el claim tome efecto en esta sesión.
+                auth.currentUser?.getIdToken(true)?.await()
+                Log.d("RoleConfigManager", "✅ Claim patronUid asignado y token refrescado")
+            } catch (e: Exception) {
+                Log.w("RoleConfigManager", "No se pudo asignar el claim patronUid: ${e.message}")
+            }
         }
     }
 
