@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recargar saldo — Crystal</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="theme-color" content="#1f6feb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Recargas">
+<style>
+  :root {
+    --fondo: #f6f7f9;
+    --tarjeta: #ffffff;
+    --borde: #e3e6ea;
+    --texto: #12161c;
+    --suave: #5c6672;
+    --acento: #1f6feb;
+    --acento-txt: #ffffff;
+    --ok: #17803d;
+    --ok-fondo: #e9f7ee;
+    --alerta: #b4460e;
+    --alerta-fondo: #fdf1e7;
+    --error: #c0362c;
+    --error-fondo: #fdecea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #0f1216; --tarjeta: #171b21; --borde: #262c34;
+      --texto: #e8ecf1; --suave: #9aa4b1; --acento: #4d8ef7;
+      --ok: #4ade80; --ok-fondo: #14281c;
+      --alerta: #f0a868; --alerta-fondo: #2a1f14;
+      --error: #f28b82; --error-fondo: #2a1715;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fondo); color: var(--texto);
+    font: 16px/1.5 -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    padding: 16px; display: flex; justify-content: center;
+  }
+  main { width: 100%; max-width: 460px; }
+  h1 { font-size: 20px; margin: 8px 0 4px; }
+  .sub { color: var(--suave); font-size: 14px; margin: 0 0 20px; }
+  .tarjeta {
+    background: var(--tarjeta); border: 1px solid var(--borde);
+    border-radius: 14px; padding: 18px; margin-bottom: 14px;
+  }
+  .oculto { display: none !important; }
+  label { display: block; font-size: 13px; color: var(--suave); margin-bottom: 6px; }
+  input[type=number] {
+    width: 100%; padding: 12px; font-size: 18px; border-radius: 10px;
+    border: 1px solid var(--borde); background: var(--fondo); color: var(--texto);
+  }
+  button {
+    width: 100%; padding: 13px; font-size: 16px; font-weight: 600;
+    border: 0; border-radius: 10px; background: var(--acento); color: var(--acento-txt);
+    cursor: pointer; margin-top: 12px;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+  button.secundario { background: transparent; color: var(--acento); border: 1px solid var(--borde); }
+  .saldo { font-size: 32px; font-weight: 700; letter-spacing: -.5px; }
+  .etiqueta { font-size: 13px; color: var(--suave); }
+  .monto-pagar {
+    font-size: 38px; font-weight: 700; letter-spacing: -1px;
+    font-variant-numeric: tabular-nums; margin: 4px 0;
+  }
+  .numero { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .copiar {
+    font-size: 12px; padding: 6px 10px; width: auto; margin: 0 0 0 10px;
+    background: transparent; color: var(--acento); border: 1px solid var(--borde);
+  }
+  .fila { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .aviso { border-radius: 10px; padding: 12px; font-size: 14px; margin-top: 12px; }
+  .aviso.alerta { background: var(--alerta-fondo); color: var(--alerta); }
+  .aviso.ok { background: var(--ok-fondo); color: var(--ok); }
+  .aviso.error { background: var(--error-fondo); color: var(--error); }
+  .pasos { display: flex; gap: 6px; margin-bottom: 16px; }
+  .paso { flex: 1; height: 3px; border-radius: 2px; background: var(--borde); }
+  .paso.activo { background: var(--acento); }
+  .cuenta { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .pie { text-align: center; color: var(--suave); font-size: 12px; margin-top: 20px; }
+  .usuario { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--suave); }
+  .usuario button { width: auto; margin: 0; padding: 4px 8px; font-size: 12px; background: transparent; color: var(--acento); }
+  ul.historial { list-style: none; padding: 0; margin: 8px 0 0; font-size: 14px; }
+  ul.historial li { display: flex; justify-content: space-between; padding: 7px 0; border-top: 1px solid var(--borde); }
+</style>
+</head>
+<body>
+<main>
+
+  <div id="cargando" class="tarjeta">Cargando…</div>
+
+  <!-- ===== Sesión ===== -->
+  <section id="vLogin" class="tarjeta oculto">
+    <h1>Recargar saldo</h1>
+    <p class="sub">Ingresa con la misma cuenta que usas en Crystal.</p>
+    <button id="btnEntrar">Entrar con Google</button>
+  </section>
+
+  <!-- ===== Panel ===== -->
+  <section id="vPanel" class="oculto">
+    <div class="tarjeta">
+      <div class="usuario">
+        <span id="correo"></span>
+        <button id="btnSalir">Salir</button>
+      </div>
+      <p class="etiqueta" style="margin:14px 0 0">Saldo actual</p>
+      <div class="saldo" id="saldo">S/ 0.00</div>
+    </div>
+
+    <!-- Instalación: es lo que evita que el usuario tenga que teclear la dirección nunca más.
+         Solo aparece si el navegador la ofrece y todavía no está instalada. -->
+    <div class="tarjeta oculto" id="cajaInstalar">
+      <p class="etiqueta" style="margin:0">Tenla siempre a mano</p>
+      <div style="font-weight:600;margin:2px 0 8px">Instalar en tu pantalla de inicio</div>
+      <p class="etiqueta" style="margin:0">
+        Queda como un ícono más, junto a Crystal. Se abre sin escribir la dirección.
+      </p>
+      <button id="btnInstalar">Instalar</button>
+      <button class="secundario" id="btnNoInstalar">Ahora no</button>
+    </div>
+
+    <!-- iOS no ofrece instalación automática: hay que decirle al usuario dónde tocar. -->
+    <div class="tarjeta oculto" id="cajaInstalarIos">
+      <p class="etiqueta" style="margin:0">Tenla siempre a mano</p>
+      <div style="font-weight:600;margin:2px 0 8px">Añádela a tu pantalla de inicio</div>
+      <p class="etiqueta" style="margin:0">
+        Toca <strong>Compartir</strong> abajo en Safari y elige <strong>“Añadir a pantalla de inicio”</strong>.
+      </p>
+      <button class="secundario" id="btnNoInstalarIos">Entendido</button>
+    </div>
+
+    <!-- Paso 1: monto -->
+    <div class="tarjeta" id="paso1">
+      <div class="pasos"><i class="paso activo"></i><i class="paso"></i><i class="paso"></i></div>
+      <label for="soles">¿Cuánto quieres recargar?</label>
+      <input type="number" id="soles" min="1" max="999" step="1" placeholder="Ej. 20" inputmode="numeric">
+      <button id="btnReservar">Continuar</button>
+      <div id="errReservar" class="aviso error oculto"></div>
+    </div>
+
+    <!-- Paso 2: pagar -->
+    <div class="tarjeta oculto" id="paso2">
+      <div class="pasos"><i class="paso activo"></i><i class="paso activo"></i><i class="paso"></i></div>
+      <p class="etiqueta">Yapea o plinea EXACTAMENTE este monto</p>
+      <div class="monto-pagar" id="montoPagar">S/ 0.00</div>
+      <div class="aviso alerta">
+        Los céntimos no son un error: son la firma que identifica tu pago.
+        Si envías otro monto, el sistema no podrá reconocerlo.
+      </div>
+      <p class="etiqueta" style="margin-top:16px">Al número</p>
+      <div class="fila">
+        <span class="numero" id="numeroPago">—</span>
+        <button class="copiar" id="btnCopiarNumero">Copiar</button>
+      </div>
+      <p class="etiqueta" style="margin-top:16px">
+        Tiempo restante: <span class="cuenta" id="contador">—</span>
+      </p>
+      <button id="btnYaPague">Ya pagué, subir constancia</button>
+    </div>
+
+    <!-- Paso 3: constancia -->
+    <div class="tarjeta oculto" id="paso3">
+      <div class="pasos"><i class="paso activo"></i><i class="paso activo"></i><i class="paso activo"></i></div>
+      <p class="etiqueta">Sube la captura de tu constancia de pago</p>
+      <input type="file" id="archivo" accept="image/*" style="margin-top:8px">
+      <button id="btnSubir" disabled>Enviar constancia</button>
+      <div id="estadoSubida" class="aviso ok oculto"></div>
+      <div id="errSubida" class="aviso error oculto"></div>
+    </div>
+
+    <!-- Resultado -->
+    <div class="tarjeta oculto" id="paso4">
+      <div id="resultado"></div>
+      <button class="secundario" id="btnOtra">Hacer otra recarga</button>
+    </div>
+
+    <!-- Recarga vencida pero dentro de las 24 h de gracia y sin constancia: el pago pudo haberse
+         hecho, así que se ofrece adjuntarla en vez de darla por perdida. -->
+    <div class="tarjeta oculto" id="cajaGracia">
+      <div class="aviso alerta">
+        <strong>Tienes una recarga sin constancia.</strong>
+        <span id="graciaDetalle"></span>
+        Si ya pagaste, súbela: todavía estás a tiempo.
+      </div>
+      <input type="file" id="archivoGracia" accept="image/*" style="margin-top:10px">
+      <button id="btnSubirGracia" disabled>Enviar constancia</button>
+      <div id="errGracia" class="aviso error oculto"></div>
+    </div>
+
+    <div class="tarjeta" id="cajaHistorial">
+      <p class="etiqueta">Tus últimas recargas</p>
+      <ul class="historial" id="historial"><li><span>Sin movimientos</span></li></ul>
+    </div>
+  </section>
+
+  <div id="servidorCaido" class="aviso error oculto">
+    El servidor de pagos no está respondiendo en este momento.
+    Tu saldo y tus datos están intactos. Vuelve a intentarlo más tarde.
+  </div>
+
+  <p class="pie">Crystal · Recargas</p>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, doc, onSnapshot, collection, query, where, limit, getDocs
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+// La apiKey de una app web NO es un secreto: identifica al proyecto, no autoriza nada. Quien manda
+// son las reglas de Firestore/Storage y la autenticación.
+const app = initializeApp({
+  apiKey: "AIzaSyAQdljrWYxmwzFu63sr3B04kYnO4Lc4TzM",
+  authDomain: "crystal-4f306.firebaseapp.com",
+  projectId: "crystal-4f306",
+  storageBucket: "crystal-4f306.firebasestorage.app",
+  messagingSenderId: "529436008604",
+  appId: "1:529436008604:web:8a9ebddaee7a2d330b4d59",
+});
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+const fns = getFunctions(app);
+const storage = getStorage(app);
+
+const $ = (id) => document.getElementById(id);
+const soles = (cent) => "S/ " + (cent / 100).toFixed(2);
+
+let uid = null;
+let reservaActual = null;   // { id, totalCent, numero, expiraMs }
+let reservaGracia = null;   // vencida, sin constancia, todavía dentro de las 24 h
+let pararReserva = null;    // corta el listener de la reserva en curso
+let pararUsuario = null;
+let temporizador = null;
+
+// ===== Sesión =====
+$("btnEntrar").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(mostrarError);
+$("btnSalir").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, (u) => {
+  $("cargando").classList.add("oculto");
+  if (pararUsuario) { pararUsuario(); pararUsuario = null; }
+  if (!u) {
+    uid = null;
+    $("vLogin").classList.remove("oculto");
+    $("vPanel").classList.add("oculto");
+    return;
+  }
+  uid = u.uid;
+  $("correo").textContent = u.email || u.displayName || "";
+  $("vLogin").classList.add("oculto");
+  $("vPanel").classList.remove("oculto");
+
+  // El saldo se escucha en vivo: cuando el servidor acredita, el número cambia solo.
+  pararUsuario = onSnapshot(doc(db, "usuarios", uid), (s) => {
+    $("saldo").textContent = soles(s.get("wallet_saldo_cent") || 0);
+  }, () => {});
+  retomarPendientes();
+  cargarHistorial();
+});
+
+// ===== Recuperar una recarga a medias =====
+// El camino normal es: reservar → salir a Yape → volver. En un teléfono, ese "volver" muchas veces
+// recarga la pestaña. Sin esto la página empezaría de cero y daría un monto NUEVO, con lo que la
+// reserva vieja se queda con el pago y sin constancia, y la nueva con la constancia y sin pago:
+// ninguna de las dos acredita y el dinero queda en el aire.
+const GRACIA_MS = 24 * 60 * 60 * 1000;
+
+async function retomarPendientes() {
+  try {
+    const q = query(
+      collection(db, "reservas_recarga"),
+      where("uid", "==", uid),
+      where("estado", "in", ["esperando", "expirada"]),
+      limit(20)
+    );
+    const snap = await getDocs(q);
+    const ahora = Date.now();
+    const abiertas = snap.docs.map((d) => ({
+      id: d.id,
+      totalCent: d.get("totalCent") || 0,
+      numero: d.get("numeroAsignado") || "",
+      expiraMs: d.get("expiraMs") || 0,
+      tieneComprobante: d.get("tieneComprobante") === true,
+    }));
+
+    // Viva: todavía dentro de sus 30 minutos. Se retoma y se bloquea pedir otra.
+    const viva = abiertas.filter((r) => r.expiraMs > ahora).sort((a, b) => b.expiraMs - a.expiraMs)[0];
+    if (viva) {
+      reservaActual = viva;
+      $("montoPagar").textContent = soles(viva.totalCent);
+      $("numeroPago").textContent = viva.numero || "—";
+      $("paso1").classList.add("oculto");
+      if (viva.tieneComprobante) {
+        $("paso3").classList.remove("oculto");
+        mostrar($("estadoSubida"), "Ya recibimos tu constancia. Estamos verificando el pago…");
+      } else {
+        $("paso2").classList.remove("oculto");
+      }
+      arrancarContador();
+      escucharReserva();
+      return;
+    }
+
+    // Vencida pero dentro de la gracia y sin constancia: puede que ya haya pagado.
+    const enGracia = abiertas
+      .filter((r) => !r.tieneComprobante && ahora < r.expiraMs + GRACIA_MS)
+      .sort((a, b) => b.expiraMs - a.expiraMs)[0];
+    if (enGracia) {
+      reservaGracia = enGracia;
+      $("graciaDetalle").textContent = ` Reservaste ${soles(enGracia.totalCent)} y no subiste el comprobante.`;
+      $("cajaGracia").classList.remove("oculto");
+    }
+  } catch (e) { /* si falla, la página sigue sirviendo para una recarga nueva */ }
+}
+
+// ===== Paso 1: reservar el monto =====
+$("btnReservar").onclick = async () => {
+  const n = parseInt($("soles").value, 10);
+  $("errReservar").classList.add("oculto");
+  if (!n || n < 1 || n > 999) return mostrar($("errReservar"), "Ingresa un monto entre 1 y 999 soles.");
+  // Dos reservas vivas a la vez es justo lo que deja el dinero en el aire.
+  if (reservaActual && reservaActual.expiraMs > Date.now()) {
+    return mostrar($("errReservar"), "Ya tienes una recarga en curso. Termínala o espera a que venza.");
+  }
+
+  $("btnReservar").disabled = true;
+  $("btnReservar").textContent = "Reservando…";
+  try {
+    const r = await httpsCallable(fns, "reservarRecarga")({ soles: n });
+    reservaActual = {
+      id: r.data.reservaId,
+      totalCent: r.data.totalCent,
+      numero: r.data.numero,
+      expiraMs: r.data.expiraMs,
+    };
+    $("montoPagar").textContent = r.data.totalTexto || soles(r.data.totalCent);
+    $("numeroPago").textContent = r.data.numero || "—";
+    $("paso1").classList.add("oculto");
+    $("paso2").classList.remove("oculto");
+    arrancarContador();
+    escucharReserva();
+  } catch (e) {
+    mostrarError(e);
+    mostrar($("errReservar"), textoError(e));
+  } finally {
+    $("btnReservar").disabled = false;
+    $("btnReservar").textContent = "Continuar";
+  }
+};
+
+$("btnCopiarNumero").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($("numeroPago").textContent.trim());
+    $("btnCopiarNumero").textContent = "Copiado";
+    setTimeout(() => ($("btnCopiarNumero").textContent = "Copiar"), 1500);
+  } catch (e) { /* algunos navegadores lo bloquean sin gesto directo */ }
+};
+
+$("btnYaPague").onclick = () => {
+  $("paso2").classList.add("oculto");
+  $("paso3").classList.remove("oculto");
+};
+
+// ===== Paso 3: constancia =====
+$("archivo").onchange = () => { $("btnSubir").disabled = !$("archivo").files.length; };
+
+// Misma ruta que usa la app Android, para que ambos canales queden en el mismo sitio.
+async function enviarConstancia(reservaId, archivo) {
+  const ruta = `vouchers/${uid}/reserva_${reservaId}_${Date.now()}.jpg`;
+  const refArchivo = ref(storage, ruta);
+  await uploadBytes(refArchivo, archivo);
+  const url = await getDownloadURL(refArchivo);
+  await httpsCallable(fns, "adjuntarComprobante")({ reservaId, voucherPath: ruta, voucherUrl: url });
+}
+
+$("btnSubir").onclick = async () => {
+  const f = $("archivo").files[0];
+  if (!f || !reservaActual) return;
+  $("errSubida").classList.add("oculto");
+  $("btnSubir").disabled = true;
+  $("btnSubir").textContent = "Subiendo…";
+  try {
+    await enviarConstancia(reservaActual.id, f);
+    mostrar($("estadoSubida"), "Constancia enviada. Estamos verificando tu pago…");
+  } catch (e) {
+    mostrarError(e);
+    mostrar($("errSubida"), textoError(e));
+  } finally {
+    $("btnSubir").disabled = false;
+    $("btnSubir").textContent = "Enviar constancia";
+  }
+};
+
+// Subir la constancia de una recarga vencida pero en gracia. Reutiliza el mismo camino: subir a
+// Storage y llamar a `adjuntarComprobante`; el servidor acredita si el pago ya estaba casado.
+$("archivoGracia").onchange = () => { $("btnSubirGracia").disabled = !$("archivoGracia").files.length; };
+
+$("btnSubirGracia").onclick = async () => {
+  const f = $("archivoGracia").files[0];
+  if (!f || !reservaGracia) return;
+  $("errGracia").classList.add("oculto");
+  $("btnSubirGracia").disabled = true;
+  $("btnSubirGracia").textContent = "Subiendo…";
+  try {
+    await enviarConstancia(reservaGracia.id, f);
+    $("cajaGracia").classList.add("oculto");
+    reservaGracia = null;
+    cargarHistorial();
+  } catch (e) {
+    mostrarError(e);
+    mostrar($("errGracia"), textoError(e));
+  } finally {
+    $("btnSubirGracia").disabled = false;
+    $("btnSubirGracia").textContent = "Enviar constancia";
+  }
+};
+
+$("btnOtra").onclick = () => {
+  reservaActual = null;
+  if (pararReserva) { pararReserva(); pararReserva = null; }
+  $("archivo").value = "";
+  $("btnSubir").disabled = true;
+  ["paso2", "paso3", "paso4"].forEach((p) => $(p).classList.add("oculto"));
+  ["estadoSubida", "errSubida", "errReservar"].forEach((p) => $(p).classList.add("oculto"));
+  $("paso1").classList.remove("oculto");
+  $("soles").value = "";
+  retomarPendientes();
+  cargarHistorial();
+};
+
+// ===== Seguimiento en vivo de la reserva =====
+// La acreditación la decide el servidor al casar el monto con el pago real; aquí solo se escucha.
+function escucharReserva() {
+  if (pararReserva) pararReserva();
+  pararReserva = onSnapshot(doc(db, "reservas_recarga", reservaActual.id), (s) => {
+    if (!s.exists()) return;
+    const estado = s.get("estado");
+    if (estado === "aplicado") {
+      clearInterval(temporizador);
+      $("resultado").innerHTML =
+        `<div class="aviso ok"><strong>¡Listo!</strong> Se acreditaron ` +
+        `${soles(s.get("acreditadoCent") || reservaActual.totalCent)} a tu saldo.</div>`;
+      ["paso1", "paso2", "paso3"].forEach((p) => $(p).classList.add("oculto"));
+      $("paso4").classList.remove("oculto");
+      cargarHistorial();
+    } else if (estado === "expirada") {
+      $("resultado").innerHTML =
+        `<div class="aviso alerta"><strong>La reserva venció.</strong> Si ya pagaste, no te preocupes: ` +
+        `hay 24 horas de gracia y tu constancia sigue valiendo. Si no llega a acreditarse, escríbenos.</div>`;
+      $("paso4").classList.remove("oculto");
+    }
+  }, () => {});
+}
+
+function arrancarContador() {
+  clearInterval(temporizador);
+  const pintar = () => {
+    const resta = (reservaActual?.expiraMs || 0) - Date.now();
+    if (resta <= 0) { $("contador").textContent = "vencida"; clearInterval(temporizador); return; }
+    const m = Math.floor(resta / 60000), s = Math.floor((resta % 60000) / 1000);
+    $("contador").textContent = `${m}:${String(s).padStart(2, "0")}`;
+  };
+  pintar();
+  temporizador = setInterval(pintar, 1000);
+}
+
+// ===== Historial =====
+// Sin orderBy a propósito: ordenar en el servidor exigiría un índice compuesto que no existe.
+async function cargarHistorial() {
+  try {
+    const q = query(collection(db, "reservas_recarga"), where("uid", "==", uid), limit(20));
+    const snap = await getDocs(q);
+    const filas = snap.docs
+      .map((d) => ({ creado: d.get("creadoMs") || 0, total: d.get("totalCent") || 0, estado: d.get("estado") }))
+      .sort((a, b) => b.creado - a.creado)
+      .slice(0, 5);
+    $("historial").innerHTML = filas.length
+      ? filas.map((f) =>
+          `<li><span>${new Date(f.creado).toLocaleDateString("es-PE")}</span>` +
+          `<span>${soles(f.total)} · ${f.estado === "aplicado" ? "acreditada" : f.estado}</span></li>`).join("")
+      : "<li><span>Sin movimientos</span></li>";
+  } catch (e) { /* el historial es accesorio: si falla, no estorba la recarga */ }
+}
+
+// ===== Errores =====
+// `internal` y `unavailable` significan que la función ni siquiera llegó a ejecutarse; se explica en
+// vez de mostrar el código crudo, que al usuario no le dice nada.
+function textoError(e) {
+  const c = e?.code || "";
+  if (c.includes("internal") || c.includes("unavailable") || c.includes("deadline")) {
+    return "El servidor de pagos no responde ahora mismo. Tu saldo está intacto; inténtalo más tarde.";
+  }
+  if (c.includes("resource-exhausted")) return "Hay muchas recargas en curso. Prueba en unos minutos.";
+  if (c.includes("unauthenticated")) return "Tu sesión venció. Vuelve a entrar.";
+  return e?.message || "No se pudo completar la operación.";
+}
+
+function mostrarError(e) {
+  const c = e?.code || "";
+  if (c.includes("internal") || c.includes("unavailable")) {
+    $("servidorCaido").classList.remove("oculto");
+  }
+}
+
+function mostrar(el, txt) { el.textContent = txt; el.classList.remove("oculto"); }
+
+// ===== Instalación en la pantalla de inicio =====
+// El aviso propio del navegador es fácil de perder, así que se guarda el evento y se ofrece con un
+// botón dentro de la página, que es donde el usuario está mirando.
+let promptInstalar = null;
+const yaInstalada = () =>
+  window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();                    // sin esto, Chrome muestra su propio aviso y pierde el evento
+  promptInstalar = e;
+  if (!yaInstalada() && localStorage.getItem("instalar_descartado") !== "1") {
+    $("cajaInstalar").classList.remove("oculto");
+  }
+});
+
+$("btnInstalar").onclick = async () => {
+  if (!promptInstalar) return;
+  $("cajaInstalar").classList.add("oculto");
+  promptInstalar.prompt();
+  await promptInstalar.userChoice.catch(() => {});
+  promptInstalar = null;                 // el evento solo se puede usar una vez
+};
+
+$("btnNoInstalar").onclick = () => {
+  $("cajaInstalar").classList.add("oculto");
+  try { localStorage.setItem("instalar_descartado", "1"); } catch (e) {}
+};
+
+$("btnNoInstalarIos").onclick = () => {
+  $("cajaInstalarIos").classList.add("oculto");
+  try { localStorage.setItem("instalar_descartado", "1"); } catch (e) {}
+};
+
+window.addEventListener("appinstalled", () => {
+  $("cajaInstalar").classList.add("oculto");
+  try { localStorage.setItem("instalar_descartado", "1"); } catch (e) {}
+});
+
+// Safari no dispara `beforeinstallprompt`: la instalación es manual y hay que explicarla.
+(function avisoIos() {
+  const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (esIos && !yaInstalada()) {
+    try { if (localStorage.getItem("instalar_descartado") === "1") return; } catch (e) {}
+    $("cajaInstalarIos").classList.remove("oculto");
+  }
+})();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

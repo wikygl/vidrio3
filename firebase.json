@@ -1,4 +1,20 @@
 {
+  "hosting": {
+    "public": "web",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "headers": [
+      {
+        "comment": "El service worker y el manifiesto NO se cachean: si el navegador se queda con una copia vieja del sw.js, la página deja de actualizarse para ese usuario y no hay forma de arreglarlo desde el servidor.",
+        "source": "/@(sw.js|manifest.json)",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+      },
+      {
+        "source": "/icon-*.png",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }]
+      }
+    ]
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
