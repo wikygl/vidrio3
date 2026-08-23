@@ -104,29 +104,13 @@
             android:name=".registro.GestionDispositivosActivity"
             android:exported="false" />
         <activity
-            android:name=".wallet.ReclamoRecargaActivity"
-            android:label="Reclamar Recarga"
-            android:parentActivityName=".registro.WalletActivity" />
-        <activity
             android:name=".registro.AyudaActivity"
             android:exported="false" />
         <activity
             android:name=".registro.PinAuthActivity"
-            android:exported="false" /> <!-- 🔹 WalletActivity: ahora puede recibir imágenes compartidas -->
-        <activity
-            android:name=".registro.WalletActivity"
-            android:exported="true"
-            android:launchMode="singleTop">
-
-            <!-- Para recibir comprobantes desde Yape / galería con "Compartir" -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data android:mimeType="image/*" />
-            </intent-filter>
-        </activity>
+            android:exported="false" />
+        <!-- Las pantallas de cobro (WalletActivity, PlanSelectionActivity, ReclamoRecargaActivity)
+             se declaran en src/directo/AndroidManifest.xml: no existen en la build de Play. -->
         <activity
             android:name=".taller.puerta.PuertasActivity"
             android:exported="false" />
@@ -162,9 +146,6 @@
             android:name=".taller.PDuchaActivity"
             android:exported="false" />
         <activity
-            android:name=".registro.PlanSelectionActivity"
-            android:exported="false" />
-        <activity
             android:name=".taller.mamparas.MamparaVidrioActivity"
             android:exported="false" />
         <activity
@@ -177,10 +158,6 @@
         <activity
             android:name=".taller.Serie20"
             android:exported="false" />
-        <activity
-            android:name=".registro.RecargaAdapter"
-            android:exported="false"
-            tools:ignore="Instantiatable" />
         <activity
             android:name=".registro.InicioActivity"
             android:exported="false" />

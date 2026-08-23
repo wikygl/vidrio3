@@ -356,7 +356,7 @@ class InicioActivity : AppCompatActivity() {
             """.trimIndent()
             )
             .setPositiveButton("Actualizar plan") { _, _ ->
-                startActivity(Intent(this, PlanSelectionActivity::class.java))
+                crystal.crystal.pagos.CanalPagos.abrirPlanes(this)
                 finish()
             }
             .setNegativeButton("Salir") { _, _ ->

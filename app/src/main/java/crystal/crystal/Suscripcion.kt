@@ -245,11 +245,7 @@ object Suscripcion {
             }
             vista.findViewById<android.view.View>(crystal.crystal.R.id.btnFull).setOnClickListener {
                 dialog.dismiss()
-                runCatching {
-                    activity.startActivity(
-                        android.content.Intent(activity, crystal.crystal.registro.PlanSelectionActivity::class.java)
-                    )
-                }
+                runCatching { crystal.crystal.pagos.CanalPagos.abrirPlanes(activity) }
             }
             vista.findViewById<android.view.View>(crystal.crystal.R.id.btnAhoraNo).setOnClickListener { dialog.dismiss() }
             dialogoInvitacionAbierto = true

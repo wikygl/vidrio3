@@ -722,10 +722,15 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun mostrarOpcionesImagenComprobante(mensaje: Message, uri: Uri) {
+        // Sin canal de cobro en la app (build de Play) la imagen solo se ve: no hay recarga a la
+        // que adjuntarla, así que ofrecerlo sería una opción muerta.
+        if (!crystal.crystal.pagos.CanalPagos.DISPONIBLE_EN_LA_APP) {
+            VisorArchivoActivity.abrir(this, uri, mensaje.tipo); return
+        }
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setItems(arrayOf("👁️ Ver imagen", "💳 Usar para mi recarga")) { _, w ->
                 if (w == 0) VisorArchivoActivity.abrir(this, uri, mensaje.tipo)
-                else usarComprobanteChatParaRecarga(mensaje)
+                else crystal.crystal.pagos.CanalPagos.usarComprobanteParaRecarga(this, mensaje.message)
             }
             .show()
     }
@@ -743,7 +748,11 @@ class ChatActivity : AppCompatActivity() {
                 opciones += "↗️ Compartir imagen" to { compartirArchivoRemoto(mensaje, "image/*") }
                 opciones += "⬇️ Descargar imagen" to { descargarImagen(mensaje) }
                 opciones += "📋 Copiar imagen" to { copiarImagen(mensaje) }
-                opciones += "💳 Usar para mi recarga" to { usarComprobanteChatParaRecarga(mensaje) }
+                if (crystal.crystal.pagos.CanalPagos.DISPONIBLE_EN_LA_APP) {
+                    opciones += "💳 Usar para mi recarga" to {
+                        crystal.crystal.pagos.CanalPagos.usarComprobanteParaRecarga(this, mensaje.message)
+                    }
+                }
             }
             mensaje.tipo in listOf("pdf", "video", "audio", "archivo", "file",
                 "medidas_crystal", "corte_crystal", "plancha_crystal", "presupuesto") -> {
@@ -1121,48 +1130,9 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
-    private fun usarComprobanteChatParaRecarga(mensaje: Message) {
-        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        val voucherUrl = mensaje.message
-        com.google.firebase.firestore.FirebaseFirestore.getInstance()
-            .collection("reservas_recarga")
-            .whereEqualTo("uid", uid)
-            .whereEqualTo("estado", "esperando")
-            .get()
-            .addOnSuccessListener { qs ->
-                val pend = qs.documents
-                when {
-                    pend.isEmpty() -> Toast.makeText(
-                        this, "No tienes una recarga en curso. Primero toca 💳 Recargar en el Wallet.", Toast.LENGTH_LONG
-                    ).show()
-                    pend.size == 1 -> adjuntarComprobanteAReserva(pend[0].id, pend[0].getLong("totalCent") ?: 0L, voucherUrl)
-                    else -> {
-                        val labels = pend.map { "S/ %.2f".format((it.getLong("totalCent") ?: 0L) / 100.0) }.toTypedArray()
-                        androidx.appcompat.app.AlertDialog.Builder(this)
-                            .setTitle("¿A qué recarga pertenece?")
-                            .setItems(labels) { _, i -> adjuntarComprobanteAReserva(pend[i].id, pend[i].getLong("totalCent") ?: 0L, voucherUrl) }
-                            .show()
-                    }
-                }
-            }
-            .addOnFailureListener { Toast.makeText(this, "Error buscando tu recarga: ${it.message}", Toast.LENGTH_LONG).show() }
-    }
-
-    private fun adjuntarComprobanteAReserva(reservaId: String, totalCent: Long, voucherUrl: String) {
-        com.google.firebase.functions.FirebaseFunctions.getInstance()
-            .getHttpsCallable("adjuntarComprobante")
-            .call(mapOf("reservaId" to reservaId, "voucherPath" to "", "voucherUrl" to voucherUrl))
-            .addOnSuccessListener {
-                Toast.makeText(this, "Comprobante adjuntado ✅. Abriendo tu Wallet…", Toast.LENGTH_SHORT).show()
-                startActivity(
-                    Intent(this, crystal.crystal.registro.WalletActivity::class.java).apply {
-                        putExtra("abrir_reserva_id", reservaId)
-                        putExtra("abrir_reserva_cent", totalCent)
-                    }
-                )
-            }
-            .addOnFailureListener { e -> Toast.makeText(this, "No se pudo adjuntar: ${e.message}", Toast.LENGTH_LONG).show() }
-    }
+    // El flujo de "usar este comprobante para mi recarga" vive ahora en CanalPagos: hablaba con
+    // `reservas_recarga` y con la función `adjuntarComprobante`, y eso no puede viajar en el APK
+    // de Play.
 
     private fun abrirMedidasCrystalDesdeChat(mensaje: Message) {
         if (!isFirebaseStorageUrl(mensaje.message)) {

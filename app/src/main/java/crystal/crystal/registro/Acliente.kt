@@ -42,7 +42,7 @@ class Acliente : AppCompatActivity() {
 
         // Botón “Ir a Wallet”
         binding.btGo.setOnClickListener {
-            startActivity(Intent(this, WalletActivity::class.java))
+            crystal.crystal.pagos.CanalPagos.abrirRecarga(this)
         }
     }
 }

@@ -359,6 +359,9 @@ class WalletActivity : AppCompatActivity() {
                     "ANUAL" -> "Anual"
                     "PREPAGO" -> "Prepago"
                     "TRIAL_1M" -> "Trial"
+                    // Lo escribe crystalAdmin al corregir a mano. Sin este caso se colaba el código
+                    // interno "AJUSTE_MANUAL" a la pantalla del usuario.
+                    "AJUSTE_MANUAL" -> "Activado por soporte"
                     else -> source
                 }
                 "Plan: FULL ($origen)"

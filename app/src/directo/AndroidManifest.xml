@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pantallas de cobro — SOLO en la build de reparto directo.
+
+  El manifiesto principal no las declara: en la build de Play estas clases ni siquiera se compilan,
+  así que declararlas allí rompería el ensamblado. Ese es justamente el efecto buscado — que la
+  ausencia sea real y no una pantalla escondida.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!-- Recibe comprobantes compartidos desde Yape o la galería. Este intent-filter es otra
+             razón para no llevarla a Play: anuncia al sistema que la app procesa pagos. -->
+        <activity
+            android:name=".registro.WalletActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".registro.PlanSelectionActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".wallet.ReclamoRecargaActivity"
+            android:label="Reclamar Recarga"
+            android:parentActivityName=".registro.WalletActivity" />
+
+    </application>
+
+</manifest>

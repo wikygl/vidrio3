@@ -50,7 +50,7 @@ class Registro : AppCompatActivity() {
         if (usuario != null) {
             // Asegurar estructura y pasar a selección de plan
             crearEstructuraBaseSiNoExiste(usuario.uid) {
-                startActivity(Intent(this, PlanSelectionActivity::class.java))
+                crystal.crystal.pagos.CanalPagos.abrirPlanes(this)
                 finish()
             }
         }
@@ -65,7 +65,7 @@ class Registro : AppCompatActivity() {
                 if (task.isSuccessful) {
                     val uid = task.result?.user?.uid ?: return@addOnCompleteListener
                     crearEstructuraBaseSiNoExiste(uid) {
-                        startActivity(Intent(this, PlanSelectionActivity::class.java))
+                        crystal.crystal.pagos.CanalPagos.abrirPlanes(this)
                         finish()
                     }
                 } else {
@@ -128,7 +128,7 @@ class Registro : AppCompatActivity() {
             if (task.isSuccessful) {
                 val uid = task.result?.user?.uid ?: return@addOnCompleteListener
                 crearEstructuraBaseSiNoExiste(uid) {
-                    startActivity(Intent(this, PlanSelectionActivity::class.java))
+                    crystal.crystal.pagos.CanalPagos.abrirPlanes(this)
                     finish()
                 }
             } else {
@@ -160,7 +160,7 @@ class Registro : AppCompatActivity() {
                     if (task.isSuccessful) {
                         val uid = task.result?.user?.uid ?: return@addOnCompleteListener
                         crearEstructuraBaseSiNoExiste(uid) {
-                            startActivity(Intent(this, PlanSelectionActivity::class.java))
+                            crystal.crystal.pagos.CanalPagos.abrirPlanes(this)
                             finish()
                         }
                     } else {

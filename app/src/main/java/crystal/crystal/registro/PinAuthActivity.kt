@@ -509,7 +509,7 @@ class PinAuthActivity : AppCompatActivity() {
     private fun toastLargo(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
     private fun abrirWallet() {
-        startActivity(Intent(this, WalletActivity::class.java))
+        crystal.crystal.pagos.CanalPagos.abrirRecarga(this)
         finish()
     }
 

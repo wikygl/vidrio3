@@ -96,10 +96,11 @@ class GestionDispositivosActivity : AppCompatActivity() {
         cargarDatos()
 
         binding.btnAmpliarPlan.setOnClickListener {
-            val intent = Intent(this, PlanSelectionActivity::class.java)
-            intent.putExtra("ES_AMPLIACION", true)
-            intent.putExtra("TERMINALES_ACTUALES", terminalesContratadas)
-            startActivity(intent)
+            crystal.crystal.pagos.CanalPagos.abrirPlanes(
+                this,
+                "ES_AMPLIACION" to true,
+                "TERMINALES_ACTUALES" to terminalesContratadas,
+            )
         }
 
         binding.swipeRefresh.setOnRefreshListener {

@@ -33,6 +33,32 @@ android {
         versionName "1.1.0-beta1"
     }
 
+    // Dos canales de distribución con reglas de cobro distintas.
+    //
+    // `directo`  — reparto del APK fuera de tiendas. Lleva el wallet completo: recarga por Yape,
+    //              lectura del comprobante y compra del plan dentro de la app.
+    // `play`     — Google Play. La política de pagos exige Play Billing para software de gestión
+    //              (y la apertura del caso Epic es solo para EE.UU.), así que esta build NO vende
+    //              nada: modelo "solo consumo", el usuario paga en la web y la app lo reconoce.
+    //
+    // La separación es por conjunto de fuentes, no por una bandera en tiempo de ejecución: las
+    // clases y los layouts del wallet no entran al APK de Play. Dejar la pantalla inalcanzable pero
+    // las cadenas dentro del paquete no sirve — la revisión las encuentra igual.
+    flavorDimensions += "canal"
+    productFlavors {
+        directo {
+            dimension "canal"
+            isDefault true
+        }
+        play {
+            dimension "canal"
+            // Mismo applicationId a propósito: es la misma app, y google-services.json solo declara
+            // `crystal.crystal`. Un sufijo dejaría al plugin de Google Services sin cliente que
+            // corresponda y rompería el ensamblado.
+            versionNameSuffix "-play"
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
