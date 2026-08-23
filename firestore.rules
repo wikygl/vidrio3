@@ -46,6 +46,24 @@ rules_version = '2';
       }
 
       // === Helpers específicos para usuarios/{uid} ===
+
+      // Campos "de valor": crean dinero o regalan servicio. Se aíslan para poder exigirles un
+      // permiso más alto que al resto del perfil.
+      function tocaValor() {
+        return request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasAny(['wallet','wallet_saldo_cent','estado_servicio']);
+      }
+
+      // Canal MANUAL de crystalAdmin: cuando el circuito automático (Cloud Functions) está caído,
+      // un `admin` corrige el saldo o el estado a mano desde el panel. Es la vía de emergencia, así
+      // que se restringe al rol `admin` — un `operador` puede editar el resto del perfil, pero
+      // nunca acreditar saldo ni otorgar FULL. Todo ajuste deja rastro en wallet_movs.
+      function isPanelSafeUpdate() {
+        return isPanelRole() && !tocaValor();
+      }
+
       function isOwnerProfileUpdate(uid) {
         return isOwner(uid)
           && !(
@@ -103,7 +121,8 @@ rules_version = '2';
         allow read: if isSignedIn() || isOwner(uid) || isPanelRole();
         allow create: if isOwner(uid) || isPanelRole();
         allow update: if
-          isPanelRole()
+          isAdmin()                  // ajuste manual: saldo y estado_servicio incluidos
+          || isPanelSafeUpdate()     // operador: el resto del perfil, nunca saldo ni estado
           || isOwnerProfileUpdate(uid)
           || isOwnerServiceDowngrade(uid)
           || isOwnerTrialCreation(uid);
@@ -111,6 +130,20 @@ rules_version = '2';
 
         match /dispositivos/{deviceId} {
           allow read, write: if isOwner(uid) || isPanelRole();
+        }
+
+        // ===== Libro de movimientos del wallet =====
+        // Lo escribe normalmente el Admin SDK, que ignora estas reglas; por eso nunca hubo regla y
+        // la LECTURA quedaba denegada por defecto (la lista de movimientos de crystalAdmin salía
+        // vacía). Se abre al dueño y al panel. La CREACIÓN se limita al rol `admin` y exige el uid
+        // de quien la hace: así un ajuste manual es siempre auditable. Nadie edita ni borra.
+        match /wallet_movs/{movId} {
+          allow read: if isOwner(uid) || isPanelRole();
+          allow create: if isAdmin()
+            && request.resource.data.tipo is string
+            && request.resource.data.monto_cent is number
+            && request.resource.data.adminUid == request.auth.uid;
+          allow update, delete: if false;
         }
 
         match /security {
@@ -200,6 +233,32 @@ rules_version = '2';
       // Permitir collectionGroup para "recargas" (el panel puede listar recargas de usuarios)
       match /{path=**}/recargas/{recId} {
         allow read: if isPanelRole();
+      }
+
+      // ===== COMPROBANTES ELECTRÓNICOS (boletas SUNAT) =====
+      // Los escribe SOLO el Admin SDK, que ignora estas reglas; por eso todo `write` es false.
+      // El usuario puede leer los suyos para descargar su boleta; el consolidado diario no tiene
+      // dueño (agrupa operaciones de varios) y queda reservado al panel.
+      match /comprobantes/{comprobanteId} {
+        allow read: if isPanelRole()
+          || (isSignedIn() && resource.data.uid == request.auth.uid);
+        allow write: if false;
+      }
+
+      match /consolidado_diario/{fecha} {
+        allow read: if isPanelRole();
+        allow write: if false;
+        match /items/{itemId} {
+          allow read: if isPanelRole();
+          allow write: if false;
+        }
+      }
+
+      // Contador de correlativos. Nadie lo toca desde un cliente: un correlativo repetido o con
+      // huecos es exactamente lo que SUNAT observa.
+      match /series/{serie} {
+        allow read: if isPanelRole();
+        allow write: if false;
       }
 
       // ===== RECARGAS PENDIENTES =====

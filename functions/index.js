@@ -1,5 +1,7 @@
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
+const facturacion = require("./facturacion");
+const correo = require("./correo");
 
 admin.initializeApp();
 
@@ -207,6 +209,11 @@ async function intentarAcreditarReserva(db, reservaRef) {
       reservaId: reservaRef.id,
       porGracia,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    // Comprobante electrónico. Solo deja el encargo escrito: emitir aquí sería llamar a una API
+    // externa dentro de una transacción que se reintenta sola, y saldrían boletas duplicadas.
+    facturacion.encolarComprobante(tx, db, {
+      uid, montoCent, reservaId: reservaRef.id, ahoraMs: Date.now(),
     });
     return { ok: true, uid, montoCent, porGracia };
   });
@@ -907,3 +914,82 @@ exports.tomarPedido = functions.https.onCall(async (data, context) => {
   }
   return resultado;
 });
+
+// ===================================================================================
+//  FACTURACIÓN ELECTRÓNICA (boletas SUNAT)
+//  El circuito vive en ./facturacion. Aquí solo quedan los disparadores.
+// ===================================================================================
+
+// Emite en cuanto se encola el comprobante. Va por trigger y no dentro de la acreditación a
+// propósito: si el proveedor falla, el saldo del usuario ya quedó acreditado igual.
+exports.emitirComprobante = functions.firestore
+  .document("comprobantes/{comprobanteId}")
+  .onCreate(async (snap, context) => {
+    if (snap.get("estado") !== "pendiente") return null;
+    const r = await facturacion.emitirComprobante(admin.firestore(), context.params.comprobanteId);
+    functions.logger.info(Object.assign({ message: "emitirComprobante", id: context.params.comprobanteId }, r));
+    return null;
+  });
+
+// Reintenta lo que quedó en error. Las boletas se informan a SUNAT por resumen diario, con plazo
+// hasta el 7.º día calendario, así que reintentar cada 30 min sobra para no incumplir.
+exports.reintentarComprobantes = functions.pubsub
+  .schedule("every 30 minutes")
+  .onRun(async () => {
+    const db = admin.firestore();
+    const snap = await db.collection("comprobantes")
+      .where("estado", "==", "error")
+      .where("reintentable", "==", true)
+      .limit(20)
+      .get();
+    let ok = 0;
+    for (const d of snap.docs) {
+      // Se corta a los 10 intentos: pasado eso el problema son los datos, no la red, y hay que
+      // mirarlo a mano en vez de seguir golpeando al proveedor.
+      if ((d.get("intentos") || 0) >= 10) continue;
+      const r = await facturacion.emitirComprobante(db, d.id);
+      if (r.ok) ok++;
+    }
+    functions.logger.info({ message: "reintentarComprobantes", revisados: snap.size, emitidos: ok });
+    return null;
+  });
+
+// ===================================================================================
+//  AVISOS POR CORREO
+//  Es el único canal por el que se puede dirigir al usuario a pagar fuera de la app: Google Play
+//  lo permite por correo y lo prohíbe desde dentro de la aplicación.
+// ===================================================================================
+
+// Bienvenida al crear la cuenta. Se dispara en Auth y no en Firestore porque aquí el correo llega
+// garantizado en el propio evento, sin depender de que el documento del usuario ya exista.
+exports.correoBienvenida = functions.auth.user().onCreate(async (user) => {
+  if (!user.email) return null;
+  const r = await correo.enviarBienvenida(admin.firestore(), {
+    uid: user.uid, correo: user.email, nombre: user.displayName || "",
+  });
+  functions.logger.info(Object.assign({ message: "correoBienvenida", uid: user.uid }, r));
+  return null;
+});
+
+// Una pasada diaria a las 09:00 de Lima — hora en que un aviso se lee, no de madrugada.
+exports.avisarVencimientos = functions.pubsub
+  .schedule("0 9 * * *")
+  .timeZone("America/Lima")
+  .onRun(async () => {
+    const r = await correo.revisarVencimientos(admin.firestore(), Date.now());
+    functions.logger.info(Object.assign({ message: "avisarVencimientos" }, r));
+    return null;
+  });
+
+// Cierra el consolidado del día anterior y encola su boleta. Corre a las 00:30 de Lima, ya entrado
+// el día siguiente, para no cerrar un día que todavía puede recibir operaciones.
+exports.cerrarConsolidadoDiario = functions.pubsub
+  .schedule("30 0 * * *")
+  .timeZone("America/Lima")
+  .onRun(async () => {
+    const db = admin.firestore();
+    const fecha = require("./facturacion/comun").fechaPeru(Date.now() - 24 * 60 * 60 * 1000);
+    const r = await facturacion.cerrarConsolidado(db, fecha);
+    functions.logger.info(Object.assign({ message: "cerrarConsolidadoDiario", fecha }, r));
+    return null;
+  });

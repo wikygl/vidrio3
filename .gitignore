@@ -32,3 +32,6 @@ replay_pid*.log
 *.rar
 *.zip
 gcm-diagnose.log
+
+# Caché local de la CLI de Firebase (no versionar)
+.firebase/
