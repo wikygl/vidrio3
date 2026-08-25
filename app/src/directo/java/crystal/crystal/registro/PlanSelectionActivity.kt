@@ -424,8 +424,79 @@ class PlanSelectionActivity : AppCompatActivity() {
                     Toast.makeText(this, "Saldo insuficiente. Recarga con Yape.", Toast.LENGTH_LONG).show()
                     startActivity(Intent(this, WalletActivity::class.java))
                 } else {
-                    Toast.makeText(this, "Error al activar plan: $msg", Toast.LENGTH_LONG).show()
+                    mostrarFalloActivacion(tipo, e)
                 }
+            }
+    }
+
+    // Un fallo al activar deja al usuario con su saldo intacto pero sin plan, y hasta ahora sin
+    // forma de avisar: el reclamo solo existía para las recargas. Aquí se le explica qué pasó y se
+    // le ofrece reportarlo.
+    private fun mostrarFalloActivacion(tipo: String, e: Exception) {
+        val codigo = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code?.name ?: ""
+        // "internal" o "unavailable" significan que la función ni siquiera llegó a ejecutarse. Al
+        // usuario ese código no le dice nada, y lo que necesita saber es que su dinero está a salvo.
+        val explicacion = when {
+            codigo.contains("INTERNAL") || codigo.contains("UNAVAILABLE") || codigo.contains("DEADLINE") ->
+                "El servidor no está respondiendo en este momento."
+            codigo.contains("UNAUTHENTICATED") -> "Tu sesión venció. Vuelve a iniciar sesión."
+            else -> e.message ?: "No se pudo completar la activación."
+        }
+        AlertDialog.Builder(this)
+            .setTitle("No se pudo activar tu plan")
+            .setMessage("$explicacion\n\nTu saldo NO se descontó: sigue completo.\n\n" +
+                        "Puedes reportarlo y lo revisamos.")
+            .setNegativeButton("Cerrar", null)
+            .setPositiveButton("Reportar") { _, _ -> crearReclamoActivacion(tipo, codigo, e.message ?: "") }
+            .show()
+    }
+
+    /**
+     * Crea el reclamo escribiendo Firestore DIRECTO, sin pasar por ninguna Cloud Function.
+     *
+     * Es deliberado: el reclamo existe justamente porque las funciones fallaron, así que hacerlo
+     * depender de ellas lo dejaría inservible en el único momento en que hace falta. Las reglas
+     * permiten a un usuario crear su propio ticket, y crystalAdmin los lee de la misma colección.
+     */
+    private fun crearReclamoActivacion(tipo: String, codigo: String, detalle: String) {
+        val uid = auth.currentUser?.uid ?: return
+        val ahora = Timestamp.now()
+        val ticket = db.collection("tickets").document()
+
+        // Se guarda el saldo del momento: si después cambia, el admin necesita saber con cuánto
+        // contaba el usuario cuando falló.
+        db.collection("usuarios").document(uid).get()
+            .addOnSuccessListener { u ->
+                val saldoCent = u.getLong("wallet_saldo_cent") ?: 0L
+                ticket.set(mapOf(
+                    "ownerUid" to uid,
+                    "tipo" to "plan_no_activado",
+                    "estado" to "nuevo",
+                    "creado_en" to ahora,
+                    "planIntentado" to tipo,
+                    "errorCodigo" to codigo,
+                    "errorDetalle" to detalle,
+                    "saldoCentAlFallar" to saldoCent,
+                    "correo" to (auth.currentUser?.email ?: ""),
+                    "appVersion" to crystal.crystal.BuildConfig.VERSION_NAME
+                )).addOnSuccessListener {
+                    ticket.collection("mensajes").add(mapOf(
+                        "de" to "usuario",
+                        "texto" to "No pude activar el plan %s. Tenía S/%.2f de saldo. Error: %s"
+                            .format(tipo, saldoCent / 100.0, codigo.ifBlank { detalle }),
+                        "creado_en" to ahora
+                    ))
+                    AlertDialog.Builder(this)
+                        .setTitle("Reporte enviado")
+                        .setMessage("Recibimos tu reporte y lo vamos a revisar. Tu saldo sigue intacto.")
+                        .setPositiveButton("Entendido", null)
+                        .show()
+                }.addOnFailureListener {
+                    Toast.makeText(this, "No se pudo enviar el reporte: ${it.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "No se pudo enviar el reporte: ${it.message}", Toast.LENGTH_LONG).show()
             }
     }
 
