@@ -452,6 +452,82 @@ exports.enviarMensajeAdmin = functions.https.onCall(async (data, context) => {
   return { ok: true, chatId };
 });
 
+// ===================================================================================
+//  AVISO DE RECLAMOS — la mitad que faltaba.
+//  crystalAdmin solo tenía la parte receptora (suscrito a `admins_soporte`); nada enviaba.
+//  Los reclamos llegaban a Firestore y no sonaba nada: había que abrir la app y mirar.
+// ===================================================================================
+
+// Mensaje SOLO de datos, sin bloque `notification`, y es deliberado: así `onMessageReceived` se
+// ejecuta siempre —también con la app en segundo plano— y es crystalAdmin quien crea el canal
+// "support" con IMPORTANCE_HIGH y levanta el aviso. Con bloque `notification` lo pinta el sistema
+// por su cuenta, en un canal de reserva de baja prioridad, y el aviso pasa desapercibido.
+async function avisarAdmins(titulo, cuerpo, extra) {
+  const data = Object.assign({ title: titulo, body: cuerpo }, extra || {});
+  // FCM exige que TODO valor de `data` sea cadena; un número cuela un error en el envío entero.
+  Object.keys(data).forEach((k) => { data[k] = String(data[k] == null ? "" : data[k]); });
+  try {
+    const id = await admin.messaging().send({
+      topic: "admins_soporte",
+      data,
+      android: { priority: "high" },
+    });
+    functions.logger.info("Aviso a admins enviado", { messageId: id, tipo: data.tipo || "" });
+  } catch (e) {
+    // Un fallo al avisar NO puede tumbar el trigger: el reclamo ya está guardado, que es lo único
+    // que no se puede perder. Queda en el log para revisarlo después.
+    functions.logger.error("No se pudo avisar a los admins", { error: String(e) });
+  }
+}
+
+const ASUNTO_TICKET = {
+  plan_no_activado: "No pudo activar su plan",
+  recarga: "Problema con una recarga",
+};
+
+exports.avisarTicketNuevo = functions.firestore
+  .document("tickets/{ticketId}")
+  .onCreate(async (snap, context) => {
+    const t = snap.data() || {};
+    const asunto = ASUNTO_TICKET[String(t.tipo || "")] || "Nuevo reclamo";
+    const quien = String(t.correo || t.ownerUid || "");
+    // El saldo va en el propio aviso porque es lo primero que el admin necesita para decidir: si
+    // alcanza, el arreglo es otorgarle el FULL cobrándoselo; si no alcanza, el problema es otro.
+    const saldoCent = Number(t.saldoCentAlFallar || 0);
+    const detalle = saldoCent > 0
+      ? quien + " — saldo S/" + (saldoCent / 100).toFixed(2)
+      : quien;
+    await avisarAdmins("🔔 " + asunto, detalle, {
+      tipo: "ticket_nuevo",
+      ticketId: context.params.ticketId,
+      ownerUid: t.ownerUid || "",
+    });
+    return null;
+  });
+
+exports.avisarMensajeTicket = functions.firestore
+  .document("tickets/{ticketId}/mensajes/{msgId}")
+  .onCreate(async (snap, context) => {
+    const m = snap.data() || {};
+    // La respuesta del admin la escribe el propio panel: avisarle de su propio mensaje sería ruido.
+    if (String(m.de || "") !== "usuario") return null;
+
+    const ticketId = context.params.ticketId;
+    const msgsRef = admin.firestore().collection("tickets").doc(ticketId).collection("mensajes");
+
+    // Abrir un reclamo escribe el ticket Y su primer mensaje, así que sin esto cada reclamo nuevo
+    // dispararía DOS avisos. Se compara contra el mensaje más antiguo y no contra la hora del
+    // ticket: así no depende de relojes ni de cuánto tarde en correr el trigger.
+    const primero = await msgsRef.orderBy("creado_en").limit(1).get();
+    if (!primero.empty && primero.docs[0].id === context.params.msgId) return null;
+
+    await avisarAdmins("💬 Respuesta en un reclamo", String(m.texto || "").slice(0, 180), {
+      tipo: "ticket_mensaje",
+      ticketId: ticketId,
+    });
+    return null;
+  });
+
 // ⚠️ TEMPORAL (borrar): envía un push de prueba al canal admins_recargas para verificar la suscripción.
 exports.devPushTest = functions.https.onRequest(async (req, res) => {
   if ((req.query.k || "") !== "crystal-dev-2026-x7k9") { res.status(403).send("forbidden"); return; }
