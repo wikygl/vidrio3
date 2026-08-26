@@ -880,7 +880,11 @@ class WalletActivity : AppCompatActivity() {
         tvMonto.text = totalTexto
 
         // Número asignado a ESTA reserva (el primario vivo, con failover). Fallback: config/pagos.
+        // El número llega del servidor y puede tardar, así que se guarda aparte: el botón de
+        // copiar no puede depender de recortar el texto ya formateado.
+        var numeroActual: String? = null
         fun pintarNumero(num: String?) {
+            numeroActual = num
             tvNumero.text = if (!num.isNullOrBlank()) "al número:  $num" else "al número del negocio"
         }
         db.collection("reservas_recarga").document(reservaId).get().addOnSuccessListener { r ->
@@ -909,6 +913,16 @@ class WalletActivity : AppCompatActivity() {
             cb.setPrimaryClip(android.content.ClipData.newPlainText("monto", soloNumero))
             Toast.makeText(this, "Monto copiado: $soloNumero", Toast.LENGTH_SHORT).show()
         }
+        vista.findViewById<android.view.View>(crystal.crystal.R.id.btnCopiarNumero).setOnClickListener {
+            val n = numeroActual
+            if (n.isNullOrBlank()) {
+                Toast.makeText(this, "Todavía no tenemos el número. Espera un momento.", Toast.LENGTH_SHORT).show()
+            } else {
+                val cb = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cb.setPrimaryClip(android.content.ClipData.newPlainText("numero", n))
+                Toast.makeText(this, "Número copiado: $n", Toast.LENGTH_SHORT).show()
+            }
+        }
         vista.findViewById<android.view.View>(crystal.crystal.R.id.btnSubirComprobante).setOnClickListener {
             reservaComprobantePendiente = reservaId
             try { pickerComprobanteReserva.launch("image/*") } catch (e: Exception) {
@@ -932,7 +946,7 @@ class WalletActivity : AppCompatActivity() {
                     "aplicado" -> {
                         tvEstado.text = "✅  ¡Saldo acreditado!"
                         tvEstado.setTextColor(ContextCompat.getColor(this, crystal.crystal.R.color.verde))
-                        vista.findViewById<android.view.View>(crystal.crystal.R.id.btnCopiarMonto).visibility = android.view.View.GONE
+                        vista.findViewById<android.view.View>(crystal.crystal.R.id.filaCopiar).visibility = android.view.View.GONE
                         vista.findViewById<android.view.View>(crystal.crystal.R.id.btnSubirComprobante).visibility = android.view.View.GONE
                     }
                     "expirada" -> {
