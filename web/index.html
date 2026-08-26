@@ -47,6 +47,9 @@
     background: var(--tarjeta); border: 1px solid var(--borde);
     border-radius: 14px; padding: 18px; margin-bottom: 14px;
   }
+  /* La fila pulsable tiene que verse pulsable: es la única puerta al reclamo. */
+  .historial li.pulsable { cursor: pointer; }
+  .historial li.pulsable:active { background: rgba(0,0,0,.05); }
   .oculto { display: none !important; }
   label { display: block; font-size: 13px; color: var(--suave); margin-bottom: 6px; }
   input[type=number] {
@@ -439,6 +442,13 @@ $("btnSubirGracia").onclick = async () => {
     $("cajaGracia").classList.add("oculto");
     reservaGracia = null;
     cargarHistorial();
+    if (reclamoTrasConstancia) {
+      const r = reclamoTrasConstancia;
+      reclamoTrasConstancia = null;
+      $("btnReclamar").disabled = false;
+      ofrecerReclamo(r);
+      $("cajaReclamo").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   } catch (e) {
     mostrarError(e);
     mostrar($("errGracia"), textoError(e));
@@ -466,6 +476,9 @@ $("btnOtra").onclick = () => {
 // recoge nadie: el dinero entra y se queda sin dueño. Aquí el usuario declara lo que pagó de verdad
 // y el servidor lo busca en lo que capturó, para que el administrador resuelva viendo la evidencia.
 let reservaReclamo = null;
+// Cuando se sube la constancia solo para poder reclamar, hay que volver al reclamo al terminar: en
+// el wallet subir y reclamar son un solo gesto, y dejarlo a medias es peor que no ofrecerlo.
+let reclamoTrasConstancia = null;
 
 function ofrecerReclamo(r) {
   reservaReclamo = r;
@@ -493,8 +506,21 @@ $("btnReclamar").onclick = async () => {
     mostrar($("okReclamo"), r.data && r.data.coincide
       ? "Encontramos tu pago. Queda pendiente de aprobación y se abonará a tu saldo."
       : "Recibimos tu reporte. Vamos a buscar tu pago y te lo abonaremos si aparece.");
+    cargarHistorial();
   } catch (e) {
     $("btnReclamar").disabled = false;
+    // Sin constancia no hay nada que revisar, así que se pide antes de reclamar — es lo que hace
+    // el wallet de la app, que abre la galería en vez de dar el reclamo por imposible.
+    if (String(e?.message || "").includes("SIN_COMPROBANTE")) {
+      reservaGracia = { id: reservaReclamo.id, totalCent: reservaReclamo.totalCent };
+      reclamoTrasConstancia = reservaReclamo;
+      $("graciaDetalle").textContent =
+        ` Reservaste ${soles(reservaReclamo.totalCent)} y no subiste el comprobante.`;
+      $("cajaReclamo").classList.add("oculto");
+      $("cajaGracia").classList.remove("oculto");
+      $("cajaGracia").scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     mostrarError(e);
     mostrar($("errReclamo"), e?.message || "No se pudo enviar el reporte. Inténtalo de nuevo.");
   }
@@ -543,20 +569,79 @@ function arrancarContador() {
 
 // ===== Historial =====
 // Sin orderBy a propósito: ordenar en el servidor exigiría un índice compuesto que no existe.
+// Lo que se está mostrando ahora mismo, para saber sobre qué se pulsó.
+let historialFilas = [];
+
+function etiquetaEstado(e) {
+  if (e === "aplicado") return "acreditada";
+  if (e === "esperando") return "esperando tu pago";
+  if (e === "expirada") return "venció · toca para reclamar";
+  if (e === "reclamada") return "en revisión";
+  return e;
+}
+
 async function cargarHistorial() {
   try {
     const q = query(collection(db, "reservas_recarga"), where("uid", "==", uid), limit(20));
     const snap = await getDocs(q);
-    const filas = snap.docs
-      .map((d) => ({ creado: d.get("creadoMs") || 0, total: d.get("totalCent") || 0, estado: d.get("estado") }))
+    historialFilas = snap.docs
+      .map((d) => ({
+        id: d.id,
+        creado: d.get("creadoMs") || 0,
+        totalCent: d.get("totalCent") || 0,
+        estado: d.get("estado"),
+        numero: d.get("numeroAsignado") || "",
+        expiraMs: d.get("expiraMs") || 0,
+        tieneComprobante: d.get("tieneComprobante") === true,
+      }))
       .sort((a, b) => b.creado - a.creado)
       .slice(0, 5);
-    $("historial").innerHTML = filas.length
-      ? filas.map((f) =>
-          `<li><span>${new Date(f.creado).toLocaleDateString("es-PE")}</span>` +
-          `<span>${soles(f.total)} · ${f.estado === "aplicado" ? "acreditada" : f.estado}</span></li>`).join("")
+    // Cada fila es pulsable, igual que la lista de recargas del wallet de la app: no es un adorno,
+    // es por donde se retoma una recarga a medias o se reclama una que no llegó a acreditarse.
+    // Antes esto era texto muerto y el usuario se quedaba mirando "expirada" sin nada que hacer.
+    $("historial").innerHTML = historialFilas.length
+      ? historialFilas.map((f, i) => {
+          const activa = f.estado !== "aplicado";
+          return `<li data-i="${i}"${activa ? ' class="pulsable"' : ""}>` +
+            `<span>${new Date(f.creado).toLocaleDateString("es-PE")}</span>` +
+            `<span>${soles(f.totalCent)} · ${etiquetaEstado(f.estado)}${activa ? " ›" : ""}</span></li>`;
+        }).join("")
       : "<li><span>Sin movimientos</span></li>";
   } catch (e) { /* el historial es accesorio: si falla, no estorba la recarga */ }
+}
+
+// Un solo escuchador en la lista en vez de uno por fila: las filas se vuelven a pintar en cada
+// recarga del historial y los escuchadores individuales se perderían con ellas.
+$("historial").onclick = (ev) => {
+  const li = ev.target.closest("li[data-i]");
+  if (!li) return;
+  const f = historialFilas[Number(li.dataset.i)];
+  if (!f) return;
+  // Mismo reparto que hace el wallet: lo que venció se reclama, lo que sigue vivo se retoma, y lo
+  // que ya se acreditó no tiene nada que hacer.
+  if (f.estado === "aplicado") return;
+  if (f.estado === "esperando" && f.expiraMs > Date.now()) return retomarViva(f);
+  ofrecerReclamo(f);
+  $("cajaReclamo").scrollIntoView({ behavior: "smooth", block: "center" });
+};
+
+// Volver a una reserva que todavía está dentro de sus 30 minutos: se muestra el paso donde se
+// quedó, sin pedir un monto nuevo, que es lo que dejaría dos reservas vivas y el dinero en el aire.
+function retomarViva(f) {
+  reservaActual = { id: f.id, totalCent: f.totalCent, numero: f.numero, expiraMs: f.expiraMs };
+  $("montoPagar").textContent = soles(f.totalCent);
+  $("numeroPago").textContent = f.numero || "—";
+  $("paso1").classList.add("oculto");
+  $("cajaReclamo").classList.add("oculto");
+  if (f.tieneComprobante) {
+    $("paso3").classList.remove("oculto");
+    mostrar($("estadoSubida"), "Ya recibimos tu constancia. Estamos verificando el pago…");
+  } else {
+    $("paso2").classList.remove("oculto");
+  }
+  arrancarContador();
+  escucharReserva();
+  $("paso2").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 // ===== Errores =====
