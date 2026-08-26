@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Recargar saldo — Crystal</title>
+<title>Mi wallet — Crystal</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
-<meta name="theme-color" content="#1f6feb">
+<meta name="theme-color" content="#3949AB">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Recargas">
+<meta name="apple-mobile-web-app-title" content="Wallet">
 <style>
   :root {
     --fondo: #f6f7f9;
@@ -16,7 +16,7 @@
     --borde: #e3e6ea;
     --texto: #12161c;
     --suave: #5c6672;
-    --acento: #1f6feb;
+    --acento: #3949AB;
     --acento-txt: #ffffff;
     --ok: #17803d;
     --ok-fondo: #e9f7ee;
@@ -28,7 +28,7 @@
   @media (prefers-color-scheme: dark) {
     :root {
       --fondo: #0f1216; --tarjeta: #171b21; --borde: #262c34;
-      --texto: #e8ecf1; --suave: #9aa4b1; --acento: #4d8ef7;
+      --texto: #e8ecf1; --suave: #9aa4b1; --acento: #5C6BC0;
       --ok: #4ade80; --ok-fondo: #14281c;
       --alerta: #f0a868; --alerta-fondo: #2a1f14;
       --error: #f28b82; --error-fondo: #2a1715;
@@ -47,9 +47,26 @@
     background: var(--tarjeta); border: 1px solid var(--borde);
     border-radius: 14px; padding: 18px; margin-bottom: 14px;
   }
-  /* La fila pulsable tiene que verse pulsable: es la única puerta al reclamo. */
-  .historial li.pulsable { cursor: pointer; }
-  .historial li.pulsable:active { background: rgba(0,0,0,.05); }
+
+  /* ===== La tarjeta del wallet, igual que cardSaldo en la app ===== */
+  .wallet {
+    background: linear-gradient(135deg, #3949AB, #5C6BC0);
+    border-radius: 16px; padding: 18px; margin-bottom: 14px; color: #fff;
+  }
+  .wallet .fila-sup { display: flex; align-items: center; justify-content: space-between; }
+  .wallet .titulo { font-size: 13px; color: #E8EAF6; }
+  .wallet .estado { font-size: 11px; font-weight: 700; }
+  .wallet .monto {
+    font-size: 34px; font-weight: 700; letter-spacing: -.5px;
+    font-variant-numeric: tabular-nums; margin: 6px 0 10px;
+  }
+  .wallet .plan { font-size: 14px; font-weight: 700; }
+  .wallet .crono { font-size: 12px; font-weight: 700; color: #C5CAE9; margin-top: 2px; }
+
+  /* Rejilla de acciones: las mismas del wallet, del mismo tamaño. */
+  .acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+  .acciones button { margin: 0; font-size: 14px; padding: 14px 8px; }
+
   .oculto { display: none !important; }
   label { display: block; font-size: 13px; color: var(--suave); margin-bottom: 6px; }
   input[type=number] {
@@ -63,7 +80,6 @@
   }
   button:disabled { opacity: .55; cursor: default; }
   button.secundario { background: transparent; color: var(--acento); border: 1px solid var(--borde); }
-  .saldo { font-size: 32px; font-weight: 700; letter-spacing: -.5px; }
   .etiqueta { font-size: 13px; color: var(--suave); }
   .monto-pagar {
     font-size: 38px; font-weight: 700; letter-spacing: -1px;
@@ -79,15 +95,30 @@
   .aviso.alerta { background: var(--alerta-fondo); color: var(--alerta); }
   .aviso.ok { background: var(--ok-fondo); color: var(--ok); }
   .aviso.error { background: var(--error-fondo); color: var(--error); }
-  .pasos { display: flex; gap: 6px; margin-bottom: 16px; }
-  .paso { flex: 1; height: 3px; border-radius: 2px; background: var(--borde); }
-  .paso.activo { background: var(--acento); }
   .cuenta { font-variant-numeric: tabular-nums; font-weight: 600; }
   .pie { text-align: center; color: var(--suave); font-size: 12px; margin-top: 20px; }
   .usuario { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--suave); }
   .usuario button { width: auto; margin: 0; padding: 4px 8px; font-size: 12px; background: transparent; color: var(--acento); }
-  ul.historial { list-style: none; padding: 0; margin: 8px 0 0; font-size: 14px; }
-  ul.historial li { display: flex; justify-content: space-between; padding: 7px 0; border-top: 1px solid var(--borde); }
+
+  .cabecera-lista { font-size: 15px; font-weight: 700; color: var(--suave); margin: 0 0 4px; }
+  ul.historial { list-style: none; padding: 0; margin: 0; font-size: 14px; }
+  ul.historial li { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--borde); }
+  /* La fila pulsable tiene que verse pulsable: es la puerta al reclamo y a retomar un pago. */
+  ul.historial li.pulsable { cursor: pointer; }
+  ul.historial li.pulsable:active { background: rgba(0,0,0,.05); }
+
+  /* ===== Diálogos =====
+     El wallet abre diálogos sobre la pantalla y al cerrarlos se vuelve donde se estaba. La versión
+     por pasos apilaba nueve tarjetas para una operación de treinta segundos. */
+  .fondo-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50;
+  }
+  .modal {
+    background: var(--tarjeta); border-radius: 16px; padding: 20px;
+    width: 100%; max-width: 420px; max-height: 88vh; overflow-y: auto;
+  }
+  .modal h2 { font-size: 17px; margin: 0 0 12px; }
 </style>
 </head>
 <body>
@@ -97,40 +128,39 @@
 
   <!-- ===== Sesión ===== -->
   <section id="vLogin" class="tarjeta oculto">
-    <h1>Recargar saldo</h1>
-    <p class="sub">Ingresa con la misma cuenta que usas en Crystal.</p>
+    <h1>Mi wallet</h1>
+    <p class="sub">Entra con la misma cuenta que usas en Crystal.</p>
     <button id="btnEntrar">Entrar con Google</button>
   </section>
 
-  <!-- ===== Panel ===== -->
+  <!-- ===== Wallet ===== -->
   <section id="vPanel" class="oculto">
-    <div class="tarjeta">
-      <div class="usuario">
-        <span id="correo"></span>
-        <button id="btnSalir">Salir</button>
+
+    <div class="usuario" style="margin-bottom:10px">
+      <span id="correo"></span>
+      <button id="btnSalir">Salir</button>
+    </div>
+
+    <div class="wallet">
+      <div class="fila-sup">
+        <span class="titulo">👛&nbsp; Saldo disponible</span>
+        <span class="estado" id="estadoWallet">● ACTIVA</span>
       </div>
-      <p class="etiqueta" style="margin:14px 0 0">Saldo actual</p>
-      <div class="saldo" id="saldo">S/ 0.00</div>
+      <div class="monto" id="saldo">S/ 0.00</div>
+      <div class="plan" id="estadoPlan">Plan: Cargando…</div>
+      <div class="crono" id="cronoPlan">⏱️ Calculando…</div>
     </div>
 
-    <!-- Tu plan. Sin esta tarjeta el saldo no sirve para nada en el canal de Google Play: la app de
-         Play no tiene pantalla de planes a propósito —activar un plan dentro de la app es una compra
-         de bienes digitales y exige Play Billing—, así que este es el único sitio donde el usuario
-         puede convertir su saldo en servicio. -->
-    <div class="tarjeta" id="cajaPlan">
-      <p class="etiqueta" style="margin:0">Tu plan</p>
-      <div class="saldo" style="font-size:22px" id="estadoPlan">—</div>
-      <p class="sub" style="margin:4px 0 0" id="detallePlan"></p>
-      <div id="listaPlanes"></div>
-      <div id="okPlan" class="aviso ok oculto"></div>
-      <div id="errPlan" class="aviso error oculto"></div>
+    <div class="acciones">
+      <button id="btnRecargar">💳&nbsp; Recargar</button>
+      <button id="btnAbrirReclamo">📋&nbsp; Reclamar</button>
+      <button id="btnAbrirPlanes">⭐&nbsp; Planes</button>
+      <button id="btnCongelar" class="secundario">❄️&nbsp; Congelar</button>
     </div>
 
-    <!-- Instalación: es lo que evita que el usuario tenga que teclear la dirección nunca más.
-         Solo aparece si el navegador la ofrece y todavía no está instalada. -->
+    <!-- Instalación: es lo que evita que el usuario tenga que teclear la dirección nunca más. -->
     <div class="tarjeta oculto" id="cajaInstalar">
-      <p class="etiqueta" style="margin:0">Tenla siempre a mano</p>
-      <div style="font-weight:600;margin:2px 0 8px">Instalar en tu pantalla de inicio</div>
+      <div style="font-weight:600;margin-bottom:6px">Tenla siempre a mano</div>
       <p class="etiqueta" style="margin:0">
         Queda como un ícono más, junto a Crystal. Se abre sin escribir la dirección.
       </p>
@@ -138,94 +168,16 @@
       <button class="secundario" id="btnNoInstalar">Ahora no</button>
     </div>
 
-    <!-- iOS no ofrece instalación automática: hay que decirle al usuario dónde tocar. -->
     <div class="tarjeta oculto" id="cajaInstalarIos">
-      <p class="etiqueta" style="margin:0">Tenla siempre a mano</p>
-      <div style="font-weight:600;margin:2px 0 8px">Añádela a tu pantalla de inicio</div>
+      <div style="font-weight:600;margin-bottom:6px">Tenla siempre a mano</div>
       <p class="etiqueta" style="margin:0">
-        Toca <strong>Compartir</strong> abajo en Safari y elige <strong>“Añadir a pantalla de inicio”</strong>.
+        Toca <strong>Compartir</strong> y luego <strong>“Añadir a pantalla de inicio”</strong>.
       </p>
       <button class="secundario" id="btnNoInstalarIos">Entendido</button>
     </div>
 
-    <!-- Paso 1: monto -->
-    <div class="tarjeta" id="paso1">
-      <div class="pasos"><i class="paso activo"></i><i class="paso"></i><i class="paso"></i></div>
-      <label for="soles">¿Cuánto quieres recargar?</label>
-      <input type="number" id="soles" min="1" max="999" step="1" placeholder="Ej. 20" inputmode="numeric">
-      <button id="btnReservar">Continuar</button>
-      <div id="errReservar" class="aviso error oculto"></div>
-    </div>
-
-    <!-- Paso 2: pagar -->
-    <div class="tarjeta oculto" id="paso2">
-      <div class="pasos"><i class="paso activo"></i><i class="paso activo"></i><i class="paso"></i></div>
-      <p class="etiqueta">Yapea o plinea EXACTAMENTE este monto</p>
-      <div class="monto-pagar" id="montoPagar">S/ 0.00</div>
-      <div class="aviso alerta">
-        Los céntimos no son un error ni un cobro extra: son la firma que identifica tu pago,
-        y <strong>se acreditan completos a tu saldo</strong>.
-        Si envías otro monto, el sistema no podrá reconocerlo.
-      </div>
-      <p class="etiqueta" style="margin-top:16px">Al número</p>
-      <div class="fila">
-        <span class="numero" id="numeroPago">—</span>
-        <button class="copiar" id="btnCopiarNumero">Copiar</button>
-      </div>
-      <p class="etiqueta" style="margin-top:16px">
-        Tiempo restante: <span class="cuenta" id="contador">—</span>
-      </p>
-      <button id="btnYaPague">Ya pagué, subir constancia</button>
-    </div>
-
-    <!-- Paso 3: constancia -->
-    <div class="tarjeta oculto" id="paso3">
-      <div class="pasos"><i class="paso activo"></i><i class="paso activo"></i><i class="paso activo"></i></div>
-      <p class="etiqueta">Sube la captura de tu constancia de pago</p>
-      <input type="file" id="archivo" accept="image/*" style="margin-top:8px">
-      <button id="btnSubir" disabled>Enviar constancia</button>
-      <div id="estadoSubida" class="aviso ok oculto"></div>
-      <div id="errSubida" class="aviso error oculto"></div>
-    </div>
-
-    <!-- Resultado -->
-    <div class="tarjeta oculto" id="paso4">
-      <div id="resultado"></div>
-      <button class="secundario" id="btnOtra">Hacer otra recarga</button>
-    </div>
-
-    <!-- Recarga vencida pero dentro de las 24 h de gracia y sin constancia: el pago pudo haberse
-         hecho, así que se ofrece adjuntarla en vez de darla por perdida. -->
-    <div class="tarjeta oculto" id="cajaGracia">
-      <div class="aviso alerta">
-        <strong>Tienes una recarga sin constancia.</strong>
-        <span id="graciaDetalle"></span>
-        Si ya pagaste, súbela: todavía estás a tiempo.
-      </div>
-      <input type="file" id="archivoGracia" accept="image/*" style="margin-top:10px">
-      <button id="btnSubirGracia" disabled>Enviar constancia</button>
-      <div id="errGracia" class="aviso error oculto"></div>
-    </div>
-
-    <!-- Pagó, pero por un importe distinto al reservado. Es el caso más común de todos: la costumbre
-         de pagar cantidades redondas. El dinero llegó y no casa con nada, así que sin esta tarjeta
-         el usuario se queda sin forma de avisar y el sol se pierde. -->
-    <div class="tarjeta oculto" id="cajaReclamo">
-      <div class="aviso alerta">
-        <strong>Tu recarga no se acreditó.</strong>
-        <span id="reclamoDetalle"></span>
-      </div>
-      <p class="etiqueta">¿Cuánto pagaste exactamente?</p>
-      <input type="number" id="montoPagado" step="0.01" min="0.01" style="margin-top:8px">
-      <p class="sub">Escríbelo tal como salió de tu billetera. Con ese dato buscamos tu pago
-        en lo que recibimos y lo abonamos.</p>
-      <button id="btnReclamar">Sí pagué, revisen mi caso</button>
-      <div id="okReclamo" class="aviso ok oculto"></div>
-      <div id="errReclamo" class="aviso error oculto"></div>
-    </div>
-
-    <div class="tarjeta" id="cajaHistorial">
-      <p class="etiqueta">Tus últimas recargas</p>
+    <div class="tarjeta">
+      <p class="cabecera-lista">🧾&nbsp; Historial de recargas</p>
       <ul class="historial" id="historial"><li><span>Sin movimientos</span></li></ul>
     </div>
   </section>
@@ -235,8 +187,94 @@
     Tu saldo y tus datos están intactos. Vuelve a intentarlo más tarde.
   </div>
 
-  <p class="pie">Crystal · Recargas</p>
+  <p class="pie">Crystal · Wallet</p>
 </main>
+
+<!-- ===== Diálogo: cuánto recargar ===== -->
+<div class="fondo-modal oculto" id="mMonto">
+  <div class="modal">
+    <h2>💳 Recargar saldo</h2>
+    <label for="soles">¿Cuánto quieres recargar?</label>
+    <input type="number" id="soles" min="1" max="999" step="1" placeholder="Ej. 20">
+    <p class="etiqueta" style="margin:10px 0 0">
+      Se te asignará un monto único con céntimos. Esos céntimos no son un cobro extra:
+      son la firma que identifica tu pago y <strong>se acreditan completos a tu saldo</strong>.
+    </p>
+    <div id="errReservar" class="aviso error oculto"></div>
+    <button id="btnReservar">Continuar</button>
+    <button class="secundario" data-cerrar="mMonto">Cancelar</button>
+  </div>
+</div>
+
+<!-- ===== Diálogo: pagar ===== -->
+<div class="fondo-modal oculto" id="mPago">
+  <div class="modal">
+    <h2>Paga EXACTAMENTE este monto</h2>
+    <div class="monto-pagar" id="montoPagar">S/ 0.00</div>
+    <div class="aviso alerta">
+      Si envías otro importe no podremos reconocerlo solo, pero tampoco se pierde:
+      podrás reclamarlo desde el historial.
+    </div>
+    <p class="etiqueta" style="margin-top:16px">Al número</p>
+    <div class="fila">
+      <span class="numero" id="numeroPago">—</span>
+      <button class="copiar" id="btnCopiarNumero">Copiar</button>
+    </div>
+    <p class="etiqueta" style="margin-top:16px">
+      Tiempo restante: <span class="cuenta" id="contador">—</span>
+    </p>
+
+    <p class="etiqueta" style="margin-top:16px">Después de pagar, adjunta la constancia:</p>
+    <input type="file" id="archivo" accept="image/*" style="margin-top:6px">
+    <div id="estadoSubida" class="aviso ok oculto"></div>
+    <div id="errSubida" class="aviso error oculto"></div>
+    <button id="btnSubir" disabled>📤&nbsp; Enviar constancia</button>
+    <button class="secundario" data-cerrar="mPago">Cerrar</button>
+  </div>
+</div>
+
+<!-- ===== Diálogo: planes ===== -->
+<div class="fondo-modal oculto" id="mPlanes">
+  <div class="modal">
+    <h2>⭐ Planes</h2>
+    <p class="etiqueta" id="detallePlan" style="margin:0 0 10px"></p>
+    <div id="listaPlanes"></div>
+    <div id="okPlan" class="aviso ok oculto"></div>
+    <div id="errPlan" class="aviso error oculto"></div>
+    <button class="secundario" data-cerrar="mPlanes">Cerrar</button>
+  </div>
+</div>
+
+<!-- ===== Diálogo: reclamar =====
+     Pagó, pero por un importe distinto al reservado. Es el caso más común: la costumbre de pagar
+     cantidades redondas. El dinero llegó y no casa con nada; sin esto se pierde. -->
+<div class="fondo-modal oculto" id="mReclamo">
+  <div class="modal">
+    <h2>📋 Reclamar una recarga</h2>
+    <div class="aviso alerta" id="reclamoDetalle"></div>
+    <p class="etiqueta" style="margin-top:14px">¿Cuánto pagaste exactamente?</p>
+    <input type="number" id="montoPagado" step="0.01" min="0.01" style="margin-top:6px">
+    <p class="etiqueta" style="margin-top:8px">
+      Escríbelo tal como salió de tu billetera. Con ese dato buscamos tu pago y lo abonamos.
+    </p>
+    <div id="okReclamo" class="aviso ok oculto"></div>
+    <div id="errReclamo" class="aviso error oculto"></div>
+    <button id="btnReclamar">Sí pagué, revisen mi caso</button>
+    <button class="secundario" data-cerrar="mReclamo">Cerrar</button>
+  </div>
+</div>
+
+<!-- ===== Diálogo: constancia de una recarga vencida ===== -->
+<div class="fondo-modal oculto" id="mGracia">
+  <div class="modal">
+    <h2>Sube tu constancia</h2>
+    <div class="aviso alerta" id="graciaDetalle"></div>
+    <input type="file" id="archivoGracia" accept="image/*" style="margin-top:12px">
+    <div id="errGracia" class="aviso error oculto"></div>
+    <button id="btnSubirGracia" disabled>📤&nbsp; Enviar constancia</button>
+    <button class="secundario" data-cerrar="mGracia">Cerrar</button>
+  </div>
+</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -244,7 +282,7 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, doc, onSnapshot, collection, query, where, limit, getDocs
+  getFirestore, doc, setDoc, onSnapshot, collection, query, where, limit, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
@@ -267,131 +305,198 @@ const storage = getStorage(app);
 
 const $ = (id) => document.getElementById(id);
 const soles = (cent) => "S/ " + (cent / 100).toFixed(2);
+const abrir = (id) => $(id).classList.remove("oculto");
+const cerrar = (id) => $(id).classList.add("oculto");
+
+const GRACIA_MS = 24 * 60 * 60 * 1000;
 
 let uid = null;
-let reservaActual = null;   // { id, totalCent, numero, expiraMs }
-let reservaGracia = null;   // vencida, sin constancia, todavía dentro de las 24 h
-let pararReserva = null;    // corta el listener de la reserva en curso
+let reservaActual = null;    // { id, totalCent, numero, expiraMs }
+let reservaGracia = null;    // vencida, sin constancia, todavía dentro de las 24 h
+let reservaReclamo = null;
+let reclamoTrasConstancia = null;
+let pararReserva = null;
 let pararUsuario = null;
+let pararHistorial = null;
+let pararPendientes = null;
+let pararCongelada = null;
 let temporizador = null;
+let temporizadorPlan = null;
+let modoActual = "BASIC";
+let congelada = false;
+let historialFilas = [];
+
+// Cerrar cualquier diálogo desde su botón, sin un manejador por diálogo.
+document.querySelectorAll("[data-cerrar]").forEach((b) => {
+  b.onclick = () => cerrar(b.dataset.cerrar);
+});
 
 // ===== Sesión =====
 $("btnEntrar").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(mostrarError);
 $("btnSalir").onclick = () => signOut(auth);
 
 onAuthStateChanged(auth, (u) => {
-  $("cargando").classList.add("oculto");
-  if (pararUsuario) { pararUsuario(); pararUsuario = null; }
-  // El historial escucha en vivo, así que al cambiar de sesión hay que soltarlo: si no, seguiría
-  // pintando las recargas del usuario anterior sobre la pantalla del nuevo.
-  if (pararHistorial) { pararHistorial(); pararHistorial = null; }
+  cerrar("cargando");
+  // Los escuchadores se sueltan al cambiar de sesión: si no, seguirían pintando los datos de un
+  // usuario sobre la pantalla del siguiente.
+  [pararUsuario, pararHistorial, pararPendientes, pararCongelada].forEach((f) => { if (f) f(); });
+  pararUsuario = pararHistorial = pararPendientes = pararCongelada = null;
   if (!u) {
     uid = null;
-    $("vLogin").classList.remove("oculto");
-    $("vPanel").classList.add("oculto");
+    abrir("vLogin"); cerrar("vPanel");
     return;
   }
   uid = u.uid;
   $("correo").textContent = u.email || u.displayName || "";
-  $("vLogin").classList.add("oculto");
-  $("vPanel").classList.remove("oculto");
+  cerrar("vLogin"); abrir("vPanel");
 
-  // El saldo se escucha en vivo: cuando el servidor acredita, el número cambia solo.
+  // Saldo y plan en vivo: cuando el servidor acredita, el número cambia solo.
   pararUsuario = onSnapshot(doc(db, "usuarios", uid), (s) => {
     $("saldo").textContent = soles(s.get("wallet_saldo_cent") || 0);
-    pintarEstadoPlan(s.data() || {});
+    pintarPlan(s.data() || {});
   }, () => {});
+
+  pararCongelada = onSnapshot(doc(db, "usuarios", uid, "security", "wallet_state"), (s) => {
+    congelada = s.exists() && s.get("wallet_frozen") === true;
+    $("estadoWallet").textContent = congelada ? "● CONGELADA" : "● ACTIVA";
+    $("btnCongelar").textContent = congelada ? "🔥  Descongelar" : "❄️  Congelar";
+  }, () => {});
+
+  escucharHistorial();
   retomarPendientes();
-  cargarHistorial();
 });
 
-// ===== Recuperar una recarga a medias =====
-// El camino normal es: reservar → salir a Yape → volver. En un teléfono, ese "volver" muchas veces
-// recarga la pestaña. Sin esto la página empezaría de cero y daría un monto NUEVO, con lo que la
-// reserva vieja se queda con el pago y sin constancia, y la nueva con la constancia y sin pago:
-// ninguna de las dos acredita y el dinero queda en el aire.
-const GRACIA_MS = 24 * 60 * 60 * 1000;
+// ===== Plan =====
+// El catálogo coincide con PLANES de functions/index.js. Manda el servidor: aquí solo se pinta, y
+// él vuelve a comprobar precio y saldo antes de cobrar nada.
+const PLANES = {
+  PREPAGO: { nombre: "Un día", precioCent: 100, dias: 1 },
+  MENSUAL: { nombre: "Un mes", precioCent: 1500, dias: 30 },
+  ANUAL: { nombre: "Un año", precioCent: 15000, dias: 365 },
+};
+const ORIGEN = {
+  MENSUAL: "Mensual", ANUAL: "Anual", PREPAGO: "Prepago", TRIAL_1M: "Trial",
+  AJUSTE_MANUAL: "Activado por soporte",
+};
 
-async function retomarPendientes() {
-  try {
-    const q = query(
-      collection(db, "reservas_recarga"),
-      where("uid", "==", uid),
-      where("estado", "in", ["esperando", "expirada"]),
-      limit(20)
-    );
-    const snap = await getDocs(q);
-    const ahora = Date.now();
-    const abiertas = snap.docs.map((d) => ({
-      id: d.id,
-      totalCent: d.get("totalCent") || 0,
-      numero: d.get("numeroAsignado") || "",
-      expiraMs: d.get("expiraMs") || 0,
-      tieneComprobante: d.get("tieneComprobante") === true,
-    }));
+function pintarPlan(datos) {
+  const es = datos.estado_servicio || {};
+  modoActual = es.mode || "BASIC";
+  const hasta = es.full_until && es.full_until.toMillis ? es.full_until.toMillis() : 0;
+  clearInterval(temporizadorPlan);
 
-    // Viva: todavía dentro de sus 30 minutos. Se retoma y se bloquea pedir otra.
-    const viva = abiertas.filter((r) => r.expiraMs > ahora).sort((a, b) => b.expiraMs - a.expiraMs)[0];
-    if (viva) {
-      reservaActual = viva;
-      $("montoPagar").textContent = soles(viva.totalCent);
-      $("numeroPago").textContent = viva.numero || "—";
-      $("paso1").classList.add("oculto");
-      if (viva.tieneComprobante) {
-        $("paso3").classList.remove("oculto");
-        mostrar($("estadoSubida"), "Ya recibimos tu constancia. Estamos verificando el pago…");
-      } else {
-        $("paso2").classList.remove("oculto");
-      }
-      arrancarContador();
-      escucharReserva();
-      return;
-    }
+  $("estadoPlan").textContent =
+    modoActual === "BASIC" ? "Plan: BASIC (Gratuito)"
+    : modoActual === "FULL" ? `Plan: FULL (${ORIGEN[es.source] || es.source || "—"})`
+    : `Plan: ${modoActual}`;
 
-    // Vencida pero dentro de la gracia y sin constancia: puede que ya haya pagado.
-    const enGracia = abiertas
-      .filter((r) => !r.tieneComprobante && ahora < r.expiraMs + GRACIA_MS)
-      .sort((a, b) => b.expiraMs - a.expiraMs)[0];
-    if (enGracia) {
-      reservaGracia = enGracia;
-      $("graciaDetalle").textContent = ` Reservaste ${soles(enGracia.totalCent)} y no subiste el comprobante.`;
-      $("cajaGracia").classList.remove("oculto");
-    }
-
-    // Vencida CON constancia: el pago no casó por monto. Es el caso del importe redondeado, y el
-    // único camino que le queda es declarar cuánto pagó de verdad.
-    const sinCasar = abiertas
-      .filter((r) => r.tieneComprobante && r.expiraMs <= ahora)
-      .sort((a, b) => b.expiraMs - a.expiraMs)[0];
-    if (sinCasar) ofrecerReclamo(sinCasar);
-  } catch (e) { /* si falla, la página sigue sirviendo para una recarga nueva */ }
+  if (!hasta || modoActual === "BASIC") {
+    $("cronoPlan").textContent = modoActual === "BASIC" ? "Actualiza a FULL" : "Sin límite de tiempo";
+  } else {
+    // Mismo formato que el cronómetro del wallet. Saber que quedan tres horas —y no un vago "vence
+    // hoy"— es lo que permite renovar a tiempo en vez de descubrirlo con la app ya bloqueada.
+    const pintar = () => {
+      const resta = hasta - Date.now();
+      if (resta <= 0) { $("cronoPlan").textContent = "⚠️ Plan vencido"; clearInterval(temporizadorPlan); return; }
+      const dias = Math.floor(resta / 86400000);
+      const horas = Math.floor(resta / 3600000) % 24;
+      const mins = Math.floor(resta / 60000) % 60;
+      const txt = dias > 0 ? `${dias} día${dias === 1 ? "" : "s"}, ${horas} hora${horas === 1 ? "" : "s"}`
+                : horas > 0 ? `${horas} hora${horas === 1 ? "" : "s"}, ${mins} min`
+                : `${mins} min`;
+      $("cronoPlan").textContent = "⏱️ " + txt;
+    };
+    pintar();
+    temporizadorPlan = setInterval(pintar, 30000);
+  }
+  pintarListaPlanes(hasta);
 }
 
-// ===== Paso 1: reservar el monto =====
+function pintarListaPlanes(hasta) {
+  $("detallePlan").textContent = hasta > Date.now()
+    ? `Tu plan vence el ${new Date(hasta).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}. Renovar suma días, no los pierde.`
+    : "Activa un plan para usar todas las funciones.";
+  // El plan VENTAS se cobra por número de terminales y NO vive en estado_servicio como los demás.
+  // Activar aquí un plan normal lo sobrescribiría y el usuario perdería su configuración.
+  if (modoActual === "VENTAS") {
+    $("listaPlanes").innerHTML =
+      `<p class="etiqueta">Tu plan de Ventas se administra desde la aplicación, porque depende de` +
+      ` cuántas terminales tengas.</p>`;
+    return;
+  }
+  $("listaPlanes").innerHTML = Object.entries(PLANES).map(([tipo, p]) =>
+    `<button data-plan="${tipo}">${p.nombre} · ${soles(p.precioCent)}</button>`
+  ).join("");
+}
+
+$("btnAbrirPlanes").onclick = () => { cerrar("okPlan"); cerrar("errPlan"); abrir("mPlanes"); };
+
+$("listaPlanes").onclick = async (ev) => {
+  const btn = ev.target.closest("button[data-plan]");
+  if (!btn) return;
+  const p = PLANES[btn.dataset.plan];
+  if (!p) return;
+  const renueva = modoActual === "FULL";
+  const texto = `Vas a activar "${p.nombre}" por ${soles(p.precioCent)}.\n\n` +
+    (renueva ? `Se sumarán ${p.dias} días a los que ya te quedan.\n\n` : `Tendrás ${p.dias} días de plan completo.\n\n`) +
+    `Se descontará de tu saldo. ¿Confirmas?`;
+  if (!confirm(texto)) return;
+
+  cerrar("errPlan"); cerrar("okPlan");
+  $("listaPlanes").querySelectorAll("button").forEach((b) => { b.disabled = true; });
+  try {
+    await httpsCallable(fns, "activarPlan")({ tipo: btn.dataset.plan });
+    // No se pinta el resultado a mano: el escuchador del usuario ya trae el estado del servidor.
+    mostrar($("okPlan"), "Plan activado. Ya puedes usar todas las funciones.");
+  } catch (e) {
+    if (String(e?.message || "").includes("SALDO_INSUFICIENTE")) {
+      mostrar($("errPlan"), "Te falta saldo para este plan. Recarga y vuelve a intentarlo.");
+    } else {
+      mostrarError(e);
+      mostrar($("errPlan"), "No se pudo activar el plan. Tu saldo no se descontó.");
+    }
+  } finally {
+    $("listaPlanes").querySelectorAll("button").forEach((b) => { b.disabled = false; });
+  }
+};
+
+// ===== Congelar =====
+// Escribe el mismo documento que la app, así que congelar aquí congela en todos los dispositivos.
+$("btnCongelar").onclick = async () => {
+  const nuevo = !congelada;
+  if (!confirm(nuevo
+    ? "Se bloqueará tu wallet en TODOS tus dispositivos. ¿Confirmas?"
+    : "Se reactivará tu wallet en todos tus dispositivos. ¿Confirmas?")) return;
+  try {
+    await setDoc(doc(db, "usuarios", uid, "security", "wallet_state"),
+      { wallet_frozen: nuevo, updatedAt: serverTimestamp(), origen: "web_recargas" }, { merge: true });
+  } catch (e) { alert(textoError(e)); }
+};
+
+// ===== Recargar =====
+$("btnRecargar").onclick = () => {
+  // Dos reservas vivas a la vez es justo lo que deja el dinero en el aire, así que si hay una en
+  // curso se vuelve a ella en vez de pedir otro monto.
+  if (reservaActual && reservaActual.expiraMs > Date.now()) return abrirPago();
+  cerrar("errReservar");
+  $("soles").value = "";
+  abrir("mMonto");
+};
+
 $("btnReservar").onclick = async () => {
   const n = parseInt($("soles").value, 10);
-  $("errReservar").classList.add("oculto");
+  cerrar("errReservar");
   if (!n || n < 1 || n > 999) return mostrar($("errReservar"), "Ingresa un monto entre 1 y 999 soles.");
-  // Dos reservas vivas a la vez es justo lo que deja el dinero en el aire.
-  if (reservaActual && reservaActual.expiraMs > Date.now()) {
-    return mostrar($("errReservar"), "Ya tienes una recarga en curso. Termínala o espera a que venza.");
-  }
-
   $("btnReservar").disabled = true;
   $("btnReservar").textContent = "Reservando…";
   try {
     const r = await httpsCallable(fns, "reservarRecarga")({ soles: n });
     reservaActual = {
-      id: r.data.reservaId,
-      totalCent: r.data.totalCent,
-      numero: r.data.numero,
-      expiraMs: r.data.expiraMs,
+      id: r.data.reservaId, totalCent: r.data.totalCent,
+      numero: r.data.numero, expiraMs: r.data.expiraMs,
     };
-    $("montoPagar").textContent = r.data.totalTexto || soles(r.data.totalCent);
-    $("numeroPago").textContent = r.data.numero || "—";
-    $("paso1").classList.add("oculto");
-    $("paso2").classList.remove("oculto");
-    arrancarContador();
+    cerrar("mMonto");
+    abrirPago();
     escucharReserva();
   } catch (e) {
     mostrarError(e);
@@ -402,6 +507,16 @@ $("btnReservar").onclick = async () => {
   }
 };
 
+function abrirPago() {
+  $("montoPagar").textContent = soles(reservaActual.totalCent);
+  $("numeroPago").textContent = reservaActual.numero || "—";
+  cerrar("estadoSubida"); cerrar("errSubida");
+  $("archivo").value = "";
+  $("btnSubir").disabled = true;
+  abrir("mPago");
+  arrancarContador();
+}
+
 $("btnCopiarNumero").onclick = async () => {
   try {
     await navigator.clipboard.writeText($("numeroPago").textContent.trim());
@@ -409,169 +524,6 @@ $("btnCopiarNumero").onclick = async () => {
     setTimeout(() => ($("btnCopiarNumero").textContent = "Copiar"), 1500);
   } catch (e) { /* algunos navegadores lo bloquean sin gesto directo */ }
 };
-
-$("btnYaPague").onclick = () => {
-  $("paso2").classList.add("oculto");
-  $("paso3").classList.remove("oculto");
-};
-
-// ===== Paso 3: constancia =====
-$("archivo").onchange = () => { $("btnSubir").disabled = !$("archivo").files.length; };
-
-// Misma ruta que usa la app Android, para que ambos canales queden en el mismo sitio.
-async function enviarConstancia(reservaId, archivo) {
-  const ruta = `vouchers/${uid}/reserva_${reservaId}_${Date.now()}.jpg`;
-  const refArchivo = ref(storage, ruta);
-  await uploadBytes(refArchivo, archivo);
-  const url = await getDownloadURL(refArchivo);
-  await httpsCallable(fns, "adjuntarComprobante")({ reservaId, voucherPath: ruta, voucherUrl: url });
-}
-
-$("btnSubir").onclick = async () => {
-  const f = $("archivo").files[0];
-  if (!f || !reservaActual) return;
-  $("errSubida").classList.add("oculto");
-  $("btnSubir").disabled = true;
-  $("btnSubir").textContent = "Subiendo…";
-  try {
-    await enviarConstancia(reservaActual.id, f);
-    mostrar($("estadoSubida"), "Constancia enviada. Estamos verificando tu pago…");
-  } catch (e) {
-    mostrarError(e);
-    mostrar($("errSubida"), textoError(e));
-  } finally {
-    $("btnSubir").disabled = false;
-    $("btnSubir").textContent = "Enviar constancia";
-  }
-};
-
-// Subir la constancia de una recarga vencida pero en gracia. Reutiliza el mismo camino: subir a
-// Storage y llamar a `adjuntarComprobante`; el servidor acredita si el pago ya estaba casado.
-$("archivoGracia").onchange = () => { $("btnSubirGracia").disabled = !$("archivoGracia").files.length; };
-
-$("btnSubirGracia").onclick = async () => {
-  const f = $("archivoGracia").files[0];
-  if (!f || !reservaGracia) return;
-  $("errGracia").classList.add("oculto");
-  $("btnSubirGracia").disabled = true;
-  $("btnSubirGracia").textContent = "Subiendo…";
-  try {
-    await enviarConstancia(reservaGracia.id, f);
-    $("cajaGracia").classList.add("oculto");
-    reservaGracia = null;
-    cargarHistorial();
-    if (reclamoTrasConstancia) {
-      const r = reclamoTrasConstancia;
-      reclamoTrasConstancia = null;
-      $("btnReclamar").disabled = false;
-      ofrecerReclamo(r);
-      $("cajaReclamo").scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  } catch (e) {
-    mostrarError(e);
-    mostrar($("errGracia"), textoError(e));
-  } finally {
-    $("btnSubirGracia").disabled = false;
-    $("btnSubirGracia").textContent = "Enviar constancia";
-  }
-};
-
-$("btnOtra").onclick = () => {
-  reservaActual = null;
-  if (pararReserva) { pararReserva(); pararReserva = null; }
-  $("archivo").value = "";
-  $("btnSubir").disabled = true;
-  ["paso2", "paso3", "paso4"].forEach((p) => $(p).classList.add("oculto"));
-  ["estadoSubida", "errSubida", "errReservar"].forEach((p) => $(p).classList.add("oculto"));
-  $("paso1").classList.remove("oculto");
-  $("soles").value = "";
-  retomarPendientes();
-  cargarHistorial();
-};
-
-// ===== Reclamo: "sí pagué, pero por otro importe" =====
-// El casamiento es por monto exacto, así que un pago de S/1.00 contra una reserva de S/1.14 no lo
-// recoge nadie: el dinero entra y se queda sin dueño. Aquí el usuario declara lo que pagó de verdad
-// y el servidor lo busca en lo que capturó, para que el administrador resuelva viendo la evidencia.
-let reservaReclamo = null;
-// Cuando se sube la constancia solo para poder reclamar, hay que volver al reclamo al terminar: en
-// el wallet subir y reclamar son un solo gesto, y dejarlo a medias es peor que no ofrecerlo.
-let reclamoTrasConstancia = null;
-
-function ofrecerReclamo(r) {
-  reservaReclamo = r;
-  $("reclamoDetalle").textContent =
-    ` Reservaste ${soles(r.totalCent)} y no encontramos un pago por ese importe exacto.`;
-  // Se propone lo reservado, que es lo correcto cuando la recarga solo venció; quien pagó de más o
-  // de menos lo corrige, y esa diferencia es justo lo que el administrador necesita ver.
-  $("montoPagado").value = (r.totalCent / 100).toFixed(2);
-  $("cajaReclamo").classList.remove("oculto");
-}
-
-$("btnReclamar").onclick = async () => {
-  if (!reservaReclamo) return;
-  $("errReclamo").classList.add("oculto");
-  const pagado = Math.round(parseFloat($("montoPagado").value) * 100);
-  if (!pagado || pagado < 1) return mostrar($("errReclamo"), "Escribe cuánto pagaste.");
-  $("btnReclamar").disabled = true;
-  try {
-    const r = await httpsCallable(fns, "reclamarReserva")({
-      reservaId: reservaReclamo.id, montoPagadoCent: pagado,
-    });
-    $("montoPagado").disabled = true;
-    // Se dice si el pago ya apareció, porque cambia por completo la espera del usuario: no es lo
-    // mismo "lo encontramos y falta aprobarlo" que "hay que buscarlo a mano".
-    mostrar($("okReclamo"), r.data && r.data.coincide
-      ? "Encontramos tu pago. Queda pendiente de aprobación y se abonará a tu saldo."
-      : "Recibimos tu reporte. Vamos a buscar tu pago y te lo abonaremos si aparece.");
-    cargarHistorial();
-  } catch (e) {
-    $("btnReclamar").disabled = false;
-    // Sin constancia no hay nada que revisar, así que se pide antes de reclamar — es lo que hace
-    // el wallet de la app, que abre la galería en vez de dar el reclamo por imposible.
-    if (String(e?.message || "").includes("SIN_COMPROBANTE")) {
-      reservaGracia = { id: reservaReclamo.id, totalCent: reservaReclamo.totalCent };
-      reclamoTrasConstancia = reservaReclamo;
-      $("graciaDetalle").textContent =
-        ` Reservaste ${soles(reservaReclamo.totalCent)} y no subiste el comprobante.`;
-      $("cajaReclamo").classList.add("oculto");
-      $("cajaGracia").classList.remove("oculto");
-      $("cajaGracia").scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
-    mostrarError(e);
-    mostrar($("errReclamo"), e?.message || "No se pudo enviar el reporte. Inténtalo de nuevo.");
-  }
-};
-
-// ===== Seguimiento en vivo de la reserva =====
-// La acreditación la decide el servidor al casar el monto con el pago real; aquí solo se escucha.
-function escucharReserva() {
-  if (pararReserva) pararReserva();
-  pararReserva = onSnapshot(doc(db, "reservas_recarga", reservaActual.id), (s) => {
-    if (!s.exists()) return;
-    const estado = s.get("estado");
-    if (estado === "aplicado") {
-      clearInterval(temporizador);
-      $("resultado").innerHTML =
-        `<div class="aviso ok"><strong>¡Listo!</strong> Se acreditaron ` +
-        `${soles(s.get("acreditadoCent") || reservaActual.totalCent)} a tu saldo.</div>`;
-      ["paso1", "paso2", "paso3"].forEach((p) => $(p).classList.add("oculto"));
-      $("paso4").classList.remove("oculto");
-      cargarHistorial();
-    } else if (estado === "expirada") {
-      $("resultado").innerHTML =
-        `<div class="aviso alerta"><strong>La reserva venció.</strong> Si ya pagaste, no te preocupes: ` +
-        `sigue valiendo durante 24 horas y todavía puede acreditarse sola.</div>`;
-      $("paso4").classList.remove("oculto");
-      // Con constancia subida y sin acreditar, lo más probable es que el importe pagado no sea el
-      // reservado. "Escríbenos" no era una salida: no decía dónde. Esta sí lo es.
-      if (s.get("tieneComprobante") === true) {
-        ofrecerReclamo({ id: s.id, totalCent: s.get("totalCent") || 0 });
-      }
-    }
-  }, () => {});
-}
 
 function arrancarContador() {
   clearInterval(temporizador);
@@ -585,112 +537,140 @@ function arrancarContador() {
   temporizador = setInterval(pintar, 1000);
 }
 
-// ===== Historial =====
-// Sin orderBy a propósito: ordenar en el servidor exigiría un índice compuesto que no existe.
-
-// ===== Tu plan =====
-// El catálogo tiene que coincidir con PLANES de functions/index.js. Manda el servidor: aquí solo se
-// pinta, y él vuelve a comprobar el precio y el saldo antes de cobrar nada.
-const PLANES = {
-  PREPAGO: { nombre: "Un día", precioCent: 100, dias: 1 },
-  MENSUAL: { nombre: "Un mes", precioCent: 1500, dias: 30 },
-  ANUAL: { nombre: "Un año", precioCent: 15000, dias: 365 },
-};
-
-let modoActual = "BASIC";
-let temporizadorPlan = null;
-
-function pintarPlanes() {
-  // El plan VENTAS se cobra por número de terminales y NO vive en estado_servicio como los demás.
-  // Activar aquí un plan normal lo sobrescribiría y el usuario perdería su configuración de
-  // terminales, así que esta pantalla se aparta y lo deja donde sí se sabe tratar.
-  if (modoActual === "VENTAS") {
-    $("listaPlanes").innerHTML =
-      `<p class="sub" style="margin:12px 0 0">Tu plan de Ventas se administra desde la aplicación,` +
-      ` porque depende de cuántas terminales tengas.</p>`;
-    return;
-  }
-  $("listaPlanes").innerHTML = Object.entries(PLANES).map(([tipo, p]) =>
-    `<button data-plan="${tipo}">${p.nombre} · ${soles(p.precioCent)}</button>`
-  ).join("");
+// ===== Constancia =====
+// Misma ruta que usa la app Android, para que ambos canales queden en el mismo sitio.
+async function enviarConstancia(reservaId, archivo) {
+  const ruta = `vouchers/${uid}/reserva_${reservaId}_${Date.now()}.jpg`;
+  const refArchivo = ref(storage, ruta);
+  await uploadBytes(refArchivo, archivo);
+  const url = await getDownloadURL(refArchivo);
+  await httpsCallable(fns, "adjuntarComprobante")({ reservaId, voucherPath: ruta, voucherUrl: url });
 }
 
-function pintarEstadoPlan(datos) {
-  const es = datos.estado_servicio || {};
-  modoActual = es.mode || "BASIC";
-  const hasta = es.full_until && es.full_until.toMillis ? es.full_until.toMillis() : 0;
-  clearInterval(temporizadorPlan);
+$("archivo").onchange = () => { $("btnSubir").disabled = !$("archivo").files.length; };
 
-  if (modoActual === "BASIC" || !hasta || hasta <= Date.now()) {
-    $("estadoPlan").textContent = modoActual === "VENTAS" ? "Ventas" : "Básico";
-    $("detallePlan").textContent = modoActual === "VENTAS"
-      ? "Plan de ventas activo."
-      : "Activa un plan para usar todas las funciones.";
-    pintarPlanes();
-    return;
-  }
-
-  $("estadoPlan").textContent = modoActual === "VENTAS" ? "Ventas" : "Completo";
-  // La cuenta atrás se refresca sola: saber que quedan tres horas y no "vence hoy" es lo que
-  // permite renovar a tiempo en vez de descubrirlo con la app ya bloqueada.
-  const pintar = () => {
-    const resta = hasta - Date.now();
-    if (resta <= 0) { $("detallePlan").textContent = "Tu plan acaba de vencer."; clearInterval(temporizadorPlan); return; }
-    const dias = Math.floor(resta / 86400000);
-    const horas = Math.floor((resta % 86400000) / 3600000);
-    const mins = Math.floor((resta % 3600000) / 60000);
-    const queda = dias > 0 ? `${dias} día${dias === 1 ? "" : "s"} y ${horas} h`
-                : horas > 0 ? `${horas} h y ${mins} min`
-                : `${mins} min`;
-    $("detallePlan").textContent =
-      `Te queda ${queda} · hasta el ${new Date(hasta).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}`;
-  };
-  pintar();
-  temporizadorPlan = setInterval(pintar, 30000);
-  pintarPlanes();
-}
-
-// Un solo escuchador en el contenedor: los botones se vuelven a pintar cuando cambia el plan.
-$("listaPlanes").onclick = async (ev) => {
-  const btn = ev.target.closest("button[data-plan]");
-  if (!btn) return;
-  const tipo = btn.dataset.plan;
-  const p = PLANES[tipo];
-  if (!p) return;
-
-  // Se cobra saldo real, así que se confirma con el importe delante. Y se dice si suma sobre lo que
-  // ya tiene: renovar antes de vencer no pierde los días restantes, se acumulan.
-  const renueva = modoActual === "FULL";
-  const texto = `Vas a activar "${p.nombre}" por ${soles(p.precioCent)}.\n\n` +
-    (renueva ? `Se sumarán ${p.dias} días a los que ya te quedan.\n\n` : `Tendrás ${p.dias} días de plan completo.\n\n`) +
-    `Se descontará de tu saldo. ¿Confirmas?`;
-  if (!confirm(texto)) return;
-
-  $("errPlan").classList.add("oculto");
-  $("okPlan").classList.add("oculto");
-  $("listaPlanes").querySelectorAll("button").forEach((b) => { b.disabled = true; });
+$("btnSubir").onclick = async () => {
+  const f = $("archivo").files[0];
+  if (!f || !reservaActual) return;
+  cerrar("errSubida");
+  $("btnSubir").disabled = true;
+  $("btnSubir").textContent = "Subiendo…";
   try {
-    await httpsCallable(fns, "activarPlan")({ tipo });
-    // No se pinta el resultado a mano: el escuchador del usuario ya trae el estado nuevo del
-    // servidor, y ese es el que manda. Pintarlo aquí sería adelantar una versión propia.
-    mostrar($("okPlan"), "Plan activado. Ya puedes usar todas las funciones.");
+    await enviarConstancia(reservaActual.id, f);
+    mostrar($("estadoSubida"), "Constancia enviada. Estamos verificando tu pago…");
   } catch (e) {
-    const msg = String(e?.message || "");
-    if (msg.includes("SALDO_INSUFICIENTE")) {
-      mostrar($("errPlan"), `Te falta saldo para este plan. Recarga y vuelve a intentarlo.`);
-      $("paso1").scrollIntoView({ behavior: "smooth", block: "center" });
-    } else {
-      mostrarError(e);
-      mostrar($("errPlan"), "No se pudo activar el plan. Tu saldo no se descontó.");
-    }
+    mostrarError(e);
+    mostrar($("errSubida"), textoError(e));
   } finally {
-    $("listaPlanes").querySelectorAll("button").forEach((b) => { b.disabled = false; });
+    $("btnSubir").disabled = false;
+    $("btnSubir").textContent = "📤  Enviar constancia";
   }
 };
 
-// Lo que se está mostrando ahora mismo, para saber sobre qué se pulsó.
-let historialFilas = [];
+$("archivoGracia").onchange = () => { $("btnSubirGracia").disabled = !$("archivoGracia").files.length; };
 
+$("btnSubirGracia").onclick = async () => {
+  const f = $("archivoGracia").files[0];
+  if (!f || !reservaGracia) return;
+  cerrar("errGracia");
+  $("btnSubirGracia").disabled = true;
+  $("btnSubirGracia").textContent = "Subiendo…";
+  try {
+    await enviarConstancia(reservaGracia.id, f);
+    const veniaDeReclamo = reclamoTrasConstancia;
+    cerrar("mGracia");
+    reservaGracia = null;
+    // En el wallet, subir la constancia y reclamar son un solo gesto; dejarlo a medias es peor
+    // que no ofrecerlo.
+    if (veniaDeReclamo) { reclamoTrasConstancia = null; ofrecerReclamo(veniaDeReclamo); }
+  } catch (e) {
+    mostrarError(e);
+    mostrar($("errGracia"), textoError(e));
+  } finally {
+    $("btnSubirGracia").disabled = false;
+    $("btnSubirGracia").textContent = "📤  Enviar constancia";
+  }
+};
+
+// ===== Seguimiento de la reserva en curso =====
+function escucharReserva() {
+  if (pararReserva) pararReserva();
+  const id = reservaActual.id;
+  pararReserva = onSnapshot(doc(db, "reservas_recarga", id), (s) => {
+    if (!s.exists()) return;
+    const estado = s.get("estado");
+    if (estado === "aplicado") {
+      clearInterval(temporizador);
+      cerrar("mPago");
+      alert(`¡Listo! Se acreditaron ${soles(s.get("acreditadoCent") || s.get("totalCent") || 0)} a tu saldo.`);
+      if (reservaActual && reservaActual.id === id) reservaActual = null;
+    } else if (estado === "expirada" && s.get("tieneComprobante") === true) {
+      // Con constancia subida y sin acreditar, lo más probable es que el importe pagado no sea el
+      // reservado. El reclamo es la salida, y está a un toque en el historial.
+      mostrar($("estadoSubida"), "La reserva venció. Si pagaste otro importe, reclámalo desde el historial.");
+    }
+  }, () => {});
+}
+
+// ===== Reclamo =====
+function ofrecerReclamo(r) {
+  reservaReclamo = r;
+  $("reclamoDetalle").textContent =
+    `Reservaste ${soles(r.totalCent)} y no encontramos un pago por ese importe exacto.`;
+  // Se propone lo reservado, que es lo correcto cuando la recarga solo venció; quien pagó otra cosa
+  // lo corrige, y esa diferencia es justo lo que el administrador necesita ver.
+  $("montoPagado").value = (r.totalCent / 100).toFixed(2);
+  $("montoPagado").disabled = false;
+  $("btnReclamar").disabled = false;
+  cerrar("okReclamo"); cerrar("errReclamo");
+  abrir("mReclamo");
+}
+
+$("btnAbrirReclamo").onclick = () => {
+  // Se reclama sobre una recarga concreta, así que se ofrece la última que quedó sin acreditar.
+  const candidata = historialFilas.find((f) => esAccionable(f.estado) && f.estado !== "esperando");
+  if (!candidata) {
+    alert("No tienes recargas pendientes de reclamar.\n\nSi pagaste y no aparece, pide el monto y sube tu constancia.");
+    return;
+  }
+  ofrecerReclamo(candidata);
+};
+
+$("btnReclamar").onclick = async () => {
+  if (!reservaReclamo) return;
+  cerrar("errReclamo");
+  const pagado = Math.round(parseFloat($("montoPagado").value) * 100);
+  if (!pagado || pagado < 1) return mostrar($("errReclamo"), "Escribe cuánto pagaste.");
+  $("btnReclamar").disabled = true;
+  try {
+    const r = await httpsCallable(fns, "reclamarReserva")({
+      reservaId: reservaReclamo.id, montoPagadoCent: pagado,
+    });
+    $("montoPagado").disabled = true;
+    // Se dice si el pago ya apareció: no es lo mismo "lo encontramos y falta aprobarlo" que "hay
+    // que buscarlo a mano".
+    mostrar($("okReclamo"), r.data && r.data.coincide
+      ? "Encontramos tu pago. Queda pendiente de aprobación y se abonará a tu saldo."
+      : "Recibimos tu reporte. Vamos a buscar tu pago y te lo abonaremos si aparece.");
+  } catch (e) {
+    $("btnReclamar").disabled = false;
+    // Sin constancia no hay nada que revisar, así que se pide antes de reclamar — es lo que hace
+    // el wallet, que abre la galería en vez de dar el reclamo por imposible.
+    if (String(e?.message || "").includes("SIN_COMPROBANTE")) {
+      reservaGracia = { id: reservaReclamo.id, totalCent: reservaReclamo.totalCent };
+      reclamoTrasConstancia = reservaReclamo;
+      $("graciaDetalle").textContent =
+        `Reservaste ${soles(reservaReclamo.totalCent)} y no subiste el comprobante. Súbelo y seguimos.`;
+      cerrar("mReclamo");
+      abrir("mGracia");
+      return;
+    }
+    mostrarError(e);
+    mostrar($("errReclamo"), textoError(e));
+  }
+};
+
+// ===== Historial, en vivo =====
 function etiquetaEstado(e) {
   if (e === "aplicado") return "acreditada";
   if (e === "esperando") return "esperando tu pago";
@@ -699,26 +679,15 @@ function etiquetaEstado(e) {
   if (e === "rechazada") return "no se acreditó";
   return e;
 }
-
 // Ya cerradas: acreditada o rechazada. Ofrecer una acción sobre ellas sería prometer algo que no
 // va a pasar — el reclamo de una reserva ya resuelta lo rechaza el servidor.
 const esAccionable = (estado) => estado !== "aplicado" && estado !== "rechazada";
 
-let pararHistorial = null;
-
-/**
- * Historial EN VIVO, como el del wallet de la app.
- *
- * Antes se pedía una sola vez al cargar la página. Bastaba con que el administrador resolviera un
- * reclamo mientras el usuario la tenía abierta para que siguiera leyendo "en revisión" sobre algo ya
- * decidido: el dato era correcto en el servidor y falso en la pantalla. Con un escuchador, la fila
- * cambia sola en cuanto cambia la reserva, sin recargar y sin que el usuario haga nada.
- *
- * Se puede llamar tantas veces como haga falta: si ya está escuchando, no vuelve a suscribirse.
- */
-function cargarHistorial() {
+function escucharHistorial() {
   if (pararHistorial) return;
   const q = query(collection(db, "reservas_recarga"), where("uid", "==", uid), limit(20));
+  // EN VIVO, como el del wallet. Pedirlo una sola vez al cargar hacía que un reclamo ya resuelto
+  // siguiera leyéndose "en revisión": el dato era correcto en el servidor y falso en la pantalla.
   pararHistorial = onSnapshot(q, (snap) => {
     historialFilas = snap.docs
       .map((d) => ({
@@ -732,14 +701,11 @@ function cargarHistorial() {
         pagoRecibido: d.get("pagoRecibido") === true,
       }))
       // Pedir un monto y no hacer nada con él NO es un movimiento: no hubo pago ni constancia, solo
-      // una cifra que se dejó ir. Verla en la lista marcada como "venció" hace parecer que algo
-      // falló y ensucia el historial de quien prueba dos o tres montos antes de decidirse.
-      // Si hubiera cualquier rastro de dinero —constancia subida o pago casado— sí aparece.
+      // una cifra que se dejó ir. Verla como "venció" hace parecer que algo falló. Si hubiera
+      // cualquier rastro de dinero —constancia o pago casado— sí aparece.
       .filter((f) => !(f.estado === "expirada" && !f.tieneComprobante && !f.pagoRecibido))
       .sort((a, b) => b.creado - a.creado)
-      .slice(0, 5);
-    // Cada fila es pulsable, igual que la lista de recargas del wallet: no es un adorno, es por
-    // donde se retoma una recarga a medias o se reclama una que no llegó a acreditarse.
+      .slice(0, 8);
     $("historial").innerHTML = historialFilas.length
       ? historialFilas.map((f, i) => {
           const activa = esAccionable(f.estado);
@@ -751,38 +717,52 @@ function cargarHistorial() {
   }, () => { /* el historial es accesorio: si falla, no estorba la recarga */ });
 }
 
-// Un solo escuchador en la lista en vez de uno por fila: las filas se vuelven a pintar en cada
-// recarga del historial y los escuchadores individuales se perderían con ellas.
+// Un solo escuchador en la lista: las filas se vuelven a pintar en cada cambio y los escuchadores
+// individuales se perderían con ellas.
 $("historial").onclick = (ev) => {
   const li = ev.target.closest("li[data-i]");
   if (!li) return;
   const f = historialFilas[Number(li.dataset.i)];
-  if (!f) return;
-  // Mismo reparto que hace el wallet: lo que venció se reclama, lo que sigue vivo se retoma, y lo
-  // que ya se acreditó no tiene nada que hacer.
-  if (!esAccionable(f.estado)) return;
-  if (f.estado === "esperando" && f.expiraMs > Date.now()) return retomarViva(f);
+  if (!f || !esAccionable(f.estado)) return;
+  // Mismo reparto que hace el wallet: lo vivo se retoma, lo vencido se reclama.
+  if (f.estado === "esperando" && f.expiraMs > Date.now()) {
+    reservaActual = { id: f.id, totalCent: f.totalCent, numero: f.numero, expiraMs: f.expiraMs };
+    abrirPago();
+    escucharReserva();
+    return;
+  }
   ofrecerReclamo(f);
-  $("cajaReclamo").scrollIntoView({ behavior: "smooth", block: "center" });
 };
 
-// Volver a una reserva que todavía está dentro de sus 30 minutos: se muestra el paso donde se
-// quedó, sin pedir un monto nuevo, que es lo que dejaría dos reservas vivas y el dinero en el aire.
-function retomarViva(f) {
-  reservaActual = { id: f.id, totalCent: f.totalCent, numero: f.numero, expiraMs: f.expiraMs };
-  $("montoPagar").textContent = soles(f.totalCent);
-  $("numeroPago").textContent = f.numero || "—";
-  $("paso1").classList.add("oculto");
-  $("cajaReclamo").classList.add("oculto");
-  if (f.tieneComprobante) {
-    $("paso3").classList.remove("oculto");
-    mostrar($("estadoSubida"), "Ya recibimos tu constancia. Estamos verificando el pago…");
-  } else {
-    $("paso2").classList.remove("oculto");
-  }
-  arrancarContador();
-  escucharReserva();
-  $("paso2").scrollIntoView({ behavior: "smooth", block: "center" });
+// ===== Recuperar una recarga a medias =====
+// El camino normal es reservar → salir a Yape → volver, y en un teléfono ese "volver" muchas veces
+// recarga la pestaña. Sin esto la página empezaría de cero y daría un monto NUEVO, con lo que la
+// reserva vieja se queda con el pago y sin constancia, y la nueva al revés: ninguna acredita.
+function retomarPendientes() {
+  const q = query(
+    collection(db, "reservas_recarga"),
+    where("uid", "==", uid), where("estado", "in", ["esperando", "expirada"]), limit(20)
+  );
+  pararPendientes = onSnapshot(q, (snap) => {
+    const ahora = Date.now();
+    const abiertas = snap.docs.map((d) => ({
+      id: d.id,
+      totalCent: d.get("totalCent") || 0,
+      numero: d.get("numeroAsignado") || "",
+      expiraMs: d.get("expiraMs") || 0,
+      tieneComprobante: d.get("tieneComprobante") === true,
+    }));
+    const viva = abiertas.filter((r) => r.expiraMs > ahora).sort((a, b) => b.expiraMs - a.expiraMs)[0];
+    if (viva && !reservaActual) {
+      reservaActual = viva;
+      escucharReserva();
+      arrancarContador();
+    }
+    // Vencida dentro de la gracia y sin constancia: puede que ya haya pagado y solo falte la foto.
+    reservaGracia = abiertas
+      .filter((r) => !r.tieneComprobante && r.expiraMs <= ahora && ahora < r.expiraMs + GRACIA_MS)
+      .sort((a, b) => b.expiraMs - a.expiraMs)[0] || null;
+  }, () => {});
 }
 
 // ===== Errores =====
@@ -800,9 +780,7 @@ function textoError(e) {
 
 function mostrarError(e) {
   const c = e?.code || "";
-  if (c.includes("internal") || c.includes("unavailable")) {
-    $("servidorCaido").classList.remove("oculto");
-  }
+  if (c.includes("internal") || c.includes("unavailable")) abrir("servidorCaido");
 }
 
 function mostrar(el, txt) { el.textContent = txt; el.classList.remove("oculto"); }
@@ -817,31 +795,29 @@ const yaInstalada = () =>
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();                    // sin esto, Chrome muestra su propio aviso y pierde el evento
   promptInstalar = e;
-  if (!yaInstalada() && localStorage.getItem("instalar_descartado") !== "1") {
-    $("cajaInstalar").classList.remove("oculto");
-  }
+  if (!yaInstalada() && localStorage.getItem("instalar_descartado") !== "1") abrir("cajaInstalar");
 });
 
 $("btnInstalar").onclick = async () => {
   if (!promptInstalar) return;
-  $("cajaInstalar").classList.add("oculto");
+  cerrar("cajaInstalar");
   promptInstalar.prompt();
   await promptInstalar.userChoice.catch(() => {});
   promptInstalar = null;                 // el evento solo se puede usar una vez
 };
 
 $("btnNoInstalar").onclick = () => {
-  $("cajaInstalar").classList.add("oculto");
+  cerrar("cajaInstalar");
   try { localStorage.setItem("instalar_descartado", "1"); } catch (e) {}
 };
 
 $("btnNoInstalarIos").onclick = () => {
-  $("cajaInstalarIos").classList.add("oculto");
+  cerrar("cajaInstalarIos");
   try { localStorage.setItem("instalar_descartado", "1"); } catch (e) {}
 };
 
 window.addEventListener("appinstalled", () => {
-  $("cajaInstalar").classList.add("oculto");
+  cerrar("cajaInstalar");
   try { localStorage.setItem("instalar_descartado", "1"); } catch (e) {}
 });
 
@@ -850,7 +826,7 @@ window.addEventListener("appinstalled", () => {
   const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
   if (esIos && !yaInstalada()) {
     try { if (localStorage.getItem("instalar_descartado") === "1") return; } catch (e) {}
-    $("cajaInstalarIos").classList.remove("oculto");
+    abrir("cajaInstalarIos");
   }
 })();
 
