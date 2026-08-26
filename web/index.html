@@ -282,6 +282,9 @@ $("btnSalir").onclick = () => signOut(auth);
 onAuthStateChanged(auth, (u) => {
   $("cargando").classList.add("oculto");
   if (pararUsuario) { pararUsuario(); pararUsuario = null; }
+  // El historial escucha en vivo, así que al cambiar de sesión hay que soltarlo: si no, seguiría
+  // pintando las recargas del usuario anterior sobre la pantalla del nuevo.
+  if (pararHistorial) { pararHistorial(); pararHistorial = null; }
   if (!u) {
     uid = null;
     $("vLogin").classList.remove("oculto");
@@ -701,10 +704,22 @@ function etiquetaEstado(e) {
 // va a pasar — el reclamo de una reserva ya resuelta lo rechaza el servidor.
 const esAccionable = (estado) => estado !== "aplicado" && estado !== "rechazada";
 
-async function cargarHistorial() {
-  try {
-    const q = query(collection(db, "reservas_recarga"), where("uid", "==", uid), limit(20));
-    const snap = await getDocs(q);
+let pararHistorial = null;
+
+/**
+ * Historial EN VIVO, como el del wallet de la app.
+ *
+ * Antes se pedía una sola vez al cargar la página. Bastaba con que el administrador resolviera un
+ * reclamo mientras el usuario la tenía abierta para que siguiera leyendo "en revisión" sobre algo ya
+ * decidido: el dato era correcto en el servidor y falso en la pantalla. Con un escuchador, la fila
+ * cambia sola en cuanto cambia la reserva, sin recargar y sin que el usuario haga nada.
+ *
+ * Se puede llamar tantas veces como haga falta: si ya está escuchando, no vuelve a suscribirse.
+ */
+function cargarHistorial() {
+  if (pararHistorial) return;
+  const q = query(collection(db, "reservas_recarga"), where("uid", "==", uid), limit(20));
+  pararHistorial = onSnapshot(q, (snap) => {
     historialFilas = snap.docs
       .map((d) => ({
         id: d.id,
@@ -714,12 +729,17 @@ async function cargarHistorial() {
         numero: d.get("numeroAsignado") || "",
         expiraMs: d.get("expiraMs") || 0,
         tieneComprobante: d.get("tieneComprobante") === true,
+        pagoRecibido: d.get("pagoRecibido") === true,
       }))
+      // Pedir un monto y no hacer nada con él NO es un movimiento: no hubo pago ni constancia, solo
+      // una cifra que se dejó ir. Verla en la lista marcada como "venció" hace parecer que algo
+      // falló y ensucia el historial de quien prueba dos o tres montos antes de decidirse.
+      // Si hubiera cualquier rastro de dinero —constancia subida o pago casado— sí aparece.
+      .filter((f) => !(f.estado === "expirada" && !f.tieneComprobante && !f.pagoRecibido))
       .sort((a, b) => b.creado - a.creado)
       .slice(0, 5);
-    // Cada fila es pulsable, igual que la lista de recargas del wallet de la app: no es un adorno,
-    // es por donde se retoma una recarga a medias o se reclama una que no llegó a acreditarse.
-    // Antes esto era texto muerto y el usuario se quedaba mirando "expirada" sin nada que hacer.
+    // Cada fila es pulsable, igual que la lista de recargas del wallet: no es un adorno, es por
+    // donde se retoma una recarga a medias o se reclama una que no llegó a acreditarse.
     $("historial").innerHTML = historialFilas.length
       ? historialFilas.map((f, i) => {
           const activa = esAccionable(f.estado);
@@ -728,7 +748,7 @@ async function cargarHistorial() {
             `<span>${soles(f.totalCent)} · ${etiquetaEstado(f.estado)}${activa ? " ›" : ""}</span></li>`;
         }).join("")
       : "<li><span>Sin movimientos</span></li>";
-  } catch (e) { /* el historial es accesorio: si falla, no estorba la recarga */ }
+  }, () => { /* el historial es accesorio: si falla, no estorba la recarga */ });
 }
 
 // Un solo escuchador en la lista en vez de uno por fila: las filas se vuelven a pintar en cada
