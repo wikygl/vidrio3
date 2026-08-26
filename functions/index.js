@@ -451,11 +451,22 @@ exports.resolverReclamoRecarga = functions.https.onCall(async (data, context) =>
     if (!c.exists) throw new functions.https.HttpsError("not-found", "Reclamo no encontrado.");
     if (c.get("estado") === "resuelto") return { ok: true, yaEstaba: true };   // idempotente
 
+    // La reserva es lo que el usuario ve en su historial. Dejarla en "reclamada" después de
+    // resolver le enseña "en revisión" para siempre: información falsa sobre su propio dinero.
+    const reservaId = c.get("reservaId") || "";
+    const rref = reservaId ? db.collection("reservas_recarga").doc(reservaId) : null;
+
     if (accion === "rechazar") {
       tx.update(cref, {
         estado: "resuelto", resultado: "rechazado", motivo, adminUid: callerUid,
         resueltoEn: admin.firestore.FieldValue.serverTimestamp(),
       });
+      if (rref) {
+        tx.set(rref, {
+          estado: "rechazada",
+          rechazadaEn: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
       return { ok: true, acreditado: 0 };
     }
 
@@ -482,6 +493,16 @@ exports.resolverReclamoRecarga = functions.https.onCall(async (data, context) =>
       evidencia, motivo, adminUid: callerUid,
       resueltoEn: admin.firestore.FieldValue.serverTimestamp(),
     });
+    // "aplicado" además cierra la puerta al automatismo: si el pago apareciera después, ni el
+    // casador ni un segundo reclamo volverían a acreditarla.
+    if (rref) {
+      tx.set(rref, {
+        estado: "aplicado",
+        acreditadoCent: montoCent,
+        porReclamo: true,
+        aplicadoEn: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
     facturacion.encolarComprobante(tx, db, {
       uid, montoCent, reservaId: "reclamo_" + reclamoId, ahoraMs: Date.now(),
     });
@@ -649,13 +670,13 @@ exports.enviarMensajeAdmin = functions.https.onCall(async (data, context) => {
 // ejecuta siempre —también con la app en segundo plano— y es crystalAdmin quien crea el canal
 // "support" con IMPORTANCE_HIGH y levanta el aviso. Con bloque `notification` lo pinta el sistema
 // por su cuenta, en un canal de reserva de baja prioridad, y el aviso pasa desapercibido.
-async function avisarAdmins(titulo, cuerpo, extra) {
+async function avisarAdmins(titulo, cuerpo, extra, tema) {
   const data = Object.assign({ title: titulo, body: cuerpo }, extra || {});
   // FCM exige que TODO valor de `data` sea cadena; un número cuela un error en el envío entero.
   Object.keys(data).forEach((k) => { data[k] = String(data[k] == null ? "" : data[k]); });
   try {
     const id = await admin.messaging().send({
-      topic: "admins_soporte",
+      topic: tema || "admins_soporte",
       data,
       android: { priority: "high" },
     });
@@ -671,6 +692,44 @@ const ASUNTO_TICKET = {
   plan_no_activado: "No pudo activar su plan",
   recarga: "Problema con una recarga",
 };
+
+/**
+ * Avisa al panel de un reclamo de recarga.
+ *
+ * Un reclamo es dinero que ya entró y que el usuario está esperando: llegaba a la bandeja sin
+ * anunciarse, así que solo se veía si a alguien se le ocurría abrir la app. Va al canal de recargas
+ * —no al de soporte— porque es la misma urgencia que una recarga pendiente.
+ *
+ * Se escucha la escritura entera y no solo la creación: reclamar de nuevo con el importe corregido
+ * actualiza el mismo documento, y ese segundo intento es justo el que hay que mirar.
+ */
+exports.avisarReclamoRecarga = functions.firestore
+  .document("reclamos_recarga/{reclamoId}")
+  .onWrite(async (cambio, context) => {
+    const ahora = cambio.after.exists ? cambio.after.data() : null;
+    if (!ahora || ahora.estado !== "nuevo") return null;
+
+    const antes = cambio.before.exists ? cambio.before.data() : null;
+    const esNuevo = !antes;
+    const cambioElMonto = antes && antes.pagadoCent !== ahora.pagadoCent;
+    if (!esNuevo && !cambioElMonto) return null;
+
+    const pagado = Number(ahora.pagadoCent || 0) / 100;
+    const reservado = Number(ahora.reservadoCent || 0) / 100;
+    // El veredicto de la búsqueda va en el propio aviso porque decide qué hace el administrador:
+    // con el pago encontrado es mirar y pulsar; sin él, hay que abrir Yape y buscarlo a mano.
+    const titulo = (ahora.coincide ? "💰 Reclamo · pago encontrado" : "🔎 Reclamo · sin coincidencia");
+    const detalle = "S/ " + pagado.toFixed(2) +
+      (pagado !== reservado ? " (reservó S/ " + reservado.toFixed(2) + ")" : "") +
+      " · " + String(ahora.correo || ahora.uid || "");
+
+    await avisarAdmins(titulo, detalle, {
+      tipo: "reclamo_recarga",
+      reclamoId: context.params.reclamoId,
+      ownerUid: ahora.uid || "",
+    }, "admins_recargas");
+    return null;
+  });
 
 exports.avisarTicketNuevo = functions.firestore
   .document("tickets/{ticketId}")

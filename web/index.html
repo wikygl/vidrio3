@@ -577,8 +577,13 @@ function etiquetaEstado(e) {
   if (e === "esperando") return "esperando tu pago";
   if (e === "expirada") return "venció · toca para reclamar";
   if (e === "reclamada") return "en revisión";
+  if (e === "rechazada") return "no se acreditó";
   return e;
 }
+
+// Ya cerradas: acreditada o rechazada. Ofrecer una acción sobre ellas sería prometer algo que no
+// va a pasar — el reclamo de una reserva ya resuelta lo rechaza el servidor.
+const esAccionable = (estado) => estado !== "aplicado" && estado !== "rechazada";
 
 async function cargarHistorial() {
   try {
@@ -601,7 +606,7 @@ async function cargarHistorial() {
     // Antes esto era texto muerto y el usuario se quedaba mirando "expirada" sin nada que hacer.
     $("historial").innerHTML = historialFilas.length
       ? historialFilas.map((f, i) => {
-          const activa = f.estado !== "aplicado";
+          const activa = esAccionable(f.estado);
           return `<li data-i="${i}"${activa ? ' class="pulsable"' : ""}>` +
             `<span>${new Date(f.creado).toLocaleDateString("es-PE")}</span>` +
             `<span>${soles(f.totalCent)} · ${etiquetaEstado(f.estado)}${activa ? " ›" : ""}</span></li>`;
@@ -619,7 +624,7 @@ $("historial").onclick = (ev) => {
   if (!f) return;
   // Mismo reparto que hace el wallet: lo que venció se reclama, lo que sigue vivo se retoma, y lo
   // que ya se acreditó no tiene nada que hacer.
-  if (f.estado === "aplicado") return;
+  if (!esAccionable(f.estado)) return;
   if (f.estado === "esperando" && f.expiraMs > Date.now()) return retomarViva(f);
   ofrecerReclamo(f);
   $("cajaReclamo").scrollIntoView({ behavior: "smooth", block: "center" });
