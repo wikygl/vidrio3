@@ -15,8 +15,7 @@
         <activity
             android:name=".registro.WalletActivity"
             android:exported="true"
-            android:launchMode="singleTop"
-            android:documentLaunchMode="never">
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
