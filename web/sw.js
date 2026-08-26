@@ -5,7 +5,8 @@
 // usuario un monto viejo. La copia en caché existe solo para que la app abra sin conexión y pueda
 // decir que no hay red, no para ahorrar peticiones.
 
-const CACHE = "crystal-recargas-v1";
+// Subir el número purga lo guardado por la versión anterior al activarse.
+const CACHE = "crystal-recargas-v2";
 const ESENCIALES = ["/", "/icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -34,8 +35,16 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  // "Red primero" no basta por sí solo: esa red pasa por la caché del navegador, y con una
+  // cabecera de caducidad la copia vieja responde sin llegar al servidor. Para la página en sí se
+  // fuerza a saltarse esa caché, que es lo que deja al usuario mirando una versión que ya no existe.
+  const esPagina = req.mode === "navigate" || url.pathname === "/" || url.pathname.endsWith(".html");
+  const alaRed = esPagina
+    ? fetch(req.url, { cache: "reload", credentials: "same-origin" })
+    : fetch(req);
+
   e.respondWith(
-    fetch(req)
+    alaRed
       .then((res) => {
         const copia = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
