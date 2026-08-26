@@ -6,7 +6,7 @@
 <title>Mi wallet — Crystal</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
-<meta name="theme-color" content="#3949AB">
+<meta name="theme-color" content="#1f6feb">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Wallet">
 <style>
@@ -16,7 +16,7 @@
     --borde: #e3e6ea;
     --texto: #12161c;
     --suave: #5c6672;
-    --acento: #3949AB;
+    --acento: #1f6feb;
     --acento-txt: #ffffff;
     --ok: #17803d;
     --ok-fondo: #e9f7ee;
@@ -28,7 +28,7 @@
   @media (prefers-color-scheme: dark) {
     :root {
       --fondo: #0f1216; --tarjeta: #171b21; --borde: #262c34;
-      --texto: #e8ecf1; --suave: #9aa4b1; --acento: #5C6BC0;
+      --texto: #e8ecf1; --suave: #9aa4b1; --acento: #4d8ef7;
       --ok: #4ade80; --ok-fondo: #14281c;
       --alerta: #f0a868; --alerta-fondo: #2a1f14;
       --error: #f28b82; --error-fondo: #2a1715;
@@ -50,18 +50,18 @@
 
   /* ===== La tarjeta del wallet, igual que cardSaldo en la app ===== */
   .wallet {
-    background: linear-gradient(135deg, #3949AB, #5C6BC0);
+    background: linear-gradient(135deg, #1f6feb, #159EC2);
     border-radius: 16px; padding: 18px; margin-bottom: 14px; color: #fff;
   }
   .wallet .fila-sup { display: flex; align-items: center; justify-content: space-between; }
-  .wallet .titulo { font-size: 13px; color: #E8EAF6; }
+  .wallet .titulo { font-size: 13px; color: #dceafd; }
   .wallet .estado { font-size: 11px; font-weight: 700; }
   .wallet .monto {
     font-size: 34px; font-weight: 700; letter-spacing: -.5px;
     font-variant-numeric: tabular-nums; margin: 6px 0 10px;
   }
   .wallet .plan { font-size: 14px; font-weight: 700; }
-  .wallet .crono { font-size: 12px; font-weight: 700; color: #C5CAE9; margin-top: 2px; }
+  .wallet .crono { font-size: 12px; font-weight: 700; color: #cfe6f5; margin-top: 2px; }
 
   /* Rejilla de acciones: las mismas del wallet, del mismo tamaño. */
   .acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
