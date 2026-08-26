@@ -278,6 +278,18 @@ rules_version = '2';
         allow write: if isPanelRole();
       }
 
+      // ===== Reclamos de recarga =====
+      // El usuario afirma haber pagado un importe distinto al reservado (la costumbre de pagar
+      // cantidades redondas). Los escribe y los resuelve SIEMPRE el servidor con el Admin SDK:
+      // aquí no se permite ninguna escritura desde un cliente, porque el documento lleva el
+      // resultado de la búsqueda del pago y el monto acreditado — dejar tocarlo sería dejar que
+      // el reclamante se acredite a sí mismo.
+      match /reclamos_recarga/{reclamoId} {
+        allow read: if isPanelRole()
+          || (isSignedIn() && resource != null && resource.data.uid == request.auth.uid);
+        allow write: if false;
+      }
+
       // ===== Tickets de soporte =====
       match /tickets/{ticketId} {
         function ownerUid() {

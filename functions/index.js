@@ -282,11 +282,88 @@ exports.adjuntarComprobante = functions.https.onCall(async (data, context) => {
 
 // Reclamo de una reserva EXPIRADA (el pago se hizo pero venció la ventana). Crea un reclamo con el
 // comprobante para revisión manual (reusa el pipeline reclamo_manual → notificarRecargaPendiente).
+// Texto de una notificación capturada que indica dinero ENTRANDO. "Plineaste S/ X a …" y
+// "TRAN S/ X A: …" son lo contrario —dinero saliendo— y no prueban que el taller haya cobrado.
+const ENTRANTE = /te envi[oó]|te ha plinead|recibiste|abono|dep[oó]sito a tu|pago por s\//i;
+const RUIDO_CAPTURA = /shopstar|dscto|descuento|consumo con tu tarjeta|playlist|oferta|cuotas|promoci/i;
+
+/**
+ * Busca en lo que capturó CrystalServer un pago por ese monto exacto, alrededor de la reserva.
+ *
+ * Es la comprobación que el administrador haría a mano abriendo Yape: se hace sola y se adjunta al
+ * reclamo, para que resolverlo sea mirar y pulsar. No decide nada por su cuenta — solo aporta la
+ * evidencia; acreditar sigue siendo un acto humano.
+ */
+async function buscarPagoCapturado(db, montoCent, desdeMs, hastaMs) {
+  const monto = montoCent / 100;
+  const hallazgos = [];
+
+  // Las notificaciones del capturador. `listDocuments` hace falta porque los documentos padre de
+  // notificaciones_servidor no existen como tales: solo existen sus subcolecciones.
+  try {
+    const devices = await db.collection("notificaciones_servidor").listDocuments();
+    for (const dev of devices) {
+      const snap = await dev.collection("registros").where("monto", "==", monto).limit(50).get();
+      snap.docs.forEach((d) => {
+        // El id del registro es el instante en milisegundos en que se capturó.
+        const ms = Number(d.id);
+        if (!Number.isFinite(ms) || ms < desdeMs || ms > hastaMs) return;
+        const texto = String(d.get("contenido") || "");
+        if (RUIDO_CAPTURA.test(texto)) return;
+        hallazgos.push({
+          ruta: d.ref.path,
+          texto: texto.slice(0, 200),
+          ms,
+          entrante: ENTRANTE.test(texto),
+          usado: d.get("estado") === "usado",
+        });
+      });
+    }
+  } catch (e) {
+    functions.logger.error("buscarPagoCapturado: registros", { error: String(e) });
+  }
+
+  // Los depósitos que llegan ya normalizados (el otro camino del mismo capturador).
+  try {
+    const snap = await db.collection("depositos_confirmados").where("monto", "==", monto).limit(20).get();
+    snap.docs.forEach((d) => {
+      const f = d.get("fecha") || d.get("creadoEn");
+      const ms = f && f.toMillis ? f.toMillis() : 0;
+      if (ms && (ms < desdeMs || ms > hastaMs)) return;
+      hallazgos.push({
+        ruta: d.ref.path,
+        texto: "Depósito confirmado " + d.id,
+        ms,
+        entrante: true,
+        usado: d.get("estado") === "usado",
+      });
+    });
+  } catch (e) {
+    functions.logger.error("buscarPagoCapturado: depositos", { error: String(e) });
+  }
+
+  // Un mismo pago genera hasta tres notificaciones (el banco, la billetera y el aviso de cobro), así
+  // que se ordena poniendo delante lo entrante y sin usar, que es lo que hay que mirar primero.
+  hallazgos.sort((a, b) => (b.entrante - a.entrante) || (a.usado - b.usado) || (b.ms - a.ms));
+  return hallazgos.slice(0, 6);
+}
+
+/**
+ * El usuario afirma que sí pagó, declarando cuánto pagó de verdad.
+ *
+ * Nace de un caso real y repetido: la costumbre de pagar cantidades redondas. Se reserva S/1.14
+ * —los céntimos son la firma que identifica el pago— y se yapea S/1.00. El dinero llega, pero no
+ * casa con ninguna reserva y se queda sin dueño. Sin esto el usuario no tiene forma de avisar.
+ *
+ * El monto declarado NO se cree a ciegas: queda escrito junto al reservado y junto a lo que el
+ * servidor capturó de verdad, para que las tres cifras se vean a la vez al resolver.
+ */
 exports.reclamarReserva = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Inicia sesión.");
   const uid = context.auth.uid;
   const reservaId = String((data && data.reservaId) || "");
   if (!reservaId) throw new functions.https.HttpsError("invalid-argument", "Falta reservaId.");
+
   const db = admin.firestore();
   const rref = db.collection("reservas_recarga").doc(reservaId);
   const s = await rref.get();
@@ -295,25 +372,135 @@ exports.reclamarReserva = functions.https.onCall(async (data, context) => {
   if (s.get("estado") === "aplicado") throw new functions.https.HttpsError("failed-precondition", "Ya fue acreditada.");
   const voucherUrl = s.get("voucherUrl");
   if (!voucherUrl) throw new functions.https.HttpsError("failed-precondition", "SIN_COMPROBANTE");
-  const totalCent = s.get("totalCent") || 0;
-  // Reclamo por el pipeline existente (validarRecargaYape → reclamo_manual → notificarRecargaPendiente).
-  await db.collection("usuarios").doc(uid).collection("recargas").add({
-    montoDetectado: totalCent / 100,
-    tipoVoucher: "reclamo_manual",
-    tipoPagoDeclarado: "monto_unico",
-    explicacionUsuario: "Recarga por monto único que expiró; el pago sí se realizó.",
-    voucherUrl,
-    estado: "pendiente_revision",
-    motivoPendiente: "RESERVA_EXPIRADA",
+
+  const reservadoCent = Number(s.get("totalCent") || 0);
+  // Sin declaración se asume que pagó lo reservado, que es el caso de la recarga que simplemente
+  // venció. El tope duro se aplica también aquí: nada entra por encima de él.
+  const pagadoCent = Math.round(Number((data && data.montoPagadoCent) || reservadoCent));
+  if (!(pagadoCent > 0) || pagadoCent > MAX_RECARGA_CENT) {
+    throw new functions.https.HttpsError("invalid-argument", "Monto pagado no válido.");
+  }
+
+  const creadoMs = Number(s.get("creadoMs") || Date.now());
+  // Ventana de búsqueda: desde media hora ANTES de reservar —se paga primero y se reserva después
+  // más a menudo de lo que parece— hasta el final de las 24 horas de gracia.
+  const hallazgos = await buscarPagoCapturado(db, pagadoCent, creadoMs - 30 * 60 * 1000, creadoMs + GRACIA_MS);
+  const coincide = hallazgos.some((h) => h.entrante && !h.usado);
+
+  // Id determinista: reclamar dos veces la misma reserva actualiza el reclamo, no crea otro.
+  const cref = db.collection("reclamos_recarga").doc(reservaId);
+  const previo = await cref.get();
+  if (previo.exists && previo.get("estado") === "resuelto") {
+    throw new functions.https.HttpsError("failed-precondition", "Este reclamo ya fue resuelto.");
+  }
+  await cref.set({
+    uid,
     reservaId,
-    fecha: admin.firestore.Timestamp.now(),
-    ts_envio: admin.firestore.FieldValue.serverTimestamp(),
-  });
+    estado: "nuevo",
+    reservadoCent,
+    pagadoCent,
+    voucherUrl,
+    numeroAsignado: s.get("numeroAsignado") || "",
+    correo: (context.auth.token && context.auth.token.email) || "",
+    hallazgos,
+    coincide,
+    creadoEn: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
   await rref.update({ estado: "reclamada", reclamadaEn: admin.firestore.FieldValue.serverTimestamp() });
-  return { ok: true };
+  return { ok: true, coincide, hallazgos: hallazgos.length };
 });
 
-// Yape: al confirmarse un depósito, marcar pago en la reserva que coincide por monto.
+/**
+ * El administrador resuelve el reclamo: acredita lo que de verdad entró, o lo rechaza.
+ *
+ * El monto lo decide él mirando las tres cifras —reservado, declarado y capturado— más el
+ * comprobante; el servidor solo impone el tope duro y la idempotencia. Deja rastro en `wallet_movs`
+ * con el reclamo y la evidencia usada, para poder reconstruir después cualquier acreditación.
+ */
+exports.resolverReclamoRecarga = functions.https.onCall(async (data, context) => {
+  const callerUid = context.auth && context.auth.uid;
+  if (!callerUid) throw new functions.https.HttpsError("unauthenticated", "No autenticado.");
+  const db = admin.firestore();
+  const rol = await db.collection("admin_roles").doc(callerUid).get();
+  if ((rol.data() || {}).role !== "admin") {
+    throw new functions.https.HttpsError("permission-denied", "Solo un administrador acredita.");
+  }
+
+  const reclamoId = String((data && data.reclamoId) || "");
+  const accion = String((data && data.accion) || "");
+  const motivo = String((data && data.motivo) || "").trim();
+  const evidencia = String((data && data.evidencia) || "");
+  if (!reclamoId) throw new functions.https.HttpsError("invalid-argument", "Falta reclamoId.");
+  if (!["acreditar", "rechazar"].includes(accion)) {
+    throw new functions.https.HttpsError("invalid-argument", "Acción no válida.");
+  }
+  if (!motivo) throw new functions.https.HttpsError("invalid-argument", "El motivo es obligatorio.");
+
+  let montoCent = 0;
+  if (accion === "acreditar") {
+    montoCent = Math.round(Number((data && data.montoCent) || 0));
+    if (!(montoCent > 0) || montoCent > MAX_RECARGA_CENT) {
+      throw new functions.https.HttpsError("invalid-argument", "Monto no válido.");
+    }
+  }
+
+  const cref = db.collection("reclamos_recarga").doc(reclamoId);
+  const res = await db.runTransaction(async (tx) => {
+    const c = await tx.get(cref);
+    if (!c.exists) throw new functions.https.HttpsError("not-found", "Reclamo no encontrado.");
+    if (c.get("estado") === "resuelto") return { ok: true, yaEstaba: true };   // idempotente
+
+    if (accion === "rechazar") {
+      tx.update(cref, {
+        estado: "resuelto", resultado: "rechazado", motivo, adminUid: callerUid,
+        resueltoEn: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return { ok: true, acreditado: 0 };
+    }
+
+    const uid = c.get("uid");
+    const userRef = db.collection("usuarios").doc(uid);
+    const u = await tx.get(userRef);
+    const saldo = u.get("wallet_saldo_cent") || 0;
+    const nuevo = saldo + montoCent;
+    // Se actualiza también el espejo en soles, que es el que mantiene la acreditación automática:
+    // escribir uno sin el otro deja el wallet descuadrado consigo mismo.
+    tx.set(userRef, { wallet_saldo_cent: nuevo, "wallet.saldo": nuevo / 100 }, { merge: true });
+    tx.set(userRef.collection("wallet_movs").doc(), {
+      tipo: "RECLAMO_RECARGA",
+      monto_cent: montoCent,
+      reclamoId,
+      reservaId: c.get("reservaId") || "",
+      evidencia,
+      motivo,
+      adminUid: callerUid,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    tx.update(cref, {
+      estado: "resuelto", resultado: "acreditado", acreditadoCent: montoCent,
+      evidencia, motivo, adminUid: callerUid,
+      resueltoEn: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    facturacion.encolarComprobante(tx, db, {
+      uid, montoCent, reservaId: "reclamo_" + reclamoId, ahoraMs: Date.now(),
+    });
+    return { ok: true, acreditado: montoCent, uid };
+  });
+
+  // La evidencia se marca fuera de la transacción, y su fallo no tumba la acreditación: el dinero ya
+  // está bien puesto, y marcarla es higiene para que no se reutilice en otro reclamo.
+  if (accion === "acreditar" && evidencia && !res.yaEstaba) {
+    try {
+      await db.doc(evidencia).set({
+        estado: "usado", usadoPor: res.uid, usadoEn: admin.firestore.Timestamp.now(), usadoEnReclamo: reclamoId,
+      }, { merge: true });
+    } catch (e) {
+      functions.logger.error("No se pudo marcar la evidencia", { evidencia, error: String(e) });
+    }
+  }
+  return res;
+});
 exports.matchReservaDeposito = functions.firestore
   .document("depositos_confirmados/{codigo}")
   .onCreate(async (snap) => {

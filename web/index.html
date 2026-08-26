@@ -190,6 +190,23 @@
       <div id="errGracia" class="aviso error oculto"></div>
     </div>
 
+    <!-- Pagó, pero por un importe distinto al reservado. Es el caso más común de todos: la costumbre
+         de pagar cantidades redondas. El dinero llegó y no casa con nada, así que sin esta tarjeta
+         el usuario se queda sin forma de avisar y el sol se pierde. -->
+    <div class="tarjeta oculto" id="cajaReclamo">
+      <div class="aviso alerta">
+        <strong>Tu recarga no se acreditó.</strong>
+        <span id="reclamoDetalle"></span>
+      </div>
+      <p class="etiqueta">¿Cuánto pagaste exactamente?</p>
+      <input type="number" id="montoPagado" step="0.01" min="0.01" style="margin-top:8px">
+      <p class="sub">Escríbelo tal como salió de tu billetera. Con ese dato buscamos tu pago
+        en lo que recibimos y lo abonamos.</p>
+      <button id="btnReclamar">Sí pagué, revisen mi caso</button>
+      <div id="okReclamo" class="aviso ok oculto"></div>
+      <div id="errReclamo" class="aviso error oculto"></div>
+    </div>
+
     <div class="tarjeta" id="cajaHistorial">
       <p class="etiqueta">Tus últimas recargas</p>
       <ul class="historial" id="historial"><li><span>Sin movimientos</span></li></ul>
@@ -319,6 +336,13 @@ async function retomarPendientes() {
       $("graciaDetalle").textContent = ` Reservaste ${soles(enGracia.totalCent)} y no subiste el comprobante.`;
       $("cajaGracia").classList.remove("oculto");
     }
+
+    // Vencida CON constancia: el pago no casó por monto. Es el caso del importe redondeado, y el
+    // único camino que le queda es declarar cuánto pagó de verdad.
+    const sinCasar = abiertas
+      .filter((r) => r.tieneComprobante && r.expiraMs <= ahora)
+      .sort((a, b) => b.expiraMs - a.expiraMs)[0];
+    if (sinCasar) ofrecerReclamo(sinCasar);
   } catch (e) { /* si falla, la página sigue sirviendo para una recarga nueva */ }
 }
 
@@ -437,6 +461,45 @@ $("btnOtra").onclick = () => {
   cargarHistorial();
 };
 
+// ===== Reclamo: "sí pagué, pero por otro importe" =====
+// El casamiento es por monto exacto, así que un pago de S/1.00 contra una reserva de S/1.14 no lo
+// recoge nadie: el dinero entra y se queda sin dueño. Aquí el usuario declara lo que pagó de verdad
+// y el servidor lo busca en lo que capturó, para que el administrador resuelva viendo la evidencia.
+let reservaReclamo = null;
+
+function ofrecerReclamo(r) {
+  reservaReclamo = r;
+  $("reclamoDetalle").textContent =
+    ` Reservaste ${soles(r.totalCent)} y no encontramos un pago por ese importe exacto.`;
+  // Se propone lo reservado, que es lo correcto cuando la recarga solo venció; quien pagó de más o
+  // de menos lo corrige, y esa diferencia es justo lo que el administrador necesita ver.
+  $("montoPagado").value = (r.totalCent / 100).toFixed(2);
+  $("cajaReclamo").classList.remove("oculto");
+}
+
+$("btnReclamar").onclick = async () => {
+  if (!reservaReclamo) return;
+  $("errReclamo").classList.add("oculto");
+  const pagado = Math.round(parseFloat($("montoPagado").value) * 100);
+  if (!pagado || pagado < 1) return mostrar($("errReclamo"), "Escribe cuánto pagaste.");
+  $("btnReclamar").disabled = true;
+  try {
+    const r = await httpsCallable(fns, "reclamarReserva")({
+      reservaId: reservaReclamo.id, montoPagadoCent: pagado,
+    });
+    $("montoPagado").disabled = true;
+    // Se dice si el pago ya apareció, porque cambia por completo la espera del usuario: no es lo
+    // mismo "lo encontramos y falta aprobarlo" que "hay que buscarlo a mano".
+    mostrar($("okReclamo"), r.data && r.data.coincide
+      ? "Encontramos tu pago. Queda pendiente de aprobación y se abonará a tu saldo."
+      : "Recibimos tu reporte. Vamos a buscar tu pago y te lo abonaremos si aparece.");
+  } catch (e) {
+    $("btnReclamar").disabled = false;
+    mostrarError(e);
+    mostrar($("errReclamo"), e?.message || "No se pudo enviar el reporte. Inténtalo de nuevo.");
+  }
+};
+
 // ===== Seguimiento en vivo de la reserva =====
 // La acreditación la decide el servidor al casar el monto con el pago real; aquí solo se escucha.
 function escucharReserva() {
@@ -455,8 +518,13 @@ function escucharReserva() {
     } else if (estado === "expirada") {
       $("resultado").innerHTML =
         `<div class="aviso alerta"><strong>La reserva venció.</strong> Si ya pagaste, no te preocupes: ` +
-        `hay 24 horas de gracia y tu constancia sigue valiendo. Si no llega a acreditarse, escríbenos.</div>`;
+        `sigue valiendo durante 24 horas y todavía puede acreditarse sola.</div>`;
       $("paso4").classList.remove("oculto");
+      // Con constancia subida y sin acreditar, lo más probable es que el importe pagado no sea el
+      // reservado. "Escríbenos" no era una salida: no decía dónde. Esta sí lo es.
+      if (s.get("tieneComprobante") === true) {
+        ofrecerReclamo({ id: s.id, totalCent: s.get("totalCent") || 0 });
+      }
     }
   }, () => {});
 }
