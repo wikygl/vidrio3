@@ -589,12 +589,20 @@ exports.notifyCrystalMessage = functions.firestore
           return;
         }
 
+        // SOLO datos, sin bloque `notification`, y aquí está la razón del aviso duplicado:
+        //
+        // Con bloque `notification`, cuando la app no está en primer plano el aviso lo pinta el
+        // SISTEMA, con su propio identificador, y `onMessageReceived` ni siquiera se ejecuta. Pero
+        // el proceso de Crystal puede seguir vivo en segundo plano con el listener de la lista de
+        // chats escuchando, y ese listener levanta SU aviso con id `chatId.hashCode()`. Dos
+        // productores, dos identificadores distintos, dos avisos del mismo mensaje. Y explicaba la
+        // asimetría: en el teléfono cuyo proceso ya estaba muerto solo quedaba el del sistema, uno.
+        //
+        // Sin bloque `notification`, `onMessageReceived` se ejecuta SIEMPRE y todos los caminos
+        // pasan por CrystalMessageNotifier con el mismo id por chat, así que se funden en uno.
+        // De paso el aviso queda mejor: canal propio, icono, texto largo y contador de no leídos.
         const payload = {
           tokens,
-          notification: {
-            title: String(senderName).slice(0, 80),
-            body: preview.slice(0, 180),
-          },
           data: {
             chatId,
             messageId: context.params.messageId,
@@ -604,16 +612,7 @@ exports.notifyCrystalMessage = functions.firestore
             preview: preview.slice(0, 180),
             unreadCount: String(unreadBy[recipientUid] || 1),
           },
-          android: {
-            priority: "high",
-            notification: {
-              channelId: "crystal_messages",
-              clickAction: "CRYSTAL_OPEN_CHAT",
-              sound: "default",
-              icon: "ic_crystal_notification",
-              notificationCount: Number(unreadBy[recipientUid] || 1),
-            },
-          },
+          android: { priority: "high" },
         };
 
         const response = await admin.messaging().sendEachForMulticast(payload);
