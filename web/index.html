@@ -113,6 +113,19 @@
       <div class="saldo" id="saldo">S/ 0.00</div>
     </div>
 
+    <!-- Tu plan. Sin esta tarjeta el saldo no sirve para nada en el canal de Google Play: la app de
+         Play no tiene pantalla de planes a propósito —activar un plan dentro de la app es una compra
+         de bienes digitales y exige Play Billing—, así que este es el único sitio donde el usuario
+         puede convertir su saldo en servicio. -->
+    <div class="tarjeta" id="cajaPlan">
+      <p class="etiqueta" style="margin:0">Tu plan</p>
+      <div class="saldo" style="font-size:22px" id="estadoPlan">—</div>
+      <p class="sub" style="margin:4px 0 0" id="detallePlan"></p>
+      <div id="listaPlanes"></div>
+      <div id="okPlan" class="aviso ok oculto"></div>
+      <div id="errPlan" class="aviso error oculto"></div>
+    </div>
+
     <!-- Instalación: es lo que evita que el usuario tenga que teclear la dirección nunca más.
          Solo aparece si el navegador la ofrece y todavía no está instalada. -->
     <div class="tarjeta oculto" id="cajaInstalar">
@@ -283,6 +296,7 @@ onAuthStateChanged(auth, (u) => {
   // El saldo se escucha en vivo: cuando el servidor acredita, el número cambia solo.
   pararUsuario = onSnapshot(doc(db, "usuarios", uid), (s) => {
     $("saldo").textContent = soles(s.get("wallet_saldo_cent") || 0);
+    pintarEstadoPlan(s.data() || {});
   }, () => {});
   retomarPendientes();
   cargarHistorial();
@@ -570,6 +584,107 @@ function arrancarContador() {
 
 // ===== Historial =====
 // Sin orderBy a propósito: ordenar en el servidor exigiría un índice compuesto que no existe.
+
+// ===== Tu plan =====
+// El catálogo tiene que coincidir con PLANES de functions/index.js. Manda el servidor: aquí solo se
+// pinta, y él vuelve a comprobar el precio y el saldo antes de cobrar nada.
+const PLANES = {
+  PREPAGO: { nombre: "Un día", precioCent: 100, dias: 1 },
+  MENSUAL: { nombre: "Un mes", precioCent: 1500, dias: 30 },
+  ANUAL: { nombre: "Un año", precioCent: 15000, dias: 365 },
+};
+
+let modoActual = "BASIC";
+let temporizadorPlan = null;
+
+function pintarPlanes() {
+  // El plan VENTAS se cobra por número de terminales y NO vive en estado_servicio como los demás.
+  // Activar aquí un plan normal lo sobrescribiría y el usuario perdería su configuración de
+  // terminales, así que esta pantalla se aparta y lo deja donde sí se sabe tratar.
+  if (modoActual === "VENTAS") {
+    $("listaPlanes").innerHTML =
+      `<p class="sub" style="margin:12px 0 0">Tu plan de Ventas se administra desde la aplicación,` +
+      ` porque depende de cuántas terminales tengas.</p>`;
+    return;
+  }
+  $("listaPlanes").innerHTML = Object.entries(PLANES).map(([tipo, p]) =>
+    `<button data-plan="${tipo}">${p.nombre} · ${soles(p.precioCent)}</button>`
+  ).join("");
+}
+
+function pintarEstadoPlan(datos) {
+  const es = datos.estado_servicio || {};
+  modoActual = es.mode || "BASIC";
+  const hasta = es.full_until && es.full_until.toMillis ? es.full_until.toMillis() : 0;
+  clearInterval(temporizadorPlan);
+
+  if (modoActual === "BASIC" || !hasta || hasta <= Date.now()) {
+    $("estadoPlan").textContent = modoActual === "VENTAS" ? "Ventas" : "Básico";
+    $("detallePlan").textContent = modoActual === "VENTAS"
+      ? "Plan de ventas activo."
+      : "Activa un plan para usar todas las funciones.";
+    pintarPlanes();
+    return;
+  }
+
+  $("estadoPlan").textContent = modoActual === "VENTAS" ? "Ventas" : "Completo";
+  // La cuenta atrás se refresca sola: saber que quedan tres horas y no "vence hoy" es lo que
+  // permite renovar a tiempo en vez de descubrirlo con la app ya bloqueada.
+  const pintar = () => {
+    const resta = hasta - Date.now();
+    if (resta <= 0) { $("detallePlan").textContent = "Tu plan acaba de vencer."; clearInterval(temporizadorPlan); return; }
+    const dias = Math.floor(resta / 86400000);
+    const horas = Math.floor((resta % 86400000) / 3600000);
+    const mins = Math.floor((resta % 3600000) / 60000);
+    const queda = dias > 0 ? `${dias} día${dias === 1 ? "" : "s"} y ${horas} h`
+                : horas > 0 ? `${horas} h y ${mins} min`
+                : `${mins} min`;
+    $("detallePlan").textContent =
+      `Te queda ${queda} · hasta el ${new Date(hasta).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}`;
+  };
+  pintar();
+  temporizadorPlan = setInterval(pintar, 30000);
+  pintarPlanes();
+}
+
+// Un solo escuchador en el contenedor: los botones se vuelven a pintar cuando cambia el plan.
+$("listaPlanes").onclick = async (ev) => {
+  const btn = ev.target.closest("button[data-plan]");
+  if (!btn) return;
+  const tipo = btn.dataset.plan;
+  const p = PLANES[tipo];
+  if (!p) return;
+
+  // Se cobra saldo real, así que se confirma con el importe delante. Y se dice si suma sobre lo que
+  // ya tiene: renovar antes de vencer no pierde los días restantes, se acumulan.
+  const renueva = modoActual === "FULL";
+  const texto = `Vas a activar "${p.nombre}" por ${soles(p.precioCent)}.\n\n` +
+    (renueva ? `Se sumarán ${p.dias} días a los que ya te quedan.\n\n` : `Tendrás ${p.dias} días de plan completo.\n\n`) +
+    `Se descontará de tu saldo. ¿Confirmas?`;
+  if (!confirm(texto)) return;
+
+  $("errPlan").classList.add("oculto");
+  $("okPlan").classList.add("oculto");
+  $("listaPlanes").querySelectorAll("button").forEach((b) => { b.disabled = true; });
+  try {
+    await httpsCallable(fns, "activarPlan")({ tipo });
+    // No se pinta el resultado a mano: el escuchador del usuario ya trae el estado nuevo del
+    // servidor, y ese es el que manda. Pintarlo aquí sería adelantar una versión propia.
+    mostrar($("okPlan"), "Plan activado. Ya puedes usar todas las funciones.");
+  } catch (e) {
+    const msg = String(e?.message || "");
+    if (msg.includes("SALDO_INSUFICIENTE")) {
+      mostrar($("errPlan"), `Te falta saldo para este plan. Recarga y vuelve a intentarlo.`);
+      $("paso1").scrollIntoView({ behavior: "smooth", block: "center" });
+    } else {
+      mostrarError(e);
+      mostrar($("errPlan"), "No se pudo activar el plan. Tu saldo no se descontó.");
+    }
+  } finally {
+    $("listaPlanes").querySelectorAll("button").forEach((b) => { b.disabled = false; });
+  }
+};
+
 // Lo que se está mostrando ahora mismo, para saber sobre qué se pulsó.
 let historialFilas = [];
 

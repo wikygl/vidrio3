@@ -46,8 +46,13 @@ exports.activarPlan = functions.https.onCall(async (data, context) => {
     const finMs = baseMs + plan.dias * 24 * 60 * 60 * 1000;
     const fin = admin.firestore.Timestamp.fromMillis(finMs);
 
+    const restante = saldo - plan.precioCent;
     tx.update(uref, {
-      wallet_saldo_cent: saldo - plan.precioCent,
+      wallet_saldo_cent: restante,
+      // El espejo en soles se mantenía al acreditar pero NO al cobrar un plan, así que tras comprar
+      // quedaba marcando el saldo de antes. La app lo lee en Acliente: el usuario veía más dinero
+      // del que tenía hasta la siguiente recarga.
+      "wallet.saldo": restante / 100,
       estado_servicio: {
         mode: "FULL",
         source: tipo,
