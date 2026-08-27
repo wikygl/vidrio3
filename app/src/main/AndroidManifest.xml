@@ -253,9 +253,29 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity,AppLinkUrlError">
+            <!-- Los envíos compartidos NO entran por aquí: los recibe CompartirActivity y los
+                 reenvía a esta tarea. Ver el comentario de esa clase. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="application/json" />
+            </intent-filter>
+        </activity>
+
+        <!-- Recibe lo compartido desde otras apps. Sin interfaz y fuera de recientes: da igual en
+             qué tarea la meta el menú de compartir, porque se cierra en cuanto reenvía. -->
+        <activity
+            android:name=".CompartirActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            tools:ignore="AppLinkUrlError">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
 
@@ -269,11 +289,12 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
             <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
 
                 <category android:name="android.intent.category.DEFAULT" />
 
-                <data android:mimeType="application/json" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
 
