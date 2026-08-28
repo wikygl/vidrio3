@@ -40,6 +40,13 @@ class MamparaPaflon : AppCompatActivity() {
   private val hoja = 199f
   private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
   private var primerClickArchivarRealizado = false
+  /**
+   * Disposición elegida a mano en el diálogo del diseño (`fcf|cf`), vacía si manda el automático.
+   *
+   * Vive aquí y no en el descriptor porque hay que conservarla entre recálculos: el descriptor se
+   * reconstruye entero cada vez que se pulsa Calcular.
+   */
+  private var patronManual: String = ""
   private var metaColorAluminio: String = ""
   private var metaTipoVidrio: String = ""
   private var metaAcabadoSuperficial: String = ""
@@ -234,13 +241,44 @@ class MamparaPaflon : AppCompatActivity() {
       true
     }
 
+    // Cambiar las divisiones, el ancho o el ancho de hoja invalida la disposición elegida a mano:
+    // describe OTRA mampara, y conservarla daría un número de módulos que ya no es el pedido. El
+    // automático vuelve a mandar hasta que se elija de nuevo.
+    listOf(binding.etDivi, binding.med1, binding.etAnHoja).forEach { campo ->
+      campo.addTextChangedListener(object : android.text.TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        override fun afterTextChanged(s: android.text.Editable?) {
+          if (patronManual.isNotBlank()) {
+            patronManual = ""
+            Toast.makeText(
+              this@MamparaPaflon,
+              "Cambió la medida: el diseño vuelve al automático.",
+              Toast.LENGTH_SHORT
+            ).show()
+          }
+        }
+      })
+    }
+
     binding.tvDiseno.setOnClickListener {
       binding.lyNMocheta.visibility = View.VISIBLE
       binding.lyAnHoja.visibility = View.VISIBLE
 
     }
+    // Igual que en Nova: tocar el diseño abre el diálogo de configuración. La ficha se sigue
+    // alcanzando desde el menú; aquí manda lo que el usuario viene a hacer, que es diseñar.
     binding.imgV.setOnClickListener {
-      startActivity(Intent(this, FichaActivity::class.java))
+      DialogoDisenoMampara.mostrar(
+        act = this,
+        patronActual = patronManual,
+        divisiones = runCatching { divisiones() }.getOrNull() ?: 1
+      ) { elegido ->
+        patronManual = elegido
+        // Recalcular deja el dibujo y los materiales al día sin que haya que tocar nada más:
+        // MamparaModulos es la única fuente, así que basta con volver a pedírselo.
+        binding.btCalcular.performClick()
+      }
     }
     // Igual que en puerta: con click largo sobre el diseño se abre DisenoActivity para verlo
     // en grande (con zoom y paneo), reusando el plano cacheado.
@@ -704,7 +742,8 @@ class MamparaPaflon : AppCompatActivity() {
       divisiones = (runCatching { divisiones() }.getOrNull() ?: 1).coerceAtLeast(1),
       bastidor = binding.etBasti.text.toString().toFloatOrNull() ?: pAnch,
       marco = marco(),
-      nMochetas = binding.etNmochetas.text.toString().toIntOrNull() ?: 0
+      nMochetas = binding.etNmochetas.text.toString().toIntOrNull() ?: 0,
+      patron = patronManual
     )
   }
 

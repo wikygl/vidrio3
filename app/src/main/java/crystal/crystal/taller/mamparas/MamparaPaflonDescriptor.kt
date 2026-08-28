@@ -6,7 +6,10 @@ package crystal.crystal.taller.mamparas
  * regenera con [MamparaPaflonRender], sin guardar PNG. Así el archivado siempre se ve con la
  * última lógica de dibujo.
  *
- * Formato: `MPF1:ancho;alto;altoHoja;divisiones;bastidor;marco;nMochetas`
+ * Formato: `MPF1:ancho;alto;altoHoja;divisiones;bastidor;marco;nMochetas[;patron]`
+ *
+ * `patron` es opcional y va al FINAL a propósito: los diseños archivados antes de que existiera
+ * tienen siete campos y se siguen leyendo igual, cayendo al patrón automático.
  */
 data class MamparaPaflonDescriptor(
     val ancho: Float,
@@ -15,10 +18,16 @@ data class MamparaPaflonDescriptor(
     val divisiones: Int,
     val bastidor: Float,
     val marco: Float,
-    val nMochetas: Int
+    val nMochetas: Int,
+    /**
+     * Disposición elegida a mano: `fcf|cf` (tramos separados por `|`, f = fijo, c = corrediza).
+     * Vacío = la calcula el automático. Cuando está, manda sobre [divisiones].
+     */
+    val patron: String = ""
 ) {
     fun serializar(): String =
-        "$PREFIJO$ancho;$alto;$altoHoja;$divisiones;$bastidor;$marco;$nMochetas"
+        "$PREFIJO$ancho;$alto;$altoHoja;$divisiones;$bastidor;$marco;$nMochetas" +
+            if (patron.isNotBlank()) ";$patron" else ""
 
     companion object {
         /** Clave bajo la que se archiva en el mapa (la misma que reconoce el recycler). */
@@ -38,7 +47,9 @@ data class MamparaPaflonDescriptor(
                     divisiones = partes[3].toInt(),
                     bastidor = partes[4].toFloat(),
                     marco = partes[5].toFloat(),
-                    nMochetas = partes[6].toInt()
+                    nMochetas = partes[6].toInt(),
+                    // Los descriptores de siete campos son los de antes del patrón manual.
+                    patron = partes.getOrNull(7).orEmpty()
                 )
             }.getOrNull()
         }

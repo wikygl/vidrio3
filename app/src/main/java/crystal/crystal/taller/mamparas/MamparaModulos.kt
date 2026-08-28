@@ -77,12 +77,32 @@ class MamparaModulos private constructor(
             return b
         }
 
+        /**
+         * Patrón por tramos elegido a mano, en la forma `fcf|cf` (tramos separados por `|`).
+         *
+         * Devuelve null si la cadena no describe una mampara utilizable: así una configuración vieja
+         * o corrupta cae al automático en vez de dibujar cualquier cosa.
+         */
+        fun patronManual(raw: String?): List<String>? {
+            val s = raw?.trim().orEmpty()
+            if (s.isEmpty()) return null
+            val tramos = s.split("|").map { it.trim().lowercase() }
+            if (tramos.isEmpty() || tramos.any { t -> t.isEmpty() || t.any { it != 'f' && it != 'c' } }) return null
+            return tramos
+        }
+
+        /** Cuántos módulos describe un patrón manual — es lo que manda sobre `divisiones`. */
+        fun modulosDe(patron: List<String>): Int = patron.sumOf { it.length }
+
         /** Construye el diseño simbólico (anchos iguales) desde el descriptor. */
         fun desde(d: MamparaPaflonDescriptor): MamparaModulos {
-            val nPaneles = d.divisiones.coerceAtLeast(1)
+            // El patrón elegido a mano manda sobre el automático: si el usuario dijo `fcc`, no se
+            // le devuelve `fcf` porque la tabla de ordenDivis lo prefiera.
+            val manual = patronManual(d.patron)
+            val nPaneles = manual?.let { modulosDe(it) } ?: d.divisiones.coerceAtLeast(1)
             val anchoUtil = d.ancho - 2 * d.marco
             // Patrón fijo/corrediza por tramo, igual que NovaCorrediza pero con tramos de máximo 4.
-            val patrones = gruposDe(nPaneles, 4).map { t ->
+            val patrones = manual ?: gruposDe(nPaneles, 4).map { t ->
                 NovaCalculos.ordenDivis(t, t.toFloat()).filter { it == 'f' || it == 'c' }
             }
             val nBast = patrones.sumOf { bastTramoPat(it) }
