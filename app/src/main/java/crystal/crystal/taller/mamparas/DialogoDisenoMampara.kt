@@ -179,7 +179,16 @@ object DialogoDisenoMampara {
         return MamparaModulos.desde(d).tramos.map { t -> t.map { ModuloPedido(it.tipo) } }
     }
 
-    /** Una fila: los módulos del tramo, más los botones de añadir y quitar módulo. */
+    /**
+     * Una fila por tramo: arriba los botones de añadir y quitar módulo, y debajo los módulos.
+     *
+     * Los botones van en su propia línea a propósito. Estaban al final de la fila de módulos y con
+     * unos pocos se salían del diálogo, empujados por ellos: dejaban de verse y ya no había forma
+     * de seguir editando. Aquí no se mueven nunca.
+     *
+     * Los módulos reparten el ancho disponible por peso, así que siempre caben —por muchos que
+     * sean— y además se ven en su proporción real: el fijo más ancho se dibuja más ancho.
+     */
     private fun filaTramo(
         act: Activity,
         d: Float,
@@ -192,28 +201,67 @@ object DialogoDisenoMampara {
     ): View {
         val fila = LinearLayout(act).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, (6 * d).toInt(), 0, (6 * d).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setPadding(0, (8 * d).toInt(), 0, (8 * d).toInt())
         }
-        if (totalTramos > 1) {
-            fila.addView(TextView(act).apply {
-                text = "Tramo ${indice + 1}"
-                textSize = 12f
-                setTextColor(0xFF888888.toInt())
-            })
-        }
-        val modulos = LinearLayout(act).apply {
+
+        // Cabecera: nombre del tramo a la izquierda, botones fijos a la derecha.
+        val cabecera = LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         }
-        val lado = (52 * d).toInt()
+        cabecera.addView(TextView(act).apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            text = if (totalTramos > 1) "Tramo ${indice + 1}" else "Módulos"
+            textSize = 12f
+            setTextColor(0xFF888888.toInt())
+        })
+        fun botonModulo(simbolo: String, activo: Boolean, accion: () -> Unit) = TextView(act).apply {
+            layoutParams = LinearLayout.LayoutParams((40 * d).toInt(), (36 * d).toInt())
+                .also { it.setMargins((4 * d).toInt(), 0, 0, 0) }
+            gravity = Gravity.CENTER
+            text = simbolo
+            textSize = 19f
+            setTextColor(if (activo) 0xFF1565C0.toInt() else 0xFFBBBBBB.toInt())
+            setBackgroundResource(R.drawable.bg_opcion_seleccionada)
+            isEnabled = activo
+            if (activo) setOnClickListener { accion() }
+        }
+        cabecera.addView(botonModulo("−", pat.size > 1) {
+            pat.removeAt(pat.lastIndex); repintar()
+        })
+        cabecera.addView(botonModulo("+", true) {
+            pat.add(ModuloPedido('f')); repintar()
+        })
+        fila.addView(cabecera)
+
+        // Módulos: reparten el ancho por peso, así que nunca se salen del diálogo.
+        val modulos = LinearLayout(act).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(0, (6 * d).toInt(), 0, 0) }
+        }
+        val alturaCelda = (54 * d).toInt()
+        // Con muchos módulos la celda se estrecha: se baja el texto para que no se corte.
+        val tamLetra = if (pat.size > 6) 13f else 16f
+        val tamMedida = if (pat.size > 6) 9f else 11f
         pat.forEachIndexed { i, m ->
+            val ancho = (m.ancho ?: anchoLibre).coerceAtLeast(1f)
             val celda = LinearLayout(act).apply {
                 orientation = LinearLayout.VERTICAL
+                // CENTER en los dos ejes: antes solo se centraba en horizontal y la letra y la
+                // medida quedaban descolgadas contra el borde de arriba.
                 gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(lado, LinearLayout.LayoutParams.WRAP_CONTENT)
-                    .also { it.setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0) }
+                // El peso es el ancho real del módulo: se ve en proporción, no todos iguales.
+                layoutParams = LinearLayout.LayoutParams(0, alturaCelda, ancho)
+                    .also { it.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0) }
                 setBackgroundResource(R.drawable.bg_opcion_seleccionada)
-                setPadding(0, (6 * d).toInt(), 0, (6 * d).toInt())
                 setOnClickListener {
                     pat[i] = m.copy(tipo = if (m.tipo == 'c') 'f' else 'c')
                     repintar()
@@ -221,40 +269,31 @@ object DialogoDisenoMampara {
                 setOnLongClickListener { pedirAncho(m, pat, i); true }
             }
             celda.addView(TextView(act).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                gravity = Gravity.CENTER
                 text = if (m.tipo == 'c') "C" else "F"
-                textSize = 16f
+                textSize = tamLetra
                 setTypeface(null, android.graphics.Typeface.BOLD)
                 // La corrediza se distingue por color además de por la letra: en obra se mira rápido.
                 setTextColor(if (m.tipo == 'c') 0xFF1565C0.toInt() else 0xFF37474F.toInt())
             })
-            // Debajo, la medida: en negrita si la fijó el usuario, tenue si es la que le tocó.
+            // Debajo, la medida: en azul y negrita si la fijó el usuario, tenue si le tocó.
             celda.addView(TextView(act).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                gravity = Gravity.CENTER
                 val fijado = m.ancho != null
                 text = fmt(m.ancho ?: anchoLibre)
-                textSize = 11f
+                textSize = tamMedida
+                maxLines = 1
                 setTextColor(if (fijado) 0xFF1565C0.toInt() else 0xFF999999.toInt())
                 if (fijado) setTypeface(null, android.graphics.Typeface.BOLD)
             })
             modulos.addView(celda)
         }
-        modulos.addView(TextView(act).apply {
-            layoutParams = LinearLayout.LayoutParams(lado, lado).also {
-                it.setMargins((10 * d).toInt(), 0, 0, 0)
-            }
-            gravity = Gravity.CENTER
-            text = "+"
-            textSize = 20f
-            setTextColor(0xFF1565C0.toInt())
-            setOnClickListener { pat.add(ModuloPedido('f')); repintar() }
-        })
-        modulos.addView(TextView(act).apply {
-            layoutParams = LinearLayout.LayoutParams(lado, lado)
-            gravity = Gravity.CENTER
-            text = "−"
-            textSize = 20f
-            setTextColor(if (pat.isEmpty()) 0xFFBBBBBB.toInt() else 0xFF1565C0.toInt())
-            setOnClickListener { if (pat.isNotEmpty()) { pat.removeAt(pat.lastIndex); repintar() } }
-        })
         fila.addView(modulos)
         return fila
     }
