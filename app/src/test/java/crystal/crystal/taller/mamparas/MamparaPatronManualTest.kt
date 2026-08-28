@@ -113,6 +113,87 @@ class MamparaPatronManualTest {
         assertEquals(339.8, m.anchoTramo(m.tramos.single()).toDouble(), 0.05)
     }
 
+    // ===== Mampara desigual: anchos fijados a mano =====
+
+    /**
+     * El caso que pidió el usuario: cfc con las dos corredizas clavadas a 100, y el fijo del centro
+     * absorbiendo lo que sobra. Es la razón de ser de la mampara desigual.
+     */
+    @Test
+    fun `fijar las corredizas ensancha el fijo del centro`() {
+        val d = MamparaPaflonDescriptor(
+            ancho = 344.8f, alto = 274.8f, altoHoja = 210f,
+            divisiones = 3, bastidor = 8.25f, marco = 2.5f, nMochetas = 0,
+            patron = "c<100>fc<100>"
+        )
+        val m = MamparaModulos.desde(d)
+        val mods = m.modulos
+        assertEquals(3, mods.size)
+        assertEquals(100.0, mods[0].ancho.toDouble(), 0.05)
+        assertEquals(100.0, mods[2].ancho.toDouble(), 0.05)
+        // cfc lleva 4 bastidores visibles: hueco 339.8 - 4*8.25 = 306.8 de vidrio.
+        // Las corredizas se llevan 200, así que al fijo le quedan 106.8 y sale MÁS ancho que ellas.
+        assertEquals(106.8, mods[1].ancho.toDouble(), 0.05)
+        assertTrue(mods[1].ancho > mods[0].ancho)
+        // Y el conjunto sigue llenando el hueco exacto: si no, el vidrio no entra en obra.
+        assertEquals((d.ancho - 2 * d.marco).toDouble(), m.anchoTramo(m.tramos.single()).toDouble(), 0.05)
+    }
+
+    @Test
+    fun `sin medidas fijadas el reparto sigue siendo parejo`() {
+        val d = MamparaPaflonDescriptor(
+            ancho = 344.8f, alto = 274.8f, altoHoja = 210f,
+            divisiones = 3, bastidor = 8.25f, marco = 2.5f, nMochetas = 0,
+            patron = "cfc"
+        )
+        val anchos = MamparaModulos.desde(d).modulos.map { it.ancho.toDouble() }
+        anchos.forEach { assertEquals(306.8 / 3, it, 0.05) }
+    }
+
+    @Test
+    fun `fijar solo uno reparte el resto entre los demas`() {
+        val d = MamparaPaflonDescriptor(
+            ancho = 344.8f, alto = 274.8f, altoHoja = 210f,
+            divisiones = 3, bastidor = 8.25f, marco = 2.5f, nMochetas = 0,
+            patron = "c<80>fc"
+        )
+        val mods = MamparaModulos.desde(d).modulos
+        assertEquals(80.0, mods[0].ancho.toDouble(), 0.05)
+        // Los otros dos se reparten 306.8 - 80 = 226.8
+        assertEquals(113.4, mods[1].ancho.toDouble(), 0.05)
+        assertEquals(113.4, mods[2].ancho.toDouble(), 0.05)
+    }
+
+    @Test
+    fun `un ancho invalido invalida el patron entero`() {
+        // Mejor caer al automático que colar un vidrio de cero a la lista de cortes.
+        assertNull(MamparaModulos.patronManual("c<0>fc"))
+        assertNull(MamparaModulos.patronManual("c<-5>fc"))
+        assertNull(MamparaModulos.patronManual("c<abc>fc"))
+        assertNull(MamparaModulos.patronManual("c<100fc"))
+    }
+
+    @Test
+    fun `el patron con anchos va y vuelve intacto`() {
+        val original = "c<100.0>fc<100.0>|f<50.5>c"
+        val ida = MamparaModulos.patronManual(original)!!
+        assertEquals(original, MamparaModulos.serializarPatron(ida))
+        assertEquals(2, ida.size)
+        assertEquals(100f, ida[0][0].ancho)
+        assertNull(ida[0][1].ancho)
+        assertEquals(50.5f, ida[1][0].ancho)
+    }
+
+    @Test
+    fun `el descriptor conserva los anchos al archivar`() {
+        val d = MamparaPaflonDescriptor(
+            ancho = 344.8f, alto = 274.8f, altoHoja = 210f,
+            divisiones = 3, bastidor = 8.25f, marco = 2.5f, nMochetas = 0,
+            patron = "c<100.0>fc<100.0>"
+        )
+        assertEquals(d, MamparaPaflonDescriptor.parsear(d.serializar()))
+    }
+
     @Test
     fun `el descriptor conserva el patron al serializar`() {
         val d = descriptor(3, "fcc")

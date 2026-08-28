@@ -3,6 +3,15 @@ package crystal.crystal.taller.mamparas
 import crystal.crystal.taller.nova.NovaCalculos
 import kotlin.math.ceil
 
+/**
+ * Un módulo tal y como lo pide el usuario: su tipo y, si fijó la medida a mano, su ancho de vidrio.
+ *
+ * `ancho == null` significa "el que salga": esos módulos se reparten a partes iguales lo que quede
+ * del hueco después de descontar los que sí llevan medida. Es lo que permite la mampara desigual —
+ * clavar las corredizas a 100 y que el fijo del centro absorba el resto.
+ */
+data class ModuloPedido(val tipo: Char, val ancho: Float? = null)
+
 /** Un módulo de la mampara: fijo ('f') o corrediza ('c'), con su ancho de vidrio (cm). */
 data class ModuloMampara(val tipo: Char, val ancho: Float) {
     val esFijo: Boolean get() = tipo != 'c'
@@ -26,6 +35,9 @@ class MamparaModulos private constructor(
     val bastidor: Float,
     val paranteTramo: Float
 ) {
+    /** Todos los módulos en orden. Los materiales van uno por uno: los anchos pueden diferir. */
+    val modulos: List<ModuloMampara> get() = tramos.flatten()
+
     val nModulos: Int get() = tramos.sumOf { it.size }
     val nFijos: Int get() = tramos.sumOf { t -> t.count { it.esFijo } }
     val nCorredizas: Int get() = tramos.sumOf { t -> t.count { !it.esFijo } }
@@ -69,11 +81,11 @@ class MamparaModulos private constructor(
             return (0 until grupos).map { idx -> if (idx < extra) base + 1 else base }
         }
 
-        private fun bastTramoPat(pat: String): Int {
+        private fun bastTramoPat(pat: List<ModuloPedido>): Int {
             var b = 0
-            for (i in 0 until pat.length - 1) b += if (pat[i] != pat[i + 1]) 1 else 2
-            if (pat.firstOrNull() == 'c') b += 1
-            if (pat.lastOrNull() == 'c') b += 1
+            for (i in 0 until pat.size - 1) b += if (pat[i].tipo != pat[i + 1].tipo) 1 else 2
+            if (pat.firstOrNull()?.tipo == 'c') b += 1
+            if (pat.lastOrNull()?.tipo == 'c') b += 1
             return b
         }
 
@@ -83,16 +95,46 @@ class MamparaModulos private constructor(
          * Devuelve null si la cadena no describe una mampara utilizable: así una configuración vieja
          * o corrupta cae al automático en vez de dibujar cualquier cosa.
          */
-        fun patronManual(raw: String?): List<String>? {
+        fun patronManual(raw: String?): List<List<ModuloPedido>>? {
             val s = raw?.trim().orEmpty()
             if (s.isEmpty()) return null
-            val tramos = s.split("|").map { it.trim().lowercase() }
-            if (tramos.isEmpty() || tramos.any { t -> t.isEmpty() || t.any { it != 'f' && it != 'c' } }) return null
-            return tramos
+            val tramos = mutableListOf<List<ModuloPedido>>()
+            for (bruto in s.split("|")) {
+                val t = bruto.trim().lowercase()
+                if (t.isEmpty()) return null
+                val modulos = mutableListOf<ModuloPedido>()
+                var i = 0
+                while (i < t.length) {
+                    val tipo = t[i]
+                    if (tipo != 'f' && tipo != 'c') return null
+                    i++
+                    var ancho: Float? = null
+                    if (i < t.length && t[i] == '<') {
+                        val fin = t.indexOf('>', i)
+                        if (fin < 0) return null
+                        ancho = t.substring(i + 1, fin).toFloatOrNull() ?: return null
+                        // Un ancho de cero o negativo no describe un vidrio: se rechaza el patrón
+                        // entero en vez de dejarlo llegar a la lista de cortes.
+                        if (ancho <= 0f) return null
+                        i = fin + 1
+                    }
+                    modulos += ModuloPedido(tipo, ancho)
+                }
+                tramos += modulos
+            }
+            return if (tramos.isEmpty()) null else tramos
         }
 
+        /** Serializa lo que el editor compone, en el mismo formato que [patronManual] entiende. */
+        fun serializarPatron(tramos: List<List<ModuloPedido>>): String =
+            tramos.joinToString("|") { t ->
+                t.joinToString("") { m ->
+                    m.tipo + (m.ancho?.let { "<" + "%.1f".format(it).replace(",", ".") + ">" } ?: "")
+                }
+            }
+
         /** Cuántos módulos describe un patrón manual — es lo que manda sobre `divisiones`. */
-        fun modulosDe(patron: List<String>): Int = patron.sumOf { it.length }
+        fun modulosDe(patron: List<List<ModuloPedido>>): Int = patron.sumOf { it.size }
 
         /** Construye el diseño simbólico (anchos iguales) desde el descriptor. */
         fun desde(d: MamparaPaflonDescriptor): MamparaModulos {
@@ -103,13 +145,25 @@ class MamparaModulos private constructor(
             val anchoUtil = d.ancho - 2 * d.marco
             // Patrón fijo/corrediza por tramo, igual que NovaCorrediza pero con tramos de máximo 4.
             val patrones = manual ?: gruposDe(nPaneles, 4).map { t ->
-                NovaCalculos.ordenDivis(t, t.toFloat()).filter { it == 'f' || it == 'c' }
+                NovaCalculos.ordenDivis(t, t.toFloat())
+                    .filter { it == 'f' || it == 'c' }
+                    .map { ModuloPedido(it) }
             }
             val nBast = patrones.sumOf { bastTramoPat(it) }
             val nPar = (patrones.size - 1).coerceAtLeast(0)
-            val vidrioAncho = (anchoUtil - nBast * d.bastidor - nPar * P_ALT) / nPaneles
-            val tramos = patrones.map { pat -> pat.map { ModuloMampara(it, vidrioAncho) } }
-            return MamparaModulos(tramos, vidrioAncho, d.bastidor, P_ALT)
+            // Lo que queda de vidrio una vez descontados perfiles: es lo que hay que repartir.
+            val disponible = anchoUtil - nBast * d.bastidor - nPar * P_ALT
+            // Los módulos con medida fijada la conservan; el resto se reparte lo que sobre. Así
+            // clavar las corredizas a 100 ensancha el fijo del centro en vez de descuadrar el hueco.
+            val fijado = patrones.sumOf { t -> t.sumOf { (it.ancho ?: 0f).toDouble() } }.toFloat()
+            val nLibres = patrones.sumOf { t -> t.count { it.ancho == null } }
+            val anchoLibre =
+                if (nLibres > 0) ((disponible - fijado) / nLibres).coerceAtLeast(0f) else 0f
+            val tramos = patrones.map { pat -> pat.map { ModuloMampara(it.tipo, it.ancho ?: anchoLibre) } }
+            // Representativo para quien solo necesita "el ancho": con medidas desiguales pierde
+            // sentido, así que los materiales recorren [modulos] uno a uno en vez de usarlo.
+            val representativo = if (nLibres > 0) anchoLibre else (tramos.firstOrNull()?.firstOrNull()?.ancho ?: 0f)
+            return MamparaModulos(tramos, representativo, d.bastidor, P_ALT)
         }
     }
 }

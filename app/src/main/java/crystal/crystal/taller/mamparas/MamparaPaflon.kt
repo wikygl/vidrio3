@@ -274,7 +274,10 @@ class MamparaPaflon : AppCompatActivity() {
       DialogoDisenoMampara.mostrar(
         act = this,
         patronActual = patronManual,
-        divisiones = runCatching { divisiones() }.getOrNull() ?: 1
+        divisiones = runCatching { divisiones() }.getOrNull() ?: 1,
+        // El hueco y el bastidor los necesita para repartir lo que sobra y avisar si no cabe.
+        anchoUtil = runCatching { anchoUtil() }.getOrNull() ?: 0f,
+        bastidor = binding.etBasti.text.toString().toFloatOrNull() ?: pAnch
       ) { elegido ->
         patronManual = elegido
         // Recalcular deja el dibujo y los materiales al día sin que haya que tocar nada más:
@@ -404,10 +407,10 @@ class MamparaPaflon : AppCompatActivity() {
   @SuppressLint("SetTextI18n")
   private fun paflon(g: MamparaModulos) {
     val lines = mutableListOf<String>()
-    // Zócalos (travesaños horizontales), todos del ancho del vidrio: el fijo lleva 1 (inferior) y
-    // la corrediza 2 (superior e inferior).
-    val nZocalos = g.nFijos + 2 * g.nCorredizas
-    if (nZocalos > 0) lines += "${df1(g.vidrioAncho)} = $nZocalos"
+    // Zócalos (travesaños horizontales): el fijo lleva 1 (inferior) y la corrediza 2 (superior e
+    // inferior). Se recorre módulo a módulo porque los anchos pueden ser distintos; cuando son
+    // iguales, agrupar devuelve exactamente la misma línea de antes.
+    g.modulos.forEach { m -> lines += "${df1(m.ancho)} = ${if (m.esFijo) 1 else 2}" }
     // Parantes de fijo (alto de hoja): uno por cada unión fijo-corrediza.
     if (g.nUnionesFC > 0) lines += "${df1(paranteFijo())} = ${g.nUnionesFC}"
     // Parantes de corrediza (alto de hoja - 2.1): dos por corrediza.
@@ -432,9 +435,8 @@ class MamparaPaflon : AppCompatActivity() {
     val jun = binding.etJunki.text.toString().toFloatOrNull() ?: 0f
     val bast = g.bastidor
     val lines = mutableListOf<String>()
-    // Horizontales (ancho del vidrio): 2 por hoja.
-    val nHoriz = 2 * (g.nFijos + g.nCorredizas)
-    if (nHoriz > 0) lines += "${df1(g.vidrioAncho)} = $nHoriz"
+    // Horizontales (ancho del vidrio): 2 por hoja, cada una con la suya.
+    g.modulos.forEach { m -> lines += "${df1(m.ancho)} = 2" }
     // Verticales (alto del vidrio menos junquillo): 2 por hoja.
     if (g.nFijos > 0) lines += "${df1((paranteFijo() - bast) - 2 * jun)} = ${2 * g.nFijos}"
     if (g.nCorredizas > 0) lines += "${df1((paranteCorredizo() - 2 * bast) - 2 * jun)} = ${2 * g.nCorredizas}"
@@ -497,11 +499,13 @@ class MamparaPaflon : AppCompatActivity() {
   //FUNCIONES VIDRIOS
   @SuppressLint("SetTextI18n")
   private fun vidrio(g: MamparaModulos) {
-    val vw = g.vidrioAncho - 0.6f
     val lines = mutableListOf<String>()
-    // Vidrios de hoja: mismo ancho para todos; alto distinto fijo/corrediza.
-    if (g.nFijos > 0) lines += "${df1(vw)} x ${df1(altoVidrioFijo())} = ${g.nFijos}"
-    if (g.nCorredizas > 0) lines += "${df1(vw)} x ${df1(altoVidrioCorredizo())} = ${g.nCorredizas}"
+    // Vidrios de hoja: uno por módulo, con SU ancho y el alto que le toca según fijo o corrediza.
+    // Antes se asumía un ancho único; con la mampara desigual eso mandaba cortes equivocados.
+    g.modulos.forEach { m ->
+      val alto = if (m.esFijo) altoVidrioFijo() else altoVidrioCorredizo()
+      lines += "${df1(m.ancho - 0.6f)} x ${df1(alto)} = 1"
+    }
     // Vidrios de mocheta (puente), por tramo.
     if (paranteMocheta() > 0f) {
       val altoMoch = paranteMocheta() - 0.6f
