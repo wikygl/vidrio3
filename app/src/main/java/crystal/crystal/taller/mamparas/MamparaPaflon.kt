@@ -244,7 +244,9 @@ class MamparaPaflon : AppCompatActivity() {
     // Cambiar las divisiones, el ancho o el ancho de hoja invalida la disposición elegida a mano:
     // describe OTRA mampara, y conservarla daría un número de módulos que ya no es el pedido. El
     // automático vuelve a mandar hasta que se elija de nuevo.
-    listOf(binding.etDivi, binding.med1, binding.etAnHoja).forEach { campo ->
+    // etHoja es el ALTO de hoja y etAnHoja el ANCHO: los dos cambian el reparto de módulos, así
+    // que los dos invalidan la disposición elegida a mano.
+    listOf(binding.etDivi, binding.med1, binding.etAnHoja, binding.etHoja).forEach { campo ->
       campo.addTextChangedListener(object : android.text.TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
         override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -412,8 +414,13 @@ class MamparaPaflon : AppCompatActivity() {
     if (g.nCorredizas > 0) lines += "${df1(paranteCorredizo())} = ${2 * g.nCorredizas}"
     // Parante estructural de paflón entre tramos (de piso a techo): largo = alto - marco.
     if (g.nParantesTramo > 0) lines += "${df1(alto() - marco())} = ${g.nParantesTramo}"
-    // Puente (mochetas): divisores verticales por tramo (el riel base va en txRiel).
+    // Puente (mochetas). En el dibujo se ve una sola banda a la altura de la hoja, pero son DOS
+    // piezas: el paflón que cierra el pie del puente y, debajo, el riel por donde corre la hoja.
     if (paranteMocheta() > 0f) {
+      // Paflón horizontal del puente, uno por tramo. Faltaba: solo se contaba el riel (txRiel),
+      // que es otra pieza distinta aunque mida lo mismo.
+      g.tramos.forEach { lines += "${df1(g.anchoTramo(it))} = 1" }
+      // Divisores verticales entre mochetas, solo si el tramo pide más de una.
       val nDiv = g.tramos.sumOf { (diviMocheta(g.anchoTramo(it)) - 1).coerceAtLeast(0) }
       if (nDiv > 0) lines += "${df1(paranteMocheta())} = $nDiv"
     }

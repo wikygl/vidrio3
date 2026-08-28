@@ -72,6 +72,47 @@ class MamparaPatronManualTest {
         assertEquals(util.toDouble(), ocupado, 0.05)
     }
 
+    /**
+     * Caso real medido en obra (captura del 2026-08-28): de aquí salen los largos que la lista de
+     * materiales imprime, incluido el paflón horizontal del puente que faltaba.
+     */
+    @Test
+    fun `caso real cf-fc reparte 168 por tramo`() {
+        val d = MamparaPaflonDescriptor(
+            ancho = 344.8f, alto = 274.8f, altoHoja = 210f,
+            divisiones = 4, bastidor = 8.25f, marco = 2.5f, nMochetas = 0,
+            patron = "cf|fc"
+        )
+        val m = MamparaModulos.desde(d)
+        assertEquals(2, m.tramos.size)
+        assertEquals(1, m.nParantesTramo)
+        assertEquals(2, m.nFijos)
+        assertEquals(2, m.nCorredizas)
+        // 75.8 por vidrio y 168 por tramo: son los números de la lista de materiales.
+        assertEquals(75.8, m.vidrioAncho.toDouble(), 0.05)
+        m.tramos.forEach { assertEquals(168.0, m.anchoTramo(it).toDouble(), 0.05) }
+        // Y los dos tramos más su parante llenan el hueco útil exacto.
+        val util = d.ancho - 2 * d.marco
+        assertEquals(
+            util.toDouble(),
+            m.tramos.sumOf { m.anchoTramo(it).toDouble() } + m.nParantesTramo * MamparaModulos.P_ALT,
+            0.05
+        )
+    }
+
+    @Test
+    fun `sin patron el tramo unico ocupa todo el hueco util`() {
+        // El caso "normal" por divisiones: un solo tramo, y su paflón de puente mide el hueco
+        // entero (339.8), que es la pieza que faltaba en esa variante.
+        val d = MamparaPaflonDescriptor(
+            ancho = 344.8f, alto = 274.8f, altoHoja = 210f,
+            divisiones = 4, bastidor = 8.25f, marco = 2.5f, nMochetas = 0
+        )
+        val m = MamparaModulos.desde(d)
+        assertEquals(1, m.tramos.size)
+        assertEquals(339.8, m.anchoTramo(m.tramos.single()).toDouble(), 0.05)
+    }
+
     @Test
     fun `el descriptor conserva el patron al serializar`() {
         val d = descriptor(3, "fcc")
