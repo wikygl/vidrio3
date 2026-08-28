@@ -5,6 +5,8 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -186,8 +188,10 @@ object DialogoDisenoMampara {
      * unos pocos se salían del diálogo, empujados por ellos: dejaban de verse y ya no había forma
      * de seguir editando. Aquí no se mueven nunca.
      *
-     * Los módulos reparten el ancho disponible por peso, así que siempre caben —por muchos que
-     * sean— y además se ven en su proporción real: el fijo más ancho se dibuja más ancho.
+     * Los módulos son cuadros de tamaño fijo dentro de un scroll horizontal. Se probó a repartir
+     * el ancho por peso —quedaba bonito y mostraba la proporción real— pero con diez divisiones
+     * cada cuadro se volvía tan estrecho que acertar al que se quería era una lotería. Aquí el
+     * cuadro siempre mide lo mismo y se desplaza la fila.
      */
     private fun filaTramo(
         act: Activity,
@@ -240,27 +244,26 @@ object DialogoDisenoMampara {
         })
         fila.addView(cabecera)
 
-        // Módulos: reparten el ancho por peso, así que nunca se salen del diálogo.
+        // Módulos dentro de un scroll horizontal: el cuadro no se encoge, se desplaza la fila.
         val modulos = LinearLayout(act).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).also { it.setMargins(0, (6 * d).toInt(), 0, 0) }
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         }
-        val alturaCelda = (54 * d).toInt()
-        // Con muchos módulos la celda se estrecha: se baja el texto para que no se corte.
-        val tamLetra = if (pat.size > 6) 13f else 16f
-        val tamMedida = if (pat.size > 6) 9f else 11f
+        val ladoCelda = (58 * d).toInt()
+        val tamLetra = 17f
+        val tamMedida = 11f
         pat.forEachIndexed { i, m ->
-            val ancho = (m.ancho ?: anchoLibre).coerceAtLeast(1f)
             val celda = LinearLayout(act).apply {
                 orientation = LinearLayout.VERTICAL
                 // CENTER en los dos ejes: antes solo se centraba en horizontal y la letra y la
                 // medida quedaban descolgadas contra el borde de arriba.
                 gravity = Gravity.CENTER
-                // El peso es el ancho real del módulo: se ve en proporción, no todos iguales.
-                layoutParams = LinearLayout.LayoutParams(0, alturaCelda, ancho)
-                    .also { it.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0) }
+                // Cuadrado y siempre del mismo tamaño: es lo que hace que se pueda acertar al que
+                // se quiere por muchos módulos que haya.
+                layoutParams = LinearLayout.LayoutParams(ladoCelda, ladoCelda)
+                    .also { it.setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0) }
                 setBackgroundResource(R.drawable.bg_opcion_seleccionada)
                 setOnClickListener {
                     pat[i] = m.copy(tipo = if (m.tipo == 'c') 'f' else 'c')
@@ -294,7 +297,22 @@ object DialogoDisenoMampara {
             })
             modulos.addView(celda)
         }
-        fila.addView(modulos)
+        fila.addView(HorizontalScrollView(act).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(0, (6 * d).toInt(), 0, 0) }
+            isHorizontalScrollBarEnabled = true
+            // Centrada mientras quepa entera: pegada a la izquierda, con dos o tres módulos queda
+            // descolgada del resto del diálogo. En cuanto no cabe, el scroll manda.
+            addView(
+                modulos,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER_HORIZONTAL
+                )
+            )
+        })
         return fila
     }
 }
