@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Líneas verticales: las divisiones que parten el ancho, o sea las columnas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@color/blanco"
+        android:pathData="M3,3h2.4v18H3zM10.8,3h2.4v18h-2.4zM18.6,3h2.4v18h-2.4z" />
+</vector>

@@ -6,13 +6,67 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <!-- GridDrawingView ocupando la mayor parte de la pantalla -->
-    <crystal.crystal.taller.GridDrawingView
-        android:id="@+id/gridDrawingView"
+    <!-- El dibujo y, encima, el mando flotante para añadir y quitar divisiones. Van en un
+         FrameLayout para que el mando pueda moverse por encima sin empujar nada. -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="8"
-        android:layout_margin="4dp"/>
+        android:layout_weight="8">
+
+        <crystal.crystal.taller.GridDrawingView
+            android:id="@+id/gridDrawingView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_margin="4dp" />
+
+        <!-- Mando de divisiones. Arrastrable: el usuario lo aparta de donde estorbe.
+             En reposo muestra la rejilla; al tocarlo salen filas y columnas; al elegir una,
+             el icono la sustituye y aparecen + y −. -->
+        <LinearLayout
+            android:id="@+id/mandoDivisiones"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btMando"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_boton_flotante"
+                android:contentDescription="@string/divisiones_del_dise_o"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_grilla" />
+
+            <ImageButton
+                android:id="@+id/btMandoUno"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_boton_flotante_claro"
+                android:contentDescription="@string/filas"
+                android:padding="9dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_filas"
+                android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/btMandoDos"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_boton_flotante_claro"
+                android:contentDescription="@string/columnas"
+                android:padding="9dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_columnas"
+                android:visibility="gone" />
+        </LinearLayout>
+    </FrameLayout>
 
     <!-- ScrollView para contener los inputs si son muchos -->
     <ScrollView

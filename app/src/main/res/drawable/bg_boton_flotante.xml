@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo circular de los botones flotantes del diseño. Con sombra propia se despega del dibujo,
+     que es blanco y los dejaría invisibles. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#33000000" />
+        </shape>
+    </item>
+    <item android:bottom="2dp" android:left="0dp" android:right="2dp" android:top="0dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/color" />
+        </shape>
+    </item>
+</layer-list>

@@ -15,6 +15,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.R
+import android.view.View
+import android.view.ViewConfiguration
+import android.widget.ImageButton
 
 class EditGridActivity : AppCompatActivity() {
 
@@ -168,8 +171,139 @@ class EditGridActivity : AppCompatActivity() {
         findViewById<Button>(R.id.buttonVidrio).setOnClickListener {
             cambiarModo(GridDrawingView.ModoVisual.VIDRIO)
         }
+        configurarMandoDivisiones()
         renderPanelSeleccion()
     }
+
+    // ===== Mando flotante de divisiones =====
+    //
+    // Un solo botón que se arrastra por encima del dibujo y va cambiando de papel:
+    //   REPOSO    muestra la rejilla; al tocarlo ofrece filas y columnas
+    //   ELIGIENDO salen los dos botones al lado
+    //   FILAS/COLUMNAS  el icono elegido sustituye a la rejilla y los dos botones pasan a + y −
+    // Tocar el botón principal cuando ya hay un eje elegido vuelve al reposo.
+    private enum class ModoMando { REPOSO, ELIGIENDO, FILAS, COLUMNAS }
+
+    private var modoMando = ModoMando.REPOSO
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun configurarMandoDivisiones() {
+        val mando = findViewById<LinearLayout>(R.id.mandoDivisiones)
+        val principal = findViewById<ImageButton>(R.id.btMando)
+        val uno = findViewById<ImageButton>(R.id.btMandoUno)
+        val dos = findViewById<ImageButton>(R.id.btMandoDos)
+
+        fun pintar() {
+            when (modoMando) {
+                ModoMando.REPOSO -> {
+                    principal.setImageResource(R.drawable.ic_grilla)
+                    uno.visibility = View.GONE
+                    dos.visibility = View.GONE
+                }
+                ModoMando.ELIGIENDO -> {
+                    principal.setImageResource(R.drawable.ic_grilla)
+                    uno.setImageResource(R.drawable.ic_filas)
+                    dos.setImageResource(R.drawable.ic_columnas)
+                    uno.contentDescription = getString(R.string.filas)
+                    dos.contentDescription = getString(R.string.columnas)
+                    uno.visibility = View.VISIBLE
+                    dos.visibility = View.VISIBLE
+                }
+                ModoMando.FILAS, ModoMando.COLUMNAS -> {
+                    principal.setImageResource(
+                        if (modoMando == ModoMando.FILAS) R.drawable.ic_filas else R.drawable.ic_columnas
+                    )
+                    uno.setImageResource(R.drawable.ic_add)
+                    dos.setImageResource(R.drawable.ic_remove)
+                    uno.contentDescription = "Agregar"
+                    dos.contentDescription = "Quitar"
+                    uno.visibility = View.VISIBLE
+                    dos.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        // Arrastre. El umbral evita que un toque con un temblor mínimo cuente como arrastre y se
+        // coma la pulsación: por debajo de él, el toque llega al onClick como siempre.
+        val umbral = ViewConfiguration.get(this).scaledTouchSlop
+        var xInicial = 0f
+        var yInicial = 0f
+        var dxInicial = 0f
+        var dyInicial = 0f
+        var arrastrando = false
+
+        val alArrastrar = View.OnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    xInicial = event.rawX
+                    yInicial = event.rawY
+                    dxInicial = mando.translationX
+                    dyInicial = mando.translationY
+                    arrastrando = false
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - xInicial
+                    val dy = event.rawY - yInicial
+                    if (!arrastrando && kotlin.math.hypot(dx, dy) > umbral) arrastrando = true
+                    if (arrastrando) {
+                        val padre = mando.parent as View
+                        // Se queda dentro del dibujo: fuera no se podría recuperar.
+                        val maxX = (padre.width - mando.width).toFloat().coerceAtLeast(0f)
+                        val maxY = (padre.height - mando.height).toFloat().coerceAtLeast(0f)
+                        mando.translationX = (dxInicial + dx).coerceIn(-mando.left.toFloat(), maxX - mando.left)
+                        mando.translationY = (dyInicial + dy).coerceIn(-mando.top.toFloat(), maxY - mando.top)
+                    }
+                    arrastrando
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // Si hubo arrastre se consume el UP, o el botón se activaría al soltar.
+                    val hubo = arrastrando
+                    arrastrando = false
+                    hubo
+                }
+                else -> false
+            }
+        }
+        principal.setOnTouchListener(alArrastrar)
+        uno.setOnTouchListener(alArrastrar)
+        dos.setOnTouchListener(alArrastrar)
+
+        principal.setOnClickListener {
+            modoMando = if (modoMando == ModoMando.REPOSO) ModoMando.ELIGIENDO else ModoMando.REPOSO
+            pintar()
+        }
+
+        uno.setOnClickListener {
+            when (modoMando) {
+                ModoMando.ELIGIENDO -> { modoMando = ModoMando.FILAS; pintar() }
+                // Se añade después de la fila o columna seleccionada; sin selección, al final.
+                ModoMando.FILAS -> agregarFilaAColumnas(
+                    filaSeleccionada.takeIf { it >= 0 } ?: maxFilaExistente()
+                )
+                ModoMando.COLUMNAS -> agregarColumna(
+                    columnaSeleccionada.takeIf { it >= 0 } ?: anchosColumnas.lastIndex
+                )
+                else -> Unit
+            }
+        }
+
+        dos.setOnClickListener {
+            when (modoMando) {
+                ModoMando.ELIGIENDO -> { modoMando = ModoMando.COLUMNAS; pintar() }
+                ModoMando.FILAS -> eliminarFilaDeColumnas(
+                    filaSeleccionada.takeIf { it >= 0 } ?: maxFilaExistente()
+                )
+                ModoMando.COLUMNAS -> eliminarColumna(
+                    columnaSeleccionada.takeIf { it >= 0 } ?: anchosColumnas.lastIndex
+                )
+                else -> Unit
+            }
+        }
+
+        pintar()
+    }
+
 
     private fun manejarArrastrePoligono(event: MotionEvent) {
         when (accionPoligono) {

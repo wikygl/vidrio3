@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Variante para los botones secundarios: se distinguen del principal de un vistazo. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#33000000" />
+        </shape>
+    </item>
+    <item android:bottom="2dp" android:left="0dp" android:right="2dp" android:top="0dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/celeste" />
+        </shape>
+    </item>
+</layer-list>

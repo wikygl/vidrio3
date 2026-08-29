@@ -219,4 +219,8 @@
     <string name="guardar_como_json">Guardar como JSON</string>
     <string name="compartir_presupuesto">Compartir presupuesto</string>
     <string name="opciones_presupuesto">Opciones de presupuesto</string>
+    <!-- Mando de divisiones del diseño del muro -->
+    <string name="divisiones_del_dise_o">Divisiones del diseño</string>
+    <string name="filas">Filas</string>
+    <string name="columnas">Columnas</string>
 </resources>
