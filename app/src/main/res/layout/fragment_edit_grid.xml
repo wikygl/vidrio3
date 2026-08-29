@@ -65,6 +65,21 @@
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_columnas"
                 android:visibility="gone" />
+
+            <!-- Ámbito: decide si la fila se añade y se quita en todas las columnas o solo en la
+                 elegida. Solo aparece con el eje de filas, porque una columna atraviesa el alto
+                 entero y no admite ese matiz. -->
+            <ImageButton
+                android:id="@+id/btMandoAmbito"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_boton_flotante_claro"
+                android:contentDescription="@string/mbito_de_la_fila"
+                android:padding="9dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_ambito_todas"
+                android:visibility="gone" />
         </LinearLayout>
     </FrameLayout>
 

@@ -186,12 +186,21 @@ class EditGridActivity : AppCompatActivity() {
 
     private var modoMando = ModoMando.REPOSO
 
+    /**
+     * Si el + y el − de filas actúan en TODAS las columnas o solo en la elegida.
+     *
+     * La lógica por columna ya existía (`agregarFilaEnColumna`), pero solo se alcanzaba desde los
+     * botones del panel de selección. Aquí se le da su propio mando.
+     */
+    private var soloColumnaElegida = false
+
     @SuppressLint("ClickableViewAccessibility")
     private fun configurarMandoDivisiones() {
         val mando = findViewById<LinearLayout>(R.id.mandoDivisiones)
         val principal = findViewById<ImageButton>(R.id.btMando)
         val uno = findViewById<ImageButton>(R.id.btMandoUno)
         val dos = findViewById<ImageButton>(R.id.btMandoDos)
+        val ambito = findViewById<ImageButton>(R.id.btMandoAmbito)
 
         fun pintar() {
             when (modoMando) {
@@ -221,6 +230,11 @@ class EditGridActivity : AppCompatActivity() {
                     dos.visibility = View.VISIBLE
                 }
             }
+            // Una columna atraviesa el alto entero, así que el ámbito solo aplica a las filas.
+            ambito.visibility = if (modoMando == ModoMando.FILAS) View.VISIBLE else View.GONE
+            ambito.setImageResource(
+                if (soloColumnaElegida) R.drawable.ic_ambito_una else R.drawable.ic_ambito_todas
+            )
         }
 
         // Arrastre. El umbral evita que un toque con un temblor mínimo cuente como arrastre y se
@@ -268,6 +282,18 @@ class EditGridActivity : AppCompatActivity() {
         principal.setOnTouchListener(alArrastrar)
         uno.setOnTouchListener(alArrastrar)
         dos.setOnTouchListener(alArrastrar)
+        ambito.setOnTouchListener(alArrastrar)
+
+        ambito.setOnClickListener {
+            soloColumnaElegida = !soloColumnaElegida
+            Toast.makeText(
+                this,
+                if (soloColumnaElegida) "La fila se toca solo en la columna elegida"
+                else "La fila se toca en todas las columnas",
+                Toast.LENGTH_SHORT
+            ).show()
+            pintar()
+        }
 
         principal.setOnClickListener {
             modoMando = if (modoMando == ModoMando.REPOSO) ModoMando.ELIGIENDO else ModoMando.REPOSO
@@ -278,9 +304,9 @@ class EditGridActivity : AppCompatActivity() {
             when (modoMando) {
                 ModoMando.ELIGIENDO -> { modoMando = ModoMando.FILAS; pintar() }
                 // Se añade después de la fila o columna seleccionada; sin selección, al final.
-                ModoMando.FILAS -> agregarFilaAColumnas(
-                    filaSeleccionada.takeIf { it >= 0 } ?: maxFilaExistente()
-                )
+                ModoMando.FILAS ->
+                    if (soloColumnaElegida) columnaElegida()?.let { agregarFilaEnColumna(it) }
+                    else agregarFilaAColumnas(filaSeleccionada.takeIf { it >= 0 } ?: maxFilaExistente())
                 ModoMando.COLUMNAS -> agregarColumna(
                     columnaSeleccionada.takeIf { it >= 0 } ?: anchosColumnas.lastIndex
                 )
@@ -291,9 +317,9 @@ class EditGridActivity : AppCompatActivity() {
         dos.setOnClickListener {
             when (modoMando) {
                 ModoMando.ELIGIENDO -> { modoMando = ModoMando.COLUMNAS; pintar() }
-                ModoMando.FILAS -> eliminarFilaDeColumnas(
-                    filaSeleccionada.takeIf { it >= 0 } ?: maxFilaExistente()
-                )
+                ModoMando.FILAS ->
+                    if (soloColumnaElegida) columnaElegida()?.let { eliminarFilaEnColumna(it) }
+                    else eliminarFilaDeColumnas(filaSeleccionada.takeIf { it >= 0 } ?: maxFilaExistente())
                 ModoMando.COLUMNAS -> eliminarColumna(
                     columnaSeleccionada.takeIf { it >= 0 } ?: anchosColumnas.lastIndex
                 )
@@ -302,6 +328,22 @@ class EditGridActivity : AppCompatActivity() {
         }
 
         pintar()
+    }
+
+    /**
+     * La columna sobre la que actuar cuando el ámbito es "solo la elegida".
+     *
+     * Vale tanto si se tocó la columna como si se tocó un módulo suyo, que es lo que el usuario
+     * entiende por elegida. Sin nada seleccionado no se adivina: se dice y no se toca nada, porque
+     * elegir una por su cuenta cambiaría un diseño que nadie pidió cambiar.
+     */
+    private fun columnaElegida(): Int? {
+        val c = columnaSeleccionada.takeIf { it >= 0 }
+            ?: moduloColumnaSeleccionada.takeIf { it >= 0 }
+        if (c == null) {
+            Toast.makeText(this, "Toca antes la columna en la que quieres la fila", Toast.LENGTH_SHORT).show()
+        }
+        return c?.takeIf { it in alturasFilasPorColumna.indices }
     }
 
 

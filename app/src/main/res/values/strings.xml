@@ -223,4 +223,5 @@
     <string name="divisiones_del_dise_o">Divisiones del diseño</string>
     <string name="filas">Filas</string>
     <string name="columnas">Columnas</string>
+    <string name="mbito_de_la_fila">Ámbito de la fila</string>
 </resources>
