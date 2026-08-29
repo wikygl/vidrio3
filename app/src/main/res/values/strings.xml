@@ -219,8 +219,4 @@
     <string name="guardar_como_json">Guardar como JSON</string>
     <string name="compartir_presupuesto">Compartir presupuesto</string>
     <string name="opciones_presupuesto">Opciones de presupuesto</string>
-    <!-- Modos de vista del diseño del muro -->
-    <string name="grilla">Grilla</string>
-    <string name="estructura">Estructura</string>
-    <string name="vidrio">Vidrio</string>
 </resources>

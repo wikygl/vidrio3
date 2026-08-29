@@ -44,28 +44,34 @@ class Muro : AppCompatActivity() {
     private var metaAcabadoSuperficial: String = ""
     private var metaObservaciones: String = ""
 
-    /**
-     * Editor del diseño, incrustado. Antes se salía a EditGridActivity y se volvía con el resultado
-     * por un launcher; ahora el dibujo es la pantalla y cada cambio recalcula en el sitio.
-     */
-    private var editorDiseno: MuroDisenoEditor? = null
-
-    /** Recoge lo que el editor cambió y lo vuelca en los campos de la calculadora. */
-    private fun recogerDelEditor() {
-        val ed = editorDiseno ?: return
+    private val editarGridLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
+        val data = result.data ?: return@registerForActivityResult
         runnableActualizacion?.let { binding.rectanguloView.removeCallbacks(it) }
         runnableActualizacion = null
-        binding.etMarco.setText(df(ed.marco()))
-        binding.etTubo.setText(df(ed.tubo()))
-        binding.etGruna.setText(df(ed.gruna()))
-        binding.etNaves.setText(ed.naves())
-        formaEditada = ed.forma()
-        val anchos = ed.anchosColumnas().toMutableList()
-        val alturas = ed.alturasFilas().split("|")
-            .map { c -> c.split(",").mapNotNull { it.toFloatOrNull() }.toMutableList() }
-            .filter { it.isNotEmpty() }
-            .toMutableList()
-        if (anchos.isEmpty() || alturas.isEmpty()) return
+        val anchos = data.getFloatArrayExtra(EditGridActivity.RESULT_ANCHOS_COLUMNAS)
+            ?.toMutableList()
+            ?: return@registerForActivityResult
+        val alturas = data.getStringExtra(EditGridActivity.RESULT_ALTURAS_FILAS)
+            ?.split("|")
+            ?.map { columna -> columna.split(",").mapNotNull { it.toFloatOrNull() }.toMutableList() }
+            ?.filter { it.isNotEmpty() }
+            ?.toMutableList()
+            ?: return@registerForActivityResult
+        data.getFloatExtra(EditGridActivity.RESULT_MARCO, Float.NaN)
+            .takeIf { !it.isNaN() }
+            ?.let { binding.etMarco.setText(df(it)) }
+        data.getFloatExtra(EditGridActivity.RESULT_TUBO, Float.NaN)
+            .takeIf { !it.isNaN() }
+            ?.let { binding.etTubo.setText(df(it)) }
+        data.getFloatExtra(EditGridActivity.RESULT_GRUNA, Float.NaN)
+            .takeIf { !it.isNaN() }
+            ?.let { binding.etGruna.setText(df(it)) }
+        data.getStringExtra(EditGridActivity.RESULT_NAVES)
+            ?.let { binding.etNaves.setText(it) }
+        formaEditada = data.getStringExtra(EditGridActivity.RESULT_FORMA).orEmpty()
         actualizarGridDesdeDiseno(anchos, alturas)
     }
 
@@ -97,17 +103,6 @@ class Muro : AppCompatActivity() {
 
         binding.med1.requestFocus()
         disenoInicial()
-        // El editor va sobre el dibujo de esta pantalla: no hay otra a la que ir.
-        montarEditorDiseno()
-        binding.buttonGrilla.setOnClickListener {
-            editorDiseno?.cambiarModo(GridDrawingView.ModoVisual.GRILLA)
-        }
-        binding.buttonEstructura.setOnClickListener {
-            editorDiseno?.cambiarModo(GridDrawingView.ModoVisual.ESTRUCTURA)
-        }
-        binding.buttonVidrio.setOnClickListener {
-            editorDiseno?.cambiarModo(GridDrawingView.ModoVisual.VIDRIO)
-        }
         configurarActualizacionAutomatica()
 
         // ==================== LISTENERS ====================
@@ -148,13 +143,10 @@ class Muro : AppCompatActivity() {
             true
         }
 
-        // El toque simple lo gobierna el editor (seleccionar columna, fila o módulo). La ficha
-        // técnica se mantiene en la pulsación larga, como en las demás calculadoras.
-        // La ficha técnica pasa a su propia etiqueta, la que ya estaba debajo del dibujo sin hacer
-        // nada. Antes iba en la pulsación larga del dibujo, y eso ya no puede ser: el editor
-        // consume el toque para seleccionar columnas y filas, así que la pulsación larga no llega.
-        binding.textView7.setOnClickListener {
+        binding.rectanguloView.setOnClickListener { mostrarEditGridFragment() }
+        binding.rectanguloView.setOnLongClickListener {
             startActivity(Intent(this, FichaActivity::class.java))
+            true
         }
 
         // Pre-carga desde presupuesto
@@ -323,27 +315,25 @@ class Muro : AppCompatActivity() {
         return resultado.replace(",", ".")
     }
 
-    /** Monta el editor sobre el dibujo de esta misma pantalla y le pasa el diseño actual. */
-    private fun montarEditorDiseno() {
-        val ed = editorDiseno ?: MuroDisenoEditor(
-            act = this,
-            gridDrawingView = binding.rectanguloView,
-            selectionPanel = binding.columnInputsLayout,
-            secondaryPanel = binding.filasPorColumnaLayout,
-            onCambio = { recogerDelEditor() }
-        ).also { editorDiseno = it }
-        ed.cargar(
-            anchoTotal = binding.rectanguloView.getAnchoTotal(),
-            altoTotal = binding.rectanguloView.getAltoTotal(),
-            marco = binding.etMarco.text.toString().toFloatOrNull() ?: 2.5f,
-            tubo = binding.etTubo.text.toString().toFloatOrNull() ?: 3.8f,
-            gruna = binding.etGruna.text.toString().toFloatOrNull() ?: 0f,
-            naves = binding.etNaves.text.toString(),
-            anchosColumnas = binding.rectanguloView.getAnchosColumnas().toFloatArray(),
-            alturasFilas = binding.rectanguloView.getAlturasFilasPorColumna()
-                .joinToString("|") { columna -> columna.joinToString(",") },
-            forma = formaEditada
-        )
+    private fun mostrarEditGridFragment() {
+        val gridDrawingView = binding.rectanguloView
+        val intent = Intent(this, EditGridActivity::class.java).apply {
+            putExtra(EditGridActivity.EXTRA_ANCHO_TOTAL, gridDrawingView.getAnchoTotal())
+            putExtra(EditGridActivity.EXTRA_ALTO_TOTAL, gridDrawingView.getAltoTotal())
+            putExtra(EditGridActivity.EXTRA_ANCHOS_COLUMNAS, gridDrawingView.getAnchosColumnas().toFloatArray())
+            putExtra(EditGridActivity.EXTRA_MARCO, binding.etMarco.text.toString().toFloatOrNull() ?: 2.5f)
+            putExtra(EditGridActivity.EXTRA_TUBO, binding.etTubo.text.toString().toFloatOrNull() ?: 3.8f)
+            putExtra(EditGridActivity.EXTRA_GRUNA, binding.etGruna.text.toString().toFloatOrNull() ?: 0f)
+            putExtra(EditGridActivity.EXTRA_NAVES, binding.etNaves.text.toString())
+            putExtra(EditGridActivity.EXTRA_FORMA, formaEditada)
+            putExtra(
+                EditGridActivity.EXTRA_ALTURAS_FILAS,
+                gridDrawingView.getAlturasFilasPorColumna().joinToString("|") { columna ->
+                    columna.joinToString(",")
+                }
+            )
+        }
+        editarGridLauncher.launch(intent)
     }
 
     private fun diseno() {

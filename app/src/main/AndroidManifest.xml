@@ -183,6 +183,9 @@
             android:name=".taller.Muro"
             android:exported="false" />
         <activity
+            android:name=".taller.EditGridActivity"
+            android:exported="false" />
+        <activity
             android:name=".red.ChatActivity"
             android:exported="false">
             <intent-filter>

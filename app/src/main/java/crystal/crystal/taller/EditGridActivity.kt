@@ -1,7 +1,10 @@
 package crystal.crystal.taller
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
 import android.graphics.PointF
+import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
 import android.view.MotionEvent
@@ -13,25 +16,26 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import crystal.crystal.R
 
-/**
- * Editor del diseño del muro, incrustado en la propia calculadora.
- *
- * Era una actividad aparte (`EditGridActivity`): se salía de la calculadora a diseñar y se volvía
- * con el resultado por un launcher. Ahora el dibujo vive en la pantalla de Muro y esto lo gobierna
- * desde dentro, así que se ve el efecto en los cálculos sin ir y volver.
- *
- * Trabaja sobre vistas que le entrega quien la hospeda; no conoce ningún layout concreto.
- */
-class MuroDisenoEditor(
-    private val act: AppCompatActivity,
-    private val gridDrawingView: GridDrawingView,
-    private val selectionPanel: LinearLayout,
-    private val secondaryPanel: LinearLayout,
-    /** Se llama en cada cambio del diseño: la calculadora recalcula con lo nuevo. */
-    private val onCambio: () -> Unit
-) {
+class EditGridActivity : AppCompatActivity() {
 
-
+    companion object {
+        const val EXTRA_ANCHO_TOTAL = "extra_ancho_total"
+        const val EXTRA_ALTO_TOTAL = "extra_alto_total"
+        const val EXTRA_ANCHOS_COLUMNAS = "extra_anchos_columnas"
+        const val EXTRA_ALTURAS_FILAS = "extra_alturas_filas"
+        const val EXTRA_MARCO = "extra_marco"
+        const val EXTRA_TUBO = "extra_tubo"
+        const val EXTRA_GRUNA = "extra_gruna"
+        const val EXTRA_NAVES = "extra_naves"
+        const val EXTRA_FORMA = "extra_forma"
+        const val RESULT_ANCHOS_COLUMNAS = "result_anchos_columnas"
+        const val RESULT_ALTURAS_FILAS = "result_alturas_filas"
+        const val RESULT_MARCO = "result_marco"
+        const val RESULT_TUBO = "result_tubo"
+        const val RESULT_GRUNA = "result_gruna"
+        const val RESULT_NAVES = "result_naves"
+        const val RESULT_FORMA = "result_forma"
+    }
 
     private var anchoTotal: Float = 150f
     private var altoTotal: Float = 180f
@@ -50,6 +54,9 @@ class MuroDisenoEditor(
     private lateinit var anchosColumnas: MutableList<Float>
     private lateinit var alturasFilasPorColumna: MutableList<MutableList<Float>>
     private lateinit var filasEditadasPorColumna: MutableList<MutableList<Boolean>>
+    private lateinit var gridDrawingView: GridDrawingView
+    private lateinit var selectionPanel: LinearLayout
+    private lateinit var secondaryPanel: LinearLayout
 
     private var filaSeleccionada = -1
     private var columnaSeleccionada = -1
@@ -58,46 +65,29 @@ class MuroDisenoEditor(
 
     private enum class AccionPoligono { NINGUNA, DIBUJAR, MOVER }
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.fragment_edit_grid)
 
-    /** Carga el diseño desde la calculadora. Sustituye a los extras del intent de la actividad. */
-    fun cargar(
-        anchoTotal: Float,
-        altoTotal: Float,
-        marco: Float,
-        tubo: Float,
-        gruna: Float,
-        naves: String,
-        anchosColumnas: FloatArray?,
-        alturasFilas: String,
-        forma: String
-    ) {
-        this.anchoTotal = anchoTotal
-        this.altoTotal = altoTotal
-        this.marco = marco
-        this.tubo = tubo
-        this.gruna = gruna
-        cargarNaves(naves)
-        this.anchosColumnas = anchosColumnas?.toMutableList() ?: mutableListOf(anchoTotal)
-        this.alturasFilasPorColumna = leerAlturasFilas(alturasFilas)
-            ?: MutableList(this.anchosColumnas.size) { mutableListOf(altoTotal) }
-        this.formaInicial = forma
+        anchoTotal = intent.getFloatExtra(EXTRA_ANCHO_TOTAL, anchoTotal)
+        altoTotal = intent.getFloatExtra(EXTRA_ALTO_TOTAL, altoTotal)
+        marco = intent.getFloatExtra(EXTRA_MARCO, marco)
+        tubo = intent.getFloatExtra(EXTRA_TUBO, tubo)
+        gruna = intent.getFloatExtra(EXTRA_GRUNA, gruna)
+        cargarNaves(intent.getStringExtra(EXTRA_NAVES).orEmpty())
+        anchosColumnas = intent.getFloatArrayExtra(EXTRA_ANCHOS_COLUMNAS)
+            ?.toMutableList()
+            ?: mutableListOf(anchoTotal)
+        alturasFilasPorColumna = leerAlturasFilas(intent)
+            ?: MutableList(anchosColumnas.size) { mutableListOf(altoTotal) }
+
         normalizarDatos()
         normalizarFilasEditadas()
         configurarVista()
     }
 
-    /** Lo que la calculadora necesita leer del diseño después de cada cambio. */
-    fun anchosColumnas(): FloatArray = anchosColumnas.toFloatArray()
-    fun alturasFilas(): String = serializarAlturasFilas()
-    fun naves(): String = serializarNaves()
-    fun forma(): String = gridDrawingView.exportarForma()
-    fun marco(): Float = marco
-    fun tubo(): Float = tubo
-    fun gruna(): Float = gruna
-
-    private var formaInicial: String = ""
-    private fun leerAlturasFilas(serializado: String): MutableList<MutableList<Float>>? {
-        if (serializado.isBlank()) return null
+    private fun leerAlturasFilas(intent: Intent): MutableList<MutableList<Float>>? {
+        val serializado = intent.getStringExtra(EXTRA_ALTURAS_FILAS)?.takeIf { it.isNotBlank() } ?: return null
         return serializado.split("|")
             .map { columna ->
                 columna.split(",")
@@ -141,16 +131,20 @@ class MuroDisenoEditor(
         return resultado.replace(",", ".")
     }
 
-    private fun dp(value: Int): Int = (value * act.resources.displayMetrics.density).toInt()
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     @SuppressLint("ClickableViewAccessibility")
     private fun configurarVista() {
+        gridDrawingView = findViewById(R.id.gridDrawingView)
+        selectionPanel = findViewById(R.id.columnInputsLayout)
+        secondaryPanel = findViewById(R.id.filasPorColumnaLayout)
+
         selectionPanel.orientation = LinearLayout.VERTICAL
         selectionPanel.gravity = Gravity.START
         selectionPanel.removeAllViews()
         secondaryPanel.removeAllViews()
         updateGrid()
-        gridDrawingView.importarForma(formaInicial)
+        gridDrawingView.importarForma(intent.getStringExtra(EXTRA_FORMA).orEmpty())
 
         gridDrawingView.setOnTouchListener { _, event ->
             if (accionPoligono != AccionPoligono.NINGUNA) {
@@ -161,6 +155,19 @@ class MuroDisenoEditor(
             true
         }
 
+        findViewById<Button>(R.id.buttonClose).setOnClickListener {
+            devolverResultado()
+            finish()
+        }
+        findViewById<Button>(R.id.buttonGrilla).setOnClickListener {
+            cambiarModo(GridDrawingView.ModoVisual.GRILLA)
+        }
+        findViewById<Button>(R.id.buttonEstructura).setOnClickListener {
+            cambiarModo(GridDrawingView.ModoVisual.ESTRUCTURA)
+        }
+        findViewById<Button>(R.id.buttonVidrio).setOnClickListener {
+            cambiarModo(GridDrawingView.ModoVisual.VIDRIO)
+        }
         renderPanelSeleccion()
     }
 
@@ -186,7 +193,7 @@ class MuroDisenoEditor(
         }
     }
 
-    fun cambiarModo(modo: GridDrawingView.ModoVisual) {
+    private fun cambiarModo(modo: GridDrawingView.ModoVisual) {
         modoVisual = modo
         gridDrawingView.setModoVisual(modoVisual, marco, tubo, gruna)
         actualizarSeleccionVisual()
@@ -239,7 +246,7 @@ class MuroDisenoEditor(
         selectionPanel.removeAllViews()
         secondaryPanel.removeAllViews()
 
-        val titulo = TextView(act).apply {
+        val titulo = TextView(this).apply {
             textSize = 14f
             setPadding(dp(8), dp(4), dp(8), dp(2))
             text = when {
@@ -376,7 +383,7 @@ class MuroDisenoEditor(
             AccionPoligono.DIBUJAR -> "Forma: dibujar poligono"
             AccionPoligono.MOVER -> "Forma: mover poligono"
         }
-        selectionPanel.addView(TextView(act).apply {
+        selectionPanel.addView(TextView(this).apply {
             text = estado
             textSize = 13f
             setPadding(dp(8), dp(4), dp(8), dp(1))
@@ -424,7 +431,7 @@ class MuroDisenoEditor(
             textoPuntosPoligono = inputPuntos.text.toString()
             val puntos = parsearPuntosPoligono(textoPuntosPoligono)
             if (!gridDrawingView.setPoligonoCm(puntos)) {
-                Toast.makeText(act, "Use minimo 3 puntos: x,y;x,y;x,y", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Use minimo 3 puntos: x,y;x,y;x,y", Toast.LENGTH_SHORT).show()
             } else {
                 actualizarMedidasPoligonoDesdePuntos(puntos)
                 renderPanelSeleccion()
@@ -493,7 +500,7 @@ class MuroDisenoEditor(
 
     private fun aplicarPoligono(operacion: GridDrawingView.OperacionPoligono) {
         if (!gridDrawingView.aplicarPoligono(operacion)) {
-            Toast.makeText(act, "Dibuja un poligono con al menos 3 puntos", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Dibuja un poligono con al menos 3 puntos", Toast.LENGTH_SHORT).show()
             return
         }
         accionPoligono = AccionPoligono.NINGUNA
@@ -502,11 +509,11 @@ class MuroDisenoEditor(
     }
 
     private fun filaControles(label: String, input: EditText, onApply: () -> Unit): LinearLayout {
-        return LinearLayout(act).apply {
+        return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), dp(2), dp(8), dp(2))
-            addView(TextView(act).apply {
+            addView(TextView(this@EditGridActivity).apply {
                 text = label
                 textSize = 13f
                 layoutParams = LinearLayout.LayoutParams(dp(54), LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -517,7 +524,7 @@ class MuroDisenoEditor(
     }
 
     private fun filaBotones(vararg botones: Button): LinearLayout {
-        return LinearLayout(act).apply {
+        return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(2), dp(8), dp(4))
@@ -526,7 +533,7 @@ class MuroDisenoEditor(
     }
 
     private fun nuevoInput(valor: Float): EditText {
-        return EditText(act).apply {
+        return EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
             setText(df(valor))
             textSize = 13f
@@ -540,7 +547,7 @@ class MuroDisenoEditor(
     }
 
     private fun nuevoInputTexto(valor: String): EditText {
-        return EditText(act).apply {
+        return EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT
             setText(valor)
             textSize = 13f
@@ -554,7 +561,7 @@ class MuroDisenoEditor(
     }
 
     private fun nuevoBoton(texto: String, accion: () -> Unit): Button {
-        return Button(act).apply {
+        return Button(this).apply {
             text = texto
             minHeight = 0
             minWidth = 0
@@ -570,7 +577,7 @@ class MuroDisenoEditor(
     private fun EditText.valorFloat(): Float? {
         val valor = text.toString().replace(",", ".").toFloatOrNull()
         if (valor == null || valor <= 0f) {
-            Toast.makeText(act, "El valor debe ser mayor que cero", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@EditGridActivity, "El valor debe ser mayor que cero", Toast.LENGTH_SHORT).show()
             return null
         }
         return valor
@@ -579,7 +586,7 @@ class MuroDisenoEditor(
     private fun EditText.valorFloatCeroPermitido(): Float? {
         val valor = text.toString().replace(",", ".").toFloatOrNull()
         if (valor == null || valor < 0f) {
-            Toast.makeText(act, "El valor no puede ser negativo", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@EditGridActivity, "El valor no puede ser negativo", Toast.LENGTH_SHORT).show()
             return null
         }
         return valor
@@ -716,7 +723,7 @@ class MuroDisenoEditor(
 
     private fun aplicarAnchoColumna(columna: Int, valor: Float) {
         if (valor >= anchoTotal && anchosColumnas.size > 1) {
-            Toast.makeText(act, "El ancho excede el total", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "El ancho excede el total", Toast.LENGTH_SHORT).show()
             return
         }
         anchosColumnas[columna] = valor
@@ -755,7 +762,7 @@ class MuroDisenoEditor(
             .toFloat()
         val filasLibres = alturasFilasPorColumna[columna].size - filasEditadasPorColumna[columna].count { it }
         if (totalEditado > altoTotal || (totalEditado >= altoTotal && filasLibres > 0)) {
-            Toast.makeText(act, "El alto excede el total", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "El alto excede el total", Toast.LENGTH_SHORT).show()
             filasEditadasPorColumna[columna][fila] = estabaEditada
             return
         }
@@ -798,7 +805,7 @@ class MuroDisenoEditor(
 
     private fun eliminarColumna(columna: Int) {
         if (anchosColumnas.size <= 1) {
-            Toast.makeText(act, "Debe existir al menos una columna", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Debe existir al menos una columna", Toast.LENGTH_SHORT).show()
             return
         }
         anchosColumnas.removeAt(columna)
@@ -840,7 +847,7 @@ class MuroDisenoEditor(
             }
         }
         if (!eliminado) {
-            Toast.makeText(act, "Debe existir al menos una fila", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Debe existir al menos una fila", Toast.LENGTH_SHORT).show()
             return
         }
         filaSeleccionada = fila.coerceAtMost(maxFilaExistente())
@@ -864,7 +871,7 @@ class MuroDisenoEditor(
     private fun eliminarFilaEnColumna(columna: Int) {
         val filas = alturasFilasPorColumna[columna]
         if (filas.size <= 1) {
-            Toast.makeText(act, "La columna debe tener al menos una fila", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "La columna debe tener al menos una fila", Toast.LENGTH_SHORT).show()
             return
         }
         val fila = filaSeleccionada.coerceIn(0, filas.lastIndex)
@@ -1022,8 +1029,16 @@ class MuroDisenoEditor(
         gridDrawingView.setModoVisual(modoVisual, marco, tubo, gruna)
     }
 
-    /** Avisa a la calculadora de que el diseño cambió, para que recalcule con lo nuevo. */
     private fun devolverResultado() {
-        onCambio()
+        val data = Intent().apply {
+            putExtra(RESULT_ANCHOS_COLUMNAS, anchosColumnas.toFloatArray())
+            putExtra(RESULT_ALTURAS_FILAS, serializarAlturasFilas())
+            putExtra(RESULT_MARCO, marco)
+            putExtra(RESULT_TUBO, tubo)
+            putExtra(RESULT_GRUNA, gruna)
+            putExtra(RESULT_NAVES, serializarNaves())
+            putExtra(RESULT_FORMA, gridDrawingView.exportarForma())
+        }
+        setResult(Activity.RESULT_OK, data)
     }
 }
