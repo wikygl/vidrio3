@@ -181,7 +181,7 @@
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
                                 android:inputType="number"
-                                android:text="1"
+                                android:text="0"
                                 android:textColorHint="@color/sombra2"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,DuplicateSpeakableTextCheck" />
                         </LinearLayout>
@@ -208,7 +208,7 @@
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
                                 android:inputType="number"
-                                android:text="1"
+                                android:text="0"
                                 android:textColorHint="#A6A5A5"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TextContrastCheck" />
                         </LinearLayout>

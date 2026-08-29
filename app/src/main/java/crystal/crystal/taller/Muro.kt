@@ -20,6 +20,7 @@ import crystal.crystal.casilla.MapStorage
 import crystal.crystal.casilla.ProyectoManager
 import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityMuroBinding
+import kotlin.math.ceil
 
 class Muro : AppCompatActivity() {
 
@@ -38,6 +39,9 @@ class Muro : AppCompatActivity() {
     // Evitar “spam” de actualizaciones cuando el usuario escribe
     private var runnableActualizacion: Runnable? = null
     private var formaEditada: String = ""
+    /** Tramo máximo al repartir solo: por encima de 90 cm se añade otra columna o fila. */
+    private val MEDIDA_AUTOMATICA = 90f
+
     private var aplicandoResultadoEdicion = false
     private var metaColorAluminio: String = ""
     private var metaTipoVidrio: String = ""
@@ -238,11 +242,17 @@ class Muro : AppCompatActivity() {
         try {
             val ancho = binding.med1.text.toString().toFloatOrNull() ?: anchoTotal
             val alto  = binding.med2.text.toString().toFloatOrNull() ?: altoTotal
-            val colum = binding.nCol.text.toString().toIntOrNull()  ?: 3
-            val filas = binding.nFilas.text.toString().toIntOrNull() ?: 2
+            if (ancho <= 0f || alto <= 0f) return
 
-            // Validaciones básicas
-            if (ancho <= 0f || alto <= 0f || colum <= 0 || filas <= 0) return
+            // Columnas y filas en 0 significan "decídelo tú": se reparte cada medida en tramos de
+            // 90 cm como mucho, la misma regla que usa la mampara paflón para sus divisiones. Con
+            // un número escrito a mano manda ese, que para eso se escribió.
+            val colum = binding.nCol.text.toString().toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?: ceil(ancho / MEDIDA_AUTOMATICA).toInt().coerceAtLeast(1)
+            val filas = binding.nFilas.text.toString().toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?: ceil(alto / MEDIDA_AUTOMATICA).toInt().coerceAtLeast(1)
 
             // >>> SIN LÍMITE A 10: usamos exactamente lo que ingrese el usuario <<<
             anchoTotal = ancho
