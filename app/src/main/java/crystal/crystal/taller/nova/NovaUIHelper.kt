@@ -122,6 +122,11 @@ object NovaUIHelper {
         modelo: String = "nn",
         alturaPuente: Float = 2.5f,
         mochetaInferior: Float = 0f,
+        // `modelo` = modulación (patrón de hojas); `remate` = nn/nr/np (mochetas). Son ejes
+        // independientes: pasar la modulación aquí hace que la rama "np" nunca se ejecute.
+        remate: String = modelo,
+        // APA descuenta del alto los perfiles de puente al repartir las mochetas; INA no.
+        descontarPuentes: Boolean = true,
         // Medida REAL para mostrar en la referencia. El ancho/alto de arriba puede venir con el
         // descuento de encuentro (ancho útil) para los cálculos de corte, pero la referencia debe
         // mostrar la medida real que se midió (y que se archiva). Por defecto = ancho/alto.
@@ -137,15 +142,16 @@ object NovaUIHelper {
         val (mochetaInf, mochetaSup) = if (siNoMoch == 0) {
             0f to 0f
         } else {
-            when (modelo) {
+            when (remate) {
                 "nr" -> 0f to (alto - altoHoja).coerceAtLeast(0f)
                 "np" -> {
                     val alturas = NovaInaCalculos.alturasMochetasPorModelo(
-                        modelo = modelo,
+                        modelo = remate,
                         alto = alto,
                         altoHoja = altoHoja,
                         alturaPuente = alturaPuente,
-                        mochetaInferior = mochetaInferior
+                        mochetaInferior = mochetaInferior,
+                        descontarPuentes = descontarPuentes
                     )
                     val inf = alturas.inferior ?: alturas.superior
                     inf.coerceAtLeast(0f) to alturas.superior.coerceAtLeast(0f)

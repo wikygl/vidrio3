@@ -33,13 +33,20 @@ object NovaInaCalculos {
         alto: Float,
         altoHoja: Float,
         alturaPuente: Float,
-        mochetaInferior: Float = 0f
+        mochetaInferior: Float = 0f,
+        // APA descuenta del alto los perfiles de puente; INA no (el puente no le come altura a
+        // la mocheta). Por eso el descuento es opcional y lo decide quien llama.
+        descontarPuentes: Boolean = true
     ): AlturasMochetas {
         return if (modelo == "np") {
-            // "Doble puente" tiene DOS puentes: el espacio disponible para las mochetas
-            // descuenta ambos (se reutiliza altoMocheta con 2*alturaPuente). Tanto el reparto
-            // por defecto como la mocheta superior parten de ese disponible ya descontado.
-            val disponible = NovaCalculos.altoMocheta(alto, altoHoja, 2f * alturaPuente).coerceAtLeast(0f)
+            // "Doble puente" tiene DOS puentes. En APA el espacio disponible para las mochetas
+            // descuenta ambos (altoMocheta con 2*alturaPuente); en INA el disponible es el alto
+            // libre completo. Tanto el reparto por defecto como la mocheta superior parten de ahí.
+            val disponible = if (descontarPuentes) {
+                NovaCalculos.altoMocheta(alto, altoHoja, 2f * alturaPuente).coerceAtLeast(0f)
+            } else {
+                (alto - altoHoja).coerceAtLeast(0f)
+            }
             val mochetaDefault = disponible / 2f
             val inferior = if (mochetaInferior > 0f) {
                 mochetaInferior.coerceAtMost(disponible)
@@ -100,24 +107,31 @@ object NovaInaCalculos {
             "${df1(ancho6)} = 1"
         }
     }
-    fun puentes(alto: Float, ancho: Float, divisiones: Int, puentesExtra: Int = 0): String {
+    /**
+     * [filasPuente] = cuántas corridas horizontales de puente lleva la ventana: 1 en el remate
+     * normal (una mocheta) y 2 en doble puente (mocheta arriba y abajo). Solo multiplica las
+     * medidas horizontales; el parante vertical entre tramos (la línea de [alto]) es uno solo,
+     * corre de piso a techo y no se duplica.
+     */
+    fun puentes(alto: Float, ancho: Float, divisiones: Int, puentesExtra: Int = 0, filasPuente: Int = 1): String {
         val mPuentesVal = mPuentes(ancho, divisiones)
         val mPuentes6 = df1(mPuentesVal - 0.06f).toFloat()
         val mPuentes2Val = df1(mPuentes2(ancho, divisiones)).toFloat()
         val nPuentesVal = nPuentes(divisiones, ancho) + puentesExtra
+        val filas = filasPuente.coerceAtLeast(1)
 
         return when {
             divisiones in 6..12 && divisiones % 2 == 0 -> {
-                "${df1(mPuentes6)} = $nPuentesVal\n" +
+                "${df1(mPuentes6)} = ${nPuentesVal * filas}\n" +
                         "${df1(alto)} = ${nPuentesVal - 1}"
             }
             divisiones == 14 -> {
-                "${df1(mPuentes6)} = ${nPuentesVal - 1}\n" +
-                        "${df1(mPuentes2Val)} = ${nPuentesVal - 2}\n" +
+                "${df1(mPuentes6)} = ${(nPuentesVal - 1) * filas}\n" +
+                        "${df1(mPuentes2Val)} = ${(nPuentesVal - 2) * filas}\n" +
                         "${df1(alto)} = ${nPuentesVal - 1}"
             }
             else -> {
-                "${df1(mPuentes6)} = $nPuentesVal"
+                "${df1(mPuentes6)} = ${nPuentesVal * filas}"
             }
         }
     }
@@ -256,7 +270,9 @@ object NovaInaCalculos {
         val nCorredizasVal = nCorredizas(ancho, divisiones)
         val uFijosVal = uFijos(ancho, divisiones, cruce)
 
-        val alturasMochetas = alturasMochetasPorModelo(remate, alto, altoHoja, alturaPuente, mochetaInferior).listaConUbicacion()
+        val alturasMochetas = alturasMochetasPorModelo(
+            remate, alto, altoHoja, alturaPuente, mochetaInferior, descontarPuentes = false
+        ).listaConUbicacion()
         if (alturasMochetas.isEmpty()) return ""
 
         // ncfc (un tramo en INA): una mocheta por cada CORRIDA de corredizas adyacentes; el ancho
@@ -487,7 +503,9 @@ object NovaInaCalculos {
 
     // ==================== FUNCIÓN COMPLETA DE OTROS ALUMINIOS ====================
     fun calcularOtrosAluminios(ancho: Float, alto: Float, hoja: Float, divisiones: Int, cruceExacto: Float,
-                               puentesExtra: Int = 0
+                               puentesExtra: Int = 0,
+                               // Remate de mochetas: "np" (doble puente) lleva dos corridas de puente.
+                               remate: String = "nn"
     ): OtrosAluminiosResult {
         val cruce = cruce(cruceExacto, divisiones)
         val altoHojaVal = altoHoja(alto, hoja)
@@ -498,7 +516,8 @@ object NovaInaCalculos {
         val portafelpaVal = portafelpa(altoHojaVal)
         val divDePortasVal = divDePortas(divisiones, nCorredizasVal)
 
-        val textoPuentes = puentes(alto, ancho, divisiones, puentesExtra)
+        val filasPuente = if (remate == "np") 2 else 1
+        val textoPuentes = puentes(alto, ancho, divisiones, puentesExtra, filasPuente)
         val textoRieles = if (divisiones == 1) "" else rieles(alto, hoja, ancho, divisiones)
         val textoUFelpero = if (divisiones == 1) "" else rieles(alto, hoja, ancho, divisiones)
         val textoHache = "${df1(hacheVal)} = $nCorredizasVal"

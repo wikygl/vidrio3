@@ -371,7 +371,8 @@ object NovaCalculosDesiguales {
                     alto = alto,
                     altoHoja = altoHoja,
                     alturaPuente = tubo,
-                    mochetaInferior = mochetaInferior
+                    mochetaInferior = mochetaInferior,
+                    descontarPuentes = !esIna
                 ).listaConUbicacion()
             } else {
                 listOf(NovaInaCalculos.AlturaMocheta(NovaCalculos.altoMocheta(alto, altoHoja, tubo), inferior = false))

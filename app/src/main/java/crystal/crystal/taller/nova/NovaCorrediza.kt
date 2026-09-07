@@ -166,6 +166,8 @@ class NovaCorrediza : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityNovaCorredizaBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+        crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
         ProyectoManager.inicializarDesdeStorage(this)
         proyectoCallback = ProyectoUIHelper.crearCallbackConActualizacionUI(
@@ -1107,7 +1109,9 @@ class NovaCorrediza : AppCompatActivity() {
             if (alto > altoHoja) 1 else 0,
             modelo = texto,
             alturaPuente = tubo,
-            mochetaInferior = mochetaInferiorDoblePuente()
+            mochetaInferior = mochetaInferiorDoblePuente(),
+            remate = modeloRemate,
+            descontarPuentes = tipoNova == TipoNova.APA
         )
 
         // Diseño visual: usar ultimoPaquete (no regenerar)
@@ -2038,6 +2042,21 @@ class NovaCorrediza : AppCompatActivity() {
     private fun descuentoAltoVertical(): Float =
         if (tipoNova == TipoNova.APA) ladosVaciosVerticales() * valorParanteVacio() else 0f
 
+    /**
+     * Doble puente lleva DOS corridas de puente (una bajo la mocheta superior y otra sobre la
+     * inferior). Las líneas de material vienen como "medida = n": aquí se duplica esa cantidad.
+     * Solo para el puente; el riel y la U felpero siguen siendo uno por tramo.
+     */
+    private fun conFilasDePuente(texto: String): String {
+        if (!esModeloDoblePuente() || texto.isBlank()) return texto
+        return texto.lines().joinToString("\n") { linea ->
+            val partes = linea.split("=")
+            if (partes.size != 2) return@joinToString linea
+            val n = partes[1].trim().toIntOrNull() ?: return@joinToString linea
+            "${partes[0].trim()} = ${n * 2}"
+        }
+    }
+
     private fun esPuenteMultipleOGorrito(): Boolean {
         val p = puente.lowercase().trim()
         return p.contains("multi") || p.contains("múlt") || p.contains("múlt") || p.contains("gorrito") || p.contains("ltiple")
@@ -2664,7 +2683,8 @@ class NovaCorrediza : AppCompatActivity() {
                 hoja = hoja,
                 divisiones = divisiones,
                 cruceExacto = cruceExacto,
-                puentesExtra = ladosVaciosVerticales()
+                puentesExtra = ladosVaciosVerticales(),
+                remate = modeloRemate
             )
 
                 val textoTramos = if (alto > altoHoja) {
@@ -2680,7 +2700,8 @@ class NovaCorrediza : AppCompatActivity() {
 
               // PUENTE
               if (textoTramos.isNotBlank()) {
-                  binding.txP.text = textoTramosUnit
+                  // El puente se duplica en doble puente; el riel no (sigue uno por tramo).
+                  binding.txP.text = conFilasDePuente(textoTramosUnit)
                   binding.txR.text = textoTramosUnit
                   binding.mulLayout.visibility = if (altoHoja >= alto) View.GONE else View.VISIBLE
                   binding.lyRiel.visibility = View.VISIBLE
@@ -2967,6 +2988,8 @@ class NovaCorrediza : AppCompatActivity() {
             modelo = texto,
             alturaPuente = tubo,
             mochetaInferior = mochetaInferiorDoblePuente(),
+            remate = modeloRemate,
+            descontarPuentes = tipoNova == TipoNova.APA,
             anchoReal = anchoReal,
             altoReal = altoReal
         )
