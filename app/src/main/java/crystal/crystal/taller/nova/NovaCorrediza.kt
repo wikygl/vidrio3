@@ -650,14 +650,14 @@ class NovaCorrediza : AppCompatActivity() {
 
         // Los campos llevan el ancho ÚTIL (con el descuento de esquina) para que los conteos y el
         // corte coincidan con el dibujo; la medida ORIGINAL solo se muestra en la referencia.
-        aplicarMedidaEnCampos(lado2Calculo)
+        aplicarMedidaEnCampos(conDivisionesDeLaMedidaReal(lado2Medida, lado2Calculo))
         uTexto()
         otrosAluminios()
         vidriosTexto()
         referencias(anchoRealMostrar = lado2Medida.ancho)
         val lado2 = capturarMateriales()
 
-        aplicarMedidaEnCampos(primeraCalculo)
+        aplicarMedidaEnCampos(conDivisionesDeLaMedidaReal(primera, primeraCalculo))
         uTexto()
         otrosAluminios()
         vidriosTexto()
@@ -714,21 +714,21 @@ class NovaCorrediza : AppCompatActivity() {
 
         // Los campos llevan el ancho ÚTIL (con los descuentos de esquina) para que los conteos y
         // el corte coincidan con el dibujo; la medida ORIGINAL solo se muestra en la referencia.
-        aplicarMedidaEnCampos(derCalculo)
+        aplicarMedidaEnCampos(conDivisionesDeLaMedidaReal(ladoDer, derCalculo))
         uTexto()
         otrosAluminios()
         vidriosTexto()
         referencias(anchoRealMostrar = ladoDer.ancho)
         val matDer = capturarMateriales()
 
-        aplicarMedidaEnCampos(centroCalculo)
+        aplicarMedidaEnCampos(conDivisionesDeLaMedidaReal(ladoCentro, centroCalculo))
         uTexto()
         otrosAluminios()
         vidriosTexto()
         referencias(anchoRealMostrar = ladoCentro.ancho)
         val matCentro = capturarMateriales()
 
-        aplicarMedidaEnCampos(izqCalculo)
+        aplicarMedidaEnCampos(conDivisionesDeLaMedidaReal(ladoIzq, izqCalculo))
         uTexto()
         otrosAluminios()
         vidriosTexto()
@@ -797,6 +797,18 @@ class NovaCorrediza : AppCompatActivity() {
         return primera.copy(ancho = (primera.ancho - descuentoPrimera).coerceAtLeast(0f)) to
             segunda.copy(ancho = (segunda.ancho - descuentoSegunda).coerceAtLeast(0f))
     }
+
+    /**
+     * CUÁNTAS hojas lleva un lado sale de la regla general (60 cm por división) sobre la medida
+     * que se MIDIÓ, no sobre el ancho útil: el descuento de esquina cambia las MEDIDAS de corte,
+     * no la cantidad de hojas. Un lado de 122 pasa de 120, así que son 3 divisiones aunque el
+     * útil quede en 119 y algo. Si en esa ventana corresponden 2, el vidriero las escribe a mano.
+     *
+     * Devuelve la medida de cálculo (ancho útil) con esa cantidad ya fijada como divisManual, para
+     * que todos los caminos que la reciben cuenten igual.
+     */
+    private fun conDivisionesDeLaMedidaReal(original: MedidaNl, calculo: MedidaNl): MedidaNl =
+        calculo.copy(divisManual = NovaCalculos.divisiones(original.ancho, original.divisManual))
 
     private fun capturarCamposCalculo(): EstadoCamposCalculo = EstadoCamposCalculo(
         ancho = binding.etAncho.text?.toString().orEmpty(),
@@ -3352,8 +3364,10 @@ class NovaCorrediza : AppCompatActivity() {
                 // el ancho ÚTIL: divisiones y paños de mocheta coinciden con la lista de corte.
                 val aletaMedida = MedidaNl(ancho, alto, hoja, divisManual)
                 val (primeraC, aletaC) = medidasCalculoNlApa(primera, aletaMedida)
-                val divisA = NovaCalculos.divisiones(primeraC.ancho, primeraC.divisManual, "nn")
-                val divisB = NovaCalculos.divisiones(aletaC.ancho, aletaC.divisManual, "nn")
+                // Cuántas hojas: regla de los 60 sobre la medida MEDIDA (ver
+                // conDivisionesDeLaMedidaReal). El ancho útil solo reparte las medidas.
+                val divisA = NovaCalculos.divisiones(primera.ancho, primera.divisManual, "nn")
+                val divisB = NovaCalculos.divisiones(aletaMedida.ancho, aletaMedida.divisManual, "nn")
                 val altoHojaA = NovaCalculos.altoHoja(primeraC.alto, primeraC.hoja)
                 val altoHojaB = NovaCalculos.altoHoja(aletaC.alto, aletaC.hoja)
                 val tramosBase = NovaUIHelper.generarTramosConsolidado(primeraC.ancho, primeraC.alto, altoHojaA, divisA, NovaCalculos.siNoMoch(primeraC.alto, primeraC.hoja), textoModelo, mochetaInferior, modeloRemate)
@@ -3376,9 +3390,11 @@ class NovaCorrediza : AppCompatActivity() {
                 val centroC = ladoCentro.copy(
                     ancho = (ladoCentro.ancho - descuentoCentro).coerceAtLeast(0f)
                 )
-                val divisIzq = NovaCalculos.divisiones(izqC.ancho, izqC.divisManual, "nn")
-                val divisCentro = NovaCalculos.divisiones(centroC.ancho, centroC.divisManual, "nn")
-                val divisDer = NovaCalculos.divisiones(derC.ancho, derC.divisManual, "nn")
+                // Cuántas hojas: regla de los 60 sobre la medida MEDIDA (ver
+                // conDivisionesDeLaMedidaReal). El ancho útil solo reparte las medidas.
+                val divisIzq = NovaCalculos.divisiones(ladoIzq.ancho, ladoIzq.divisManual, "nn")
+                val divisCentro = NovaCalculos.divisiones(ladoCentro.ancho, ladoCentro.divisManual, "nn")
+                val divisDer = NovaCalculos.divisiones(ladoDer.ancho, ladoDer.divisManual, "nn")
                 val altoHojaIzq = NovaCalculos.altoHoja(izqC.alto, izqC.hoja)
                 val altoHojaCentro = NovaCalculos.altoHoja(centroC.alto, centroC.hoja)
                 val altoHojaDer = NovaCalculos.altoHoja(derC.alto, derC.hoja)

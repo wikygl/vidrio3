@@ -4,20 +4,31 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * En L y en C el ancho que se corta y se dibuja es el ÚTIL: la medida menos el descuento de
- * esquina (`NovaCorrediza.medidasCalculoNlApa`). Las divisiones automáticas salen de ese ancho,
- * no de la medida original, y el salto de 2 a 3 cae justo en 120 (60 por división).
+ * En L y en C conviven dos anchos: la medida que se MIDIÓ y el ancho ÚTIL (esa medida menos el
+ * descuento de esquina que reparte `NovaCorrediza.medidasCalculoNlApa`). Cada uno manda en una
+ * cosa distinta:
  *
- * Caso real que lo destapó: lado de 122 en L. Sin descuento cuenta 3 divisiones (y de ahí
- * "fjs: 2; czs: 1"); con el descuento de esquina cuenta 2, que es lo que dibuja el diseño y lo
- * que sale en la lista de materiales. La referencia debe MOSTRAR 122 pero CONTAR sobre el útil.
+ * - **Cuántas hojas** lleva el lado: regla general de 60 cm por división sobre la medida MEDIDA.
+ *   Un lado de 122 pasa de 120, así que son 3 divisiones. Si en esa ventana corresponden 2, las
+ *   escribe el vidriero a mano.
+ * - **Qué medida tiene cada pieza**: el ancho útil, porque el parante de esquina ya se comió su
+ *   parte del aluminio.
+ *
+ * El error que destapó esto: los materiales contaban sobre el útil (122 - esquina < 120 -> 2
+ * divisiones) mientras el resto contaba sobre la medida real. Los números de abajo son los del
+ * caso real reportado.
  */
 class DivisionesAnchoUtilTest {
 
     @Test
-    fun `un lado de 122 cuenta 3 divisiones sin descuento y 2 con el descuento de esquina`() {
+    fun `un lado de 122 lleva 3 divisiones por la regla de los 60`() {
         assertEquals(3, NovaCalculos.divisiones(122f, 0))
-        // Cualquier esquinero descuenta al menos ~2.5 y lo baja de 120.
+    }
+
+    @Test
+    fun `contar sobre el ancho util daria 2, y por eso no se cuenta ahi`() {
+        // Cualquier esquinero descuenta lo suficiente para bajar de 120: si la cuenta saliera del
+        // ancho útil, el mismo lado de 122 pasaría a 2 hojas sin que nadie lo pidiera.
         assertEquals(2, NovaCalculos.divisiones(122f - 2.5f, 0))
         assertEquals(2, NovaCalculos.divisiones(122f - 5f, 0))
     }
@@ -30,18 +41,15 @@ class DivisionesAnchoUtilTest {
     }
 
     @Test
-    fun `con divisiones manuales el ancho no manda`() {
+    fun `las divisiones manuales mandan sobre el ancho`() {
+        // Es la salida del vidriero cuando el reparto automático no es el que quiere.
         assertEquals(2, NovaCalculos.divisiones(122f, 2))
         assertEquals(2, NovaCalculos.divisiones(119.5f, 2))
     }
 
     @Test
-    fun `los fijos y corredizas del lado de 122 cambian con el ancho util`() {
-        // Lo que mostraba la referencia con la medida sin descontar...
+    fun `fijos y corredizas del lado de 122 con sus 3 divisiones`() {
         assertEquals(2, NovaCalculos.nFijos(122f, 3))
         assertEquals(1, NovaCalculos.nCorredizas(122f, 3))
-        // ...y lo que corresponde al ancho útil, que es lo que se corta.
-        assertEquals(1, NovaCalculos.nFijos(119.5f, 2))
-        assertEquals(1, NovaCalculos.nCorredizas(119.5f, 2))
     }
 }
