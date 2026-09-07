@@ -648,26 +648,24 @@ class NovaCorrediza : AppCompatActivity() {
         )
         val (primeraCalculo, lado2Calculo) = medidasCalculoNlApa(primera, lado2Medida)
 
+        // Los campos llevan el ancho ÚTIL (con el descuento de esquina) para que los conteos y el
+        // corte coincidan con el dibujo; la medida ORIGINAL solo se muestra en la referencia.
         aplicarMedidaEnCampos(lado2Calculo)
         uTexto()
         otrosAluminios()
         vidriosTexto()
-        referencias()
+        referencias(anchoRealMostrar = lado2Medida.ancho)
         val lado2 = capturarMateriales()
 
         aplicarMedidaEnCampos(primeraCalculo)
         uTexto()
         otrosAluminios()
         vidriosTexto()
-        referencias()
+        referencias(anchoRealMostrar = primera.ancho)
         val lado1 = capturarMateriales()
 
-        aplicarMedidaEnCampos(lado2Medida)
-        referencias()
-        val referenciasLado2 = binding.txReferencias.text?.toString().orEmpty()
-        aplicarMedidaEnCampos(primera)
-        referencias()
-        val referenciasLado1 = binding.txReferencias.text?.toString().orEmpty()
+        val referenciasLado2 = lado2.referencias
+        val referenciasLado1 = lado1.referencias
 
         restaurarCamposCalculo(camposLado2)
         val combinados = combinarMateriales(lado1, lado2)
@@ -714,37 +712,32 @@ class NovaCorrediza : AppCompatActivity() {
             ancho = (ladoCentro.ancho - descuentoCentro).coerceAtLeast(0f)
         )
 
+        // Los campos llevan el ancho ÚTIL (con los descuentos de esquina) para que los conteos y
+        // el corte coincidan con el dibujo; la medida ORIGINAL solo se muestra en la referencia.
         aplicarMedidaEnCampos(derCalculo)
         uTexto()
         otrosAluminios()
         vidriosTexto()
-        referencias()
+        referencias(anchoRealMostrar = ladoDer.ancho)
         val matDer = capturarMateriales()
 
         aplicarMedidaEnCampos(centroCalculo)
         uTexto()
         otrosAluminios()
         vidriosTexto()
-        referencias()
+        referencias(anchoRealMostrar = ladoCentro.ancho)
         val matCentro = capturarMateriales()
 
         aplicarMedidaEnCampos(izqCalculo)
         uTexto()
         otrosAluminios()
         vidriosTexto()
-        referencias()
+        referencias(anchoRealMostrar = ladoIzq.ancho)
         val matIzq = capturarMateriales()
 
-        // Referencias con las medidas originales (sin descuento de esquina).
-        aplicarMedidaEnCampos(ladoDer)
-        referencias()
-        val referenciasDer = binding.txReferencias.text?.toString().orEmpty()
-        aplicarMedidaEnCampos(ladoCentro)
-        referencias()
-        val referenciasCentro = binding.txReferencias.text?.toString().orEmpty()
-        aplicarMedidaEnCampos(ladoIzq)
-        referencias()
-        val referenciasIzq = binding.txReferencias.text?.toString().orEmpty()
+        val referenciasDer = matDer.referencias
+        val referenciasCentro = matCentro.referencias
+        val referenciasIzq = matIzq.referencias
 
         restaurarCamposCalculo(camposActuales)
 
@@ -2958,7 +2951,15 @@ class NovaCorrediza : AppCompatActivity() {
       }
 
     // ==================== REFERENCIAS ====================
-    private fun referencias() {
+    /**
+     * [anchoRealMostrar] = medida que se midió, SOLO para la línea "An:" de la referencia. En L y
+     * en C los campos ya traen el ancho útil (con el descuento de esquina de `medidasCalculoNlApa`,
+     * que es el que se corta y se dibuja) y la medida original se pasa por aquí. Sin este
+     * parámetro habría que volver a llamar a `referencias()` con la medida original, y entonces
+     * las divisiones, los fijos y las corredizas saldrían del ancho sin descontar: un lado de 122
+     * cuenta 3 divisiones sin descuento y 2 con él, que es lo que dibuja y corta el resto.
+     */
+    private fun referencias(anchoRealMostrar: Float? = null) {
         val anchoEntrada = binding.etAncho.text.toString().toFloat()
         val altoReal = binding.etAlto.text.toString().toFloat()
         val alto = altoReal - descuentoAltoVertical()
@@ -2968,8 +2969,9 @@ class NovaCorrediza : AppCompatActivity() {
         // Arco de la curva (ver arcoCurvo): cuerda + flecha si se indican, si no el ancho.
         // anchoReal = medida sin descuento de encuentro (lo que se muestra/archiva en referencia);
         // ancho = útil (con descuento) para los cálculos de corte.
-        val anchoReal = arcoCurvo(anchoEntrada)
-        val ancho = anchoReal - descuentoAnchoLateralApa()
+        val anchoCampo = arcoCurvo(anchoEntrada)
+        val anchoReal = anchoRealMostrar ?: anchoCampo
+        val ancho = anchoCampo - descuentoAnchoLateralApa()
         val divisiones = NovaCalculos.divisiones(ancho, divisManual)
         val altoHoja = NovaCalculos.altoHoja(alto, hoja)
         val siNoMoch = NovaCalculos.siNoMoch(alto, hoja)
