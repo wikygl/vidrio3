@@ -771,8 +771,16 @@ class NovaCorrediza : AppCompatActivity() {
     // "ninguno" = sin descuento. Reparto INVERTIDO: la ventana más ancha recibe la parte
     // MENOR del aluminio y la más angosta la MAYOR.
     private fun medidasCalculoNlApa(primera: MedidaNl, segunda: MedidaNl): Pair<MedidaNl, MedidaNl> {
-        // El descuento de esquina reduce el ancho; todos los conteos (divisiones, paños de
-        // mocheta, Tee) se calculan sobre ese ancho ÚTIL ya descontado, no sobre el original.
+        // En INA no se descuenta NADA: ni el parante ni los puentes. Es la misma regla que ya
+        // cumplen `descuentoAnchoLateralApa` y `descuentoAltoVertical`, y el descuento de esquina
+        // era el único que se la saltaba (entró en 64c2251 aplicándose a los dos tipos; en
+        // 932353b no existía). El encuentro en ángulo de INA se resuelve SUMANDO el espesor de
+        // una pata, no restando: mientras ese valor no esté definido, INA usa la medida tal cual.
+        if (tipoNova != TipoNova.APA) return primera to segunda
+
+        // APA: el descuento de esquina reduce el ancho; los paños de mocheta y los Tee se
+        // calculan sobre ese ancho ÚTIL ya descontado, no sobre el original. Cuántas hojas lleva
+        // el lado NO sale de aquí (ver conDivisionesDeLaMedidaReal).
         val opcion = opcionEsquinero() ?: return primera to segunda
         val valorNormal = opcion.valor
         val valorEsquina = opcion.valorEsquina
