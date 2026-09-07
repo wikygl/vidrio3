@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Calculadora flotante que se abre desde el título "Referencias y Cálculos" de cada calculadora de
+  taller. Es pequeña y no bloquea la pantalla: se puede seguir escribiendo medidas con ella abierta,
+  y se arrastra desde la barra del título para dejarla donde no estorbe.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/corner2"
+    android:backgroundTint="@color/blanco"
+    android:elevation="12dp"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <!-- Barra: además de titular, es el asa para arrastrar la ventana. -->
+    <LinearLayout
+        android:id="@+id/calcBarra"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingEnd="2dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Calculadora"
+            android:textColor="@color/azul"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/calcCerrar"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textColor="@color/gris"
+            android:textSize="17sp" />
+    </LinearLayout>
+
+    <!-- Alto fijo y una sola línea: la letra se achica sola para que quepa todo (lo hace el
+         código con autoSize) y, si aun así no cabe, se recorta por el PRINCIPIO, que es lo que ya
+         se leyó; lo último escrito siempre queda a la vista. -->
+    <TextView
+        android:id="@+id/calcExpresion"
+        android:layout_width="match_parent"
+        android:layout_height="20dp"
+        android:ellipsize="start"
+        android:gravity="end|center_vertical"
+        android:maxLines="1"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:textColor="@color/gris"
+        android:textSize="14sp" />
+
+    <!-- El resultado se toca para copiarlo: casi siempre va a parar a un campo de medida. -->
+    <TextView
+        android:id="@+id/calcResultado"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:ellipsize="start"
+        android:gravity="end|center_vertical"
+        android:maxLines="1"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:text="0"
+        android:textColor="@color/azul"
+        android:textSize="28sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:paddingEnd="6dp"
+        android:paddingBottom="4dp"
+        android:text="toca el resultado para copiarlo"
+        android:textColor="#999999"
+        android:textSize="10sp" />
+
+    <GridLayout
+        android:id="@+id/calcTeclado"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:columnCount="4"
+        android:rowCount="5" />
+</LinearLayout>
