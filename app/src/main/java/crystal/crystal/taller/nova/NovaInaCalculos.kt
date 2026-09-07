@@ -42,6 +42,10 @@ object NovaInaCalculos {
             // "Doble puente" tiene DOS puentes. En APA el espacio disponible para las mochetas
             // descuenta ambos (altoMocheta con 2*alturaPuente); en INA el disponible es el alto
             // libre completo. Tanto el reparto por defecto como la mocheta superior parten de ahí.
+            //
+            // Versión anterior (descontaba siempre, y en INA dejaba los vidrios 2.5 cortos):
+            //     val disponible = NovaCalculos.altoMocheta(alto, altoHoja, 2f * alturaPuente)
+            //         .coerceAtLeast(0f)
             val disponible = if (descontarPuentes) {
                 NovaCalculos.altoMocheta(alto, altoHoja, 2f * alturaPuente).coerceAtLeast(0f)
             } else {
@@ -112,6 +116,13 @@ object NovaInaCalculos {
      * normal (una mocheta) y 2 en doble puente (mocheta arriba y abajo). Solo multiplica las
      * medidas horizontales; el parante vertical entre tramos (la línea de [alto]) es uno solo,
      * corre de piso a techo y no se duplica.
+     *
+     * Versión original (una sola corrida, sin [filasPuente]):
+     *     divisiones 6..12 par -> "$mPuentes6 = $nPuentesVal" + "$alto = ${nPuentesVal - 1}"
+     *     divisiones == 14     -> "$mPuentes6 = ${nPuentesVal - 1}" +
+     *                             "$mPuentes2Val = ${nPuentesVal - 2}" +
+     *                             "$alto = ${nPuentesVal - 1}"
+     *     resto                -> "$mPuentes6 = $nPuentesVal"
      */
     fun puentes(alto: Float, ancho: Float, divisiones: Int, puentesExtra: Int = 0, filasPuente: Int = 1): String {
         val mPuentesVal = mPuentes(ancho, divisiones)

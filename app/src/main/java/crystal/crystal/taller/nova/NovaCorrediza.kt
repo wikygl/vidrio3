@@ -2043,19 +2043,10 @@ class NovaCorrediza : AppCompatActivity() {
         if (tipoNova == TipoNova.APA) ladosVaciosVerticales() * valorParanteVacio() else 0f
 
     /**
-     * Doble puente lleva DOS corridas de puente (una bajo la mocheta superior y otra sobre la
-     * inferior). Las líneas de material vienen como "medida = n": aquí se duplica esa cantidad.
-     * Solo para el puente; el riel y la U felpero siguen siendo uno por tramo.
+     * Corridas horizontales de puente: 1 en el remate normal y 2 en doble puente (una bajo la
+     * mocheta superior y otra sobre la inferior). Se multiplica con [escalarCantidadesTexto].
      */
-    private fun conFilasDePuente(texto: String): String {
-        if (!esModeloDoblePuente() || texto.isBlank()) return texto
-        return texto.lines().joinToString("\n") { linea ->
-            val partes = linea.split("=")
-            if (partes.size != 2) return@joinToString linea
-            val n = partes[1].trim().toIntOrNull() ?: return@joinToString linea
-            "${partes[0].trim()} = ${n * 2}"
-        }
-    }
+    private fun filasDePuente(): Int = if (esModeloDoblePuente()) 2 else 1
 
     private fun esPuenteMultipleOGorrito(): Boolean {
         val p = puente.lowercase().trim()
@@ -2544,8 +2535,16 @@ class NovaCorrediza : AppCompatActivity() {
                 } else {
                     ""
                 }
-              val factorMochetas = if (esModeloDoblePuente()) 2 else 1
-              val textoTramosUnitPuente = escalarCantidadesTexto(textoTramosUnitBase, factorMochetas)
+              // Original (932353b), cuando "np" era un valor de `texto` y el bloque era uno solo
+              // para APA e INA:
+              //     val factorMochetas = if (texto == "np") 2 else 1
+              //     val textoTramosUnit = escalarCantidadesTexto(textoTramosUnitBase, factorMochetas)
+              //     binding.txP.text = textoTramosUnit
+              //     binding.txR.text = textoTramosUnit   // el riel también iba x2
+              // Cambió dos veces: el remate salió a su propio eje (`modeloRemate`, por eso
+              // `esModeloDoblePuente()` y no `texto`) y el riel volvió a uno por tramo (va en el
+              // puente de abajo; el felpero en el de arriba). El x2 queda solo para el puente.
+              val textoTramosUnitPuente = escalarCantidadesTexto(textoTramosUnitBase, filasDePuente())
               val textoTramosUnitPerfiles = textoTramosUnitBase
 
               if (textoTramos.isNotBlank()) {
@@ -2698,10 +2697,10 @@ class NovaCorrediza : AppCompatActivity() {
                     ""
                 }
 
-              // PUENTE
+              // PUENTE. Mismo criterio que la rama aparente: el x2 del doble puente sale de
+              // `escalarCantidadesTexto` (ver el original de 932353b comentado allá arriba).
               if (textoTramos.isNotBlank()) {
-                  // El puente se duplica en doble puente; el riel no (sigue uno por tramo).
-                  binding.txP.text = conFilasDePuente(textoTramosUnit)
+                  binding.txP.text = escalarCantidadesTexto(textoTramosUnit, filasDePuente())
                   binding.txR.text = textoTramosUnit
                   binding.mulLayout.visibility = if (altoHoja >= alto) View.GONE else View.VISIBLE
                   binding.lyRiel.visibility = View.VISIBLE
