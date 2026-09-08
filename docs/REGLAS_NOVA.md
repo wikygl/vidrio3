@@ -263,15 +263,82 @@ Divisiones: <n> -> fjs: <n>;czs: <n>
 
 ## 13. Diseño simbólico
 
-El paquete se arma según `diseño simbólico nova.txt` (en la raíz del proyecto). Orden:
+Hay **tres formatos distintos** y conviene no confundirlos:
+
+1. La **especificación** de `diseño simbólico nova.txt` (raíz del proyecto), con tokens compactos:
+   `Cliente - medidas - Vnic1 - prmn - Tb<210>(s(fccf)m(ff)) - aluminio - vidrios - accesorios`.
+2. Lo que la app **emite al calcular** (V2, `disenoSimbolicoV2`): los mismos datos en el mismo
+   orden, pero en campos etiquetados.
+3. El **paquete técnico** de dentro (`{nova,…}`, `disenoSimbolico`), que es lo que parsea
+   `DisenoNovaActivity`.
+
+### 13.1 Formato V2 (lo que se ve al calcular) ✔
 
 ```
-Cliente - medidas - Producto,sistema,acabado,tipología,número - volumen,forma,encuentro,modelo
-       - Tramo,condición<medida>(franja<medida>(módulo<medida>…)…)… - aluminio - vidrios - accesorios
+C<cliente>-M<ancho,alto,hp,null,null,cantidad>-P<V,n,acabado,mecanismo,nº>-G<volumen,forma,encuentro,modelo>-T<L{paquete}>-MAT<alu:…;vid:…>-ACC<…>
 ```
+
+| Campo | Contenido |
+|---|---|
+| `C<>` | Cliente (o "sin cliente") |
+| `M<>` | ancho, alto, altura de puente, **alféizar**, **dintel**, cantidad |
+| `P<>` | `V` producto, `n` sistema nova, acabado `a`/`i`/`p`, mecanismo `c`/`p`, nº de producto |
+| `G<>` | volumen `p`/`e`/`c`, forma `r`/`c`/`p`, encuentro, modelo |
+| `T<>` | condición + `{paquete técnico}` |
+| `MAT<>` | `alu:<color>;vid:<tipo>` |
+| `ACC<>` | `acabado_sup:… \| obs:…` o `null` |
+
+Detalles del código que sorprenden al leer una cadena real: ✔
+
+- **Alféizar y dintel están escritos a fuego como `null`** (`append(",null,null,")`). Nunca se
+  llenan, aunque la especificación los contempla.
+- **`modelo` de `G<>` no es la modulación sino el REMATE**: `nn→n`, `nr→i`, `np→b`, otro→`x`. Una
+  `b` significa **doble puente**. ❓ *La especificación dice que `b` es "bandera".*
+- **`encuentro` puede salir como máscara de 4 dígitos** (`1011`, ARBL: 1 = colinda, 0 = vacío) en
+  vez de la letra `m`/`a`/`l` de la especificación, cuando algún lado quedó al vacío. ❓
+- **La condición de `T<>` es siempre `L`**; nunca se emite `B` (bloqueado). ❓
+- `dfV2` trunca a un decimal, igual que `df1`.
+
+### 13.2 Escapado ✔
+
+`escaparCampoV2` transforma lo que va dentro de un campo: `<`→`(`, `>`→`)`, `-`→`_`, salto de
+línea→` / `. Por eso el paquete técnico aparece con paréntesis (`Tl(219)`, `m(48.4)`, `P(2.5)`) y
+hay que deshacerlo para leerlo como paquete. El `L{{nova,…}}` con doble llave es `L{` + un paquete
+que ya empieza por `{`.
+
+### 13.3 Paquete técnico ✔
+
+```
+{nova,<acabado>,[<ancho>,<alto>: Tl<w>(franja;franja;…) P<2.5> Tl<w>(…) ]}
+```
+
+- `Tl<w>` = tramo libre de ancho `w`; `P<2.5>` = parante entre tramos; `A<90>` = giro entre lados
+  en L, C y serie.
+- Franjas separadas por `;`: `s<alto>` sistema, `m<alto>` mocheta.
+- Módulos dentro de la franja: `f<w>` fijo, `c<w>` corrediza.
+- Orden de franjas según el remate: `nn` → `s;m` · `nr` → `m;s` · `np` → `m;s;m`.
+
+**Ejemplo real desarmado** (385.9 × 246.8, puente 150, aparente, doble puente):
+
+```
+Tl<219>( m<48.4>(f<109.5>f<109.5>) ; s<150>(f<54.7>c<54.7>c<54.7>f<54.7>) ; m<48.4>(f<109.5>f<109.5>) )
+P<2.5>
+Tl<164.3>( m<48.4>(f<164.3>) ; s<150>(f<54.7>c<54.7>f<54.7>) ; m<48.4>(f<164.3>) )
+```
+
+- 385.9 → `ceil(385.9/60)` = 7 divisiones, repartidas [4, 3].
+- Ancho útil = 385.9 − 2.5 = 383.4 → 54.77 por hoja → tramos de 219 y 164.3.
+- `ordenDivis(4)` = `fccf`, `ordenDivis(3)` = `fcf`; 54.7 porque `df1` trunca.
+- `anchMota(219)` = 2 paños de 109.5; `anchMota(164.3)` = 1 paño de 164.3.
+
+### 13.4 El dibujo usa la medida real ✔
 
 El diseño usa la **medida real**, no la útil: es visual, muestra cómo va a quedar la ventana y no
-alimenta los materiales. ✔ *No hay que "corregirlo" para que use el útil.*
+alimenta los materiales. *No hay que "corregirlo" para que use el útil.*
+
+Consecuencia visible en el ejemplo: las mochetas suman 48.4 + 150 + 48.4 = 246.8, el alto exacto,
+porque el dibujo reparte `alto − altoHoja` **sin descontar los puentes**. En aparente la lista de
+materiales sí los descuenta y daría 45.9. ❓ *Diferencia de 2.5 por mocheta entre plano y corte.*
 
 ---
 
@@ -299,6 +366,10 @@ alimenta los materiales. ✔ *No hay que "corregirlo" para que use el útil.*
 | 6 | El cruce por defecto (0.7); en doble puente se vio 0.9 | §7 |
 | 7 | ¿Separar el eje de modulación del de geometría? | §1 |
 | 8 | `divisiones(..., tipo)` con `else -> 0` | §3 |
+| 9 | En `G<>` la `b` sale del remate (doble puente); la especificación dice que `b` es "bandera" | §13.1 |
+| 10 | `encuentro` emite máscara `1011` en vez de la letra `m`/`a`/`l` de la especificación | §13.1 |
+| 11 | Alféizar y dintel van siempre `null`; la condición de `T<>` va siempre `L` | §13.1 |
+| 12 | El plano reparte la mocheta sin descontar puentes; en aparente el corte sí los descuenta (2.5 por mocheta) | §13.4 |
 
 ---
 
