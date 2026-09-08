@@ -272,6 +272,31 @@ Hay **tres formatos distintos** y conviene no confundirlos:
 3. El **paquete técnico** de dentro (`{nova,…}`, `disenoSimbolico`), que es lo que parsea
    `DisenoNovaActivity`.
 
+### 13.0 Estructura oficial (la autoridad)
+
+Jerarquía que debe cumplir la cadena. Es la referencia: si el código no la sigue, el que está mal
+es el código.
+
+| Nivel | Segmento | Sigla | Valores |
+|---|---|---|---|
+| 0 | Id / Cliente | `C` | nombre completo |
+| 1 | Producto | `V` | ventana |
+| 2 | Numeración | | nº de ventana |
+| 3 | Línea / sistema | `n` | sistema nova |
+| 4 | Acabado | `a` / `i` / `p` | aparente, inaparente, pivotante |
+| 5 | Tipología / mecanismo | `c` / `b` / `p` / `f` | corrediza, batiente, pivotante, fija |
+| 6 | Volumen | `p` / `e` / `c` | plano, esquinero, curvo |
+| 7 | Forma | `r` / `c` / `p` | rectangular, circular, poligonal |
+| 8 | Encuentro / transición | `m` / `a` / `l` | muro, acople, borde libre |
+| 9 | Modelo / integración | `n` / `i` / `b` / `x` | normal, invertido, bandera, compuesto |
+| 10 | Módulo / modulación | `f` / `c` / `p` / `P` | fijo, corrediza, pivotante, **parante** |
+| 11 | Franja | `s` / `m` | sistema, mocheta |
+| 12 | Tramo / condición | `B` / `L` | bloqueado, libre |
+| 13 | Medida | `a` / `h` / `hp` / `c` / `a` / `d` | ancho, alto, altura de puente, cantidad, alféizar, dintel |
+| 14 | Aluminio | | color, espesor, descripción |
+| 15 | Vidrio | | tipo, color, espesor, descripción |
+| 16 | Accesorio | | descripción |
+
 ### 13.1 Formato V2 (lo que se ve al calcular) ✔
 
 ```
@@ -288,16 +313,24 @@ C<cliente>-M<ancho,alto,hp,null,null,cantidad>-P<V,n,acabado,mecanismo,nº>-G<vo
 | `MAT<>` | `alu:<color>;vid:<tipo>` |
 | `ACC<>` | `acabado_sup:… \| obs:…` o `null` |
 
-Detalles del código que sorprenden al leer una cadena real: ✔
+**Desvíos respecto de la estructura oficial (§13.0).** Todos verificados en el código; todos son
+del código, no de la estructura: ❓
 
-- **Alféizar y dintel están escritos a fuego como `null`** (`append(",null,null,")`). Nunca se
-  llenan, aunque la especificación los contempla.
-- **`modelo` de `G<>` no es la modulación sino el REMATE**: `nn→n`, `nr→i`, `np→b`, otro→`x`. Una
-  `b` significa **doble puente**. ❓ *La especificación dice que `b` es "bandera".*
-- **`encuentro` puede salir como máscara de 4 dígitos** (`1011`, ARBL: 1 = colinda, 0 = vacío) en
-  vez de la letra `m`/`a`/`l` de la especificación, cuando algún lado quedó al vacío. ❓
-- **La condición de `T<>` es siempre `L`**; nunca se emite `B` (bloqueado). ❓
-- `dfV2` trunca a un decimal, igual que `df1`.
+| # | Debe ser | Emite hoy |
+|---|---|---|
+| a | `P<V,1,n,a,c>` — el número es el nivel 2, tras el producto | `P<V,n,a,c,1>`, el número al final. *El ejemplo del propio `diseño simbólico nova.txt` también lo escribe al final (`Vnic1`): hay que decidir cuál manda.* |
+| b | `M<ancho,alto,hp,cantidad,alféizar,dintel>` | `M<ancho,alto,hp,null,null,cantidad>`: la cantidad al final y alféizar/dintel escritos a fuego como `null` (`append(",null,null,")`) |
+| c | `9 modelo` = normal / invertido / **bandera** / compuesto | la letra sale del REMATE: `nn→n`, `nr→i`, `np→b`. Se está usando `b` (bandera) para **doble puente**, que no tiene letra propia en la estructura |
+| d | `8 encuentro` = `m` / `a` / `l` | cuando algún lado queda al vacío emite una máscara de 4 dígitos (`1011`, ARBL: 1 = colinda, 0 = vacío) |
+| e | `10 módulo` incluye el **parante** (`P`): va dentro de la franja, junto a `f` y `c` | `P<2.5>` va suelto **entre** tramos, fuera de las franjas |
+| f | `12 condición` (`B`/`L`) es del tramo, y ya va en `Tl<219>` | además envuelve todo con una `L` fija en `T<>`; nunca emite `B` |
+| g | `14 aluminio` = color, espesor, descripción; `15 vidrio` = tipo, color, espesor, descripción | `MAT<alu:…;vid:…>` con un solo valor cada uno |
+
+El desvío **e** es el de más peso: cambiarlo altera el paquete técnico, que es lo que parsea
+`DisenoNovaActivity` **y lo que está guardado en los proyectos ya archivados**. Habría que decidir
+entre migrar o aceptar los dos formatos al leer.
+
+Otro detalle: `dfV2` trunca a un decimal, igual que `df1`. ✔
 
 ### 13.2 Escapado ✔
 
@@ -366,9 +399,9 @@ materiales sí los descuenta y daría 45.9. ❓ *Diferencia de 2.5 por mocheta e
 | 6 | El cruce por defecto (0.7); en doble puente se vio 0.9 | §7 |
 | 7 | ¿Separar el eje de modulación del de geometría? | §1 |
 | 8 | `divisiones(..., tipo)` con `else -> 0` | §3 |
-| 9 | En `G<>` la `b` sale del remate (doble puente); la especificación dice que `b` es "bandera" | §13.1 |
-| 10 | `encuentro` emite máscara `1011` en vez de la letra `m`/`a`/`l` de la especificación | §13.1 |
-| 11 | Alféizar y dintel van siempre `null`; la condición de `T<>` va siempre `L` | §13.1 |
+| 9 | Los siete desvíos del formato V2 respecto de la estructura oficial (a-g) | §13.0, §13.1 |
+| 10 | ¿El nº de ventana va en el nivel 2 o al final? La tabla y el ejemplo del .txt se contradicen | §13.1 a |
+| 11 | ¿Qué letra le toca al doble puente? Hoy usa la `b` de "bandera" | §13.1 c |
 | 12 | El plano reparte la mocheta sin descontar puentes; en aparente el corte sí los descuenta (2.5 por mocheta) | §13.4 |
 
 ---
