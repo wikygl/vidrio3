@@ -3522,19 +3522,15 @@ class NovaCorrediza : AppCompatActivity() {
         val aluminio = escaparCampoV2(metaColorAluminio.ifBlank { "null" })
         val vidrios = escaparCampoV2(metaTipoVidrio.ifBlank { "null" })
         val accesorios = escaparCampoV2(textoMetadatosProduccionV2())
-        // Orden: quién (cliente) → qué (producto, para saber a qué calculadora va y numerarlo) →
-        // cómo tratarlo (geometría) → con qué medidas → el diseño → materiales → accesorios.
-        return buildString {
-            append("C<").append(clienteTxt).append(">")
-            val mecanismo = if (tipoNova == TipoNova.PIV) "p" else "c"
-            append("-P<V,n,").append(acabado).append(",").append(mecanismo).append(",").append(numeroProducto).append(">")
-            append("-G<").append(volumen).append(",").append(forma).append(",").append(encuentro).append(",").append(modelo).append(">")
-            append("-M<").append(anchosTxt).append(",").append(altosTxt).append(",").append(hpTxt)
-            append(",null,null,").append(cantidad).append(">")
-            append("-T<").append(tramo).append(">")
-            append("-MAT<alu:").append(aluminio).append(";vid:").append(vidrios).append(">")
-            append("-ACC<").append(accesorios).append(">")
-        }
+        val mecanismo = if (tipoNova == TipoNova.PIV) "p" else "c"
+        return crystal.crystal.taller.PaqueteV2.construir(
+            cliente = clienteTxt,
+            producto = "V,n,$acabado,$mecanismo,$numeroProducto",
+            geometria = "$volumen,$forma,$encuentro,$modelo",
+            medidas = "$anchosTxt,$altosTxt,$hpTxt,null,null,$cantidad",
+            diseno = tramo,
+            sufijos = "-MAT<alu:$aluminio;vid:$vidrios>-ACC<$accesorios>"
+        )
     }
 
     /**
@@ -3613,15 +3609,7 @@ class NovaCorrediza : AppCompatActivity() {
         else "%.1f".format(redondeado).replace(",", ".")
     }
 
-    private fun escaparCampoV2(raw: String): String {
-        return raw
-            .replace("\n", " / ")
-            .replace("\r", " ")
-            .replace("-", "_")
-            .replace("<", "(")
-            .replace(">", ")")
-            .trim()
-    }
+    private fun escaparCampoV2(raw: String): String = crystal.crystal.taller.PaqueteV2.escapar(raw)
 
     private fun mismaMedida(a: MedidaNl, b: MedidaNl): Boolean {
         fun casiIgual(x: Float, y: Float): Boolean = kotlin.math.abs(x - y) < 0.001f

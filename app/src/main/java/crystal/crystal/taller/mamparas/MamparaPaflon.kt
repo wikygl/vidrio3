@@ -47,6 +47,13 @@ class MamparaPaflon : AppCompatActivity() {
    * reconstruye entero cada vez que se pulsa Calcular.
    */
   private var patronManual: String = ""
+  /**
+   * Mampara con marco inferior, elegido en el diálogo del diseño. Por defecto NO lleva: la paflón
+   * se apoya en el piso o en el plato de ducha.
+   *
+   * Vive aquí junto al patrón por lo mismo: el descriptor se rehace entero en cada Calcular.
+   */
+  private var marcoInferior: Boolean = false
   private var metaColorAluminio: String = ""
   private var metaTipoVidrio: String = ""
   private var metaAcabadoSuperficial: String = ""
@@ -68,6 +75,8 @@ class MamparaPaflon : AppCompatActivity() {
     super.onCreate(savedInstanceState)
     binding= ActivityMamparaPaflonBinding.inflate(layoutInflater)
     setContentView(binding.root)
+    // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+    crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
     // ==================== CONFIGURACIÓN DEL SISTEMA DE PROYECTOS ====================
 
@@ -110,7 +119,10 @@ class MamparaPaflon : AppCompatActivity() {
         // Diseño simbólico: única fuente de geometría para todos los materiales.
         val g = geomActual() ?: throw IllegalStateException("Sin geometría")
 
-        binding.txMarco.text = "${df1(alto)} = 2\n${df1(anchoUtil())} = 1"
+        // Dos verticales de alto completo y el horizontal superior; con marco inferior, dos
+        // horizontales (el de abajo mide lo mismo: entra entre los verticales).
+        binding.txMarco.text =
+          "${df1(alto)} = 2\n${df1(anchoUtil())} = ${if (marcoInferior) 2 else 1}"
 
         // Riel superior, uno por tramo (su propio ancho); se agrupan los de igual medida.
         binding.txRiel.text = MaterialesTexto.agrupar(
@@ -277,9 +289,11 @@ class MamparaPaflon : AppCompatActivity() {
         divisiones = runCatching { divisiones() }.getOrNull() ?: 1,
         // El hueco y el bastidor los necesita para repartir lo que sobra y avisar si no cabe.
         anchoUtil = runCatching { anchoUtil() }.getOrNull() ?: 0f,
-        bastidor = binding.etBasti.text.toString().toFloatOrNull() ?: pAnch
-      ) { elegido ->
+        bastidor = binding.etBasti.text.toString().toFloatOrNull() ?: pAnch,
+        marcoInferiorActual = marcoInferior
+      ) { elegido, conMarcoInferior ->
         patronManual = elegido
+        marcoInferior = conMarcoInferior
         // Recalcular deja el dibujo y los materiales al día sin que haya que tocar nada más:
         // MamparaModulos es la única fuente, así que basta con volver a pedírselo.
         binding.btCalcular.performClick()
@@ -415,8 +429,12 @@ class MamparaPaflon : AppCompatActivity() {
     if (g.nUnionesFC > 0) lines += "${df1(paranteFijo())} = ${g.nUnionesFC}"
     // Parantes de corrediza (alto de hoja - 2.1): dos por corrediza.
     if (g.nCorredizas > 0) lines += "${df1(paranteCorredizo())} = ${2 * g.nCorredizas}"
-    // Parante estructural de paflón entre tramos (de piso a techo): largo = alto - marco.
-    if (g.nParantesTramo > 0) lines += "${df1(alto() - marco())} = ${g.nParantesTramo}"
+    // Parante estructural de paflón entre tramos (de piso a techo): largo = alto - marco, y un
+    // marco menos todavía cuando hay marco inferior, porque apoya sobre él.
+    if (g.nParantesTramo > 0) {
+      val largoTramo = alto() - marco() - marcoInf()
+      lines += "${df1(largoTramo)} = ${g.nParantesTramo}"
+    }
     // Puente (mochetas). En el dibujo se ve una sola banda a la altura de la hoja, pero son DOS
     // piezas: el paflón que cierra el pie del puente y, debajo, el riel por donde corre la hoja.
     if (paranteMocheta() > 0f) {
@@ -481,8 +499,10 @@ class MamparaPaflon : AppCompatActivity() {
   private fun paranteFijo(): Float {
     return altoHoja()
   }
+  /** Alto de la mocheta: lo que queda entre el marco superior y la hoja, que con marco inferior
+   *  arranca un marco más arriba. Es lo único que se acorta al añadirlo. */
   private fun paranteMocheta():Float {
-    return (alto()- (altoHoja()+pAlt+marco()))
+    return (alto()- (altoHoja()+pAlt+marco()+marcoInf()))
   }
   private fun anchoMocheta():Float{
     val divis = diviMocheta(ancho())
@@ -491,7 +511,7 @@ class MamparaPaflon : AppCompatActivity() {
   }
   private fun altoMocheta(): Float {
     val alto = binding.med2.text.toString().toFloat()
-    return alto - (marco() + altoHoja() + pAlt)
+    return alto - (marco() + marcoInf() + altoHoja() + pAlt)
   }
   private fun nMocheta() {
   }
@@ -602,15 +622,7 @@ class MamparaPaflon : AppCompatActivity() {
       "obs:${metaObservaciones.ifBlank { "null" }}>"
   }
 
-  private fun escaparCampoArchivo(raw: String): String {
-    return raw
-      .replace("\n", " / ")
-      .replace("\r", " ")
-      .replace("-", "_")
-      .replace("<", "(")
-      .replace(">", ")")
-      .trim()
-  }
+  private fun escaparCampoArchivo(raw: String): String = crystal.crystal.taller.PaqueteV2.escapar(raw)
 
   private fun etiquetaPaquete(prefijo: String, numero: Int): String {
     val cliente = binding.txC.text?.toString()?.trim()
@@ -627,14 +639,14 @@ class MamparaPaflon : AppCompatActivity() {
         ?.ifBlank { "sin cliente" }
         ?: "sin cliente"
     )
-    return buildString {
-      append("C<").append(cliente).append(">")
-      append("-M<").append(df1(ancho())).append(",").append(df1(alto())).append(",").append(df1(altoHoja()))
-      append(",null,null,").append(intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)).append(">")
-      append("-P<M,p,a,c,").append(numeroProducto).append(">")
-      append("-G<p,r,m,p>")
-      append(sufijoMetadatosProduccion())
-    }
+    val cantidad = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+    return crystal.crystal.taller.PaqueteV2.construir(
+      cliente = cliente,
+      producto = "M,p,a,c,$numeroProducto",
+      geometria = "p,r,m,p",
+      medidas = "${df1(ancho())},${df1(alto())},${df1(altoHoja())},null,null,$cantidad",
+      sufijos = sufijoMetadatosProduccion()
+    )
   }
 
   private fun archivarMapas() {
@@ -754,7 +766,8 @@ class MamparaPaflon : AppCompatActivity() {
       bastidor = binding.etBasti.text.toString().toFloatOrNull() ?: pAnch,
       marco = marco(),
       nMochetas = binding.etNmochetas.text.toString().toIntOrNull() ?: 0,
-      patron = patronManual
+      patron = patronManual,
+      marcoInferior = marcoInferior
     )
   }
 
@@ -864,22 +877,34 @@ class MamparaPaflon : AppCompatActivity() {
   }
 
   //FUNCIONES GENERALES (SIN CAMBIOS)
+  /**
+   * Alto de la hoja = altura de puente. Es una cota INTERNA: si se pide 210, la hoja mide 210
+   * lleve o no marco inferior. Con marco inferior la hoja se apoya sobre él, así que sube un marco
+   * respecto del piso y lo que se acorta por arriba es la mocheta, no la hoja.
+   *
+   * Por eso el marco inferior solo entra donde la hoja ocupa todo el hueco (sin puente): ahí el
+   * hueco libre es alto menos los DOS marcos.
+   */
   private fun altoHoja():Float {
     val hHoja=binding.etHoja.text.toString().toFloat()
     val pisog=0f
     val piso = if (pisog==0f){pisog}else{pisog-0.5f}
+    val mInf = marcoInf()
     return when {
       hHoja==0f -> when{
-        alto()>210f && (hoja+piso)< alto()-5.3-> {hoja+piso}
+        alto()>210f && (hoja+piso)< alto()-5.3-mInf-> {hoja+piso}
         alto()<=210f&&alto()>hoja->{190f+piso}
-        alto()<=hoja -> {(alto()-marco())}
-        (hoja+piso)> alto()-5.3-> {(alto()-marco())}
-        else -> {(alto()-marco())+piso}}
+        alto()<=hoja -> {(alto()-marco()-mInf)}
+        (hoja+piso)> alto()-5.3-mInf-> {(alto()-marco()-mInf)}
+        else -> {(alto()-marco()-mInf)+piso}}
 
-      alto()<=hHoja || (hHoja+piso)> alto()-5.3-> {(alto()-marco())}
+      alto()<=hHoja || (hHoja+piso)> alto()-5.3-mInf-> {(alto()-marco()-mInf)}
       else -> {hHoja+piso}
     }
   }
+  /** Lo que come el marco inferior cuando lo hay: 0 cuando la mampara apoya en el piso. */
+  private fun marcoInf(): Float = if (marcoInferior) marco() else 0f
+
   private fun nParantes():Float{
     val parantes= when (divisiones()){
       1 -> 0

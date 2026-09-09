@@ -111,6 +111,8 @@ class PuertasActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityPuertaPanoBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+        crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
         // ==================== Sistema de Proyectos ====================
         ProyectoManager.inicializarDesdeStorage(this)
@@ -1688,15 +1690,7 @@ class PuertasActivity : AppCompatActivity() {
         return "P" // Puertas - prefijo para identificar cálculos de puertas
     }
 
-    private fun escaparCampoArchivo(raw: String): String {
-        return raw
-            .replace("\n", " / ")
-            .replace("\r", " ")
-            .replace("-", "_")
-            .replace("<", "(")
-            .replace(">", ")")
-            .trim()
-    }
+    private fun escaparCampoArchivo(raw: String): String = crystal.crystal.taller.PaqueteV2.escapar(raw)
 
     private fun etiquetaPaquete(prefijo: String, numero: Int): String {
         // El id del paquete usa el PROYECTO activo, nunca el cliente de tvTitulo/clienteActual.
@@ -1751,14 +1745,13 @@ class PuertasActivity : AppCompatActivity() {
         val hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
         val cantidad = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
         val modelo = escaparCampoArchivo("${puertaActual?.nombre.orEmpty()} ${varianteSeleccionada}".trim()).ifBlank { "x" }
-        return buildString {
-            append("C<").append(cliente).append(">")
-            append("-M<").append(CalculosPuerta.df1(ancho)).append(",").append(CalculosPuerta.df1(alto)).append(",").append(CalculosPuerta.df1(hoja))
-            append(",null,null,").append(cantidad).append(">")
-            append("-P<P,p,a,p,").append(numeroProducto).append(">")
-            append("-G<p,r,m,").append(modelo).append(">")
-            append(sufijoMetadatosProduccion())
-        }
+        return crystal.crystal.taller.PaqueteV2.construir(
+            cliente = cliente,
+            producto = "P,p,a,p,$numeroProducto",
+            geometria = "p,r,m,$modelo",
+            medidas = "${CalculosPuerta.df1(ancho)},${CalculosPuerta.df1(alto)},${CalculosPuerta.df1(hoja)},null,null,$cantidad",
+            sufijos = sufijoMetadatosProduccion()
+        )
     }
 
     private fun mostrarDialogoMetadatosProduccion(onContinuar: () -> Unit) {
