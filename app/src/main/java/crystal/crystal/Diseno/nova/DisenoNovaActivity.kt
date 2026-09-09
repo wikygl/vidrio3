@@ -1152,6 +1152,15 @@ class DisenoNovaActivity : AppCompatActivity() {
                     }
                     corteVerticalCm = medidas[0].takeIf { it > 0f && it < anchoCm }
                 }
+                // Rehacer el diseño con la medida nueva. Sin esto los tramos se quedaban con el
+                // ancho viejo y `reconstruirPaqueteConBloques` devolvía `anchoCm` a la suma de
+                // esos tramos: al tocar cualquier otro botón, el ancho volvía al de antes.
+                val rehecho = runCatching {
+                    DisenoNova.desdePaquete(paqueteActualLectura())
+                        ?.conAnchosRepartidos(anchoParanteCm)
+                        ?.aPaquete()
+                }.getOrNull()
+                if (rehecho != null) cargarDesdePaquete(rehecho)
                 actualizarVista()
             }
             .setNegativeButton("Cancelar", null)
