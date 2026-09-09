@@ -1720,9 +1720,23 @@ class DisenoNovaActivity : AppCompatActivity() {
     // =========================== VISTA / REDIBUJO ===========================
 
     /** Paquete mínimo válido (un tramo, un fijo) usado como base/fallback en cadena. */
+    /**
+     * El diseño de arranque cuando no viene ninguno de la calculadora.
+     *
+     * Antes era un solo fijo en un solo tramo (`Tl<ancho>(s(f))`) y había que armar la ventana
+     * entera a mano. Ahora sale ya repartido con las reglas de siempre: divisiones por la regla
+     * de los 60, tramos de hasta 5 módulos y el patrón clásico de fijos y corredizas.
+     *
+     * Sin mocheta: la pantalla no lleva altura de puente, así que la franja del sistema ocupa
+     * todo el alto y la mocheta se agrega con su botón si hace falta.
+     */
     private fun paqueteBase(): String {
         val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
-        return "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
+        return runCatching {
+            DisenoNova.nuevo(tipoTxt, anchoCm, altoCm, altoHoja = altoCm).aPaquete()
+        }.getOrElse {
+            "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
+        }
     }
 
     private fun paqueteConDimensionesActualizadas(base: String): String {
@@ -2089,14 +2103,14 @@ class DisenoNovaActivity : AppCompatActivity() {
         return androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
     }
 
+    /** Vuelve al diseño de arranque: el reparto automático para las medidas actuales. */
     private fun limpiarDiseno() {
-        // Volver al diseño base por la cadena (un tramo, un fijo), sin usar aPaquete().
-        val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
         indiceFranjaActiva = -1
         indiceTramoActivo = -1
         indiceModuloActivo = -1
         corteVerticalCm = null
-        cargarDesdePaquete("{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}")
+        tramosBlockeados.clear()
+        cargarDesdePaquete(paqueteBase())
         actualizarVista()
     }
 

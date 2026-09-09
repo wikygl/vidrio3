@@ -247,6 +247,67 @@ data class DisenoNova(
 
         private fun num(s: String): Float = s.replace(",", ".").toFloatOrNull() ?: 0f
 
+        /**
+         * Un diseño NUEVO, para empezar de cero, armado con las reglas de la calculadora en vez
+         * de dejar al vidriero un solo fijo que tenga que partir a mano.
+         *
+         * - Divisiones: las que pida [divisiones], o la regla de los 60 si viene en 0.
+         * - Tramos: el reparto de siempre, máximo 5 módulos por tramo.
+         * - Módulos: el patrón clásico de fijos y corredizas de cada tramo.
+         * - Mocheta: si la hoja no llega al alto, una franja de mocheta por tramo, con los paños
+         *   que quepan (ninguno pasa de 180 de ancho).
+         *
+         * [altoHoja] es la altura de puente. Si llega al alto de la ventana, no hay mocheta.
+         */
+        fun nuevo(
+            acabado: String,
+            ancho: Float,
+            alto: Float,
+            altoHoja: Float,
+            divisiones: Int = 0,
+            anchoParante: Float = 2.5f
+        ): DisenoNova {
+            val anchoSeguro = ancho.coerceAtLeast(1f)
+            val divs = NovaCalculos.divisiones(anchoSeguro, divisiones.coerceAtLeast(0))
+            val grupos = NovaCalculos.gruposDivisionesPorTramo(anchoSeguro, divs)
+                .ifEmpty { listOf(divs.coerceAtLeast(1)) }
+            val hojaSegura = altoHoja.coerceIn(0f, alto)
+            val hayMocheta = hojaSegura > 0f && hojaSegura < alto
+            val altoSistema = if (hayMocheta) hojaSegura else alto
+            val altoMocheta = (alto - hojaSegura).coerceAtLeast(0f)
+
+            val util = (anchoSeguro - (grupos.size - 1) * anchoParante).coerceAtLeast(1f)
+            val porModulo = util / divs.coerceAtLeast(1)
+
+            val tramos = grupos.map { nMods ->
+                val anchoTramo = porModulo * nMods
+                val franjas = mutableListOf<NovaFranja>()
+                // Sistema: el patrón clásico de fijos y corredizas del tramo.
+                val tipos = NovaCalculos.ordenDivis(nMods, anchoTramo)
+                    .filter { it == 'f' || it == 'c' }
+                    .ifEmpty { "f" }
+                franjas.add(
+                    NovaFranja(
+                        esSistema = true,
+                        alto = altoSistema,
+                        modulos = tipos.map { NovaModulo(it, anchoTramo / tipos.length) }
+                    )
+                )
+                if (hayMocheta) {
+                    val panos = NovaCalculos.anchMota(anchoTramo).coerceAtLeast(1)
+                    franjas.add(
+                        NovaFranja(
+                            esSistema = false,
+                            alto = altoMocheta,
+                            modulos = List(panos) { NovaModulo('f', anchoTramo / panos) }
+                        )
+                    )
+                }
+                NovaTramo(anchoTramo, franjas)
+            }
+            return DisenoNova(acabado, anchoSeguro, alto, tramos)
+        }
+
         /** Devuelve null si la cadena no es un paquete de Nova. */
         fun desdePaquete(paquete: String): DisenoNova? {
             val m = RE_CABECERA.find(paquete.trim()) ?: return null
