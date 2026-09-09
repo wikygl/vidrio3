@@ -185,7 +185,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.cardTramos.setOnClickListener { dialogoTramos() }
         binding.fijo.setOnClickListener { agregarModuloDirecto(TipoModulo.FIJO) }
         binding.corrediza.setOnClickListener { agregarModuloDirecto(TipoModulo.CORREDIZA) }
-        binding.parante.setOnClickListener { alternarParanteDerechaDelModulo() }
+        binding.parante.setOnClickListener { partirTramoConParante() }
         binding.cardEliminarModulo.setOnClickListener { quitarModulo() }
 
         // Botón inferior: envía el diseño a NovaCorrediza (igual que el botón Atrás).
@@ -644,47 +644,86 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     /**
-     * Pone —o quita— un parante a la DERECHA del módulo seleccionado, partiendo en dos el tramo
-     * al que pertenece. Vale igual en las franjas de mocheta que en las de sistema: cada franja
-     * lleva sus propios parantes, así que se pueden partir por separado.
+     * Parte el TRAMO en dos con un parante a la derecha del módulo seleccionado.
      *
-     * `fr.parantes` guarda el índice del módulo que queda a la DERECHA del parante, y
-     * `indiceModuloActivo` es relativo al tramo, no absoluto: la conversión es la misma que hace
-     * [agregarModuloDirecto].
+     * El parante es vertical: va de piso a techo y parte el tramo **entero**, con todas sus
+     * franjas. La de mocheta se parte con él, en la misma proporción que la de sistema; si en esa
+     * franja solo había un módulo, cada tramo se queda con uno.
      *
-     * Si donde tocaría ya hay un parante, se quita y los dos tramos vuelven a ser uno. Es la
-     * única forma de deshacerlo, y deja el botón simétrico.
+     * Por eso no se toca `fr.parantes` —que son parantes dentro de una sola franja— sino la
+     * estructura del paquete: el bloque `Tl<w>(…)` se convierte en dos, y el ancho se reparte
+     * entre ellos según los módulos que le tocan a cada uno.
      */
-    private fun alternarParanteDerechaDelModulo() {
+    private fun partirTramoConParante() {
         if (indiceFranjaActiva !in franjas.indices) {
             Toast.makeText(this, "Primero agrega/selecciona una franja.", Toast.LENGTH_SHORT).show()
             return
         }
         val fr = franjas[indiceFranjaActiva]
         val tramoStart = inicioDelTramoActivo(fr)
-        val tramoEnd = finDelTramoActivo(fr)
-        val tramoSize = (tramoEnd - tramoStart).coerceAtLeast(0)
+        val tramoSize = (finDelTramoActivo(fr) - tramoStart).coerceAtLeast(0)
         if (indiceModuloActivo !in 0 until tramoSize) {
             Toast.makeText(this, "Seleccione el módulo a cuya derecha va el parante.", Toast.LENGTH_SHORT).show()
             return
         }
-        val pos = tramoStart + indiceModuloActivo + 1
-        if (pos >= fr.modulos.size) {
+        // Módulos que quedan a la izquierda del parante, dentro del tramo.
+        val corte = indiceModuloActivo + 1
+        if (corte >= tramoSize) {
             Toast.makeText(this, "A la derecha de ese módulo no queda nada que partir.", Toast.LENGTH_SHORT).show()
             return
         }
-        if (fr.parantes.contains(pos)) {
-            fr.parantes.remove(pos)
-            Toast.makeText(this, "Parante quitado: los tramos se unen.", Toast.LENGTH_SHORT).show()
-        } else {
-            fr.parantes.add(pos)
-            fr.parantes.sort()
-            Toast.makeText(this, "Parante agregado: el tramo se parte.", Toast.LENGTH_SHORT).show()
+
+        val bloques = parsearBloquesTramo().toMutableList()
+        if (bloques.isEmpty()) {
+            Toast.makeText(this, "No se pudo leer el tramo.", Toast.LENGTH_SHORT).show()
+            return
         }
-        // El módulo elegido queda como último del tramo de la izquierda, que empieza donde
-        // empezaba: la selección no se mueve.
-        recalcularCorteVerticalProporcional()
-        aplicarModificacionModulosAlPaquete()
+        val idx = indiceTramoActivo.coerceIn(0, bloques.lastIndex)
+        val bloque = bloques[idx]
+
+        val izquierda = mutableListOf<String>()
+        val derecha = mutableListOf<String>()
+        for (token in splitTopLevelSemicolon(bloque.contenido)) {
+            val t = token.trim()
+            val openP = t.indexOf('(')
+            if (openP < 0) { izquierda.add(t); derecha.add(t); continue }
+            val head = t.substring(0, openP)
+            val mods = parsearModsSegmento(extraerBloqueModulosFranja(t) ?: "")
+            if (mods.isEmpty()) { izquierda.add(t); derecha.add(t); continue }
+            fun texto(lista: List<ConteoMod>) =
+                "$head(${lista.joinToString("") { it.tipo.toString() }})"
+            if (mods.size == 1) {
+                // Una sola mocheta para todo el tramo: al partirlo, una para cada lado.
+                izquierda.add(texto(mods))
+                derecha.add(texto(mods))
+            } else {
+                // El resto de franjas se parte en la misma proporción que la de sistema, dejando
+                // al menos un módulo a cada lado.
+                val en = Math.round(mods.size * corte / tramoSize.toFloat()).coerceIn(1, mods.size - 1)
+                izquierda.add(texto(mods.subList(0, en)))
+                derecha.add(texto(mods.subList(en, mods.size)))
+            }
+        }
+
+        // El ancho del tramo se reparte según los módulos de sistema que van a cada lado.
+        val anchoUtil = (bloque.ancho - anchoParanteCm).coerceAtLeast(2f)
+        val anchoIzq = anchoUtil * corte / tramoSize
+        var btIzq = BloqueTramo(bloque.letra, anchoIzq, izquierda.joinToString(";"))
+        var btDer = BloqueTramo(bloque.letra, anchoUtil - anchoIzq, derecha.joinToString(";"))
+        btIzq = anotarAnchosEquitativosFranja(btIzq, esSistema = true)
+        btIzq = anotarAnchosEquitativosFranja(btIzq, esSistema = false)
+        btDer = anotarAnchosEquitativosFranja(btDer, esSistema = true)
+        btDer = anotarAnchosEquitativosFranja(btDer, esSistema = false)
+
+        bloques[idx] = btIzq
+        bloques.add(idx + 1, btDer)
+        tramosBlockeados.clear()
+
+        indiceTramoActivo = idx
+        indiceModuloActivo = corte - 1
+        cargarDesdePaquete(reconstruirPaqueteConBloques(bloques))
+        actualizarVista()
+        Toast.makeText(this, "Tramo partido: ${bloques.size} tramos", Toast.LENGTH_SHORT).show()
     }
 
     private fun agregarModuloDirecto(tipo: TipoModulo) {
