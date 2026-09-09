@@ -451,7 +451,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             var actual = d
             repeat(cantidad) {
                 actual = actual.conModuloAgregado(
-                    indiceTramoActivo, indiceFranjaActiva, despuesDe, letra, bloqueados
+                    tramoActivoSeguro(), indiceFranjaActiva, despuesDe, letra, bloqueados
                 )
                 despuesDe++
             }
@@ -587,7 +587,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         val visualIdx = insertIdx - tramoStart
         val letra = if (tipo == TipoModulo.CORREDIZA) 'c' else 'f'
         aplicarAlModelo {
-            it.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visualIdx - 1, letra, tramosLibresBloqueados())
+            it.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visualIdx - 1, letra, tramosLibresBloqueados())
         }
         indiceModuloActivo = visualIdx
         binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, visualIdx)
@@ -611,7 +611,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             tramoEnd - 1
         }
         val visual = idx - tramoStart
-        aplicarAlModelo { it.conModuloQuitado(indiceTramoActivo, indiceFranjaActiva, visual, tramosLibresBloqueados()) }
+        aplicarAlModelo { it.conModuloQuitado(tramoActivoSeguro(), indiceFranjaActiva, visual, tramosLibresBloqueados()) }
         indiceModuloActivo = -1
         binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
     }
@@ -627,6 +627,13 @@ class DisenoNovaActivity : AppCompatActivity() {
      * por el camino viejo de cirugía de texto. Es la red mientras se van convirtiendo las
      * operaciones una por una.
      */
+    /**
+     * El tramo activo, ya usable como índice. Vale -1 mientras no se haya tocado ninguno, y el
+     * modelo con -1 no encuentra el tramo y devuelve el diseño sin tocar: la edición no hacía
+     * nada. El camino viejo lo toleraba porque `inicioDelTramoActivo` trata el -1 como 0.
+     */
+    private fun tramoActivoSeguro(): Int = indiceTramoActivo.coerceAtLeast(0)
+
     private fun aplicarAlModelo(operacion: (DisenoNova) -> DisenoNova): Boolean {
         // Cualquier fallo del modelo devuelve false y la pantalla sigue por el camino viejo: en
         // plena migración, una edición no puede tumbar la app.
@@ -755,12 +762,12 @@ class DisenoNovaActivity : AppCompatActivity() {
                 }
                 aplicarAlModelo { d ->
                     when (which) {
-                        0 -> d.conTipoCambiado(indiceTramoActivo, indiceFranjaActiva, visual, bloqueados)
-                        1 -> d.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visual - 1, 'f', bloqueados)
-                        2 -> d.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visual - 1, 'c', bloqueados)
-                        3 -> d.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visual, 'f', bloqueados)
-                        4 -> d.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visual, 'c', bloqueados)
-                        5 -> d.conModuloQuitado(indiceTramoActivo, indiceFranjaActiva, visual, bloqueados)
+                        0 -> d.conTipoCambiado(tramoActivoSeguro(), indiceFranjaActiva, visual, bloqueados)
+                        1 -> d.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visual - 1, 'f', bloqueados)
+                        2 -> d.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visual - 1, 'c', bloqueados)
+                        3 -> d.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visual, 'f', bloqueados)
+                        4 -> d.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visual, 'c', bloqueados)
+                        5 -> d.conModuloQuitado(tramoActivoSeguro(), indiceFranjaActiva, visual, bloqueados)
                         else -> d
                     }
                 }
