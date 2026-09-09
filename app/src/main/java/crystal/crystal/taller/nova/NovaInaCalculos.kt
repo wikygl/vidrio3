@@ -406,11 +406,7 @@ object NovaInaCalculos {
         val cruce = cruce(cruceExacto, divisiones)
         val altoHojaVal = altoHoja(alto, hoja)
 
-        // Sin truncar: las rachas de fijos suman en exacto y se truncan una sola vez al escribir,
-        // y el resto del redondeo se reparte. `uFijosVal` truncado se sigue usando donde la
-        // medida se compara o se muestra suelta.
-        val uFijosExacto = uFijos(ancho, divisiones, cruce)
-        val uFijosVal = df1(uFijosExacto).toFloat()
+        val uFijosVal = df1(uFijos(ancho, divisiones, cruce)).toFloat()
         val uParanteVal = df1(uParante(alto, us)).toFloat()
         val uParante2Val = df1(uParante2(alto, altoHojaVal, us)).toFloat()
         val uSuperiorVal = df1(uSuperior(ancho)).toFloat()
@@ -426,8 +422,8 @@ object NovaInaCalculos {
             // ncfc: 1 U por módulo fijo; fijos adyacentes suman su medida en un solo perfil.
             NovaCalculos.uFijosRunsNcfc(ancho, divisiones, uFijosVal)
         } else {
-            NovaCalculos.textoUFijosColindantes(ancho, divisiones, uFijosExacto)
-                .ifBlank { NovaCalculos.lineasConRedondeoRepartido(List(nFijosVal) { uFijosExacto }) }
+            NovaCalculos.textoUFijosColindantes(ancho, divisiones, uFijosVal)
+                .ifBlank { "${df1(uFijosVal)} = $nFijosVal" }
         }
 
         fun unirLineas(vararg lineas: String): String {
@@ -535,9 +531,7 @@ object NovaInaCalculos {
         val textoPuentes = puentes(alto, ancho, divisiones, puentesExtra, filasPuente)
         val textoRieles = if (divisiones == 1) "" else rieles(alto, hoja, ancho, divisiones)
         val textoUFelpero = if (divisiones == 1) "" else rieles(alto, hoja, ancho, divisiones)
-        // La hache corre a lo ancho junto con las U de fijos: reparte el redondeo para que entre
-        // todas cierren el ancho de la ventana en vez de quedarse cortas.
-        val textoHache = NovaCalculos.lineasConRedondeoRepartido(List(nCorredizasVal) { hacheVal })
+        val textoHache = "${df1(hacheVal)} = $nCorredizasVal"
         val textoAngTope = if (divisiones == 2) "${df1(altoHojaVal - 0.9f)} = 1" else ""
         val textoPortafelpa = "${df1(portafelpaVal)} = $divDePortasVal"
 
