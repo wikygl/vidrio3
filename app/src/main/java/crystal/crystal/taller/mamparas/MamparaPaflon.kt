@@ -669,8 +669,14 @@ class MamparaPaflon : AppCompatActivity() {
     val cant = cantidadProducto
     var ultimoID = ""
 
+    // Los números se reservan ANTES del bucle: dentro, nada se ha guardado todavía y
+
+    // obtenerSiguienteContadorPorPrefijo devolvería el mismo para todas las copias.
+
+    val numerosPaquete = ProyectoManager.reservarNumerosPorPrefijo(this, prefijo, cant)
+
     for (u in 1..cant) {
-      val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
+      val siguienteNumero = numerosPaquete[u - 1]
       val identificadorPaquete = etiquetaPaquete(prefijo, siguienteNumero)
       ultimoID = identificadorPaquete
 

@@ -107,6 +107,21 @@ object ProyectoManager {
         return numeroMasAlto + 1
     }
 
+    /**
+     * Números correlativos para archivar [cantidad] copias de un producto de una sola vez.
+     *
+     * Hay que pedirlos TODOS de golpe, antes de guardar nada.
+     * [obtenerSiguienteContadorPorPrefijo] mira los paquetes que ya están **guardados** en el
+     * proyecto, así que llamarlo dentro del bucle de archivado devuelve el mismo número una y otra
+     * vez —lo que se está archivando todavía no está en disco— y las copias se pisan bajo un solo
+     * identificador: con cantidad 2 quedaba una sola Vna3 en vez de Vna3 y Vna4, y la siguiente
+     * ventana arrancaba en Vna4 en lugar de Vna5.
+     */
+    fun reservarNumerosPorPrefijo(context: Context, prefijo: String, cantidad: Int): List<Int> {
+        val base = obtenerSiguienteContadorPorPrefijo(context, prefijo)
+        return (0 until cantidad.coerceAtLeast(1)).map { base + it }
+    }
+
     private fun obtenerContadorPorPrefijo(context: Context, prefijo: String): Int {
         val sharedPreferences = context.getSharedPreferences("MapStorage", Context.MODE_PRIVATE)
 

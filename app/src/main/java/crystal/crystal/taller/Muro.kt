@@ -85,6 +85,8 @@ class Muro : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMuroBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+        crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
         // ==================== CONFIGURACIÓN DEL SISTEMA DE PROYECTOS ====================
 
@@ -428,8 +430,14 @@ class Muro : AppCompatActivity() {
         val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
         var ultimoID = ""
 
+        // Los números se reservan ANTES del bucle: dentro, nada se ha guardado todavía y
+
+        // obtenerSiguienteContadorPorPrefijo devolvería el mismo para todas las copias.
+
+        val numerosPaquete = ProyectoManager.reservarNumerosPorPrefijo(this, prefijo, cant)
+
         for (u in 1..cant) {
-            val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
+            val siguienteNumero = numerosPaquete[u - 1]
             val identificadorPaquete = etiquetaPaquete(prefijo, siguienteNumero)
             ultimoID = identificadorPaquete
 

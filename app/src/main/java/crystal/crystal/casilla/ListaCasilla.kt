@@ -183,8 +183,12 @@ object ListaCasilla {
         }
         var ultimoID = ""
         val n = cantidad.coerceAtLeast(1)
+        // Los números se reservan ANTES del bucle: `obtenerSiguienteContadorPorPrefijo` mira los
+        // paquetes ya GUARDADOS, y aquí todavía no se guardó nada, así que dentro del bucle
+        // devolvería el mismo número para todas las copias y se pisarían bajo un solo id.
+        val numeros = ProyectoManager.reservarNumerosPorPrefijo(context, prefijo, n)
         for (u in 1..n) {
-            val numero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(context, prefijo)
+            val numero = numeros[u - 1]
             val id = "$prefijo$numero"
             ultimoID = id
             referencias?.let {

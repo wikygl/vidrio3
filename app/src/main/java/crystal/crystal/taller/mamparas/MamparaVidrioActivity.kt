@@ -32,6 +32,8 @@ override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     binding = ActivityMamparaVidrioBinding.inflate(layoutInflater)
     setContentView(binding.root)
+    // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+    crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
     cliente()
     calcular()
@@ -627,8 +629,14 @@ private fun divisiones(): Int {
         val prefijo = obtenerPrefijo()
         val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
 
+        // Los números se reservan ANTES del bucle: dentro, nada se ha guardado todavía y
+
+        // obtenerSiguienteContadorPorPrefijo devolvería el mismo para todas las copias.
+
+        val numerosPaquete = ProyectoManager.reservarNumerosPorPrefijo(this, prefijo, cant)
+
         for (u in 1..cant) {
-            val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
+            val siguienteNumero = numerosPaquete[u - 1]
             val paqueteID = "v${siguienteNumero}${prefijo}"
 
             if (binding.lyU.visibility == View.VISIBLE) archivarConNombre("U-13", binding.txU.text.toString(), paqueteID)

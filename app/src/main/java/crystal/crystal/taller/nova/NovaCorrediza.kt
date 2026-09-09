@@ -4188,8 +4188,14 @@ class NovaCorrediza : AppCompatActivity() {
         // Si la vista de referencias está contraída, archivar el texto completo (sin spans).
         if (referenciasColapsable) binding.txReferencias.text = referenciasFull
 
+        // Los números se reservan ANTES del bucle: dentro, nada se ha guardado todavía y
+
+        // obtenerSiguienteContadorPorPrefijo devolvería el mismo para todas las copias.
+
+        val numerosPaquete = ProyectoManager.reservarNumerosPorPrefijo(this, prefijo, cant)
+
         for (u in 1..cant) {
-            val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
+            val siguienteNumero = numerosPaquete[u - 1]
             val identificadorPaquete = "${prefijo}${siguienteNumero}"
             ultimoID = identificadorPaquete
             val matNl = if (texto == "nl") materialesNlArchivables else null
