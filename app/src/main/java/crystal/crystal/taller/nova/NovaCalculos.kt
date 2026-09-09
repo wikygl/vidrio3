@@ -654,20 +654,15 @@ object NovaCalculos {
      * En cuántos TRAMOS se parte la ventana. Es el origen del que salen las cantidades de puente,
      * de U y de todo lo que va por tramo: se cuenta, no se saca de una tabla.
      *
-     * Dos límites, y manda el que obligue a más tramos:
-     *  - **5 módulos** por tramo.
-     *  - **360 cm** de ancho por tramo.
+     * El único límite es de **5 módulos por tramo**. El tamaño del módulo NO parte la ventana: si
+     * el vidriero decide meter dos divisiones en una ventana de mil, es su decisión y se respeta.
      *
-     * Con divisiones automáticas (`ceil(ancho/60)`) el de 360 nunca llega a activarse, porque
-     * cinco módulos miden como mucho 300. Solo aparece cuando el vidriero fija las divisiones a
-     * mano y los módulos salen anchos: 500 en dos divisiones son dos módulos de 250, y eso no va
-     * en un solo tramo.
+     * (Se probó a partir también por ancho de tramo, a 360 cm, y estaba mal: una ventana de 1000
+     * con 5 divisiones salía en tres tramos, uno de ellos de un solo módulo.)
      */
     fun tramos(ancho: Float, divisiones: Int): Int {
         if (divisiones <= 0) return 1
-        val porModulos = ceil(divisiones / 5.0).toInt()
-        val porAncho = if (ancho > 0f) ceil(ancho / 360.0).toInt() else 1
-        return maxOf(porModulos, porAncho).coerceAtLeast(1)
+        return ceil(divisiones / 5.0).toInt().coerceAtLeast(1)
     }
 
     fun nPuentesEfectivos(ancho: Float, divisiones: Int): Int = tramos(ancho, divisiones)

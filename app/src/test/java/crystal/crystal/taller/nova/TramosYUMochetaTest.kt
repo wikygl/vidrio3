@@ -9,7 +9,8 @@ import kotlin.math.ceil
  * El número de TRAMOS es el origen del que salen las cantidades que van por tramo (puentes, U de
  * mocheta parante…). Se cuenta, no sale de una tabla por número de divisiones.
  *
- * Dos límites, manda el que obligue a más tramos: 5 módulos por tramo y 360 cm de ancho por tramo.
+ * El único límite es de 5 módulos por tramo. El tamaño del módulo no parte la ventana: si el
+ * vidriero pone dos divisiones en una ventana de mil, se respeta.
  */
 class TramosYUMochetaTest {
 
@@ -23,27 +24,27 @@ class TramosYUMochetaTest {
     }
 
     @Test
-    fun `manda el limite de 360 cuando las divisiones se fijan a mano`() {
-        // 500 en dos divisiones son módulos de 250: no entran en un tramo.
-        assertEquals(2, NovaCalculos.tramos(500f, 2))
-        assertEquals(2, NovaCalculos.tramos(400f, 1))
-        assertEquals(2, NovaCalculos.tramos(586f, 3))
-        // Justo en el límite no hace falta partir.
-        assertEquals(1, NovaCalculos.tramos(360f, 2))
-        assertEquals(2, NovaCalculos.tramos(360.1f, 2))
+    fun `el ancho del modulo no parte la ventana`() {
+        // Decisión del vidriero: pocas divisiones en una ventana muy ancha se respetan tal cual.
+        // Partir por tamaño (se probó a 360) dejaba una ventana de 1000 con 5 divisiones en tres
+        // tramos, uno de ellos de un solo módulo.
+        assertEquals(1, NovaCalculos.tramos(1000f, 5))
+        assertEquals(1, NovaCalculos.tramos(1000f, 2))
+        assertEquals(1, NovaCalculos.tramos(500f, 2))
+        assertEquals(1, NovaCalculos.tramos(400f, 1))
     }
 
     @Test
-    fun `con divisiones automaticas el limite de 360 nunca se activa`() {
-        // Cinco módulos de 60 miden 300: el de módulos siempre llega antes.
+    fun `los tramos solo dependen del numero de modulos`() {
         var ancho = 60f
         while (ancho <= 1200f) {
-            val div = NovaCalculos.divisiones(ancho, 0)
-            assertEquals(
-                "ancho=$ancho div=$div",
-                ceil(div / 5.0).toInt(),
-                NovaCalculos.tramos(ancho, div)
-            )
+            for (div in 1..20) {
+                assertEquals(
+                    "ancho=$ancho div=$div",
+                    ceil(div / 5.0).toInt(),
+                    NovaCalculos.tramos(ancho, div)
+                )
+            }
             ancho += 5f
         }
     }
