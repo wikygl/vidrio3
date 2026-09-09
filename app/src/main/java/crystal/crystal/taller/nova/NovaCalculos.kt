@@ -210,26 +210,71 @@ object NovaCalculos {
     fun repartoManualPara(divisiones: Int): List<Int>? =
         repartoManual?.takeIf { it.isNotEmpty() && it.sum() == divisiones }
 
+    /** Repartos simétricos de [n] módulos en [t] tramos, cada tramo entre 2 y 5. */
+    private fun repartosSimetricos(n: Int, t: Int): List<List<Int>> {
+        if (t <= 0) return emptyList()
+        if (t == 1) return if (n in 1..5) listOf(listOf(n)) else emptyList()
+        val mitad = (t + 1) / 2
+        val encontrados = mutableListOf<List<Int>>()
+        val parcial = IntArray(mitad)
+        fun buscar(idx: Int) {
+            if (idx == mitad) {
+                val reparto = IntArray(t)
+                for (i in 0 until mitad) {
+                    reparto[i] = parcial[i]
+                    reparto[t - 1 - i] = parcial[i]
+                }
+                if (reparto.sum() == n) encontrados.add(reparto.toList())
+                return
+            }
+            for (v in 2..5) {
+                parcial[idx] = v
+                buscar(idx + 1)
+            }
+        }
+        buscar(0)
+        return encontrados
+    }
+
     /**
-     * Las formas de repartir [divisiones] módulos en tramos, de menos tramos a más. Ningún tramo
-     * pasa de 5 módulos —el límite de siempre— ni baja de 2, porque un tramo de un solo módulo no
-     * es un tramo.
+     * Las formas de repartir [divisiones] módulos en tramos, para poder acortar el tramo más
+     * largo sin encarecer la ventana.
      *
-     * Con 10 salen: [5,5] · [3,4,3] · [2,3,3,2] · [2,2,2,2,2]. El reparto de cada opción es el
-     * mismo de siempre ([repartirDivisionesEnTramos]): simétrico y equilibrado.
+     * **Cada tramo de más cuesta**: un parante, su U, su puente. Por eso el orden es primero TODO
+     * lo que se puede hacer con el menor número de tramos, y solo después lo que añade tramos.
+     * Con 10 divisiones eso deja `[3,4,3]` y `[4,2,4]` —los dos de tres tramos, mismo costo—
+     * antes que `[2,3,3,2]`, que lleva un parante más.
+     *
+     * Dentro de un mismo número de tramos va primero el reparto automático
+     * ([repartirDivisionesEnTramos]) y luego los demás, del que deja el tramo más corto al que lo
+     * deja más largo. Ningún tramo pasa de 5 módulos ni baja de 2, y todos son simétricos.
      */
     fun repartosPosibles(divisiones: Int, maxOpciones: Int = 5): List<List<Int>> {
         if (divisiones <= 0) return emptyList()
+        if (divisiones <= 5) return listOf(listOf(divisiones))
         val minTramos = ceil(divisiones / 5.0).toInt().coerceAtLeast(1)
         val maxTramos = (divisiones / 2).coerceAtLeast(minTramos)
         val opciones = mutableListOf<List<Int>>()
+        // El tramo más corto conseguido hasta ahora con menos tramos. Añadir un tramo solo se
+        // ofrece si de verdad acorta el más largo; si no, es gasto sin ganancia.
+        var mejorMaximo = Int.MAX_VALUE
         for (t in minTramos..maxTramos) {
-            val reparto = repartirDivisionesEnTramos(divisiones, t)
-            if (reparto.size != t) continue
-            if (t > 1 && reparto.any { it < 2 }) continue
-            if (reparto.any { it > 5 }) continue
-            opciones.add(reparto)
             if (opciones.size >= maxOpciones) break
+            val automatico = repartirDivisionesEnTramos(divisiones, t)
+                .takeIf { it.size == t && it.all { n -> n in 2..5 } }
+            val resto = repartosSimetricos(divisiones, t)
+                .filter { it != automatico }
+                .sortedWith(compareBy({ it.max() }, { it.max() - it.min() }))
+            val candidatos = (listOfNotNull(automatico) + resto).filter { it.max() < mejorMaximo }
+            // Dentro del mismo número de tramos tampoco vale el que alarga: cuesta igual y deja
+            // un tramo más largo. Se quedan los que empatan con el mejor del grupo.
+            val mejorDelGrupo = candidatos.minOfOrNull { it.max() }
+            val delGrupo = candidatos.filter { it.max() == mejorDelGrupo }
+            for (reparto in delGrupo) {
+                if (opciones.size >= maxOpciones) break
+                if (reparto !in opciones) opciones.add(reparto)
+            }
+            delGrupo.minOfOrNull { it.max() }?.let { if (it < mejorMaximo) mejorMaximo = it }
         }
         if (opciones.isEmpty()) opciones.add(listOf(divisiones))
         return opciones

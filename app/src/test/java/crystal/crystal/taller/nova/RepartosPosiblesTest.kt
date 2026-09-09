@@ -17,11 +17,35 @@ class RepartosPosiblesTest {
     }
 
     @Test
-    fun `con 10 divisiones hay cuatro repartos`() {
-        assertEquals(
-            listOf(listOf(5, 5), listOf(3, 4, 3), listOf(2, 3, 3, 2), listOf(2, 2, 2, 2, 2)),
-            NovaCalculos.repartosPosibles(10)
-        )
+    fun `con 10 divisiones primero van los repartos que no anaden tramos`() {
+        val opciones = NovaCalculos.repartosPosibles(10)
+        // Dos de tres tramos (mismo costo) antes que cualquiera de cuatro.
+        assertEquals(listOf(5, 5), opciones[0])
+        assertEquals(listOf(3, 4, 3), opciones[1])
+        assertEquals(listOf(4, 2, 4), opciones[2])
+        assertTrue("el de 4 tramos no puede ir antes", opciones.indexOf(listOf(2, 3, 3, 2)) > 2)
+    }
+
+    @Test
+    fun `las opciones nunca van de mas tramos a menos`() {
+        for (div in 6..20) {
+            val tramos = NovaCalculos.repartosPosibles(div).map { it.size }
+            assertEquals("div=$div: $tramos", tramos.sorted(), tramos)
+        }
+    }
+
+    @Test
+    fun `las variantes son simetricas, salvo el automatico cuando no puede serlo`() {
+        // Con un número impar de módulos en un número par de tramos la simetría es imposible:
+        // 7 en dos tramos es [4,3]. Ese es el reparto automático y va igual.
+        for (div in 6..20) {
+            val opciones = NovaCalculos.repartosPosibles(div)
+            val asimetricos = opciones.filter { it != it.reversed() }
+            for (r in asimetricos) {
+                assertTrue("div=$div: $r no es simétrico y no es el primero de su grupo",
+                    opciones.indexOf(r) == opciones.indexOfFirst { it.size == r.size })
+            }
+        }
     }
 
     @Test
