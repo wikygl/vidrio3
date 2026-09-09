@@ -75,6 +75,13 @@ class NovaCorrediza : AppCompatActivity() {
     // Remate (mochetas): nn=normal, nr=invertido, np=doble puente. Eje independiente.
     private var modeloRemate: String = "nn"
     private var nombreRemate: String = "normal"
+    /**
+     * Cuántas ventanas iguales lleva este producto. Llega de MedidaActivity y se puede cambiar en
+     * el diálogo de opciones. Al archivar se guardan tantas copias como diga, cada una con su
+     * propio número correlativo (cantidad 2 sobre la ventana 1 deja Vna2 y Vna3, y la siguiente
+     * empieza en Vna4), de modo que el material queda multiplicado por esa cantidad.
+     */
+    private var cantidadProducto: Int = 1
     private var contadorLado = 1
     private var maxLados = -1
     private val mapListas = mutableMapOf<String, MutableList<MutableList<String>>>()
@@ -168,6 +175,7 @@ class NovaCorrediza : AppCompatActivity() {
         setContentView(binding.root)
         // Tocar "Referencias y Cálculos" abre la calculadora flotante.
         crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
+        cantidadProducto = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
 
         ProyectoManager.inicializarDesdeStorage(this)
         proyectoCallback = ProyectoUIHelper.crearCallbackConActualizacionUI(
@@ -1605,11 +1613,15 @@ class NovaCorrediza : AppCompatActivity() {
 
         // Reflejar la selección actual al abrir el diálogo.
         refrescarSeleccion()
+        dlg.dgCantidad.setText(cantidadProducto.toString())
 
         AlertDialog.Builder(this)
             .setTitle("Opciones de la ventana")
             .setView(dlg.root)
             .setPositiveButton("Listo") { _, _ ->
+                // Cuántas ventanas iguales: en blanco o 0 vale 1.
+                cantidadProducto = dlg.dgCantidad.text?.toString()?.trim()?.toIntOrNull()
+                    ?.coerceAtLeast(1) ?: 1
                 // Guardar el encuentro (solo dato): 1 = colinda, 0 = al vacío.
                 metaEncuentro = buildString {
                     append(if (dlg.dgCbTop.isChecked) '1' else '0')
@@ -3587,9 +3599,7 @@ class NovaCorrediza : AppCompatActivity() {
         return pares.joinToString(" | ") { "${it.first}:${it.second}" }
     }
 
-    private fun obtenerCantidadPreferida(): Int {
-        return intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
-    }
+    private fun obtenerCantidadPreferida(): Int = cantidadProducto
 
     private fun numeroProductoPreferido(numeroProductoAuto: Int? = null): Int {
         val clavesNumero = listOf("numero_producto", "numero", "n_producto", "item_numero", "id_producto")
@@ -4172,7 +4182,7 @@ class NovaCorrediza : AppCompatActivity() {
         }
 
         val prefijo = obtenerPrefijo()
-        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        val cant = cantidadProducto
         var ultimoID = ""
 
         // Si la vista de referencias está contraída, archivar el texto completo (sin spans).

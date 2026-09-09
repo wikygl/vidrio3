@@ -94,6 +94,13 @@ class PuertasActivity : AppCompatActivity() {
     private var ventanaIzquierda: Boolean = false
     private var ventanaDerecha: Boolean = false
 
+    /**
+     * Cuántas puertas iguales lleva este producto. Llega de MedidaActivity y se puede cambiar en el
+     * diálogo de variantes. Al archivar se guardan tantas copias como diga, cada una con su número
+     * correlativo, de modo que el material queda multiplicado por esa cantidad.
+     */
+    private var cantidadProducto: Int = 1
+
     // Metadatos de producción (color aluminio / tipo vidrio)
     private var metaColorAluminio: String = ""
     private var metaTipoVidrio: String = ""
@@ -113,6 +120,7 @@ class PuertasActivity : AppCompatActivity() {
         setContentView(binding.root)
         // Tocar "Referencias y Cálculos" abre la calculadora flotante.
         crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
+        cantidadProducto = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
 
         // ==================== Sistema de Proyectos ====================
         ProyectoManager.inicializarDesdeStorage(this)
@@ -1619,8 +1627,17 @@ class PuertasActivity : AppCompatActivity() {
             // Va dentro de un ScrollView: la grilla se muestra entera y quien desplaza es el diálogo.
             isNestedScrollingEnabled = false
         }
+        // Cuántas puertas iguales: al archivar se guardan tantas copias, numeradas seguidas.
+        val (filaCantidad, etCantidad) = filaValor(
+            "Cantidad", cantidadProducto.toFloat(), conPerfiles = false
+        )
+        fun leerCantidad() {
+            cantidadProducto = etCantidad.text?.toString()?.trim()?.toFloatOrNull()?.toInt()
+                ?.coerceAtLeast(1) ?: 1
+        }
         val contenedor = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
+            addView(filaCantidad)
             addView(filaVentana)
             addView(filaConfig)
             addView(filaMarco)
@@ -1640,6 +1657,7 @@ class PuertasActivity : AppCompatActivity() {
             .setPositiveButton("OK") { _, _ ->
                 ventanaIzquierda = cbIzq.isChecked
                 ventanaDerecha = cbDer.isChecked
+                leerCantidad()
                 aplicarValores()
             }
             .setNegativeButton("Cerrar", null)
@@ -1651,6 +1669,9 @@ class PuertasActivity : AppCompatActivity() {
             binding.ivModelo.setImageResource(v.imagen)
             ventanaIzquierda = cbIzq.isChecked
             ventanaDerecha = cbDer.isChecked
+            // Elegir variante cierra el diálogo sin pasar por "OK": la cantidad escrita se lee
+            // también aquí para no perderla.
+            leerCantidad()
             aplicarValores()
             // Cada variante arranca con el interior que le corresponde, pero SOLO al cambiar de
             // variante: si se toca la que ya estaba, manda lo que el vidriero acaba de escribir.
@@ -1743,7 +1764,7 @@ class PuertasActivity : AppCompatActivity() {
         val ancho = binding.etMed1.text?.toString()?.toFloatOrNull() ?: 0f
         val alto = binding.etMed2.text?.toString()?.toFloatOrNull() ?: 0f
         val hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
-        val cantidad = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        val cantidad = cantidadProducto
         val modelo = escaparCampoArchivo("${puertaActual?.nombre.orEmpty()} ${varianteSeleccionada}".trim()).ifBlank { "x" }
         return crystal.crystal.taller.PaqueteV2.construir(
             cliente = cliente,
@@ -1856,7 +1877,7 @@ class PuertasActivity : AppCompatActivity() {
         }
 
         val prefijo = obtenerPrefijo()
-        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        val cant = cantidadProducto
         var ultimoID = ""
 
         for (u in 1..cant) {

@@ -9,6 +9,42 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- ============ CANTIDAD ============ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:labelFor="@+id/dgCantidad"
+                android:text="Cantidad"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/dgCantidad"
+                android:layout_width="72dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:gravity="center"
+                android:importantForAutofill="no"
+                android:inputType="number"
+                android:maxLength="3"
+                android:text="1" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:text="ventanas iguales, numeradas seguidas"
+                android:textSize="11sp" />
+        </LinearLayout>
+
         <!-- ============ GEOMETRÍA (vista top) ============ -->
         <TextView
             android:layout_width="wrap_content"
