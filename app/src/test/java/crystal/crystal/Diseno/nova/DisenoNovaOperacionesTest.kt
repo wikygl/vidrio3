@@ -107,6 +107,25 @@ class DisenoNovaOperacionesTest {
     }
 
     @Test
+    fun `un tramo bloqueado conserva su ancho y el resto absorbe`() {
+        val anchoDelMedio = abel.tramos[1].ancho
+        // Se agrega un módulo al primer tramo con el del medio bloqueado.
+        val d = abel.conModuloAgregado(0, 0, despuesDe = 0, tipo = 'c', bloqueados = setOf(1))
+        assertEquals(12, d.nModulos)
+        assertEquals("el bloqueado se movió", anchoDelMedio, d.tramos[1].ancho, 0.01f)
+        assertTrue("el resto no absorbió", cierraElAncho(d))
+        // Y los otros dos sí cambiaron para absorber.
+        assertTrue(kotlin.math.abs(d.tramos[0].ancho - abel.tramos[0].ancho) > 0.1f)
+    }
+
+    @Test
+    fun `con todos los tramos bloqueados no se reparte nada`() {
+        val todos = abel.tramos.indices.toSet()
+        val d = abel.conAnchosRepartidos(bloqueados = todos)
+        assertSame(abel, d)
+    }
+
+    @Test
     fun `el reparto de anchos cierra el ancho de la ventana`() {
         for (d in listOf(abel, unTramo)) {
             val r = d.conAnchosRepartidos()

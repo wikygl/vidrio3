@@ -82,13 +82,28 @@ data class DisenoNova(
      * reparten el ancho del tramo por igual.
      *
      * Es la regla de siempre: los tramos y las medidas salen de contar módulos.
+     *
+     * [bloqueados] son los tramos cuyo ancho el vidriero fijó y no se tocan: conservan su medida
+     * y el resto absorbe la diferencia, repartiéndose lo que queda. Si se bloquean todos no hay
+     * nada que repartir y el diseño se devuelve tal cual.
      */
-    fun conAnchosRepartidos(anchoParante: Float = 2.5f): DisenoNova {
+    fun conAnchosRepartidos(
+        anchoParante: Float = 2.5f,
+        bloqueados: Set<Int> = emptySet()
+    ): DisenoNova {
         val totalModulos = nModulos
         if (totalModulos <= 0) return this
-        val porModulo = anchoUtil(anchoParante) / totalModulos
-        return copy(tramos = tramos.map { tramo ->
-            val anchoTramo = porModulo * tramo.nModulosSistema
+        val fijos = bloqueados.filter { it in tramos.indices }.toSet()
+        val libres = tramos.indices.filter { it !in fijos }
+        if (libres.isEmpty()) return this
+
+        val anchoFijo = fijos.sumOf { tramos[it].ancho.toDouble() }.toFloat()
+        val disponible = (anchoUtil(anchoParante) - anchoFijo).coerceAtLeast(0f)
+        val modulosLibres = libres.sumOf { tramos[it].nModulosSistema }
+        val porModulo = if (modulosLibres > 0) disponible / modulosLibres else 0f
+
+        return copy(tramos = tramos.mapIndexed { i, tramo ->
+            val anchoTramo = if (i in fijos) tramo.ancho else porModulo * tramo.nModulosSistema
             NovaTramo(
                 ancho = anchoTramo,
                 franjas = tramo.franjas.map { fr ->
@@ -132,7 +147,13 @@ data class DisenoNova(
         return copy(tramos = nuevos).conAnchosRepartidos()
     }
 
-    /** Quita el parante entre el tramo [indice] y el siguiente: los dos vuelven a ser uno. */
+    /**
+     * Quita el parante entre el tramo [indice] y el siguiente: los dos vuelven a ser uno.
+     *
+     * Ni esta ni [conTramoPartido] admiten tramos bloqueados: al partir o unir, los índices de
+     * los tramos se corren y el bloqueo dejaría de apuntar a donde apuntaba. Quien las llame
+     * tiene que soltar los bloqueos.
+     */
     fun conTramosUnidos(indice: Int): DisenoNova {
         val a = tramos.getOrNull(indice) ?: return this
         val b = tramos.getOrNull(indice + 1) ?: return this
@@ -156,22 +177,22 @@ data class DisenoNova(
     }
 
     /** Agrega un módulo [tipo] justo después del módulo [despuesDe] de esa franja. */
-    fun conModuloAgregado(indiceTramo: Int, indiceFranja: Int, despuesDe: Int, tipo: Char): DisenoNova =
-        conFranjaCambiada(indiceTramo, indiceFranja) { mods ->
+    fun conModuloAgregado(indiceTramo: Int, indiceFranja: Int, despuesDe: Int, tipo: Char, bloqueados: Set<Int> = emptySet()): DisenoNova =
+        conFranjaCambiada(indiceTramo, indiceFranja, bloqueados) { mods ->
             val pos = (despuesDe + 1).coerceIn(0, mods.size)
             mods.toMutableList().apply { add(pos, NovaModulo(tipo)) }
         }
 
     /** Quita un módulo. Siempre queda al menos uno en la franja. */
-    fun conModuloQuitado(indiceTramo: Int, indiceFranja: Int, indice: Int): DisenoNova =
-        conFranjaCambiada(indiceTramo, indiceFranja) { mods ->
+    fun conModuloQuitado(indiceTramo: Int, indiceFranja: Int, indice: Int, bloqueados: Set<Int> = emptySet()): DisenoNova =
+        conFranjaCambiada(indiceTramo, indiceFranja, bloqueados) { mods ->
             if (mods.size <= 1 || indice !in mods.indices) mods
             else mods.toMutableList().apply { removeAt(indice) }
         }
 
     /** Cambia un fijo por corrediza y al revés. */
-    fun conTipoCambiado(indiceTramo: Int, indiceFranja: Int, indice: Int): DisenoNova =
-        conFranjaCambiada(indiceTramo, indiceFranja) { mods ->
+    fun conTipoCambiado(indiceTramo: Int, indiceFranja: Int, indice: Int, bloqueados: Set<Int> = emptySet()): DisenoNova =
+        conFranjaCambiada(indiceTramo, indiceFranja, bloqueados) { mods ->
             if (indice !in mods.indices) mods
             else mods.toMutableList().apply {
                 this[indice] = this[indice].copy(tipo = if (this[indice].esFijo) 'c' else 'f')
@@ -181,6 +202,7 @@ data class DisenoNova(
     private fun conFranjaCambiada(
         indiceTramo: Int,
         indiceFranja: Int,
+        bloqueados: Set<Int>,
         cambio: (List<NovaModulo>) -> List<NovaModulo>
     ): DisenoNova {
         val tramo = tramos.getOrNull(indiceTramo) ?: return this
@@ -191,7 +213,7 @@ data class DisenoNova(
         franjas[indiceFranja] = franja.copy(modulos = nuevos)
         val ts = tramos.toMutableList()
         ts[indiceTramo] = tramo.copy(franjas = franjas)
-        return copy(tramos = ts).conAnchosRepartidos()
+        return copy(tramos = ts).conAnchosRepartidos(bloqueados = bloqueados)
     }
 
     fun aPaquete(): String {

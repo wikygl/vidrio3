@@ -707,13 +707,19 @@ class DisenoNovaActivity : AppCompatActivity() {
         } else {
             tramoEnd
         }
-        fr.modulos.add(insertIdx, tipo)
-        fr.parantes.replaceAll { p -> if (p >= insertIdx) p + 1 else p }
         val visualIdx = insertIdx - tramoStart
+        val despuesDe = visualIdx - 1
+        val letra = if (tipo == TipoModulo.CORREDIZA) 'c' else 'f'
+        if (!aplicarAlModelo {
+                it.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, despuesDe, letra, tramosLibresBloqueados())
+            }) {
+            fr.modulos.add(insertIdx, tipo)
+            fr.parantes.replaceAll { p -> if (p >= insertIdx) p + 1 else p }
+            recalcularCorteVerticalProporcional()
+            aplicarModificacionModulosAlPaquete()
+        }
         indiceModuloActivo = visualIdx
         binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, visualIdx)
-        recalcularCorteVerticalProporcional()
-        aplicarModificacionModulosAlPaquete()
     }
 
     private fun quitarModulo() {
@@ -733,13 +739,37 @@ class DisenoNovaActivity : AppCompatActivity() {
         } else {
             tramoEnd - 1
         }
-        fr.modulos.removeAt(idx)
-        fr.parantes.replaceAll { p -> if (p > idx) p - 1 else p }
-        fr.parantes.removeAll { p -> p <= 0 || p >= fr.modulos.size }
+        val visual = idx - tramoStart
+        if (!aplicarAlModelo { it.conModuloQuitado(indiceTramoActivo, indiceFranjaActiva, visual, tramosLibresBloqueados()) }) {
+            // Sin modelo legible se mantiene el camino de siempre.
+            fr.modulos.removeAt(idx)
+            fr.parantes.replaceAll { p -> if (p > idx) p - 1 else p }
+            fr.parantes.removeAll { p -> p <= 0 || p >= fr.modulos.size }
+            recalcularCorteVerticalProporcional()
+            aplicarModificacionModulosAlPaquete()
+        }
         indiceModuloActivo = -1
         binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
-        recalcularCorteVerticalProporcional()
-        aplicarModificacionModulosAlPaquete()
+    }
+
+    /** Los tramos cuyo ancho fijó el vidriero: el reparto no los toca. */
+    private fun tramosLibresBloqueados(): Set<Int> =
+        tramosBlockeados.indices.filter { tramosBlockeados[it] }.toSet()
+
+    /**
+     * Aplica una operación sobre el MODELO del diseño y recarga la pantalla con el resultado.
+     *
+     * Devuelve false si el paquete no se pudo leer como modelo, para que quien llame pueda seguir
+     * por el camino viejo de cirugía de texto. Es la red mientras se van convirtiendo las
+     * operaciones una por una.
+     */
+    private fun aplicarAlModelo(operacion: (DisenoNova) -> DisenoNova): Boolean {
+        val modelo = DisenoNova.desdePaquete(paqueteActualLectura()) ?: return false
+        val nuevo = operacion(modelo)
+        if (nuevo === modelo) return true   // la operación no aplicaba; no se toca nada
+        cargarDesdePaquete(nuevo.aPaquete())
+        actualizarVista()
+        return true
     }
 
     /**
@@ -880,6 +910,13 @@ class DisenoNovaActivity : AppCompatActivity() {
             .setTitle("Editar módulo [$indiceModulo] en franja [$indiceFranjaActiva]")
             .setItems(opciones) { _, which ->
                 val p = fr.parantes
+                // Cambiar el tipo ya pasa por el modelo; el resto sigue por el camino viejo.
+                if (which == 0) {
+                    val visual = indiceModulo - inicioDelTramoActivo(fr)
+                    if (aplicarAlModelo {
+                            it.conTipoCambiado(indiceTramoActivo, indiceFranjaActiva, visual, tramosLibresBloqueados())
+                        }) return@setItems
+                }
                 when (which) {
                     0 -> fr.modulos[indiceModulo] =
                         if (fr.modulos[indiceModulo] == TipoModulo.CORREDIZA) TipoModulo.FIJO else TipoModulo.CORREDIZA
