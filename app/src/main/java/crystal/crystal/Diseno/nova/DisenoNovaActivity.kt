@@ -673,57 +673,23 @@ class DisenoNovaActivity : AppCompatActivity() {
             return
         }
 
-        val bloques = parsearBloquesTramo().toMutableList()
-        if (bloques.isEmpty()) {
-            Toast.makeText(this, "No se pudo leer el tramo.", Toast.LENGTH_SHORT).show()
+        val modelo = DisenoNova.desdePaquete(paqueteActualLectura())
+        if (modelo == null) {
+            Toast.makeText(this, "No se pudo leer el diseño.", Toast.LENGTH_SHORT).show()
             return
         }
-        val idx = indiceTramoActivo.coerceIn(0, bloques.lastIndex)
-        val bloque = bloques[idx]
-
-        val izquierda = mutableListOf<String>()
-        val derecha = mutableListOf<String>()
-        for (token in splitTopLevelSemicolon(bloque.contenido)) {
-            val t = token.trim()
-            val openP = t.indexOf('(')
-            if (openP < 0) { izquierda.add(t); derecha.add(t); continue }
-            val head = t.substring(0, openP)
-            val mods = parsearModsSegmento(extraerBloqueModulosFranja(t) ?: "")
-            if (mods.isEmpty()) { izquierda.add(t); derecha.add(t); continue }
-            fun texto(lista: List<ConteoMod>) =
-                "$head(${lista.joinToString("") { it.tipo.toString() }})"
-            if (mods.size == 1) {
-                // Una sola mocheta para todo el tramo: al partirlo, una para cada lado.
-                izquierda.add(texto(mods))
-                derecha.add(texto(mods))
-            } else {
-                // El resto de franjas se parte en la misma proporción que la de sistema, dejando
-                // al menos un módulo a cada lado.
-                val en = Math.round(mods.size * corte / tramoSize.toFloat()).coerceIn(1, mods.size - 1)
-                izquierda.add(texto(mods.subList(0, en)))
-                derecha.add(texto(mods.subList(en, mods.size)))
-            }
+        val idx = indiceTramoActivo.coerceIn(0, (modelo.nTramos - 1).coerceAtLeast(0))
+        val nuevo = modelo.conTramoPartido(idx, indiceModuloActivo)
+        if (nuevo === modelo) {
+            Toast.makeText(this, "A la derecha de ese módulo no queda nada que partir.", Toast.LENGTH_SHORT).show()
+            return
         }
-
-        // El ancho del tramo se reparte según los módulos de sistema que van a cada lado.
-        val anchoUtil = (bloque.ancho - anchoParanteCm).coerceAtLeast(2f)
-        val anchoIzq = anchoUtil * corte / tramoSize
-        var btIzq = BloqueTramo(bloque.letra, anchoIzq, izquierda.joinToString(";"))
-        var btDer = BloqueTramo(bloque.letra, anchoUtil - anchoIzq, derecha.joinToString(";"))
-        btIzq = anotarAnchosEquitativosFranja(btIzq, esSistema = true)
-        btIzq = anotarAnchosEquitativosFranja(btIzq, esSistema = false)
-        btDer = anotarAnchosEquitativosFranja(btDer, esSistema = true)
-        btDer = anotarAnchosEquitativosFranja(btDer, esSistema = false)
-
-        bloques[idx] = btIzq
-        bloques.add(idx + 1, btDer)
         tramosBlockeados.clear()
-
         indiceTramoActivo = idx
         indiceModuloActivo = corte - 1
-        cargarDesdePaquete(reconstruirPaqueteConBloques(bloques))
+        cargarDesdePaquete(nuevo.aPaquete())
         actualizarVista()
-        Toast.makeText(this, "Tramo partido: ${bloques.size} tramos", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Tramo partido: ${nuevo.nTramos} tramos", Toast.LENGTH_SHORT).show()
     }
 
     private fun agregarModuloDirecto(tipo: TipoModulo) {
