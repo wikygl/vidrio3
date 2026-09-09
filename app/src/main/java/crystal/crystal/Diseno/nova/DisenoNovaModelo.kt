@@ -72,6 +72,128 @@ data class DisenoNova(
     fun anchoUtil(anchoParante: Float = 2.5f): Float =
         (ancho - nParantes * anchoParante).coerceAtLeast(0f)
 
+    // ==================== OPERACIONES ====================
+    // Todas devuelven un diseño NUEVO; el modelo no se muta. Si los índices no valen devuelven
+    // el mismo diseño sin tocar, para que la pantalla no tenga que validar antes de llamar.
+
+    /**
+     * Reparte los anchos: el ancho útil (sin los parantes entre tramos) entre todos los módulos
+     * del sistema, cada tramo se queda con los suyos, y dentro de cada franja los módulos se
+     * reparten el ancho del tramo por igual.
+     *
+     * Es la regla de siempre: los tramos y las medidas salen de contar módulos.
+     */
+    fun conAnchosRepartidos(anchoParante: Float = 2.5f): DisenoNova {
+        val totalModulos = nModulos
+        if (totalModulos <= 0) return this
+        val porModulo = anchoUtil(anchoParante) / totalModulos
+        return copy(tramos = tramos.map { tramo ->
+            val anchoTramo = porModulo * tramo.nModulosSistema
+            NovaTramo(
+                ancho = anchoTramo,
+                franjas = tramo.franjas.map { fr ->
+                    val w = if (fr.modulos.isEmpty()) anchoTramo else anchoTramo / fr.modulos.size
+                    fr.copy(modulos = fr.modulos.map { it.copy(ancho = w) })
+                }
+            )
+        })
+    }
+
+    /**
+     * Parte el tramo [indice] en dos con un parante, justo después del módulo
+     * [despuesDelModulo] de su franja de sistema.
+     *
+     * El parante es vertical: parte el tramo ENTERO. Cada franja se reparte en la misma
+     * proporción que la de sistema, con al menos un módulo a cada lado; si una franja tenía un
+     * solo módulo —una mocheta corrida— cada tramo se queda con uno.
+     */
+    fun conTramoPartido(indice: Int, despuesDelModulo: Int): DisenoNova {
+        val tramo = tramos.getOrNull(indice) ?: return this
+        val nSistema = tramo.nModulosSistema
+        val corte = despuesDelModulo + 1
+        if (corte !in 1 until nSistema) return this
+
+        val izq = mutableListOf<NovaFranja>()
+        val der = mutableListOf<NovaFranja>()
+        for (fr in tramo.franjas) {
+            val n = fr.modulos.size
+            if (n <= 1) {
+                izq.add(fr)
+                der.add(fr)
+            } else {
+                val en = Math.round(n * corte / nSistema.toFloat()).coerceIn(1, n - 1)
+                izq.add(fr.copy(modulos = fr.modulos.subList(0, en).toList()))
+                der.add(fr.copy(modulos = fr.modulos.subList(en, n).toList()))
+            }
+        }
+        val nuevos = tramos.toMutableList()
+        nuevos[indice] = NovaTramo(tramo.ancho, izq)
+        nuevos.add(indice + 1, NovaTramo(tramo.ancho, der))
+        return copy(tramos = nuevos).conAnchosRepartidos()
+    }
+
+    /** Quita el parante entre el tramo [indice] y el siguiente: los dos vuelven a ser uno. */
+    fun conTramosUnidos(indice: Int): DisenoNova {
+        val a = tramos.getOrNull(indice) ?: return this
+        val b = tramos.getOrNull(indice + 1) ?: return this
+        // Las franjas se emparejan por orden y tipo; las que no tengan pareja se conservan.
+        val franjas = mutableListOf<NovaFranja>()
+        val pendientes = b.franjas.toMutableList()
+        for (fr in a.franjas) {
+            val pareja = pendientes.firstOrNull { it.esSistema == fr.esSistema }
+            if (pareja != null) {
+                pendientes.remove(pareja)
+                franjas.add(fr.copy(modulos = fr.modulos + pareja.modulos))
+            } else {
+                franjas.add(fr)
+            }
+        }
+        franjas.addAll(pendientes)
+        val nuevos = tramos.toMutableList()
+        nuevos[indice] = NovaTramo(a.ancho + b.ancho, franjas)
+        nuevos.removeAt(indice + 1)
+        return copy(tramos = nuevos).conAnchosRepartidos()
+    }
+
+    /** Agrega un módulo [tipo] justo después del módulo [despuesDe] de esa franja. */
+    fun conModuloAgregado(indiceTramo: Int, indiceFranja: Int, despuesDe: Int, tipo: Char): DisenoNova =
+        conFranjaCambiada(indiceTramo, indiceFranja) { mods ->
+            val pos = (despuesDe + 1).coerceIn(0, mods.size)
+            mods.toMutableList().apply { add(pos, NovaModulo(tipo)) }
+        }
+
+    /** Quita un módulo. Siempre queda al menos uno en la franja. */
+    fun conModuloQuitado(indiceTramo: Int, indiceFranja: Int, indice: Int): DisenoNova =
+        conFranjaCambiada(indiceTramo, indiceFranja) { mods ->
+            if (mods.size <= 1 || indice !in mods.indices) mods
+            else mods.toMutableList().apply { removeAt(indice) }
+        }
+
+    /** Cambia un fijo por corrediza y al revés. */
+    fun conTipoCambiado(indiceTramo: Int, indiceFranja: Int, indice: Int): DisenoNova =
+        conFranjaCambiada(indiceTramo, indiceFranja) { mods ->
+            if (indice !in mods.indices) mods
+            else mods.toMutableList().apply {
+                this[indice] = this[indice].copy(tipo = if (this[indice].esFijo) 'c' else 'f')
+            }
+        }
+
+    private fun conFranjaCambiada(
+        indiceTramo: Int,
+        indiceFranja: Int,
+        cambio: (List<NovaModulo>) -> List<NovaModulo>
+    ): DisenoNova {
+        val tramo = tramos.getOrNull(indiceTramo) ?: return this
+        val franja = tramo.franjas.getOrNull(indiceFranja) ?: return this
+        val nuevos = cambio(franja.modulos)
+        if (nuevos == franja.modulos) return this
+        val franjas = tramo.franjas.toMutableList()
+        franjas[indiceFranja] = franja.copy(modulos = nuevos)
+        val ts = tramos.toMutableList()
+        ts[indiceTramo] = tramo.copy(franjas = franjas)
+        return copy(tramos = ts).conAnchosRepartidos()
+    }
+
     fun aPaquete(): String {
         val cuerpo = tramos.joinToString(" $SEPARADOR_TRAMO ") { tramo ->
             val franjas = tramo.franjas.joinToString(";") { fr ->
