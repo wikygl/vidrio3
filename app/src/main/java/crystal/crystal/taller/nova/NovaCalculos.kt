@@ -905,16 +905,52 @@ object NovaCalculos {
         return rachas
     }
 
+    /**
+     * Líneas "medida = cantidad" a partir de las medidas EXACTAS, repartiendo el redondeo.
+     *
+     * `df1` trunca, así que cada pieza pierde hasta 0.099 y **siempre hacia abajo**: en una
+     * ventana de once módulos eso son 8 mm que faltan al llegar al otro extremo. Aquí ese resto
+     * se devuelve a las piezas de una en una, en décimas, empezando por las que más perdieron.
+     *
+     * Se reparte **solo lo que cabe entero en décimas**, nunca de más: los puentes y los parantes
+     * no pueden salir más largos que el ancho de la ventana. Lo que sobre queda por debajo, que
+     * es donde se puede perder sin que se note.
+     */
+    fun lineasConRedondeoRepartido(medidasExactas: List<Float>): String {
+        if (medidasExactas.isEmpty()) return ""
+        // Se trabaja en DÉCIMAS enteras. Con flotantes no sale: 33.3f + 0.1f da 33.399998, y df1
+        // lo trunca otra vez a 33.3, así que la décima devuelta se perdía sin avisar.
+        val enDecimas = medidasExactas.map { it * 10.0 }
+        val bases = enDecimas.map { kotlin.math.floor(it).toInt() }
+        val perdidas = enDecimas.mapIndexed { i, exacta -> exacta - bases[i] }
+        // Solo las décimas completas: nunca por encima de la suma exacta.
+        val aRepartir = kotlin.math.floor(perdidas.sum() + 1e-6).toInt()
+            .coerceIn(0, medidasExactas.size)
+        val suben = perdidas.withIndex()
+            .sortedByDescending { it.value }
+            .take(aRepartir)
+            .map { it.index }
+            .toSet()
+
+        fun texto(decimas: Int): String =
+            if (decimas % 10 == 0) (decimas / 10).toString() else "${decimas / 10}.${decimas % 10}"
+
+        val conteo = linkedMapOf<String, Int>()
+        for (i in bases.indices) {
+            val clave = texto(bases[i] + if (i in suben) 1 else 0)
+            conteo[clave] = (conteo[clave] ?: 0) + 1
+        }
+        return conteo.entries.joinToString("\n") { "${it.key} = ${it.value}" }
+    }
+
+    /**
+     * [uFijos] tiene que llegar SIN truncar: la racha de dos fijos vale la suma exacta de los dos
+     * y se trunca una sola vez, al escribirla. Truncando antes se perdía una décima por racha.
+     */
     fun textoUFijosColindantes(ancho: Float, divisiones: Int, uFijos: Float): String {
         val rachas = rachasFijosColindantes(ancho, divisiones)
         if (rachas.isEmpty()) return ""
-
-        val conteo = linkedMapOf<String, Int>()
-        for (racha in rachas) {
-            val medida = df1(uFijos * racha)
-            conteo[medida] = (conteo[medida] ?: 0) + 1
-        }
-        return conteo.entries.joinToString("\n") { "${it.key} = ${it.value}" }
+        return lineasConRedondeoRepartido(rachas.map { uFijos * it })
     }
 
     private fun esPuenteMultipleOGorrito(puente: String): Boolean {
