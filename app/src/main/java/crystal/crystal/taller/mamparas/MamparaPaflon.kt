@@ -54,6 +54,11 @@ class MamparaPaflon : AppCompatActivity() {
    * Vive aquí junto al patrón por lo mismo: el descriptor se rehace entero en cada Calcular.
    */
   private var marcoInferior: Boolean = false
+  /**
+   * Cuántas mamparas iguales lleva este producto. Llega de MedidaActivity y se puede cambiar en
+   * el diálogo de diseño. Al archivar se guarda una copia por unidad, numeradas seguidas.
+   */
+  private var cantidadProducto: Int = 1
   private var metaColorAluminio: String = ""
   private var metaTipoVidrio: String = ""
   private var metaAcabadoSuperficial: String = ""
@@ -75,6 +80,7 @@ class MamparaPaflon : AppCompatActivity() {
     super.onCreate(savedInstanceState)
     binding= ActivityMamparaPaflonBinding.inflate(layoutInflater)
     setContentView(binding.root)
+    cantidadProducto = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
     // Tocar "Referencias y Cálculos" abre la calculadora flotante.
     crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
@@ -290,10 +296,12 @@ class MamparaPaflon : AppCompatActivity() {
         // El hueco y el bastidor los necesita para repartir lo que sobra y avisar si no cabe.
         anchoUtil = runCatching { anchoUtil() }.getOrNull() ?: 0f,
         bastidor = binding.etBasti.text.toString().toFloatOrNull() ?: pAnch,
-        marcoInferiorActual = marcoInferior
-      ) { elegido, conMarcoInferior ->
+        marcoInferiorActual = marcoInferior,
+        cantidadActual = cantidadProducto
+      ) { elegido, conMarcoInferior, cantidad ->
         patronManual = elegido
         marcoInferior = conMarcoInferior
+        cantidadProducto = cantidad
         // Recalcular deja el dibujo y los materiales al día sin que haya que tocar nada más:
         // MamparaModulos es la única fuente, así que basta con volver a pedírselo.
         binding.btCalcular.performClick()
@@ -639,7 +647,7 @@ class MamparaPaflon : AppCompatActivity() {
         ?.ifBlank { "sin cliente" }
         ?: "sin cliente"
     )
-    val cantidad = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+    val cantidad = cantidadProducto
     return crystal.crystal.taller.PaqueteV2.construir(
       cliente = cliente,
       producto = "M,p,a,c,$numeroProducto",
@@ -658,7 +666,7 @@ class MamparaPaflon : AppCompatActivity() {
     }
 
     val prefijo = obtenerPrefijo()
-    val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+    val cant = cantidadProducto
     var ultimoID = ""
 
     for (u in 1..cant) {

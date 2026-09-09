@@ -43,6 +43,12 @@ class PDuchaActivity : AppCompatActivity() {
     private var ducha: SerieDucha?=null
     private var indice = 0
 
+    /**
+     * Cuántas duchas iguales lleva este producto. Llega de MedidaActivity y se puede cambiar en el
+     * diálogo de opciones. Al archivar se guarda una copia por unidad, numeradas seguidas.
+     */
+    private var cantidadProducto: Int = 1
+
     private val mapDuchas: LinkedHashMap<SerieDucha, MutableList<DoorData>> = LinkedHashMap()
 // Cada vez que pulsemos “Calcular”, meteremos los datos en mapDuchas[serie], de modo
 // que cada clave (p.ej. “A005”, “A010”, “C1”…) tenga lista de DoorData acumulados.
@@ -72,6 +78,9 @@ class PDuchaActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityPduchaBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        cantidadProducto = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+        crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
         // Proyecto activo (mismo patrón que Nova/Vitrovén/ventanas).
         ProyectoManager.inicializarDesdeStorage(this)
@@ -118,9 +127,37 @@ class PDuchaActivity : AppCompatActivity() {
             true
         }
 
-        // 4) Pulsar sobre la imagen de modelo (“ivModelo”) para cambiar de serie
+        // 4) Pulsar sobre la imagen de modelo abre las opciones, como en las demás calculadoras:
+        //    la cantidad y, debajo, el cambio de serie que antes hacía el propio toque.
         binding.ivModelo.setOnClickListener {
-            actualizarDuchas()   // Solo cambia la variable `ducha` y el texto de tvDucha
+            val dens = resources.displayMetrics.density
+            val fila = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+            fila.addView(android.widget.TextView(this).apply {
+                text = "Serie"
+                textSize = 13f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            })
+            val tvSerie = android.widget.TextView(this).apply {
+                text = ducha?.let { "${it.nombre} [${it.marca}]" } ?: "—"
+                textSize = 13f
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                ).apply { marginStart = (12 * dens).toInt() }
+            }
+            fila.addView(tvSerie)
+            fila.addView(android.widget.Button(this).apply {
+                text = "Cambiar"
+                setOnClickListener {
+                    actualizarDuchas()
+                    tvSerie.text = ducha?.let { "${it.nombre} [${it.marca}]" } ?: "—"
+                }
+            })
+            crystal.crystal.taller.OpcionesUI.mostrar(
+                this, "Opciones de la ducha", cantidadProducto, fila
+            ) { cant -> cantidadProducto = cant }
         }
 
         // Inicializamos la serie por primera vez (texto en tvDucha):
@@ -1073,7 +1110,7 @@ class PDuchaActivity : AppCompatActivity() {
     }
 
     private fun archivarMapas() {
-        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        val cant = cantidadProducto
         val referencias = ListaCasilla.ItemArchivable(
             binding.tvReferencias, binding.tvReferencias, conValor(binding.tvReferencias)
         )

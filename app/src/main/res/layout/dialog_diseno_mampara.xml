@@ -99,6 +99,72 @@
                 android:textSize="18sp" />
         </LinearLayout>
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="14dp"
+            android:background="#DDDDDD" />
+
+        <!-- Cuántas mamparas iguales: al archivar se guarda una copia por unidad, numeradas
+             seguidas, así que el material queda multiplicado. Mismo sitio que en las demás
+             calculadoras. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:labelFor="@+id/dmCantidad"
+                android:text="Cantidad"
+                android:textColor="#333333"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/dmCantidad"
+                android:layout_width="72dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:gravity="center"
+                android:importantForAutofill="no"
+                android:inputType="number"
+                android:maxLength="3"
+                android:text="1" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:text="iguales, numeradas seguidas"
+                android:textColor="#333333"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- La mampara paflón no lleva marco inferior: se apoya en el piso o en el plato de ducha.
+             Cuando el trabajo sí lo pide, se marca aquí y la hoja se apoya sobre él. -->
+        <CheckBox
+            android:id="@+id/dmMarcoInferior"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:checked="false"
+            android:text="Con marco inferior"
+            android:textColor="#333333"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:text="La hoja se apoya sobre el marco y conserva su alto: la altura de puente es interna, así que lo que se acorta es la mocheta de arriba."
+            android:textColor="#666666"
+            android:textSize="12sp" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

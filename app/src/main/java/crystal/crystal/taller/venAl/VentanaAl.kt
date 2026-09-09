@@ -40,6 +40,12 @@ class VentanaAl : AppCompatActivity() {
     // simple: fc, cc, cfc/fcc, fccf, cccc). Predeterminado "tramos". (Serie 20/25/62.)
     private var patron20 = "tramos"
 
+    /**
+     * Cuántas ventanas iguales lleva este producto. Llega de MedidaActivity y se puede cambiar en
+     * el diálogo de opciones. Al archivar se guarda una copia por unidad, numeradas seguidas.
+     */
+    private var cantidadProducto: Int = 1
+
     // Serie 3825: siempre por tramos. Patrón elegido por tramo (índice = nº de tramo). Cada tramo
     // puede cambiar entre los patrones de su tamaño (2 módulos: fc/cc; 3: cfc; 4: fccf/cccc). Vacío
     // = automático. Al recalcular se conserva la elección solo en los tramos cuyo tamaño coincide.
@@ -72,6 +78,9 @@ class VentanaAl : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding= ActivityVentanaAlBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        cantidadProducto = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+        crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
         ProyectoManager.inicializarDesdeStorage(this)
         proyectoCallback = ProyectoUIHelper.crearCallbackConActualizacionUI(
@@ -612,7 +621,11 @@ class VentanaAl : AppCompatActivity() {
         binding.txTraslape.text = "Traslape"; binding.tvTraslapo.text = fmt(tras)
         binding.txAdaptador.text = "Pierna c/aleta"; binding.tvAdaptador.text = fmt(ale)
         binding.txZocalo.text = "Zócalo"; binding.tvZocalo.text = fmt(zoc)
-        binding.txJunki.text = "Junquillo"; binding.tvJunki.text = fmt(junk)
+        // La etiqueta ES el nombre con el que se archiva la lista, así que tiene que ser la misma
+        // que usan las demás pantallas (@string/junkillo). Poniendo "Junquillo" a mano, el
+        // junquillo de esta serie acababa en una lista aparte: no aparecía junto al de los otros
+        // productos en corte de varillas ni sumaba con ellos.
+        binding.txJunki.text = getString(crystal.crystal.R.string.junkillo); binding.tvJunki.text = fmt(junk)
         binding.txCabezal.text = "Parante"; binding.tvCabezal.text = if (nPaflon > 0) "${df1(hRaw)} = $nPaflon" else ""
         binding.tvVidriosR.text = fmt(vid)
 
@@ -978,7 +991,7 @@ class VentanaAl : AppCompatActivity() {
         }
 
         val prefijo = obtenerPrefijo()
-        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        val cant = cantidadProducto
 
         for (u in 1..cant) {
             val siguienteNumero = ProyectoManager.obtenerSiguienteContadorPorPrefijo(this, prefijo)
@@ -1049,6 +1062,14 @@ class VentanaAl : AppCompatActivity() {
                 mapListas.getOrPut("Tipo vidrio") { mutableListOf() }
                     .add(mutableListOf(metaTipoVidrio, "", identificadorPaquete))
             }
+            // Los mismos datos en la clave canónica `-MAT<alu:...;vid:...>`. Las dos de arriba solo
+            // las lee la ficha; el corte de varillas lee ESTA (MetadatosProduccion.mapaPorVentana),
+            // y sin ella las listas salían con el nombre pelado, sin el color ni el vidrio que se
+            // escriben en el diálogo de archivar.
+            metadatosProduccionPaquete()?.let { paquete ->
+                mapListas.getOrPut("MetadatosProduccion") { mutableListOf() }
+                    .add(mutableListOf(paquete, "", identificadorPaquete))
+            }
             construirDescriptorVentanaAl()?.let { desc ->
                 mapListas.getOrPut("DisenoVentanaAl") { mutableListOf() }
                     .add(mutableListOf(desc.serializar(), "", identificadorPaquete))
@@ -1059,6 +1080,29 @@ class VentanaAl : AppCompatActivity() {
             MapStorage.guardarMap(this, mapListas)
         }
     }
+    /**
+     * Metadatos de la ventana en el formato que lee [crystal.crystal.casilla.MetadatosProduccion]:
+     * `-MAT<alu:...;vid:...>`. Null cuando no se escribió ninguno de los dos.
+     */
+    private fun metadatosProduccionPaquete(): String? {
+        val alu = escaparCampoMat(metaColorAluminio.ifBlank { "null" })
+        val vid = escaparCampoMat(metaTipoVidrio.ifBlank { "null" })
+        if (alu == "null" && vid == "null") return null
+        return "-MAT<alu:$alu;vid:$vid>"
+    }
+
+    /** Sanea el texto para no romper el formato -MAT<...> (mismo criterio que Nova y Vitroven). */
+    private fun escaparCampoMat(raw: String): String {
+        return raw
+            .replace("\n", " / ")
+            .replace("\r", " ")
+            .replace("-", "_")
+            .replace("<", "(")
+            .replace(">", ")")
+            .replace(";", ",")
+            .trim()
+    }
+
     // Función para verificar si un Layout es visible o tiene estado GONE
     private fun esValido(ly: LinearLayout): Boolean {
         return ly.visibility == View.VISIBLE || ly.visibility == View.INVISIBLE
@@ -1349,18 +1393,13 @@ class VentanaAl : AppCompatActivity() {
             VentanaAlRender.serieUsaPatron(serie) -> {
                 val opciones = VentanaAlRender.patronesDe(serie)
                 val (vista, getSel) = construirSelectorModulacion(opciones, patron20, serie) {}
-                val pad = (16 * resources.displayMetrics.density).toInt()
-                vista.setPadding(pad, pad, pad, 0)
-                AlertDialog.Builder(this)
-                    .setTitle("Tipo de ventana")
-                    .setView(android.widget.ScrollView(this).apply { addView(vista) })
-                    .setPositiveButton("Aceptar") { dialog, _ ->
-                        patron20 = getSel()
-                        renderizarPreviewEstructurada()
-                        dialog.dismiss()
-                    }
-                    .setNegativeButton("Cancelar", null)
-                    .show()
+                crystal.crystal.taller.OpcionesUI.mostrar(
+                    this, "Tipo de ventana", cantidadProducto, vista
+                ) { cant ->
+                    cantidadProducto = cant
+                    patron20 = getSel()
+                    renderizarPreviewEstructurada()
+                }
             }
             // Serie 3825: un solo diálogo — marco externo (Con/Sin) y la modulación POR TRAMO (un
             // selector por cada tramo, limitado a los patrones de su tamaño). Todo con botones de opción.
@@ -1440,32 +1479,27 @@ class VentanaAl : AppCompatActivity() {
                 }
                 refrescarPerTramo?.invoke()
 
-                val scroll = android.widget.ScrollView(this).apply { addView(cont) }
-                AlertDialog.Builder(this)
-                    .setTitle("Opciones de diseño")
-                    .setView(scroll)
-                    .setPositiveButton("Aceptar") { dialog, _ ->
-                        conMarco = rgMarco.checkedRadioButtonId == rbConMarco.id
-                        patron20 = getSelGen()
-                        if (patron20.equals("tramos", ignoreCase = true) && hayMedidas) {
-                            val elegidos = rgPorTramo.mapIndexed { i, rg ->
-                                val idx = rg.indexOfChild(rg.findViewById(rg.checkedRadioButtonId)).coerceAtLeast(0)
-                                opcionesTramo[i].getOrElse(idx) { opcionesTramo[i][0] }
-                            }
-                            patronesTramo3825.clear(); patronesTramo3825.addAll(elegidos)
+                crystal.crystal.taller.OpcionesUI.mostrar(
+                    this, "Opciones de diseño", cantidadProducto, cont
+                ) { cant ->
+                    cantidadProducto = cant
+                    conMarco = rgMarco.checkedRadioButtonId == rbConMarco.id
+                    patron20 = getSelGen()
+                    if (patron20.equals("tramos", ignoreCase = true) && hayMedidas) {
+                        val elegidos = rgPorTramo.mapIndexed { i, rg ->
+                            val idx = rg.indexOfChild(rg.findViewById(rg.checkedRadioButtonId)).coerceAtLeast(0)
+                            opcionesTramo[i].getOrElse(idx) { opcionesTramo[i][0] }
                         }
-                        if (hayMedidas) calcularSerieClasica() else renderizarPreviewEstructurada()
-                        dialog.dismiss()
+                        patronesTramo3825.clear(); patronesTramo3825.addAll(elegidos)
                     }
-                    .setNegativeButton("Cancelar", null)
-                    .show()
+                    if (hayMedidas) calcularSerieClasica() else renderizarPreviewEstructurada()
+                }
             }
-            // Serie 84: el marco es parte de la ventana, no hay opciones.
-            else -> Toast.makeText(
-                this,
-                "Esta serie no tiene opciones de diseño configurables",
-                Toast.LENGTH_SHORT
-            ).show()
+            // Serie 84: el marco es parte de la ventana, pero la cantidad se elige igual que en
+            // todas las demás calculadoras.
+            else -> crystal.crystal.taller.OpcionesUI.mostrar(
+                this, "Opciones", cantidadProducto
+            ) { cant -> cantidadProducto = cant }
         }
     }
 

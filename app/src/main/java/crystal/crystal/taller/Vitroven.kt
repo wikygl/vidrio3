@@ -38,6 +38,12 @@ class Vitroven : AppCompatActivity() {
     /** Holgura de armado del vidrio del fijo, sobre el ancho del U. */
     private val HOLGURA_FIJO = 0.3f
     private var texto =""
+
+    /**
+     * Cuántas ventanas iguales lleva este producto. Llega de MedidaActivity y se puede cambiar en
+     * el diálogo de opciones. Al archivar se guarda una copia por unidad, numeradas seguidas.
+     */
+    private var cantidadProducto: Int = 1
     private var diseno:String =""
     private var disenoSimbolicoManual: String = ""
     // Metadatos de producción (igual que Nova): color de aluminio y tipo de vidrio. Se piden en un
@@ -82,6 +88,9 @@ class Vitroven : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityVitrovenBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        cantidadProducto = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+        crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
         modelos()
 
@@ -235,10 +244,17 @@ class Vitroven : AppCompatActivity() {
         binding.btVitrofvf.setOnClickListener { seleccionarModelo("fvf", "vitroven3v", R.drawable.vitroven3v) }
         binding.btVitrobv.setOnClickListener { seleccionarModelo("vb", "vitroven4", R.drawable.vitroven4) }
         binding.btVitrobvs.setOnClickListener { seleccionarModelo("bvm", "vitroven5", R.drawable.vitroven5) }
+        // Tocar el diseño abre las opciones, como en las demás calculadoras: la cantidad y, al
+        // aceptar, el mismo despliegue de modelos que hacía antes el toque directo.
         binding.ivDiseno.setOnClickListener {
-            binding.ivDiseno.visibility = View.GONE
-            binding.svModelos.visibility = View.VISIBLE
-            if (binding.ivDiseno.rotation %360==90f) {binding.ivDiseno.rotation += -90f}
+            crystal.crystal.taller.OpcionesUI.mostrar(
+                this, "Opciones de la ventana", cantidadProducto
+            ) { cant ->
+                cantidadProducto = cant
+                binding.ivDiseno.visibility = View.GONE
+                binding.svModelos.visibility = View.VISIBLE
+                if (binding.ivDiseno.rotation % 360 == 90f) binding.ivDiseno.rotation += -90f
+            }
         }
         binding.ivDiseno.setOnLongClickListener {
             val anchoActual = binding.etAncho.text?.toString()?.toFloatOrNull() ?: return@setOnLongClickListener true
@@ -708,7 +724,7 @@ class Vitroven : AppCompatActivity() {
     }
 
     private fun archivarMapas() {
-        val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        val cant = cantidadProducto
         prepararCasillasArchivables()
 
         // Cada par respeta EXACTAMENTE el orden (nombre, datos) que usaba el archivado anterior.

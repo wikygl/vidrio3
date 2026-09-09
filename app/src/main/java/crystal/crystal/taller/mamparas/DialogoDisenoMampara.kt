@@ -34,7 +34,10 @@ object DialogoDisenoMampara {
      * @param divisiones   módulos que tiene hoy la mampara, para construir el punto de partida
      * @param anchoUtil    hueco entre marcos (cm), para avisar si las medidas fijadas no caben
      * @param bastidor     ancho del bastidor (cm), que también come del hueco
-     * @param onAplicar    recibe el patrón elegido, o "" si se pidió volver al automático
+     * @param marcoInferiorActual si la mampara lleva hoy marco inferior (por defecto no lleva)
+     * @param cantidadActual cuántas mamparas iguales lleva el producto
+     * @param onAplicar    recibe el patrón elegido —o "" si se pidió volver al automático—, si
+     *                     la mampara lleva marco inferior y la cantidad
      */
     fun mostrar(
         act: Activity,
@@ -42,7 +45,9 @@ object DialogoDisenoMampara {
         divisiones: Int,
         anchoUtil: Float,
         bastidor: Float,
-        onAplicar: (String) -> Unit
+        marcoInferiorActual: Boolean,
+        cantidadActual: Int,
+        onAplicar: (String, Boolean, Int) -> Unit
     ) {
         val b = DialogDisenoMamparaBinding.inflate(act.layoutInflater)
 
@@ -52,6 +57,12 @@ object DialogoDisenoMampara {
             (MamparaModulos.patronManual(patronActual) ?: patronAutomatico(divisiones))
                 .map { it.toMutableList() }
                 .toMutableList()
+
+        b.dmMarcoInferior.isChecked = marcoInferiorActual
+        b.dmCantidad.setText(cantidadActual.coerceAtLeast(1).toString())
+        // En blanco o 0 vale 1, igual que en las demás calculadoras.
+        fun leerCantidad(): Int =
+            b.dmCantidad.text?.toString()?.trim()?.toIntOrNull()?.coerceAtLeast(1) ?: 1
 
         val dlg = AlertDialog.Builder(act).setView(b.root).create()
         val d = act.resources.displayMetrics.density
@@ -150,9 +161,12 @@ object DialogoDisenoMampara {
         b.dmQuitarTramo.setOnClickListener {
             if (tramos.size > 1) { tramos.removeAt(tramos.lastIndex); pintar() }
         }
-        b.dmAuto.setOnClickListener { onAplicar(""); dlg.dismiss() }
+        // El marco inferior no depende de la disposición: volver al automático tampoco lo desmarca.
+        b.dmAuto.setOnClickListener {
+            onAplicar("", b.dmMarcoInferior.isChecked, leerCantidad()); dlg.dismiss()
+        }
         b.dmAplicar.setOnClickListener {
-            onAplicar(MamparaModulos.serializarPatron(tramos))
+            onAplicar(MamparaModulos.serializarPatron(tramos), b.dmMarcoInferior.isChecked, leerCantidad())
             dlg.dismiss()
         }
 
