@@ -650,9 +650,27 @@ object NovaCalculos {
         }
     }
 
-    fun nPuentesEfectivos(ancho: Float, divisiones: Int): Int {
-        return nPuentes(divisiones).coerceAtLeast(1)
+    /**
+     * En cuántos TRAMOS se parte la ventana. Es el origen del que salen las cantidades de puente,
+     * de U y de todo lo que va por tramo: se cuenta, no se saca de una tabla.
+     *
+     * Dos límites, y manda el que obligue a más tramos:
+     *  - **5 módulos** por tramo.
+     *  - **360 cm** de ancho por tramo.
+     *
+     * Con divisiones automáticas (`ceil(ancho/60)`) el de 360 nunca llega a activarse, porque
+     * cinco módulos miden como mucho 300. Solo aparece cuando el vidriero fija las divisiones a
+     * mano y los módulos salen anchos: 500 en dos divisiones son dos módulos de 250, y eso no va
+     * en un solo tramo.
+     */
+    fun tramos(ancho: Float, divisiones: Int): Int {
+        if (divisiones <= 0) return 1
+        val porModulos = ceil(divisiones / 5.0).toInt()
+        val porAncho = if (ancho > 0f) ceil(ancho / 360.0).toInt() else 1
+        return maxOf(porModulos, porAncho).coerceAtLeast(1)
     }
+
+    fun nPuentesEfectivos(ancho: Float, divisiones: Int): Int = tramos(ancho, divisiones)
     /**
      * Calcula medida de puentes para APARENTE
      */
@@ -943,20 +961,22 @@ object NovaCalculos {
         }
     }
 
-    fun mochetaUParante(divisiones: Int): Int {
-        return when (divisiones) {
-            1, 2, 3, 4, 5, 7, 9, 11, 13, 15 -> 2
-            6, 8 -> 4
-            10, 12, 14 -> 6
-            else -> if (divisiones > 0) (nPuentes(divisiones) * 2).coerceAtLeast(2) else 0
-        }
-    }
-
-    fun mochetaUParante(divisiones: Int, ancho: Float): Int {
-        val base = mochetaUParante(divisiones)
-        val porLongitud = (nPuentesEfectivos(ancho, divisiones) * 2).coerceAtLeast(2)
-        return maxOf(base, porLongitud)
-    }
+    /**
+     * U parante de la mocheta: **dos por tramo**, una a cada lado.
+     *
+     * Sale de contar los tramos (ver [tramos]), no de una tabla. La versión anterior era una tabla
+     * por número de divisiones que llegaba hasta 15:
+     *
+     *     1,2,3,4,5,7,9,11,13,15 -> 2
+     *     6,8                    -> 4
+     *     10,12,14               -> 6
+     *
+     * Esa tabla decía justamente "dos por tramo" en todos los casos menos en 10, donde metía la
+     * ventana entre las de tres tramos y devolvía 6. Con 10 divisiones el diseño hace DOS tramos
+     * de 5, así que le correspondían 4: una ventana de 586 pedía dos U de más.
+     */
+    fun mochetaUParante(divisiones: Int, ancho: Float): Int =
+        if (divisiones <= 0) 0 else (2 * tramos(ancho, divisiones)).coerceAtLeast(2)
     // ==================== FUNCIONES DE PORTAFELPA ====================
     fun cantidadPortafelpas(divisiones: Int, ancho: Float = divisiones.toFloat()): Int {
         if (divisiones <= 1) return 0
