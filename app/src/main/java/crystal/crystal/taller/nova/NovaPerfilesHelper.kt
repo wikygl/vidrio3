@@ -360,7 +360,7 @@ object NovaPerfilesHelper {
         bindings: BindingsU
     ) {
         val nFijos = NovaCalculos.nFijos(divisiones)
-        val fijoUParante = NovaCalculos.fijoUParante(divisiones)
+        val fijoUParante = NovaCalculos.fijoUParante(divisiones, ancho)
         val uFijos = NovaCalculos.uFijos(ancho, divisiones, cruce, tipoVentana)
         val mPuentes = NovaCalculos.mPuentes1(ancho, divisiones, tipoVentana)
         val uSuperior = calcularUSuperior(mPuentes)

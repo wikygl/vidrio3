@@ -412,7 +412,7 @@ object NovaInaCalculos {
         val uSuperiorVal = df1(uSuperior(ancho)).toFloat()
         val nFijosVal = nFijos(divisiones)
         // ncfc: U parante solo en fijos al borde del tramo (pared/parante); 0 = no se muestra.
-        val fijoUParanteVal = if (esCfc) NovaCalculos.uParanteFijosNcfc(ancho, divisiones) else fijoUParante(divisiones)
+        val fijoUParanteVal = if (esCfc) NovaCalculos.uParanteFijosNcfc(ancho, divisiones) else NovaCalculos.fijoUParante(divisiones, ancho)
         val textoUFijos = if (!incluirUFijos) {
             ""
         } else if (esFullFijos) {

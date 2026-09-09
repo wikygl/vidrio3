@@ -715,14 +715,35 @@ object NovaCalculos {
         return base
     }
 
-    // Wrapper para compatibilidad
+    /**
+     * Ancho de cada tramo, en el orden en que van. Sale del reparto de módulos: el ancho útil
+     * (descontando los parantes entre tramos) repartido entre las divisiones, y cada tramo se
+     * queda con los suyos. De aquí salen las medidas de puente y de riel.
+     */
+    fun medidasDeTramos(ancho: Float, divisiones: Int): List<Float> {
+        if (divisiones <= 0 || ancho <= 0f) return emptyList()
+        val grupos = gruposDivisionesPorTramo(ancho, divisiones)
+        if (grupos.isEmpty()) return emptyList()
+        val anchoUtil = ancho - (grupos.size - 1) * 2.5f
+        val porDivision = anchoUtil / divisiones
+        return grupos.map { porDivision * it }
+    }
 
+    /**
+     * Medida del puente: el ancho del tramo. Cuando los tramos no son todos iguales —el reparto
+     * de 14 es [5,4,5]— esta es la medida del tramo GRANDE y [mPuentes2] la del otro.
+     *
+     * Sale de contar el reparto, no de una tabla. Las tablas anteriores coincidían con el reparto
+     * en 6, 8, 12, 14 y 16, y fallaban en 10 aparente: daban 178.5 y 238 donde los dos tramos
+     * miden 298.7. El acabado no cambia la medida: el parante entre tramos es 2.5 en los dos.
+     *
+     *     apa: 1,2,3,4,5,7,9,11,13,15 -> ancho · 6,8 -> (ancho-2.5)/2
+     *          10 -> (ancho-5)/div*3 · 12 -> (ancho-5)/3 · 14 -> (ancho-5)/div*5
+     *     ina: igual, salvo 10 -> (ancho-2.5)/2
+     */
     fun mPuentes1(ancho: Float, divisiones: Int, tipoVentana: String = "apa"): Float {
-        return when (tipoVentana) {
-            "apa" -> mPuentes1Aparente(ancho, divisiones)
-            "ina", "piv" -> mPuentes1Inaparente(ancho, divisiones)
-            else -> mPuentes1Aparente(ancho, divisiones)
-        }
+        val medidas = medidasDeTramos(ancho, divisiones)
+        return medidas.maxOrNull() ?: ancho
     }
     fun mPuentes2Aparente(ancho: Float, divisiones: Int): Float {
         val parantes = 2.5f
@@ -739,12 +760,18 @@ object NovaCalculos {
             else -> 0f  // En INA, división 10 no usa mPuentes2
         }
     }
+    /**
+     * Segunda medida de puente: la del tramo distinto, cuando el reparto no es parejo. Con 14
+     * divisiones el reparto es [5,4,5], así que hay dos medidas y esta es la del tramo de 4. Si
+     * todos los tramos miden igual devuelve 0, que es como se marca "no hay segunda medida".
+     *
+     * Tablas anteriores: apa `10 y 14 -> (ancho-5)/div*4`; ina `14 -> (ancho-5)/div*4`. La fila
+     * de 10 en aparente sobraba: ese reparto es [5,5] y no tiene segunda medida.
+     */
     fun mPuentes2(ancho: Float, divisiones: Int, tipoVentana: String = "apa"): Float {
-        return when (tipoVentana) {
-            "apa" -> mPuentes2Aparente(ancho, divisiones)
-            "ina", "piv" -> mPuentes2Inaparente(ancho, divisiones)
-            else -> mPuentes2Aparente(ancho, divisiones)
-        }
+        val medidas = medidasDeTramos(ancho, divisiones)
+        val mayor = medidas.maxOrNull() ?: return 0f
+        return medidas.firstOrNull { kotlin.math.abs(it - mayor) > 0.001f } ?: 0f
     }
     // ==================== FUNCIONES DE U ====================
     // Calcula U fijos para APARENTE Fórmula: ((ancho - (2.5 * (nPuentes - 1))) + cruceTotal) / divisiones/*
@@ -924,6 +951,16 @@ object NovaCalculos {
             else -> uFijosAparente(ancho, divisiones, cruce, valorParanteApa)
         }
     }
+    /**
+     * TABLA ANTIGUA, solo de consulta: no la llame nadie. Cuenta mal en cuanto el número de
+     * divisiones no es uno de los tabulados — con 7, 9, 11, 13 o 15 se queda en 2 sin mirar
+     * cuántos tramos hay, y con 10 devuelve 6 cuando son dos tramos. Use [fijoUParante] con el
+     * ancho, que cuenta los fijos en los extremos de cada tramo.
+     *
+     *     1 -> 2 · 2 -> 1 · 3,4,5,7,9,11,13,15 -> 2 · 6,8 -> 4 · 10,12,14 -> 6
+     *     else -> nPuentes(divisiones) * 2
+     */
+    @Deprecated("Cuenta por tabla; use fijoUParante(divisiones, ancho)", ReplaceWith("fijoUParante(divisiones, ancho)"))
     fun fijoUParante(divisiones: Int): Int {
         return when (divisiones) {
             1 -> 2
