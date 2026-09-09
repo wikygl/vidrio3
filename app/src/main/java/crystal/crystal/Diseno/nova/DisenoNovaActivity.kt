@@ -443,122 +443,22 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun repetirModulo(fc: Char, cantidad: Int) {
         if (indiceFranjaActiva !in franjas.indices) return
         val fr = franjas[indiceFranjaActiva]
-        val tipo = if (fc == 'c' || fc == 'C') TipoModulo.CORREDIZA else TipoModulo.FIJO
-        var insertPos = finDelTramoActivo(fr)
-        repeat(cantidad) {
-            fr.modulos.add(insertPos, tipo)
-            for (i in fr.parantes.indices) { if (fr.parantes[i] >= insertPos) fr.parantes[i]++ }
-            insertPos++
+        val letra = if (fc == 'c' || fc == 'C') 'c' else 'f'
+        val bloqueados = tramosLibresBloqueados()
+        // Se agregan al final del tramo activo, uno tras otro.
+        var despuesDe = finDelTramoActivo(fr) - inicioDelTramoActivo(fr) - 1
+        aplicarAlModelo { d ->
+            var actual = d
+            repeat(cantidad) {
+                actual = actual.conModuloAgregado(
+                    indiceTramoActivo, indiceFranjaActiva, despuesDe, letra, bloqueados
+                )
+                despuesDe++
+            }
+            actual
         }
-        recalcularCorteVerticalProporcional()
-        aplicarModificacionModulosAlPaquete()
     }
 
-    /**
-     * Parchea el bloque T<> del tramo activo con los módulos actuales de franjas[indiceFranjaActiva],
-     * preservando la estructura NS multi-tramo.
-     */
-    private fun aplicarModificacionModulosAlPaquete() {
-        val fr = franjas.getOrNull(indiceFranjaActiva) ?: run {
-            actualizarVista(); return
-        }
-        val bloques = parsearBloquesTramo()
-        if (bloques.isEmpty()) {
-            actualizarVista(); return
-        }
-        val tramoIdx = if (indiceTramoActivo in bloques.indices) indiceTramoActivo else 0
-        val bloque = bloques[tramoIdx]
-        val franjaPrefix = if (fr.esSistema) "s" else "m"
-
-        val franjaTokens = splitTopLevelSemicolon(bloque.contenido).toMutableList()
-        val franjaIdxInBloque = franjaTokens.indexOfFirst {
-            it.trim().startsWith(franjaPrefix, ignoreCase = true)
-        }
-        if (franjaIdxInBloque < 0) {
-            actualizarVista(); return
-        }
-
-        val franjaToken = franjaTokens[franjaIdxInBloque].trim()
-        val openP = franjaToken.indexOf('(')
-        if (openP < 0) { actualizarVista(); return }
-        val franjaHead = franjaToken.substring(0, openP)   // e.g. "s<100>" o "s"
-
-        // Reconstruir string de módulos a partir del estado actual de fr
-        val newModStr = if (bloques.size > 1) {
-            // Multi-T: solo los módulos del tramo activo (sin ;P;)
-            val parantes = fr.parantes.sorted()
-            val start = if (tramoIdx == 0) 0 else parantes.getOrElse(tramoIdx - 1) { 0 }
-            val end   = parantes.getOrElse(tramoIdx) { fr.modulos.size }
-            fr.modulos.subList(start.coerceIn(0, fr.modulos.size), end.coerceIn(0, fr.modulos.size))
-                .joinToString("") { if (it == TipoModulo.CORREDIZA) "c" else "f" }
-                .ifEmpty { "f" }
-        } else {
-            val parantesSet = fr.parantes.toSet()
-            buildString {
-                fr.modulos.forEachIndexed { idx, mod ->
-                    if (idx in parantesSet) append(";P;")
-                    append(if (mod == TipoModulo.CORREDIZA) "c" else "f")
-                }
-            }.ifEmpty { "f" }
-        }
-
-        franjaTokens[franjaIdxInBloque] = "${franjaHead}(${newModStr})"
-        val newContenido = franjaTokens.joinToString(";")
-        val newBloques = bloques.toMutableList()
-        newBloques[tramoIdx] = BloqueTramo(bloque.letra, bloque.ancho, newContenido)
-
-        // Redistribuir anchos proporcionalmente al conteo de módulos de cada tramo.
-        // Si ningún tramo está bloqueado se ajustan todos; si hay bloqueados solo
-        // se redistribuye entre los libres absorbiendo el cambio.
-        if (bloques.size > 1) {
-            val conteosMods = newBloques.map { bt ->
-                val tokens = splitTopLevelSemicolon(bt.contenido)
-                val sTok = tokens.firstOrNull { it.trim().startsWith("s", ignoreCase = true) }
-                val modStr = sTok?.let { extraerBloqueModulosFranja(it) } ?: ""
-                parsearModsSegmento(modStr).size.coerceAtLeast(1)
-            }
-            val nParantes = bloques.size - 1
-            val anchoUtil = (anchoCm - nParantes * anchoParanteCm).coerceAtLeast(1f)
-            val bloqueados = (0 until bloques.size).filter { tramosBlockeados.getOrElse(it) { false } }
-            if (bloqueados.isEmpty()) {
-                // Todos libres: ancho proporcional al nº de módulos
-                val totalMods = conteosMods.sum().coerceAtLeast(1)
-                val anchoPorMod = anchoUtil / totalMods
-                for (t in newBloques.indices) {
-                    newBloques[t] = newBloques[t].copy(ancho = (anchoPorMod * conteosMods[t]).coerceAtLeast(1f))
-                }
-            } else {
-                // Solo redistribuir entre los tramos libres
-                val anchoFijo = bloqueados.sumOf { newBloques[it].ancho.toDouble() }.toFloat()
-                val anchoLibre = (anchoUtil - anchoFijo).coerceAtLeast(0f)
-                val libres = (0 until bloques.size).filter { it !in bloqueados }
-                val totalModsLibres = libres.sumOf { conteosMods[it] }.coerceAtLeast(1)
-                val anchoPorMod = anchoLibre / totalModsLibres
-                for (t in libres) {
-                    newBloques[t] = newBloques[t].copy(ancho = (anchoPorMod * conteosMods[t]).coerceAtLeast(1f))
-                }
-            }
-        }
-
-        // Escalar anotaciones <w> de módulos en los tramos cuyo ancho cambió,
-        // para que las medidas sigan siendo coherentes con el nuevo ancho del tramo.
-        for (t in newBloques.indices) {
-            val oldAncho = bloques[t].ancho
-            val newAncho = newBloques[t].ancho
-            if (kotlin.math.abs(oldAncho - newAncho) > 0.05f && oldAncho > 0.001f) {
-                newBloques[t] = escalarAnchosModulosEnBloque(newBloques[t], newAncho / oldAncho)
-            }
-        }
-
-        // La franja editada puede tener módulos recién agregados sin <w>: se anotan con
-        // anchos equitativos para que el paquete siempre lleve anchos explícitos.
-        if (tramoIdx in newBloques.indices) {
-            newBloques[tramoIdx] = anotarAnchosEquitativosFranja(newBloques[tramoIdx], fr.esSistema)
-        }
-
-        cargarDesdePaquete(reconstruirPaqueteConBloques(newBloques))
-        actualizarVista()
-    }
 
     /**
      * Escala todas las anotaciones <w> de los módulos de un bloque por [factor].
@@ -619,29 +519,6 @@ class DisenoNovaActivity : AppCompatActivity() {
         return bloque.copy(contenido = tokens.joinToString(";"))
     }
 
-    /**
-     * Reescribe los módulos de la franja [esSistema] del bloque con anchos explícitos
-     * equitativos (ancho del tramo ÷ nº de módulos), preservando los ;P; internos.
-     * Garantiza que el editor emita siempre <w>, incluso en módulos recién agregados.
-     */
-    private fun anotarAnchosEquitativosFranja(bloque: BloqueTramo, esSistema: Boolean): BloqueTramo {
-        val prefix = if (esSistema) "s" else "m"
-        val tokens = splitTopLevelSemicolon(bloque.contenido).toMutableList()
-        val idx = tokens.indexOfFirst { it.trim().startsWith(prefix, ignoreCase = true) }
-        if (idx < 0) return bloque
-        val token = tokens[idx].trim()
-        val openP = token.indexOf('('); if (openP < 0) return bloque
-        val head = token.substring(0, openP)
-        val interior = extraerBloqueModulosFranja(token) ?: return bloque
-        val grupos = interior.split(Regex("""(?i)\s*;\s*p\s*;\s*"""))
-        val nMods = grupos.sumOf { parsearModsSegmento(it).size }.coerceAtLeast(1)
-        val w = bloque.ancho / nMods
-        val nuevoInterior = grupos.joinToString(";P;") { g ->
-            parsearModsSegmento(g).joinToString("") { m -> "${m.tipo}<${df1(w)}>" }
-        }.ifEmpty { "f<${df1(bloque.ancho)}>" }
-        tokens[idx] = "$head($nuevoInterior)"
-        return bloque.copy(contenido = tokens.joinToString(";"))
-    }
 
     /**
      * Parte el TRAMO en dos con un parante a la derecha del módulo seleccionado.
@@ -708,15 +585,9 @@ class DisenoNovaActivity : AppCompatActivity() {
             tramoEnd
         }
         val visualIdx = insertIdx - tramoStart
-        val despuesDe = visualIdx - 1
         val letra = if (tipo == TipoModulo.CORREDIZA) 'c' else 'f'
-        if (!aplicarAlModelo {
-                it.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, despuesDe, letra, tramosLibresBloqueados())
-            }) {
-            fr.modulos.add(insertIdx, tipo)
-            fr.parantes.replaceAll { p -> if (p >= insertIdx) p + 1 else p }
-            recalcularCorteVerticalProporcional()
-            aplicarModificacionModulosAlPaquete()
+        aplicarAlModelo {
+            it.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visualIdx - 1, letra, tramosLibresBloqueados())
         }
         indiceModuloActivo = visualIdx
         binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, visualIdx)
@@ -740,14 +611,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             tramoEnd - 1
         }
         val visual = idx - tramoStart
-        if (!aplicarAlModelo { it.conModuloQuitado(indiceTramoActivo, indiceFranjaActiva, visual, tramosLibresBloqueados()) }) {
-            // Sin modelo legible se mantiene el camino de siempre.
-            fr.modulos.removeAt(idx)
-            fr.parantes.replaceAll { p -> if (p > idx) p - 1 else p }
-            fr.parantes.removeAll { p -> p <= 0 || p >= fr.modulos.size }
-            recalcularCorteVerticalProporcional()
-            aplicarModificacionModulosAlPaquete()
-        }
+        aplicarAlModelo { it.conModuloQuitado(indiceTramoActivo, indiceFranjaActiva, visual, tramosLibresBloqueados()) }
         indiceModuloActivo = -1
         binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
     }
@@ -775,41 +639,6 @@ class DisenoNovaActivity : AppCompatActivity() {
         return true
     }
 
-    /**
-     * Recalcula [corteVerticalCm] de forma proporcional al conteo de módulos
-     * en cada tramo de la franja activa. Así, al agregar/quitar un módulo en
-     * cualquier tramo, los anchos de TODOS los tramos se ajustan proporcionalmente
-     * y todos los módulos quedan con el mismo ancho relativo.
-     *
-     * Para tramos de más de 2 secciones pone null para que VistaDiseno
-     * distribuya igualmente desde las posiciones de parante.
-     */
-    private fun recalcularCorteVerticalProporcional() {
-        val fr = franjas.getOrNull(indiceFranjaActiva) ?: return
-        val parantes = fr.parantes.sorted()
-        if (parantes.isEmpty()) {
-            // Sin parantes: 1 tramo, no hay corte vertical
-            corteVerticalCm = null
-            return
-        }
-        // Si el paquete ya define varios bloques T<> independientes, los tramos
-        // están en la estructura del paquete, no en corteVerticalCm.
-        // Poner corteVerticalCm=null evita el parante duplicado visual.
-        if (parsearBloquesTramo().size > 1) { corteVerticalCm = null; return }
-
-        if (parantes.size > 1) {
-            // Más de 2 tramos: VistaDiseno distribuye igualmente desde posición de parante
-            corteVerticalCm = null
-            return
-        }
-        // Exactamente 1 parante → 2 tramos en formato bloque único
-        val n1 = parantes[0]                    // módulos en tramo 1
-        val n2 = fr.modulos.size - parantes[0]  // módulos en tramo 2
-        val total = n1 + n2
-        if (total <= 0) { corteVerticalCm = null; return }
-        val corte = anchoCm * n1.toFloat() / total.toFloat()
-        corteVerticalCm = corte.takeIf { it > 0f && it < anchoCm }
-    }
 
     private fun dialogoSeleccionarFranjaActiva() {
         if (franjas.isEmpty()) {
@@ -912,37 +741,29 @@ class DisenoNovaActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Editar módulo [$indiceModulo] en franja [$indiceFranjaActiva]")
             .setItems(opciones) { _, which ->
-                val p = fr.parantes
-                // Cambiar el tipo ya pasa por el modelo; el resto sigue por el camino viejo.
-                if (which == 0) {
-                    val visual = indiceModulo - inicioDelTramoActivo(fr)
-                    if (aplicarAlModelo {
-                            it.conTipoCambiado(indiceTramoActivo, indiceFranjaActiva, visual, tramosLibresBloqueados())
-                        }) return@setItems
-                }
-                when (which) {
-                    0 -> fr.modulos[indiceModulo] =
-                        if (fr.modulos[indiceModulo] == TipoModulo.CORREDIZA) TipoModulo.FIJO else TipoModulo.CORREDIZA
-                    1 -> { fr.modulos.add(indiceModulo, TipoModulo.FIJO); p.replaceAll { if (it >= indiceModulo) it + 1 else it } }
-                    2 -> { fr.modulos.add(indiceModulo, TipoModulo.CORREDIZA); p.replaceAll { if (it >= indiceModulo) it + 1 else it } }
-                    3 -> { fr.modulos.add(indiceModulo + 1, TipoModulo.FIJO); p.replaceAll { if (it >= indiceModulo + 1) it + 1 else it } }
-                    4 -> { fr.modulos.add(indiceModulo + 1, TipoModulo.CORREDIZA); p.replaceAll { if (it >= indiceModulo + 1) it + 1 else it } }
-                    5 -> {
-                        if (fr.modulos.size <= 1) {
-                            Toast.makeText(this, "Debe quedar al menos un módulo.", Toast.LENGTH_SHORT).show()
-                            return@setItems
-                        }
-                        fr.modulos.removeAt(indiceModulo)
-                        p.replaceAll { if (it > indiceModulo) it - 1 else it }
-                        p.removeAll { it <= 0 || it >= fr.modulos.size }
-                    }
-                }
-                // Reconstruye en la cadena el tramo que contiene el módulo editado (sin aPaquete()).
+                // El tramo activo es el que contiene el módulo editado.
                 val sorted = fr.parantes.sorted()
                 var t = 0
                 for (pp in sorted) { if (indiceModulo >= pp) t++ else break }
                 indiceTramoActivo = t.coerceIn(0, sorted.size)
-                aplicarModificacionModulosAlPaquete()
+
+                val visual = indiceModulo - inicioDelTramoActivo(fr)
+                val bloqueados = tramosLibresBloqueados()
+                if (which == 5 && fr.modulos.size <= 1) {
+                    Toast.makeText(this, "Debe quedar al menos un módulo.", Toast.LENGTH_SHORT).show()
+                    return@setItems
+                }
+                aplicarAlModelo { d ->
+                    when (which) {
+                        0 -> d.conTipoCambiado(indiceTramoActivo, indiceFranjaActiva, visual, bloqueados)
+                        1 -> d.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visual - 1, 'f', bloqueados)
+                        2 -> d.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visual - 1, 'c', bloqueados)
+                        3 -> d.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visual, 'f', bloqueados)
+                        4 -> d.conModuloAgregado(indiceTramoActivo, indiceFranjaActiva, visual, 'c', bloqueados)
+                        5 -> d.conModuloQuitado(indiceTramoActivo, indiceFranjaActiva, visual, bloqueados)
+                        else -> d
+                    }
+                }
             }
             .setNegativeButton("Cancelar", null)
             .show()
@@ -1360,60 +1181,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         return out
     }
 
-    private fun resumenFranjaSeleccionada(base: String, tramoIdx: Int, franjaIdx: Int): String {
-        val limpio = base.replace(" ", "")
-        val idxColon = limpio.indexOf(':')
-        val idxClose = limpio.lastIndexOf(']')
-        if (idxColon < 0 || idxClose <= idxColon || franjaIdx !in franjas.indices) return ""
-        val cuerpo = limpio.substring(idxColon + 1, idxClose)
-        val franjasTop = splitTopLevelSemicolon(cuerpo)
-        val token = franjasTop.getOrNull(franjaIdx) ?: return ""
-        val bloqueMods = extraerBloqueModulosFranja(token) ?: return ""
-        val segmentos = bloqueMods.split(Regex("""(?i)\s*;\s*p\s*;\s*""")).filter { it.isNotBlank() }
-        val seg = segmentos.getOrNull(tramoIdx) ?: segmentos.firstOrNull().orEmpty()
-        val mods = parsearModsSegmento(seg)
-        if (mods.isEmpty()) return ""
 
-        fun parte(tipo: Char, etiqueta: String): String {
-            val filtrados = mods.filter { it.tipo == tipo }
-            if (filtrados.isEmpty()) return ""
-            val n = filtrados.size
-            val medidas = filtrados.mapNotNull { it.medida }.distinct()
-            val txtMed = if (medidas.isEmpty()) "" else {
-                if (medidas.size == 1) " de ${df1(medidas[0])} cm"
-                else " (${medidas.joinToString("/") { "${df1(it)} cm" }})"
-            }
-            val plural = if (n == 1) etiqueta else "${etiqueta}s"
-            return "$n $plural$txtMed"
-        }
 
-        val tipoFranja = if (franjas[franjaIdx].esSistema) "Sistema" else "Mocheta"
-        val fijoTxt = parte('f', "fijo")
-        val corrTxt = parte('c', "corrediza")
-        val detalle = listOf(fijoTxt, corrTxt).filter { it.isNotBlank() }.joinToString(" y ")
-        return "$tipoFranja: $detalle"
-    }
-
-    private fun resumenFranjaSeleccionadaFallback(base: String, franjaIdx: Int): String {
-        val limpio = base.replace(" ", "")
-        val idxColon = limpio.indexOf(':')
-        val idxClose = limpio.lastIndexOf(']')
-        if (idxColon < 0 || idxClose <= idxColon) return ""
-        val cuerpo = limpio.substring(idxColon + 1, idxClose)
-        val tokens = splitTopLevelSemicolon(cuerpo)
-        val token = tokens.getOrNull(franjaIdx) ?: return ""
-        val tipoFranja = if (token.trim().startsWith("s", true)) "Sistema" else "Mocheta"
-        return "$tipoFranja: sin detalle"
-    }
-
-    private fun anchosTramoDesdeModulos(fr: Franja): List<Float> {
-        val parantes = fr.parantes.sorted()
-        val limites = listOf(0) + parantes + listOf(fr.modulos.size)
-        val conteos = (0 until limites.lastIndex).map { limites[it + 1] - limites[it] }
-        val totalMods = conteos.sum().coerceAtLeast(1)
-        val anchoUtil = (anchoCm - parantes.size * anchoParanteCm).coerceAtLeast(0f)
-        return conteos.map { anchoUtil * it / totalMods }
-    }
 
     // ---- Datos de tramo extraídos del paquete ----
     private data class InfoTramo(val ancho: Float, val sistemaAltura: Float, val mochetaAltura: Float)
