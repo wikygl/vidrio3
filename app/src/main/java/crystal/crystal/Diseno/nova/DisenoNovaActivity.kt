@@ -79,7 +79,11 @@ class DisenoNovaActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         // ---- MODO HEADLESS (genera imagen y termina) ----
-        val paqueteIntent = intent.getStringExtra(EXTRA_PAQUETE) ?: "{nova,ina,[150,120:Tl<150>(s(f))]}"
+        // Sin diseño de entrada se empieza de cero: en vez del fijo suelto que había escrito aquí
+        // a mano (150x120, un módulo), la ventana sale ya repartida con las reglas de siempre.
+        val paqueteIntent = intent.getStringExtra(EXTRA_PAQUETE)
+            ?: runCatching { DisenoNova.nuevo("ina", 150f, 120f, altoHoja = 120f).aPaquete() }
+                .getOrElse { "{nova,ina,[150,120:Tl<150>(s(f))]}" }
         mochetaLateralCm = intent.getFloatExtra(EXTRA_MOCHETA_LATERAL_CM, 0f)
         encuentroVacio = intent.getStringExtra(EXTRA_ENCUENTRO_VACIO) ?: "1111"
         direccion = intent.getStringExtra(EXTRA_DIRECCION) ?: "adentro"
@@ -1913,4 +1917,42 @@ class DisenoNovaActivity : AppCompatActivity() {
             putExtra(RESULT_PAQUETE, paqueteSalida)
         })
     }
+
+    // ==================== ENGANCHES PARA LAS PRUEBAS EN EL CELULAR ====================
+    // Sirven para que la prueba instrumentada pueda leer el diseño y pulsar los botones sin
+    // depender de coordenadas de pantalla. No los usa la app.
+
+    @androidx.annotation.VisibleForTesting
+    fun paqueteParaPruebas(): String = paqueteActualLectura()
+
+    @androidx.annotation.VisibleForTesting
+    fun estadoParaPruebas(): String =
+        "ancho=$anchoCm alto=$altoCm franjas=${franjas.size} orig=[$paqueteOriginal]"
+
+    /**
+     * Carga un diseño en la pantalla ya abierta. Las pruebas lo usan en vez de mandar el diseño
+     * por el intent: el celular restaura la pantalla que quedó abierta con SUS extras, y entonces
+     * la prueba acabaría midiendo el diseño del usuario en lugar del suyo.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun cargarParaPruebas(paquete: String) {
+        cargarDesdePaquete(paquete)
+        actualizarVista()
+    }
+
+    @androidx.annotation.VisibleForTesting
+    fun seleccionarParaPruebas(franja: Int, tramo: Int, modulo: Int) {
+        indiceFranjaActiva = franja
+        indiceTramoActivo = tramo
+        indiceModuloActivo = modulo
+    }
+
+    @androidx.annotation.VisibleForTesting
+    fun pulsarFijoParaPruebas() = binding.fijo.performClick()
+
+    @androidx.annotation.VisibleForTesting
+    fun pulsarCorredizaParaPruebas() = binding.corrediza.performClick()
+
+    @androidx.annotation.VisibleForTesting
+    fun pulsarParanteParaPruebas() = binding.parante.performClick()
 }

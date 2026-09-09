@@ -31,6 +31,9 @@ android {
         // versionName es lo que ve la gente; versionCode es lo que compara el sistema.
         versionCode 2
         versionName "1.1.0-beta1"
+        // Pruebas instrumentadas: corren en el celular, así se puede comprobar que la pantalla
+        // hace lo que dice en vez de dar por bueno que compila.
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // Dos canales de distribución con reglas de cobro distintas.
@@ -130,6 +133,11 @@ android {
 }
 
 dependencies {
+    // Pruebas que corren en el celular: lanzan la pantalla de verdad y pulsan sus botones.
+    androidTestImplementation "androidx.test.ext:junit:1.1.5"
+    androidTestImplementation "androidx.test:runner:1.5.2"
+    androidTestImplementation "androidx.test:rules:1.5.0"
+
     // Firebase
     implementation platform("com.google.firebase:firebase-bom:32.8.0")
     implementation "com.google.firebase:firebase-auth-ktx"

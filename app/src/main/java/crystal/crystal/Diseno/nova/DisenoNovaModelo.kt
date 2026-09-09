@@ -223,7 +223,8 @@ data class DisenoNova(
                 val mods = fr.modulos.joinToString("") { m ->
                     if (m.ancho != null) "${m.tipo}<${df(m.ancho)}>" else m.tipo.toString()
                 }
-                "$cabeza<${df(fr.alto)}>($mods)"
+                // Una franja sin altura se escribe sin `<alto>`, como venía.
+                if (fr.alto > 0f) "$cabeza<${df(fr.alto)}>($mods)" else "$cabeza($mods)"
             }
             "Tl<${df(tramo.ancho)}>($franjas)"
         }
@@ -240,7 +241,10 @@ data class DisenoNova(
         // motor de Android (ICU) los rechaza y revienta al inicializar la clase, no al usarla, así
         // que la app se cae con ExceptionInInitializerError y las pruebas de escritorio no lo ven.
         private val RE_CABECERA = Regex("""\{nova\s*,\s*([a-z]+)\s*,\s*\[(.*)\]\}""", RegexOption.IGNORE_CASE)
-        private val RE_FRANJA = Regex("""^([smSM])\s*<\s*([\d.,-]+)\s*>""")
+        // La altura es OPCIONAL: los diseños viejos y el de arranque escriben la franja como
+        // `s(f)`, sin `<alto>`. Exigirla hacía que el modelo no pudiera leerlos, y entonces las
+        // ediciones no hacían nada.
+        private val RE_FRANJA = Regex("""^([smSM])\s*(?:<\s*([\d.,-]+)\s*>)?\s*\(""")
         private val RE_MODULO = Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>)?""")
         private val RE_TRAMO = Regex("""^t[a-z]?\s*<\s*([\d.,-]+)\s*>""", RegexOption.IGNORE_CASE)
         private val RE_ETIQUETA = Regex("""^[AUO]<[^>]*>$""", RegexOption.IGNORE_CASE)
@@ -340,7 +344,8 @@ data class DisenoNova(
             val t = texto.trim()
             val cab = RE_FRANJA.find(t) ?: return null
             val esSistema = cab.groupValues[1].lowercase() == "s"
-            val alto = num(cab.groupValues[2])
+            // Sin `<alto>` la franja vale 0 y se escribe igual: es lo que hace el diseño viejo.
+            val alto = cab.groupValues[2].takeIf { it.isNotBlank() }?.let { num(it) } ?: 0f
             val interior = interiorDeParentesis(t) ?: return null
             val modulos = RE_MODULO.findAll(interior).map { mm ->
                 val tipo = mm.groupValues[1].lowercase().first()
