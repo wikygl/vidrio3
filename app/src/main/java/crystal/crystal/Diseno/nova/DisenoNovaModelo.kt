@@ -236,7 +236,10 @@ data class DisenoNova(
 
         private fun df(v: Float) = NovaCalculos.df1(v)
 
-        private val RE_CABECERA = Regex("""\{nova\s*,\s*([a-z]+)\s*,\s*\[(.*)]}""", RegexOption.IGNORE_CASE)
+        // OJO con los cierres: hay que escapar `]` y `}` aunque en la JVM se acepten sueltos. El
+        // motor de Android (ICU) los rechaza y revienta al inicializar la clase, no al usarla, así
+        // que la app se cae con ExceptionInInitializerError y las pruebas de escritorio no lo ven.
+        private val RE_CABECERA = Regex("""\{nova\s*,\s*([a-z]+)\s*,\s*\[(.*)\]\}""", RegexOption.IGNORE_CASE)
         private val RE_FRANJA = Regex("""^([smSM])\s*<\s*([\d.,-]+)\s*>""")
         private val RE_MODULO = Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>)?""")
         private val RE_TRAMO = Regex("""^t[a-z]?\s*<\s*([\d.,-]+)\s*>""", RegexOption.IGNORE_CASE)

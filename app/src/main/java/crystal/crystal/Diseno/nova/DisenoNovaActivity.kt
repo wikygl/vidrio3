@@ -673,7 +673,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             return
         }
 
-        val modelo = DisenoNova.desdePaquete(paqueteActualLectura())
+        val modelo = runCatching { DisenoNova.desdePaquete(paqueteActualLectura()) }.getOrNull()
         if (modelo == null) {
             Toast.makeText(this, "No se pudo leer el diseño.", Toast.LENGTH_SHORT).show()
             return
@@ -764,8 +764,11 @@ class DisenoNovaActivity : AppCompatActivity() {
      * operaciones una por una.
      */
     private fun aplicarAlModelo(operacion: (DisenoNova) -> DisenoNova): Boolean {
-        val modelo = DisenoNova.desdePaquete(paqueteActualLectura()) ?: return false
-        val nuevo = operacion(modelo)
+        // Cualquier fallo del modelo devuelve false y la pantalla sigue por el camino viejo: en
+        // plena migración, una edición no puede tumbar la app.
+        val modelo = runCatching { DisenoNova.desdePaquete(paqueteActualLectura()) }
+            .getOrNull() ?: return false
+        val nuevo = runCatching { operacion(modelo) }.getOrNull() ?: return false
         if (nuevo === modelo) return true   // la operación no aplicaba; no se toca nada
         cargarDesdePaquete(nuevo.aPaquete())
         actualizarVista()
