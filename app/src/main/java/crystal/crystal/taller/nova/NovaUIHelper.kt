@@ -139,11 +139,13 @@ object NovaUIHelper {
             "sin puente"
         }
 
+        // Dónde va la mocheta según el remate: en el normal va ARRIBA del sistema, en el
+        // invertido ABAJO, y en bandera (doble puente) hay una a cada lado.
         val (mochetaInf, mochetaSup) = if (siNoMoch == 0) {
             0f to 0f
         } else {
             when (remate) {
-                "nr" -> 0f to (alto - altoHoja).coerceAtLeast(0f)
+                "nr" -> (alto - altoHoja).coerceAtLeast(0f) to 0f
                 "np" -> {
                     val alturas = NovaInaCalculos.alturasMochetasPorModelo(
                         modelo = remate,
@@ -156,15 +158,20 @@ object NovaUIHelper {
                     val inf = alturas.inferior ?: alturas.superior
                     inf.coerceAtLeast(0f) to alturas.superior.coerceAtLeast(0f)
                 }
-                else -> (alto - altoHoja).coerceAtLeast(0f) to 0f
+                else -> 0f to (alto - altoHoja).coerceAtLeast(0f)
             }
         }
 
-        val referenciasBase = "An: ${NovaCalculos.df1(anchoReal)}  x  Al: ${NovaCalculos.df1(altoReal)}\n" +
-                "Altura de puente: $altoPuenteTexto\n" +
-                "mocheta inf: ${NovaCalculos.df1(mochetaInf)}\n" +
-                "mocheta sup: ${NovaCalculos.df1(mochetaSup)}\n" +
-                "Divisiones: $divisiones -> fjs: $nFijos;czs: $nCorredizas"
+        // Las mochetas que no existen no se listan: en el remate normal no hay inferior y en el
+        // invertido no hay superior, y una línea en 0 solo confunde al que lee la referencia.
+        val lineas = mutableListOf(
+            "An: ${NovaCalculos.df1(anchoReal)}  x  Al: ${NovaCalculos.df1(altoReal)}",
+            "Altura de puente: $altoPuenteTexto"
+        )
+        if (mochetaInf > 0f) lineas.add("mocheta inf: ${NovaCalculos.df1(mochetaInf)}")
+        if (mochetaSup > 0f) lineas.add("mocheta sup: ${NovaCalculos.df1(mochetaSup)}")
+        lineas.add("Divisiones: $divisiones -> fjs: $nFijos;czs: $nCorredizas")
+        val referenciasBase = lineas.joinToString("\n")
 
         return if (divisiones > 4 && puntosU.isNotEmpty()) {
             "$referenciasBase\nPuntos: $puntosU"
