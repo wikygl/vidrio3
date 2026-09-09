@@ -3480,10 +3480,11 @@ class NovaCorrediza : AppCompatActivity() {
 
     private fun disenoSimbolicoV2(numeroProductoAuto: Int? = null): String {
         val clienteTxt = escaparCampoV2(binding.txC.text?.toString()?.trim().orEmpty().ifBlank { "sin cliente" })
-        val anchoValor = binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f
-        // En curvo se guarda el arco (ver arcoCurvo): cuerda + flecha si se indican.
-        val anchoTxt = dfV2(arcoCurvo(anchoValor))
-        val altoTxt = dfV2(binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f)
+        // Un ancho y un alto por LADO: la cantidad de anchos es la que dice si la geometría se
+        // resuelve en L (2), en C (3) o en serie (más). Ver medidasDeLaGeometria.
+        val lados = medidasDeLaGeometria()
+        val anchosTxt = lados.joinToString(",") { dfV2(it.ancho) }
+        val altosTxt = lados.joinToString(",") { dfV2(it.alto) }
         val hpTxt = dfV2(binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f)
         val cantidad = obtenerCantidadPreferida()
         val numeroProducto = numeroProductoPreferido(numeroProductoAuto)
@@ -3517,21 +3518,68 @@ class NovaCorrediza : AppCompatActivity() {
             else -> "x"
         }
         val disenoTecnico = try { disenoSimbolico() } catch (_: Exception) { "" }
-        val tramo = "L{${escaparCampoV2(disenoTecnico.ifBlank { "null" })}}"
+        val tramo = escaparCampoV2(tramosDelPaquete(disenoTecnico).ifBlank { "null" })
         val aluminio = escaparCampoV2(metaColorAluminio.ifBlank { "null" })
         val vidrios = escaparCampoV2(metaTipoVidrio.ifBlank { "null" })
         val accesorios = escaparCampoV2(textoMetadatosProduccionV2())
+        // Orden: quién (cliente) → qué (producto, para saber a qué calculadora va y numerarlo) →
+        // cómo tratarlo (geometría) → con qué medidas → el diseño → materiales → accesorios.
         return buildString {
             append("C<").append(clienteTxt).append(">")
-            append("-M<").append(anchoTxt).append(",").append(altoTxt).append(",").append(hpTxt)
-            append(",null,null,").append(cantidad).append(">")
             val mecanismo = if (tipoNova == TipoNova.PIV) "p" else "c"
             append("-P<V,n,").append(acabado).append(",").append(mecanismo).append(",").append(numeroProducto).append(">")
             append("-G<").append(volumen).append(",").append(forma).append(",").append(encuentro).append(",").append(modelo).append(">")
+            append("-M<").append(anchosTxt).append(",").append(altosTxt).append(",").append(hpTxt)
+            append(",null,null,").append(cantidad).append(">")
             append("-T<").append(tramo).append(">")
             append("-MAT<alu:").append(aluminio).append(";vid:").append(vidrios).append(">")
             append("-ACC<").append(accesorios).append(">")
         }
+    }
+
+    /**
+     * Los lados de la ventana, en el mismo orden en que los dibuja el diseño. La CANTIDAD es
+     * significativa: 1 lado = plano, 2 = en L, 3 = en C, más = serie. Quien lea la cadena decide
+     * con eso, sin necesidad de otro campo.
+     */
+    private fun medidasDeLaGeometria(): List<MedidaNl> {
+        val anchoCampo = arcoCurvo(binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f)
+        val actual = MedidaNl(
+            ancho = anchoCampo,
+            alto = binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f,
+            hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f,
+            divisManual = binding.etPartes.text?.toString()?.toIntOrNull() ?: 0
+        )
+        return when (texto) {
+            "nl" -> listOfNotNull(obtenerPrimeraMedidaNlEditable(), actual)
+            "nu" -> listOfNotNull(
+                obtenerPrimeraMedidaNuEditable(), obtenerSegundaMedidaNuEditable(), actual
+            )
+            "ns" -> {
+                val lados = ladosNs.toMutableList()
+                // En modo navegar, ladosNs ya trae la serie completa (mismo criterio que
+                // disenoSimbolico): no anexar la medida en curso.
+                if (!navegandoNs && actual.ancho > 0f && actual.alto > 0f) {
+                    val ultimo = lados.lastOrNull()
+                    if (ultimo == null || !mismaMedida(ultimo, actual)) lados.add(actual)
+                }
+                lados.ifEmpty { listOf(actual) }
+            }
+            else -> listOf(actual)
+        }
+    }
+
+    /**
+     * El paquete legado es `{nova,<acabado>,[<ancho>,<alto>:<tramos>]}`. En la cadena V2 el sistema
+     * y el acabado ya van en `P<>` y las medidas en `M<>`, así que `T<>` lleva SOLO los tramos, sin
+     * repetir la cabecera. El paquete completo se sigue usando tal cual donde hace falta: es lo que
+     * viaja a DisenoNovaActivity para dibujar.
+     */
+    private fun tramosDelPaquete(paquete: String): String {
+        val dentro = paquete.substringAfter("[", "").substringBeforeLast("]", "")
+        if (dentro.isBlank()) return ""
+        // La cabecera es "<ancho>,<alto>:" y es lo único que lleva dos puntos.
+        return dentro.substringAfter(":", dentro).trim()
     }
 
     private fun textoMetadatosProduccionV2(): String {

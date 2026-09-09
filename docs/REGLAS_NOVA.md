@@ -274,8 +274,28 @@ Hay **tres formatos distintos** y conviene no confundirlos:
 
 ### 13.0 Estructura oficial (la autoridad)
 
-Jerarquía que debe cumplir la cadena. Es la referencia: si el código no la sigue, el que está mal
-es el código.
+**Orden acordado, y por qué cada campo está donde está:**
+
+| # | Campo | Para qué sirve ese orden |
+|---|---|---|
+| 1 | **Cliente** | Un contrato suele tener varios productos: primero se reconoce de quién es y a dónde se envía |
+| 2 | **Producto** (producto, línea, acabado, tipo, numeración) | Decide **a qué calculadora** se manda desde MedidaActivity o MainActivity, y permite comparar con los otros productos del mismo cliente para numerarlos |
+| 3 | **Geometría** (volumen, forma, encuentro, modelo) | Ya dentro de la calculadora, decide **cómo tratar los datos** |
+| 4 | **Medidas** (ancho1, ancho2…, alto1, alto2…, hPuente, alféizar, dintel, cantidad) | Con qué calcular |
+| 5 | **Diseño** (tramo, condición (franja (alto), módulo (ancho))) | El dibujo técnico |
+| 6 | **Material** (aluminio, vidrio) | |
+| 7 | **Accesorios** | |
+
+Cómo usa la calculadora el campo 3: ✔
+
+- **Volumen** esquinero → en Nova corrediza toca L, C o S; **la decisión final sale de contar los
+  anchos de `M<>`**: 2 lados → L, 3 → C, más → serie. Curvo → `ncu`.
+- **Forma** → normal (`nn`, `ncc`…), circular o poligonal (esta última sin desarrollar).
+- **Encuentro** → si algún lado va desmarcado en el diálogo, o sea si lleva un parante más.
+- **Modelo** → normal, invertido o **bandera**. **Bandera = doble puente** (decidido el
+  2026-09-08; antes la palabra se usaba para otra cosa).
+
+La tabla de siglas de abajo es de **Nova ventana**; Nova también tiene mampara y puerta.
 
 | Nivel | Segmento | Sigla | Valores |
 |---|---|---|---|
@@ -313,22 +333,39 @@ C<cliente>-M<ancho,alto,hp,null,null,cantidad>-P<V,n,acabado,mecanismo,nº>-G<vo
 | `MAT<>` | `alu:<color>;vid:<tipo>` |
 | `ACC<>` | `acabado_sup:… \| obs:…` o `null` |
 
-**Desvíos respecto de la estructura oficial (§13.0).** Todos verificados en el código; todos son
-del código, no de la estructura: ❓
+**Estado respecto de la estructura oficial (§13.0):**
 
-| # | Debe ser | Emite hoy |
+| # | Punto | Estado |
 |---|---|---|
-| a | `P<V,1,n,a,c>` — el número es el nivel 2, tras el producto | `P<V,n,a,c,1>`, el número al final. *El ejemplo del propio `diseño simbólico nova.txt` también lo escribe al final (`Vnic1`): hay que decidir cuál manda.* |
-| b | `M<ancho,alto,hp,cantidad,alféizar,dintel>` | `M<ancho,alto,hp,null,null,cantidad>`: la cantidad al final y alféizar/dintel escritos a fuego como `null` (`append(",null,null,")`) |
-| c | `9 modelo` = normal / invertido / **bandera** / compuesto | la letra sale del REMATE: `nn→n`, `nr→i`, `np→b`. Se está usando `b` (bandera) para **doble puente**, que no tiene letra propia en la estructura |
-| d | `8 encuentro` = `m` / `a` / `l` | cuando algún lado queda al vacío emite una máscara de 4 dígitos (`1011`, ARBL: 1 = colinda, 0 = vacío) |
-| e | `10 módulo` incluye el **parante** (`P`): va dentro de la franja, junto a `f` y `c` | `P<2.5>` va suelto **entre** tramos, fuera de las franjas |
-| f | `12 condición` (`B`/`L`) es del tramo, y ya va en `Tl<219>` | además envuelve todo con una `L` fija en `T<>`; nunca emite `B` |
-| g | `14 aluminio` = color, espesor, descripción; `15 vidrio` = tipo, color, espesor, descripción | `MAT<alu:…;vid:…>` con un solo valor cada uno |
+| a | Orden de los campos: cliente → producto → geometría → medidas → diseño → material → accesorios | ✔ **hecho** (2026-09-08) |
+| b | `M<>` con un ancho y un alto **por lado**, y la cantidad de anchos como señal de L / C / serie | ✔ **hecho**: `medidasDeLaGeometria()` |
+| c | `T<>` sin el paquete legado dentro: solo los tramos, sin repetir sistema, acabado ni medidas | ✔ **hecho**: `tramosDelPaquete()` |
+| d | La condición del tramo ya va en `Tl<…>`; sobraba la `L` fija envolviendo todo | ✔ **hecho** |
+| e | El número de ventana va al final de `P<>` (`V,n,a,c,1`) | ✔ correcto: así lo pide el orden acordado |
+| f | La cantidad va al final de `M<>`, tras alféizar y dintel | ✔ correcto: así lo pide el orden acordado |
+| g | `modelo` = `b` para doble puente | ✔ correcto: **bandera = doble puente** |
+| h | `encuentro` sale como máscara de 4 dígitos (`1011`, ARBL: 1 = colinda, 0 = vacío) en vez de `m`/`a`/`l` | ❓ la máscara dice *qué lado* va al vacío, que es lo que hace falta para saber si lleva un parante más; la letra sola no alcanza. Falta decidir si la estructura adopta la máscara |
+| i | El **parante** es un módulo (nivel 10) y debería poder ir dentro de la franja; hoy `P<2.5>` va suelto entre tramos | ❓ pendiente, ligado a poder añadir y quitar parantes dentro de un tramo (§16) |
+| j | `14 aluminio` = color, espesor, descripción; `15 vidrio` = tipo, color, espesor, descripción | ❓ hoy `MAT<alu:…;vid:…>` lleva un solo valor cada uno |
+| k | Alféizar y dintel siguen escritos a fuego como `null` | ❓ nadie los llena todavía |
 
-El desvío **e** es el de más peso: cambiarlo altera el paquete técnico, que es lo que parsea
-`DisenoNovaActivity` **y lo que está guardado en los proyectos ya archivados**. Habría que decidir
-entre migrar o aceptar los dos formatos al leer.
+Ejemplo de la cadena que emite hoy (ventana plana, aparente, doble puente):
+
+```
+C<Jorge>-P<V,n,a,c,1>-G<p,r,m,b>-M<385.9,246.8,150,null,null,1>
+-T<Tl(219)(m(48.4)(f(109.5)f(109.5));s(150)(f(54.7)c(54.7)c(54.7)f(54.7));m(48.4)(f(109.5)f(109.5)))
+   P(2.5) Tl(164.3)(m(48.4)(f(164.3));s(150)(f(54.7)c(54.7)f(54.7));m(48.4)(f(164.3)))>
+-MAT<alu:null;vid:null>-ACC<null>
+```
+
+En una L el mismo campo llevaría los dos lados: `M<385.9,122,246.8,246.8,150,null,null,1>`. Como al
+final hay cuatro campos fijos (hp, alféizar, dintel, cantidad), el número de lados es
+`(total − 4) / 2`.
+
+**Quién lee esta cadena hoy:** solo tres copias del regex `-MAT<([^>]*)>` (en
+`casilla/MetadatosProduccion` y dos en `FichaActivity`). Nadie la lee por posición, por eso
+reordenar no rompió lo ya archivado. El paquete `{nova,…}` que sí se parsea viaja aparte, por
+`EXTRA_PAQUETE`, y no cambió. ✔
 
 Otro detalle: `dfV2` trunca a un decimal, igual que `df1`. ✔
 
@@ -399,10 +436,30 @@ materiales sí los descuenta y daría 45.9. ❓ *Diferencia de 2.5 por mocheta e
 | 6 | El cruce por defecto (0.7); en doble puente se vio 0.9 | §7 |
 | 7 | ¿Separar el eje de modulación del de geometría? | §1 |
 | 8 | `divisiones(..., tipo)` con `else -> 0` | §3 |
-| 9 | Los siete desvíos del formato V2 respecto de la estructura oficial (a-g) | §13.0, §13.1 |
-| 10 | ¿El nº de ventana va en el nivel 2 o al final? La tabla y el ejemplo del .txt se contradicen | §13.1 a |
-| 11 | ¿Qué letra le toca al doble puente? Hoy usa la `b` de "bandera" | §13.1 c |
+| 9 | ¿El encuentro adopta la máscara de 4 dígitos, o se queda en `m`/`a`/`l`? | §13.1 h |
+| 10 | El parante como módulo dentro de la franja | §13.1 i, §16 |
+| 11 | Subcampos de aluminio y vidrio en `MAT<>`; alféizar y dintel sin llenar | §13.1 j, k |
 | 12 | El plano reparte la mocheta sin descontar puentes; en aparente el corte sí los descuenta (2.5 por mocheta) | §13.4 |
+
+---
+
+## 16. Hacia dónde va (por qué importa la estructura)
+
+La cadena no es solo un registro: es el formato con el que se quiere trabajar más adelante. Por eso
+vale la pena ordenarla ahora, antes de seguir tocando reglas de cálculo.
+
+- **Calcular por cliente, no medida por medida.** Elegir un cliente y mandar a calcular todos sus
+  productos: cada cadena ya dice a qué calculadora va (`P<>`), cómo tratar los datos (`G<>`) y con
+  qué medidas (`M<>`). La calculadora devuelve el resultado sin pasar por la pantalla.
+- **Diseños mixtos y modulares.** Poder poner, por ejemplo, un vitroven dentro de una ventana de
+  aluminio ocupando un espacio, y que las calculadoras lean ese diseño y saquen los materiales.
+- **Una sola actividad de diseño**, en vez de una por producto como ahora.
+- **El parante pasa a tener un papel de primera.** Hay que poder **añadirlo y quitarlo dentro de un
+  tramo**, no solo al generar el tramo como hoy. Lo mismo con los **puentes dentro de una franja**.
+
+De ahí que las reglas de las calculadoras —divisiones, holguras, descuentos, aumentos, orden de
+módulos— haya que dejarlas escritas y ordenadas: son las que tendrán que aplicarse sin que nadie
+mire la pantalla.
 
 ---
 
