@@ -185,7 +185,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.cardTramos.setOnClickListener { dialogoTramos() }
         binding.fijo.setOnClickListener { agregarModuloDirecto(TipoModulo.FIJO) }
         binding.corrediza.setOnClickListener { agregarModuloDirecto(TipoModulo.CORREDIZA) }
-        binding.parante.setOnClickListener { Toast.makeText(this, "Parante no disponible", Toast.LENGTH_SHORT).show() }
+        binding.parante.setOnClickListener { alternarParanteDerechaDelModulo() }
         binding.cardEliminarModulo.setOnClickListener { quitarModulo() }
 
         // Botón inferior: envía el diseño a NovaCorrediza (igual que el botón Atrás).
@@ -641,6 +641,50 @@ class DisenoNovaActivity : AppCompatActivity() {
         }.ifEmpty { "f<${df1(bloque.ancho)}>" }
         tokens[idx] = "$head($nuevoInterior)"
         return bloque.copy(contenido = tokens.joinToString(";"))
+    }
+
+    /**
+     * Pone —o quita— un parante a la DERECHA del módulo seleccionado, partiendo en dos el tramo
+     * al que pertenece. Vale igual en las franjas de mocheta que en las de sistema: cada franja
+     * lleva sus propios parantes, así que se pueden partir por separado.
+     *
+     * `fr.parantes` guarda el índice del módulo que queda a la DERECHA del parante, y
+     * `indiceModuloActivo` es relativo al tramo, no absoluto: la conversión es la misma que hace
+     * [agregarModuloDirecto].
+     *
+     * Si donde tocaría ya hay un parante, se quita y los dos tramos vuelven a ser uno. Es la
+     * única forma de deshacerlo, y deja el botón simétrico.
+     */
+    private fun alternarParanteDerechaDelModulo() {
+        if (indiceFranjaActiva !in franjas.indices) {
+            Toast.makeText(this, "Primero agrega/selecciona una franja.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val fr = franjas[indiceFranjaActiva]
+        val tramoStart = inicioDelTramoActivo(fr)
+        val tramoEnd = finDelTramoActivo(fr)
+        val tramoSize = (tramoEnd - tramoStart).coerceAtLeast(0)
+        if (indiceModuloActivo !in 0 until tramoSize) {
+            Toast.makeText(this, "Seleccione el módulo a cuya derecha va el parante.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val pos = tramoStart + indiceModuloActivo + 1
+        if (pos >= fr.modulos.size) {
+            Toast.makeText(this, "A la derecha de ese módulo no queda nada que partir.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (fr.parantes.contains(pos)) {
+            fr.parantes.remove(pos)
+            Toast.makeText(this, "Parante quitado: los tramos se unen.", Toast.LENGTH_SHORT).show()
+        } else {
+            fr.parantes.add(pos)
+            fr.parantes.sort()
+            Toast.makeText(this, "Parante agregado: el tramo se parte.", Toast.LENGTH_SHORT).show()
+        }
+        // El módulo elegido queda como último del tramo de la izquierda, que empieza donde
+        // empezaba: la selección no se mueve.
+        recalcularCorteVerticalProporcional()
+        aplicarModificacionModulosAlPaquete()
     }
 
     private fun agregarModuloDirecto(tipo: TipoModulo) {
