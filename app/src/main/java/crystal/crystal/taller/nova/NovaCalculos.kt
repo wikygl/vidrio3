@@ -197,7 +197,46 @@ object NovaCalculos {
         return reparto
     }
 
+    /**
+     * Reparto de módulos en tramos elegido a mano, arrastrando sobre el diseño. Se guarda aquí
+     * porque de este reparto sale TODO —dibujo, puentes, U, vidrios—, igual que
+     * [corredizasPorTramoNfc]. Lo fija la pantalla.
+     *
+     * Solo se aplica si corresponde al número de divisiones en curso: si el vidriero cambia las
+     * divisiones, el reparto guardado deja de valer y manda otra vez el automático.
+     */
+    var repartoManual: List<Int>? = null
+
+    fun repartoManualPara(divisiones: Int): List<Int>? =
+        repartoManual?.takeIf { it.isNotEmpty() && it.sum() == divisiones }
+
+    /**
+     * Las formas de repartir [divisiones] módulos en tramos, de menos tramos a más. Ningún tramo
+     * pasa de 5 módulos —el límite de siempre— ni baja de 2, porque un tramo de un solo módulo no
+     * es un tramo.
+     *
+     * Con 10 salen: [5,5] · [3,4,3] · [2,3,3,2] · [2,2,2,2,2]. El reparto de cada opción es el
+     * mismo de siempre ([repartirDivisionesEnTramos]): simétrico y equilibrado.
+     */
+    fun repartosPosibles(divisiones: Int, maxOpciones: Int = 5): List<List<Int>> {
+        if (divisiones <= 0) return emptyList()
+        val minTramos = ceil(divisiones / 5.0).toInt().coerceAtLeast(1)
+        val maxTramos = (divisiones / 2).coerceAtLeast(minTramos)
+        val opciones = mutableListOf<List<Int>>()
+        for (t in minTramos..maxTramos) {
+            val reparto = repartirDivisionesEnTramos(divisiones, t)
+            if (reparto.size != t) continue
+            if (t > 1 && reparto.any { it < 2 }) continue
+            if (reparto.any { it > 5 }) continue
+            opciones.add(reparto)
+            if (opciones.size >= maxOpciones) break
+        }
+        if (opciones.isEmpty()) opciones.add(listOf(divisiones))
+        return opciones
+    }
+
     fun gruposDivisionesPorTramo(ancho: Float, divisiones: Int): List<Int> {
+        repartoManualPara(divisiones)?.let { return it }
         val tramos = nPuentesEfectivos(ancho, divisiones)
         return when {
             tramos == 2 && divisiones == 6 -> listOf(3, 3)
@@ -587,7 +626,13 @@ object NovaCalculos {
         if (nP <= 1) return ordenDivis(divisiones, ancho)
         val f = "f<${df1(ancho / divisiones)}>"
         val c = "c<${df1(ancho / divisiones)}>"
+        // Con reparto elegido a mano manda ese, no los casos escritos aquí abajo.
         val grupos = when {
+            repartoManualPara(divisiones) != null -> {
+                return gruposDivisionesPorTramo(ancho, divisiones).joinToString(";P;") { nDiv ->
+                    ordenDivis(nDiv, (ancho / divisiones) * nDiv)
+                }
+            }
             nP == 2 && divisiones == 6 -> listOf("$f$c$f", "$f$c$f")
             nP == 2 && divisiones == 8 -> listOf("$f$c$c$f", "$f$c$c$f")
             nP == 2 && divisiones == 10 -> listOf("$f$c$f$c$f", "$f$c$f$c$f")
@@ -662,6 +707,8 @@ object NovaCalculos {
      */
     fun tramos(ancho: Float, divisiones: Int): Int {
         if (divisiones <= 0) return 1
+        // Si el vidriero eligió un reparto a mano, los tramos son los suyos.
+        repartoManualPara(divisiones)?.let { return it.size }
         return ceil(divisiones / 5.0).toInt().coerceAtLeast(1)
     }
 

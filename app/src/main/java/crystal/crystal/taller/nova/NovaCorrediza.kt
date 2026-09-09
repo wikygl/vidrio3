@@ -187,6 +187,9 @@ class NovaCorrediza : AppCompatActivity() {
         // Tocar "Referencias y Cálculos" abre la calculadora flotante.
         crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
         cantidadProducto = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
+        // El reparto de tramos vive en NovaCalculos y lo comparten todas las ventanas: se limpia
+        // al entrar para que no se arrastre el de la ventana anterior.
+        NovaCalculos.repartoManual = null
 
         ProyectoManager.inicializarDesdeStorage(this)
         proyectoCallback = ProyectoUIHelper.crearCallbackConActualizacionUI(
@@ -3346,7 +3349,11 @@ class NovaCorrediza : AppCompatActivity() {
         val watcher = object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) { limpiarEstadoDesigual() }
+            override fun afterTextChanged(s: android.text.Editable?) {
+                limpiarEstadoDesigual()
+                // El reparto elegido a mano era para esa medida: con otra vuelve el automático.
+                NovaCalculos.repartoManual = null
+            }
         }
         binding.etPartes.addTextChangedListener(watcher)
         binding.etHoja.addTextChangedListener(watcher)
@@ -4001,13 +4008,50 @@ class NovaCorrediza : AppCompatActivity() {
                 MotionEvent.ACTION_UP -> {
                     val dx = event.x - arrastreDownX
                     val dy = event.y - arrastreDownY
-                    if (kotlin.math.abs(dx) > umbral && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f) {
-                        alternarBocetoOriginal()
+                    val horizontal = kotlin.math.abs(dx) > umbral &&
+                        kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f
+                    val vertical = kotlin.math.abs(dy) > umbral &&
+                        kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.5f
+                    when {
+                        // Arrastre horizontal: recorrer los repartos de módulos en tramos.
+                        // Hacia la izquierda avanza, hacia la derecha vuelve.
+                        horizontal -> cambiarReparto(if (dx < 0) 1 else -1)
+                        // El boceto original pasó al arrastre vertical, que estaba libre.
+                        vertical -> alternarBocetoOriginal()
                     }
                 }
             }
             true
         }
+    }
+
+    /**
+     * Recorre los repartos posibles de los módulos en tramos. Con 10 divisiones son [5,5],
+     * [3,4,3], [2,3,3,2] y [2,2,2,2,2]: el vidriero elige el que le convenga en obra en vez de
+     * quedarse con el tramo más largo.
+     *
+     * El reparto elegido manda sobre todo lo demás —dibujo, puentes, U, vidrios— porque todos
+     * salen de `gruposDivisionesPorTramo`.
+     */
+    private fun cambiarReparto(paso: Int) {
+        val div = divisiones()
+        val opciones = NovaCalculos.repartosPosibles(div)
+        if (opciones.size <= 1) {
+            Toast.makeText(this, "Con $div divisiones solo hay un reparto", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val actual = NovaCalculos.repartoManualPara(div)
+        val desde = opciones.indexOfFirst { it == actual }.takeIf { it >= 0 } ?: 0
+        val nuevo = (desde + paso).coerceIn(0, opciones.lastIndex)
+        if (nuevo == desde && actual != null) return
+        val reparto = opciones[nuevo]
+        NovaCalculos.repartoManual = reparto
+        Toast.makeText(
+            this,
+            "Tramos: ${reparto.joinToString(" + ")}  (${nuevo + 1}/${opciones.size})",
+            Toast.LENGTH_SHORT
+        ).show()
+        binding.btCalcular.performClick()
     }
 
     private fun abrirDisenoInteractivo() {
