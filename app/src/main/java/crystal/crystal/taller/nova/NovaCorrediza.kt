@@ -334,28 +334,10 @@ class NovaCorrediza : AppCompatActivity() {
             }
         }
 
-        binding.textView28.setOnLongClickListener {
-            val texto = binding.textView28.text?.toString().orEmpty()
-            if (texto.isBlank()) {
-                Toast.makeText(this, "No hay texto para copiar", Toast.LENGTH_SHORT).show()
-                return@setOnLongClickListener true
-            }
-            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("paquete_nova", texto))
-            Toast.makeText(this, "Texto copiado", Toast.LENGTH_SHORT).show()
-            true
-        }
-        binding.txPr.setOnLongClickListener {
-            val texto = binding.txPr.text?.toString().orEmpty()
-            if (texto.isBlank()) {
-                Toast.makeText(this, "No hay texto para copiar", Toast.LENGTH_SHORT).show()
-                return@setOnLongClickListener true
-            }
-            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("diseno_simbolico_v2", texto))
-            Toast.makeText(this, "Texto copiado", Toast.LENGTH_SHORT).show()
-            true
-        }
+        hacerCopiable(binding.textView28, "paquete_nova")
+        hacerCopiable(binding.txPr, "diseno_simbolico_v2")
+        // La U se copia con un toque: es la lista que más se consulta y se pasa a otro lado.
+        hacerCopiable(binding.txU, "u_nova", conToque = true)
 
         // Pre-carga desde presupuesto
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etAncho.setText(df1(it)) }
@@ -3661,6 +3643,26 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     private fun escaparCampoV2(raw: String): String = crystal.crystal.taller.PaqueteV2.escapar(raw)
+
+    /**
+     * Deja el texto de [vista] copiable al portapapeles. Con pulsación larga siempre; con
+     * [conToque] también con un toque simple, para los textos que no hacen otra cosa al tocarlos.
+     */
+    private fun hacerCopiable(vista: android.widget.TextView, etiqueta: String, conToque: Boolean = false) {
+        fun copiar(): Boolean {
+            val texto = vista.text?.toString().orEmpty()
+            if (texto.isBlank()) {
+                Toast.makeText(this, "No hay texto para copiar", Toast.LENGTH_SHORT).show()
+                return true
+            }
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText(etiqueta, texto))
+            Toast.makeText(this, "Texto copiado", Toast.LENGTH_SHORT).show()
+            return true
+        }
+        vista.setOnLongClickListener { copiar() }
+        if (conToque) vista.setOnClickListener { copiar() }
+    }
 
     private fun mismaMedida(a: MedidaNl, b: MedidaNl): Boolean {
         fun casiIgual(x: Float, y: Float): Boolean = kotlin.math.abs(x - y) < 0.001f
