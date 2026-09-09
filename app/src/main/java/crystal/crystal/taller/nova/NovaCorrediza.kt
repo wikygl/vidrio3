@@ -69,6 +69,17 @@ class NovaCorrediza : AppCompatActivity() {
     private var nombreModelo: String = "normal"
     // Modulación: patrón de hojas del sistema (nn/ncfc/nff/nfc). Eje independiente.
     private var textoModelo: String = "nn"
+    /** Imagen del modelo que se está mostrando; hace falta para poder volver a él. */
+    private var drawableModelo: Int = R.drawable.ic_fichad3a
+    /**
+     * Modulación (nombre, imagen, token) de antes de pasar a circular.
+     *
+     * La forma circular no es una modulación, pero se implementa cambiando el modelo a `nci`
+     * porque de ahí lo leen el dibujo y las franjas. Al volver a rectangular hay que devolver la
+     * modulación que había: sin esto, `metaForma` volvía a "plano" pero el modelo se quedaba en
+     * `nci` y el diseño seguía saliendo circular.
+     */
+    private var modulacionPrevia: Triple<String, Int, String>? = null
     // Full corredizas: cada cuántas corredizas va el parante que arma otro tramo.
     // 0 = automático (reparto balanceado como el clásico); >1 = forzar corte cada N.
     private var corredizasPorTramo: Int = 0
@@ -1602,12 +1613,13 @@ class NovaCorrediza : AppCompatActivity() {
         }
         dlg.dgRgForma.setOnCheckedChangeListener { _, checkedId ->
             when (checkedId) {
-                R.id.dgRbFormaCircular -> {
-                    metaForma = "circular"
-                    seleccionarModelo("circular", R.drawable.novaci, "nci")
+                // seleccionarModelo y salirDeCircular ya dejan `metaForma` en su sitio.
+                R.id.dgRbFormaCircular -> seleccionarModelo("circular", R.drawable.novaci, "nci")
+                R.id.dgRbFormaPoligonal -> {
+                    salirDeCircular()
+                    metaForma = "poligonal" // solo dato por ahora
                 }
-                R.id.dgRbFormaPoligonal -> metaForma = "poligonal" // solo dato por ahora
-                else -> metaForma = "plano"
+                else -> salirDeCircular()
             }
         }
 
@@ -1666,19 +1678,48 @@ class NovaCorrediza : AppCompatActivity() {
      * [texto] permanece intacto.
      */
     private fun seleccionarModelo(nombre: String, drawableRes: Int, textoMod: String = "") {
+        // Entrar en circular guarda la modulación de partida, para poder devolverla al salir.
+        // Salir por cualquier otra vía (elegir otra modulación) la da por gastada.
+        if (textoMod == "nci" && textoModelo != "nci") {
+            modulacionPrevia = Triple(nombreModelo, drawableModelo, textoModelo)
+        } else if (textoMod.isNotBlank() && textoMod != "nci" && textoModelo == "nci") {
+            modulacionPrevia = null
+        }
         nombreModelo = nombre
         actualizarNombreModelo()
         if (textoMod.isNotBlank()) {
             textoModelo = textoMod                              // siempre se guarda el modelo
             if (texto !in textosGeometria) texto = textoMod    // solo sobreescribe texto si geometría es plana
+            // La FORMA va pegada al modelo, porque circular se implementa como el modelo `nci`:
+            // entrar en él es ponerse circular y elegir cualquier otra modulación es dejar de
+            // serlo. La forma poligonal no se toca: esa sí es independiente.
+            metaForma = when {
+                textoMod == "nci" -> "circular"
+                metaForma == "circular" -> "plano"
+                else -> metaForma
+            }
         }
         // Si la modulación restringe el puente actual (p. ej. INA ncfc), pasar al permitido.
         if (puenteMultipleNoPermitido(puente)) aplicarPuentePredeterminadoSinMultiple()
+        drawableModelo = drawableRes
         binding.ivDiseno.setImageResource(drawableRes)
         binding.ivDiseno.visibility = View.VISIBLE
         binding.svModelos.visibility = View.GONE
         mostrandoBocetoOriginal = false
         actualizarVisibilidadMochetaInferior()
+    }
+
+    /**
+     * Devuelve la modulación que había antes de pasar a circular. Si no se guardó ninguna (por
+     * ejemplo, se entró a la pantalla ya en circular), vuelve al modelo normal, que es el de
+     * arranque. Sin esto el modelo se quedaba clavado en `nci` y el diseño seguía saliendo
+     * circular aunque la forma dijera rectangular.
+     */
+    private fun salirDeCircular() {
+        if (textoModelo != "nci") return
+        val previa = modulacionPrevia ?: Triple("normal", R.drawable.ic_fichad3a, "nn")
+        modulacionPrevia = null
+        seleccionarModelo(previa.first, previa.second, previa.third)
     }
 
     /**
