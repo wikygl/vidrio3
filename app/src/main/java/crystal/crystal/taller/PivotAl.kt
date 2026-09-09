@@ -99,11 +99,8 @@ class PivotAl : AppCompatActivity() {
         val cant = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
 
         // Los números se reservan ANTES del bucle: dentro, nada se ha guardado todavía y
-
         // obtenerSiguienteContadorPorPrefijo devolvería el mismo para todas las copias.
-
         val numerosPaquete = ProyectoManager.reservarNumerosPorPrefijo(this, prefijo, cant)
-
         for (u in 1..cant) {
             val siguienteNumero = numerosPaquete[u - 1]
             val paqueteID = "v${siguienteNumero}${prefijo}"
