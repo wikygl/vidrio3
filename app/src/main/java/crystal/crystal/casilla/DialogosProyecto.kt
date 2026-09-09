@@ -126,6 +126,7 @@ object DialogosProyecto {
             "🗑️ Eliminar Proyecto",
             "✏️ Editar Contenido",
             "✅ Poner Activo",
+            "📤 Enviar por Crystal chat",
             "➕ Crear Nuevo Proyecto"
         )
 
@@ -175,6 +176,10 @@ object DialogosProyecto {
                         Toast.makeText(context, "Proyecto '$nombreProyecto' ahora está activo", Toast.LENGTH_SHORT).show()
                     }
                     3 -> {
+                        // Enviar por Crystal chat (mismo envío que el botón de Taller)
+                        CompartirProyecto.porChat(context, nombreProyecto)
+                    }
+                    4 -> {
                         // Crear nuevo proyecto
                         mostrarDialogoCrearProyecto(context, callback)
                     }

@@ -17,6 +17,7 @@ import crystal.crystal.Diseno.DisenoActivity
 import crystal.crystal.Diseno.nova.DisenoNovaActivity
 import crystal.crystal.Listado
 import crystal.crystal.MainActivity
+import crystal.crystal.casilla.DialogosProyecto
 import crystal.crystal.casilla.MapStorage
 import crystal.crystal.casilla.ProyectoManager
 import crystal.crystal.databinding.ActivityTallerBinding
@@ -596,7 +597,11 @@ class Taller : AppCompatActivity() {
         // "Resultados" (btFichas, último botón): NECESARIO — abre las listas de resultados (FichaActivity).
         binding.btFichas.setOnClickListener { startActivity(Intent(this, FichaActivity::class.java)) }
         // "Pendientes": lista todos los proyectos guardados y permite compartir el elegido por Crystal chat.
-        binding.tallerBtFiltroPendientes.setOnClickListener { mostrarDialogoCompartirProyecto() }
+        // Mismo diálogo que el visor de proyecto activo de las calculadoras: eliminar, editar,
+        // poner activo, enviar por Crystal chat y crear nuevo. Un solo flujo en toda la app.
+        binding.tallerBtFiltroPendientes.setOnClickListener {
+            DialogosProyecto.mostrarDialogoGestionAvanzada(this, callbackProyecto())
+        }
         binding.btDivisionBano.setOnClickListener { lanzarCalculadora(DivisionBanoActivity::class.java) }
         binding.btBaranda.setOnClickListener { lanzarCalculadora(BarandaActivity::class.java) }
     }
@@ -606,69 +611,22 @@ class Taller : AppCompatActivity() {
         startActivity(Intent(this, clase).putExtras(paquete))
     }
 
-    // ─── Compartir proyecto por Crystal chat (botón "Pendientes") ──────────────────────────────
-    private fun mostrarDialogoCompartirProyecto() {
-        val proyectos = MapStorage.obtenerListaProyectos(this)
-        if (proyectos.isEmpty()) {
-            Toast.makeText(this, "No hay proyectos guardados", Toast.LENGTH_SHORT).show()
-            return
+    /**
+     * El botón "Pendientes" abre la gestión de proyectos, que ya trae todas las acciones. El
+     * callback solo avisa por pantalla: aquí no hay visor de proyecto activo que refrescar.
+     */
+    private fun callbackProyecto() = object : DialogosProyecto.ProyectoCallback {
+        override fun onProyectoSeleccionado(nombreProyecto: String) {
+            Toast.makeText(this@Taller, "Proyecto activo: $nombreProyecto", Toast.LENGTH_SHORT).show()
         }
-        AlertDialog.Builder(this)
-            .setTitle("Proyectos")
-            .setItems(proyectos.toTypedArray()) { _, i -> mostrarAccionesProyecto(proyectos[i]) }
-            .setNegativeButton("Cerrar", null)
-            .show()
-    }
 
-    private fun mostrarAccionesProyecto(nombre: String) {
-        AlertDialog.Builder(this)
-            .setTitle(nombre)
-            .setItems(arrayOf("Poner activo", "Compartir por Crystal chat")) { _, opcion ->
-                when (opcion) {
-                    0 -> ponerProyectoActivo(nombre)
-                    1 -> compartirProyectoPorChat(nombre)
-                }
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun ponerProyectoActivo(nombre: String) {
-        ProyectoManager.setProyectoActivo(this, nombre)
-        Toast.makeText(this, "Proyecto activo: $nombre", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun compartirProyectoPorChat(nombre: String) {
-        val mapa = MapStorage.cargarProyecto(this, nombre)
-        if (mapa.isNullOrEmpty()) {
-            Toast.makeText(this, "El proyecto está vacío o no se pudo cargar", Toast.LENGTH_SHORT).show()
-            return
+        override fun onProyectoCreado(nombreProyecto: String) {
+            Toast.makeText(this@Taller, "Proyecto creado: $nombreProyecto", Toast.LENGTH_SHORT).show()
         }
-        runCatching {
-            val envoltura = com.google.gson.JsonObject().apply {
-                addProperty("format", FORMAT_PROYECTO_CRYSTAL)
-                addProperty("version", 1)
-                addProperty("proyecto", nombre)
-                addProperty("exportedAt", System.currentTimeMillis())
-                add("data", com.google.gson.Gson().toJsonTree(mapa))
-            }
-            val shareDir = java.io.File(cacheDir, "proyectoshare").apply { mkdirs() }
-            val file = java.io.File(shareDir, "${sanitizarNombreArchivo(nombre)}.$EXTENSION_PROYECTO_CRYSTAL")
-            file.writeText(envoltura.toString())
-            val uri = androidx.core.content.FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
-            val intent = Intent(this, crystal.crystal.red.ListChatActivity::class.java).apply {
-                putExtra(crystal.crystal.red.interop.ChatInteropIntents.EXTRA_SEND_SHARED_URI, uri.toString())
-                putExtra(crystal.crystal.red.interop.ChatInteropIntents.EXTRA_SEND_SHARED_NAME, file.name)
-                putExtra(crystal.crystal.red.interop.ChatInteropIntents.EXTRA_SEND_SHARED_MIME, MIME_PROYECTO_CRYSTAL)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                clipData = android.content.ClipData.newUri(contentResolver, "proyecto_crystal", uri)
-            }
-            startActivity(intent)
-        }.onFailure {
-            Toast.makeText(this, "No se pudo compartir el proyecto: ${it.message}", Toast.LENGTH_SHORT).show()
+
+        override fun onProyectoEliminado(nombreProyecto: String) {
+            Toast.makeText(this@Taller, "Proyecto eliminado: $nombreProyecto", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun sanitizarNombreArchivo(valor: String): String =
-        valor.trim().replace(Regex("[^A-Za-z0-9_-]+"), "_").trim('_').ifBlank { "proyecto" }
 }
