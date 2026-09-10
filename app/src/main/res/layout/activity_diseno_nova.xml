@@ -37,7 +37,7 @@
         android:layout_height="0dp"
         android:layout_marginBottom="180dp"
         android:contentDescription="Lienzo de diseno"
-        app:layout_constraintBottom_toTopOf="@+id/botonEditar"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/panelInfoSeleccion" />
@@ -48,7 +48,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_margin="9dp"
-        app:layout_constraintBottom_toTopOf="@+id/botonEditar"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
@@ -171,16 +171,5 @@
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </FrameLayout>
-
-    <Button
-        android:id="@+id/botonEditar"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:backgroundTint="@color/azul"
-        android:text="Volver"
-        android:textAllCaps="false"
-        android:textColor="@color/blanco"
-        android:textSize="18sp"
-        app:layout_constraintBottom_toBottomOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -179,19 +179,18 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.btnMedidasRapidas.setOnClickListener { dialogoCambiarMedidas() }
         binding.btnCotasPlanos.setOnClickListener { togglePanelCotasPlanos() }
         binding.btnTipoEnsamble.setOnClickListener { alternarEnsamble() }
-        binding.btnEnviarCalculadora.setOnClickListener { Toast.makeText(this, "No disponible", Toast.LENGTH_SHORT).show() }
+        // El botón de la calculadora hace lo que hacía el "Volver" de abajo: envía el diseño a
+        // NovaCorrediza y cierra. El botón Atrás sigue saliendo SIN aplicar los cambios.
+        binding.btnEnviarCalculadora.setOnClickListener {
+            prepararResultadoDiseno()
+            finish()
+        }
         binding.btnLimpiarDiseno.setOnClickListener { limpiarDiseno() }
 
         // El lienzo se sube o se baja solo, según lo que ocupe el bloque de controles: al abrir
         // el panel de cotas con varios tramos el dibujo se encoge en vez de quedar tapado.
         binding.overlayControles.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
             if (bottom - top != oldBottom - oldTop) subirLienzoSobreLosControles()
-        }
-
-        // Botón inferior: envía el diseño a NovaCorrediza (igual que el botón Atrás).
-        binding.botonEditar.setOnClickListener {
-            prepararResultadoDiseno()
-            finish()
         }
 
         actualizarInfoSeleccion()
@@ -1851,8 +1850,8 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     /**
-     * Envía el diseño actual a NovaCorrediza. Lo usa SOLO el botón "Volver"; el botón Atrás del
-     * sistema NO lo llama, así que Atrás vuelve sin aplicar cambios al diseño.
+     * Envía el diseño actual a NovaCorrediza. Lo usa SOLO el botón de la calculadora; el botón
+     * Atrás del sistema NO lo llama, así que Atrás vuelve sin aplicar cambios al diseño.
      */
     private fun prepararResultadoDiseno() {
         val paqueteSalida = if (paqueteOriginal.isNotBlank()) {
