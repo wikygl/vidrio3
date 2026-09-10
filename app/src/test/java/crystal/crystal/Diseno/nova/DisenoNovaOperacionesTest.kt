@@ -166,4 +166,59 @@ class DisenoNovaOperacionesTest {
             releido.tramos.map { t -> t.franjas.map { fr -> fr.modulos.map { it.tipo } } }
         )
     }
+
+    // ==================== ESTRUCTURA: TRAMOS Y FRANJAS ====================
+    // Lo que el panel de cotas llama al pulsar + y −, igual que el editor de la mampara.
+
+    @Test
+    fun `agregar un tramo lo deja con un modulo por franja`() {
+        val d = unTramo.conTramoAgregado()
+        assertEquals(2, d.nTramos)
+        // El tramo nuevo copia las franjas del anterior —sistema y mocheta— con un fijo en cada una.
+        assertEquals(unTramo.tramos[0].franjas.size, d.tramos[1].franjas.size)
+        assertEquals(listOf(1, 1), d.tramos[1].franjas.map { it.modulos.size })
+        assertTrue(d.tramos[1].franjas.all { fr -> fr.modulos.all { it.esFijo } })
+        assertTrue(cierraElAncho(d))
+    }
+
+    @Test
+    fun `quitar un tramo se lleva sus franjas y reparte el ancho`() {
+        val d = abel.conTramoQuitado()
+        assertEquals(2, d.nTramos)
+        assertEquals(abel.nModulos - 4, d.nModulos)
+        assertTrue(cierraElAncho(d))
+    }
+
+    @Test
+    fun `nunca se queda sin tramos`() {
+        assertSame(unTramo, unTramo.conTramoQuitado())
+    }
+
+    @Test
+    fun `agregar una franja la agrega en todos los tramos`() {
+        val d = abel.conFranjaAgregada()
+        assertTrue(d.tramos.all { it.franjas.size == 3 })
+        // Una mocheta más, en cada tramo, con un paño y en altura automática.
+        assertTrue(d.tramos.all { it.mochetas.size == 2 })
+        assertTrue(d.tramos.all { it.franjas.last().modulos.size == 1 })
+        assertEquals(0f, d.tramos[0].franjas.last().alto, 0.001f)
+        // Las franjas nuevas no cambian el reparto del ancho: los tramos siguen midiendo igual.
+        assertEquals(abel.tramos.map { it.ancho }, d.tramos.map { it.ancho })
+    }
+
+    @Test
+    fun `quitar una franja quita la mocheta en todos los tramos`() {
+        val d = abel.conFranjaQuitada()
+        assertTrue(d.tramos.all { it.franjas.size == 1 })
+        assertTrue(d.tramos.all { it.mochetas.isEmpty() })
+        // Y el sistema se queda como estaba: mismos módulos por tramo.
+        assertEquals(abel.tramos.map { it.nModulosSistema }, d.tramos.map { it.nModulosSistema })
+    }
+
+    @Test
+    fun `la franja del sistema no se quita`() {
+        // Un diseño sin mochetas: no hay nada que quitar y se devuelve tal cual.
+        val soloSistema = DisenoNova.desdePaquete("{nova,apa,[240,200:Tl<240>(s<200>(f<120>c<120>))]}")!!
+        assertSame(soloSistema, soloSistema.conFranjaQuitada())
+    }
 }

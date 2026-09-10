@@ -12,6 +12,7 @@ import android.text.InputType
 import android.text.Spanned
 import android.text.style.StyleSpan
 import android.graphics.Typeface
+import android.view.Gravity
 import android.view.View
 import android.graphics.Color
 import android.widget.Button
@@ -22,6 +23,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import crystal.crystal.R
 import crystal.crystal.databinding.ActivityDisenoNovaBinding
 import kotlin.math.abs
 import kotlin.math.max
@@ -169,14 +171,8 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
         }
 
-        // Botones flotantes (columna)
-        binding.btnAgregarFranja.setOnClickListener { dialogoAgregarFranja() }
-        binding.btnQuitarFranja.setOnClickListener { quitarFranja() }
-        binding.btnAgregarModulo.setOnClickListener { dialogoAgregarModulo() }
-        binding.btnQuitarModulo.setOnClickListener { quitarModulo() }
-        binding.btnMostrarOcultar.setOnClickListener { alternarColumnaBotones() }
-        // Mantener pulsado el botón de controles abre el menú de opciones sin botón propio.
-        binding.btnMostrarOcultar.setOnLongClickListener { mostrarMenuEditar(); true }
+        // El botón de la izquierda abre el menú de opciones del diseño.
+        binding.btnMostrarOcultar.setOnClickListener { mostrarMenuEditar() }
         binding.btnMedidasRapidas.setOnClickListener { dialogoCambiarMedidas() }
         binding.btnCotasPlanos.setOnClickListener { togglePanelCotasPlanos() }
         binding.btnTipoEnsamble.setOnClickListener { alternarEnsamble() }
@@ -219,14 +215,6 @@ class DisenoNovaActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun alternarColumnaBotones() {
-        val mostrar = binding.panelControles.visibility != View.VISIBLE
-        if (mostrar) {
-            binding.panelCotasPlanos.visibility = View.GONE
-        }
-        setPanelControlesVisible(mostrar)
-    }
-
     /** Cierra el panel de cotas si está visible. */
     private fun cerrarPanelesContenido(): Boolean {
         var cerro = false
@@ -242,18 +230,8 @@ class DisenoNovaActivity : AppCompatActivity() {
             panel.visibility = View.GONE
             return
         }
-        setPanelControlesVisible(false)
         actualizarPanelCotas()
         panel.visibility = View.VISIBLE
-    }
-
-    private fun setPanelControlesVisible(mostrar: Boolean) {
-        binding.panelControles.visibility = if (mostrar) View.VISIBLE else View.GONE
-        val vis = if (mostrar) View.VISIBLE else View.INVISIBLE
-        binding.btnAgregarModulo.visibility = vis
-        binding.btnQuitarModulo.visibility = vis
-        binding.btnAgregarFranja.visibility = vis
-        binding.btnQuitarFranja.visibility = vis
     }
 
     // --- Ver / copiar paquete ---
@@ -300,38 +278,6 @@ class DisenoNovaActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("Cancelar", null)
                     .show()
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun dialogoAgregarModulo() {
-        if (indiceFranjaActiva !in franjas.indices) {
-            Toast.makeText(this, "Primero agrega/selecciona una franja.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        var seleccion = 'f'
-        val opciones = arrayOf("f (fijo)", "c (corrediza)")
-        val cont = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 16, 24, 8)
-        }
-        val etCantidad = EditText(this).apply {
-            hint = "Cantidad"
-            inputType = InputType.TYPE_CLASS_NUMBER
-            setText("1")
-        }
-        cont.addView(etCantidad)
-
-        AlertDialog.Builder(this)
-            .setTitle("Agregar módulos")
-            .setView(cont)
-            .setSingleChoiceItems(opciones, 0) { _, which ->
-                seleccion = if (which == 0) 'f' else 'c'
-            }
-            .setPositiveButton("Agregar") { _, _ ->
-                val cant = max(1, etCantidad.text.toString().toIntOrNull() ?: 1)
-                repetirModulo(seleccion, cant)
             }
             .setNegativeButton("Cancelar", null)
             .show()
@@ -419,26 +365,6 @@ class DisenoNovaActivity : AppCompatActivity() {
         indiceFranjaActiva = franjas.lastIndex
     }
 
-    private fun repetirModulo(fc: Char, cantidad: Int) {
-        if (indiceFranjaActiva !in franjas.indices) return
-        val fr = franjas[indiceFranjaActiva]
-        val letra = if (fc == 'c' || fc == 'C') 'c' else 'f'
-        val bloqueados = tramosLibresBloqueados()
-        // Se agregan al final del tramo activo, uno tras otro.
-        var despuesDe = finDelTramoActivo(fr) - inicioDelTramoActivo(fr) - 1
-        aplicarAlModelo { d ->
-            var actual = d
-            repeat(cantidad) {
-                actual = actual.conModuloAgregado(
-                    tramoActivoSeguro(), indiceFranjaActiva, despuesDe, letra, bloqueados
-                )
-                despuesDe++
-            }
-            actual
-        }
-    }
-
-
     /**
      * Escala todas las anotaciones <w> de los módulos de un bloque por [factor].
      * Si ningún módulo tiene anotación, el bloque se devuelve sin cambios.
@@ -496,29 +422,6 @@ class DisenoNovaActivity : AppCompatActivity() {
             tokens[idx] = "$head($nuevoInterior)"
         }
         return bloque.copy(contenido = tokens.joinToString(";"))
-    }
-
-    private fun quitarModulo() {
-        if (indiceFranjaActiva !in franjas.indices) return
-        val fr = franjas[indiceFranjaActiva]
-        if (fr.modulos.size <= 1) {
-            Toast.makeText(this, "Debe quedar al menos un módulo.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val tramoStart = inicioDelTramoActivo(fr)
-        val tramoEnd   = finDelTramoActivo(fr)
-        val tramoSize  = (tramoEnd - tramoStart).coerceAtLeast(0)
-        if (tramoSize <= 0) return
-        // indiceModuloActivo es visual (relativo al tramo); convertir a absoluto
-        val idx = if (indiceModuloActivo in 0 until tramoSize) {
-            tramoStart + indiceModuloActivo
-        } else {
-            tramoEnd - 1
-        }
-        val visual = idx - tramoStart
-        aplicarAlModelo { it.conModuloQuitado(tramoActivoSeguro(), indiceFranjaActiva, visual, tramosLibresBloqueados()) }
-        indiceModuloActivo = -1
-        binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
     }
 
     /** Los tramos cuyo ancho fijó el vidriero: el reparto no los toca. */
@@ -1468,6 +1371,31 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.tvTituloCotas.text = "Tramos"
         binding.contenedorCotas.removeAllViews()
 
+        val dp = resources.displayMetrics.density
+        val dp4 = (4 * dp).toInt()
+        val dp8 = (8 * dp).toInt()
+
+        // Arriba del todo, agregar y quitar tramos y franjas: igual que en la mampara, donde el
+        // editor lleva los botones de estructura y no un panel aparte.
+        binding.contenedorCotas.addView(filaMasMenos(
+            etiqueta = "Tramos",
+            dp = dp,
+            puedeQuitar = bloques.size > 1,
+            onQuitar = { cambiarEstructura { it.conTramoQuitado() } },
+            onAgregar = { cambiarEstructura { it.conTramoAgregado() } }
+        ))
+        val nFranjas = bloques.firstOrNull()?.let { splitTopLevelSemicolon(it.contenido).size } ?: 0
+        binding.contenedorCotas.addView(filaMasMenos(
+            etiqueta = "Franjas",
+            dp = dp,
+            puedeQuitar = nFranjas > 1,
+            onQuitar = { cambiarEstructura { it.conFranjaQuitada() } },
+            onAgregar = { cambiarEstructura { it.conFranjaAgregada() } },
+            // Un toque agrega una mocheta en automático; mantener pulsado deja elegir si es de
+            // sistema o de mocheta y con qué altura.
+            onAgregarLargo = { dialogoAgregarFranja() }
+        ))
+
         if (bloques.isEmpty()) {
             binding.contenedorCotas.addView(TextView(this).apply {
                 text = "Sin tramos"; textSize = 11f
@@ -1478,10 +1406,6 @@ class DisenoNovaActivity : AppCompatActivity() {
         // Sync tramosBlockeados
         while (tramosBlockeados.size < bloques.size) tramosBlockeados.add(false)
         while (tramosBlockeados.size > bloques.size) tramosBlockeados.removeAt(tramosBlockeados.lastIndex)
-
-        val dp = resources.displayMetrics.density
-        val dp4 = (4 * dp).toInt()
-        val dp8 = (8 * dp).toInt()
 
         val etAnchos = mutableListOf<EditText>()
         val etAltos = mutableListOf<EditText>()
@@ -1576,6 +1500,66 @@ class DisenoNovaActivity : AppCompatActivity() {
                 aplicarCambiosCotas(capturedBloques, nuevosAnchos, nuevoAlto, nuevasPuentes)
             }
         })
+    }
+
+    /**
+     * Una fila `etiqueta  [−][+]` para el panel de cotas, con la misma forma que los botones del
+     * editor de la mampara: cuadros de tamaño fijo, azules cuando se pueden pulsar y apagados
+     * cuando no, para que se vea de un vistazo que ya no queda nada que quitar.
+     */
+    private fun filaMasMenos(
+        etiqueta: String,
+        dp: Float,
+        puedeQuitar: Boolean,
+        onQuitar: () -> Unit,
+        onAgregar: () -> Unit,
+        onAgregarLargo: (() -> Unit)? = null
+    ): View {
+        val fila = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(0, (2 * dp).toInt(), 0, (2 * dp).toInt()) }
+        }
+        fila.addView(TextView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            text = etiqueta
+            textSize = 11f
+            setTypeface(null, Typeface.BOLD)
+        })
+        fun boton(simbolo: String, activo: Boolean, accion: () -> Unit, accionLarga: (() -> Unit)?) =
+            TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams((36 * dp).toInt(), (32 * dp).toInt())
+                    .also { it.marginStart = (4 * dp).toInt() }
+                gravity = Gravity.CENTER
+                text = simbolo
+                textSize = 17f
+                setTextColor(if (activo) Color.parseColor("#1565C0") else Color.parseColor("#BBBBBB"))
+                setBackgroundResource(R.drawable.bg_opcion_seleccionada)
+                isEnabled = activo
+                if (activo) setOnClickListener { accion() }
+                if (accionLarga != null) setOnLongClickListener { accionLarga(); true }
+            }
+        fila.addView(boton("−", puedeQuitar, onQuitar, null))
+        fila.addView(boton("+", true, onAgregar, onAgregarLargo))
+        return fila
+    }
+
+    /**
+     * Cambio de estructura del diseño —tramos o franjas— pasando por el modelo.
+     *
+     * Agregar o quitar corre los índices de los tramos, así que los bloqueos dejarían de apuntar
+     * a donde apuntaban: se sueltan todos, igual que al partir un tramo.
+     */
+    private fun cambiarEstructura(operacion: (DisenoNova) -> DisenoNova) {
+        tramosBlockeados.clear()
+        indiceModuloActivo = -1
+        if (!aplicarAlModelo(operacion)) {
+            Toast.makeText(this, "No se pudo leer el diseño.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        actualizarPanelCotas()
     }
 
     // =========================== UTILIDADES ===========================
@@ -1750,5 +1734,19 @@ class DisenoNovaActivity : AppCompatActivity() {
         indiceFranjaActiva = franja
         indiceTramoActivo = tramo
         indiceModuloActivo = modulo
+    }
+
+    /**
+     * Pulsa el + o el − del panel de cotas: [fila] 0 son los tramos y 1 las franjas.
+     *
+     * Va por las vistas de verdad, no por el modelo, porque el fallo que interesa cazar es
+     * justamente el de un botón que no hace nada.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun pulsarEstructuraParaPruebas(fila: Int, mas: Boolean): Boolean {
+        actualizarPanelCotas()
+        val row = binding.contenedorCotas.getChildAt(fila) as? LinearLayout ?: return false
+        val boton = row.getChildAt(if (mas) 2 else 1) ?: return false
+        return boton.performClick()
     }
 }

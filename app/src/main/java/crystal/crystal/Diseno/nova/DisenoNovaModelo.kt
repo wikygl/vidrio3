@@ -176,6 +176,68 @@ data class DisenoNova(
         return copy(tramos = nuevos).conAnchosRepartidos()
     }
 
+    /**
+     * Agrega un tramo al final, con las mismas franjas que el último pero con un solo módulo en
+     * cada una.
+     *
+     * Un tramo nuevo empieza con lo mínimo que se sostiene —un fijo por franja—, igual que en la
+     * mampara: el vidriero le añade después lo que necesite. El ancho lo pone el reparto, que es
+     * quien manda: los tramos y las medidas salen de contar módulos.
+     */
+    fun conTramoAgregado(): DisenoNova {
+        val ultimo = tramos.lastOrNull()
+        val franjas = ultimo?.franjas?.map { it.copy(modulos = listOf(NovaModulo('f'))) }
+            ?: listOf(NovaFranja(esSistema = true, alto = 0f, modulos = listOf(NovaModulo('f'))))
+        return copy(tramos = tramos + NovaTramo(0f, franjas)).conAnchosRepartidos()
+    }
+
+    /**
+     * Quita el tramo [indice] entero —por defecto el último—, con todas sus franjas. Siempre
+     * queda al menos un tramo.
+     *
+     * Como [conTramoPartido] y [conTramosUnidos], corre los índices de los tramos: quien la llame
+     * tiene que soltar los bloqueos.
+     */
+    fun conTramoQuitado(indice: Int = tramos.lastIndex): DisenoNova {
+        if (tramos.size <= 1 || indice !in tramos.indices) return this
+        return copy(tramos = tramos.filterIndexed { i, _ -> i != indice }).conAnchosRepartidos()
+    }
+
+    /**
+     * Agrega una franja al final de TODOS los tramos, con un módulo del ancho del tramo.
+     *
+     * Va en todos porque las franjas de un tramo empiezan y acaban juntas: una mocheta que
+     * existiera solo en un tramo no sería una franja, sería otro diseño. [alto] en 0 la deja en
+     * automático, que es como se reparte lo que sobra del alto.
+     *
+     * No toca el reparto: una franja más no cambia el ancho de ningún tramo, y volver a repartir
+     * borraría los anchos que el vidriero hubiera fijado a mano.
+     */
+    fun conFranjaAgregada(esSistema: Boolean = false, alto: Float = 0f): DisenoNova {
+        if (tramos.isEmpty()) return this
+        return copy(tramos = tramos.map { t ->
+            val nueva = NovaFranja(esSistema, alto.coerceAtLeast(0f), listOf(NovaModulo('f', t.ancho)))
+            t.copy(franjas = t.franjas + nueva)
+        })
+    }
+
+    /**
+     * Quita una franja de todos los tramos: por defecto la última mocheta. La del sistema no se
+     * toca —sin ella no hay ventana— y siempre queda al menos una franja.
+     *
+     * Tampoco toca el reparto, por lo mismo que [conFranjaAgregada].
+     */
+    fun conFranjaQuitada(indice: Int = -1): DisenoNova {
+        val franjas = tramos.firstOrNull()?.franjas ?: return this
+        if (franjas.size <= 1) return this
+        val idx = if (indice >= 0) indice else franjas.indexOfLast { !it.esSistema }
+        if (idx !in franjas.indices || franjas[idx].esSistema) return this
+        return copy(tramos = tramos.map { t ->
+            if (idx !in t.franjas.indices) t
+            else t.copy(franjas = t.franjas.filterIndexed { i, _ -> i != idx })
+        })
+    }
+
     /** Agrega un módulo [tipo] justo después del módulo [despuesDe] de esa franja. */
     fun conModuloAgregado(indiceTramo: Int, indiceFranja: Int, despuesDe: Int, tipo: Char, bloqueados: Set<Int> = emptySet()): DisenoNova =
         conFranjaCambiada(indiceTramo, indiceFranja, bloqueados) { mods ->

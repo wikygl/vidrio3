@@ -76,4 +76,60 @@ class DisenoNovaPantallaTest {
             )
         }
     }
+
+    // ---- Panel de cotas: agregar y quitar tramos y franjas ----
+    private val tresTramos =
+        "{nova,ina,[650,160:Tl<234.5>(s<114.2>(f<58.6>c<58.6>c<58.6>f<58.6>);m<43.3>(f<117.2>f<117.2>))" +
+            " P<2.5> Tl<175.9>(s<114.2>(f<58.6>c<58.6>f<58.6>);m<43.3>(f<175.9>))" +
+            " P<2.5> Tl<234.5>(s<114.2>(f<58.6>c<58.6>c<58.6>f<58.6>);m<43.3>(f<117.2>f<117.2>))]}"
+
+    @Test
+    fun el_mas_de_tramos_agrega_un_tramo() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 0, mas = true) }
+            esperar()
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el + de tramos no agregó nada", 4, d.nTramos)
+        }
+    }
+
+    @Test
+    fun el_menos_de_tramos_quita_un_tramo() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 0, mas = false) }
+            esperar()
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el − de tramos no quitó nada", 2, d.nTramos)
+        }
+    }
+
+    @Test
+    fun el_mas_y_el_menos_de_franjas_mueven_la_mocheta_en_todos_los_tramos() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 1, mas = true) }
+            esperar()
+            val conMas = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertTrue(
+                "el + de franjas no agregó en todos los tramos: ${conMas.aPaquete()}",
+                conMas.tramos.all { it.franjas.size == 3 }
+            )
+
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 1, mas = false) }
+            esperar()
+            val conMenos = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertTrue(
+                "el − de franjas no quitó en todos los tramos: ${conMenos.aPaquete()}",
+                conMenos.tramos.all { it.franjas.size == 2 }
+            )
+        }
+    }
 }
