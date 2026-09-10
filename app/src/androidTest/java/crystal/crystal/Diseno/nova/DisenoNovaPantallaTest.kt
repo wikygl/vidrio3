@@ -367,4 +367,44 @@ class DisenoNovaPantallaTest {
             assertEquals("no seleccionó la franja de arriba", 2, seleccion.second)
         }
     }
+
+    /**
+     * El segundo toque en una franja tiene que pasar a elegir módulo —es lo que intensifica el
+     * color y abre el ancho del módulo—. En la franja de arriba de un tramo con tres no llegaba.
+     */
+    @Test
+    fun el_segundo_toque_en_la_franja_de_arriba_elige_modulo() {
+        val casos = mapOf(
+            "apa" to ("{nova,apa,[400,200:Tl<200>(s<160>(f<100>c<100>);m<40>(f<200>))" +
+                " P<2.5> Tl<200>(s<120>(f<100>c<100>);m<40>(f<200>);m<40>(f<200>))]}"),
+            "ina" to ("{nova,ina,[400,200:Tl<200>(s<160>(f<100>c<100>);m<40>(f<200>))" +
+                " P<2.5> Tl<200>(s<120>(f<100>c<100>);m<40>(f<200>);m<40>(f<200>))]}")
+        )
+        val problemas = mutableListOf<String>()
+        for ((nombre, paquete) in casos) {
+            ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+                esperar()
+                enPantalla(esc) { it.cargarParaPruebas(paquete) }
+                esperar()
+                val bandas = enPantalla(esc) { it.bandasDeFranjaParaPruebas(1) }
+                val anchos = enPantalla(esc) { it.anchosDeTramoParaPruebas() }
+                if (bandas.size < 3 || anchos.size < 2) {
+                    problemas.add("$nombre: bandas=${bandas.size} tramos=${anchos.size}")
+                    return@use
+                }
+                val x = (anchos[1].first + anchos[1].second) / 2f
+                val y = (bandas[2].first + bandas[2].second) / 2f
+
+                val primera = enPantalla(esc) { it.tocarLienzoParaPruebas(x, y) }
+                esperar(300)
+                if (primera != 1 to 2) problemas.add("$nombre: el primer toque dio $primera")
+
+                enPantalla(esc) { it.tocarLienzoParaPruebas(x, y) }
+                esperar(300)
+                val modulo = enPantalla(esc) { it.moduloActivoParaPruebas() }
+                if (modulo < 0) problemas.add("$nombre: el segundo toque no eligió módulo")
+            }
+        }
+        assertTrue(problemas.joinToString("\n"), problemas.isEmpty())
+    }
 }

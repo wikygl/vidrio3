@@ -2012,6 +2012,10 @@ class DisenoNovaActivity : AppCompatActivity() {
         arriba.recycle()
         return indiceTramoActivo to indiceFranjaActiva
     }
+    /** El módulo seleccionado ahora mismo, o -1. */
+    @androidx.annotation.VisibleForTesting
+    fun moduloActivoParaPruebas(): Int = indiceModuloActivo
+
     /** Toca el recuadro de un módulo, que es lo que cambia fijo por corrediza. */
     @androidx.annotation.VisibleForTesting
     fun tocarRecuadroModuloParaPruebas(indiceTramo: Int, indiceModulo: Int): Boolean {
