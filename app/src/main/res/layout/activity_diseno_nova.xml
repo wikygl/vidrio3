@@ -90,10 +90,13 @@
                         android:text="Cotas"
                         android:textStyle="bold" />
 
+                    <!-- El alto lo limita la pantalla, en limitarAltoDelPanel: android:maxHeight
+                         no vale aquí, ScrollView no lo respeta y el panel crecía hasta tapar el
+                         diseño. -->
                     <ScrollView
+                        android:id="@+id/scrollCotas"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:maxHeight="270dp">
+                        android:layout_height="wrap_content">
 
                         <LinearLayout
                             android:id="@+id/contenedorCotas"

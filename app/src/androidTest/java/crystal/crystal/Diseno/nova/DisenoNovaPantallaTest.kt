@@ -179,4 +179,27 @@ class DisenoNovaPantallaTest {
             assertEquals(3, d.tramos[1].nModulosSistema)
         }
     }
+
+    @Test
+    fun el_panel_de_cotas_no_se_come_la_pantalla() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            enPantalla(esc) { it.abrirCotasParaPruebas() }
+            esperar()
+            // Seis tramos: con el panel sin límite, esto tapaba el diseño entero.
+            repeat(3) {
+                enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 0, mas = true) }
+                esperar(300)
+            }
+            esperar()
+            val (alto, pantalla) = enPantalla(esc) { it.altoDelPanelParaPruebas() }
+            assertTrue("el panel ni se ve: $alto", alto > 0)
+            assertTrue(
+                "el panel ocupa $alto de $pantalla: se come la pantalla",
+                alto <= (pantalla * 0.45f).toInt()
+            )
+        }
+    }
 }

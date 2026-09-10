@@ -14,6 +14,7 @@ import android.text.style.StyleSpan
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.graphics.Color
 import android.widget.Button
 import android.widget.EditText
@@ -1410,9 +1411,36 @@ class DisenoNovaActivity : AppCompatActivity() {
         while (tramosBlockeados.size > bloques.size) tramosBlockeados.removeAt(tramosBlockeados.lastIndex)
 
         val etAnchos = mutableListOf<EditText>()
-        val etAltos = mutableListOf<EditText>()
         val etPuentes = mutableListOf<EditText>()
         val capturedBloques = bloques.toList()
+
+        // Fila `etiqueta [campo]` del panel.
+        fun addRow(label: String, value: String): EditText {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
+                    it.setMargins(0, 1, 0, 1)
+                }
+            }
+            row.addView(TextView(this).apply {
+                text = label; textSize = 10f
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.42f)
+                setPadding(0, dp4, dp4, dp4)
+            })
+            val et = EditText(this).apply {
+                setText(value); textSize = 10f; setSingleLine(true)
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.58f)
+                setPadding(dp4, 2, dp4, 2)
+            }
+            row.addView(et)
+            binding.contenedorCotas.addView(row)
+            return et
+        }
+
+        // El alto es de la ventana entera, no de cada tramo: una sola casilla arriba. Antes salía
+        // repetida en cada tramo y solo se leía la primera, así que las demás engañaban.
+        val etAlto = addRow("Alto:", df1(altoCm))
 
         bloques.forEachIndexed { i, bloque ->
             val info = tramoInfo.getOrNull(i)
@@ -1466,32 +1494,7 @@ class DisenoNovaActivity : AppCompatActivity() {
                 botonPanel("C", dp, true) { agregarModuloEnTramo(i, 'c') }
             ).apply { tag = "$TAG_MODULOS$i" })
 
-            // Helper para añadir fila label+edittext
-            fun addRow(label: String, value: String): EditText {
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
-                        it.setMargins(0, 1, 0, 1)
-                    }
-                }
-                row.addView(TextView(this).apply {
-                    text = label; textSize = 10f
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.42f)
-                    setPadding(0, dp4, dp4, dp4)
-                })
-                val et = EditText(this).apply {
-                    setText(value); textSize = 10f; setSingleLine(true)
-                    inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.58f)
-                    setPadding(dp4, 2, dp4, 2)
-                }
-                row.addView(et)
-                binding.contenedorCotas.addView(row)
-                return et
-            }
-
             etAnchos.add(addRow("Ancho:", df1(bloque.ancho)))
-            etAltos.add(addRow("Alto:", df1(altoCm)))
             etPuentes.add(addRow("Puente:", df1(info?.sistemaAltura ?: 0f)))
         }
 
@@ -1506,13 +1509,37 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
             setOnClickListener {
                 val nuevosAnchos = etAnchos.map { it.text.toString().aNumeroSeguro() }
-                val nuevoAlto = etAltos.firstOrNull()?.text?.toString()?.aNumeroSeguro() ?: altoCm
+                val nuevoAlto = etAlto.text.toString().aNumeroSeguro()
                 val nuevasPuentes = etPuentes.map { e ->
                     e.text.toString().aNumeroSeguro().takeIf { it > 0f }
                 }
                 aplicarCambiosCotas(capturedBloques, nuevosAnchos, nuevoAlto, nuevasPuentes)
             }
         })
+
+        limitarAltoDelPanel()
+    }
+
+    /**
+     * El panel de cotas crece hacia arriba, y con cuatro o cinco tramos tapaba el diseño entero.
+     *
+     * `android:maxHeight` no sirve para esto —ScrollView no lo respeta—, así que se mide lo que
+     * ocupa el contenido y, si pasa de poco menos de la mitad de la pantalla, se le fija esa
+     * altura y lo demás se desplaza dentro. Mientras quepa, el panel sigue siendo del tamaño de
+     * lo que muestra.
+     */
+    private fun limitarAltoDelPanel() {
+        val scroll = binding.scrollCotas
+        scroll.post {
+            val maximo = (resources.displayMetrics.heightPixels * 0.42f).toInt()
+            // El hijo de un ScrollView se mide sin límite, así que su alto es el del contenido
+            // entero aunque el scroll ya esté recortado.
+            val contenido = binding.contenedorCotas.height
+            val alto = if (contenido > maximo) maximo else ViewGroup.LayoutParams.WRAP_CONTENT
+            if (scroll.layoutParams.height != alto) {
+                scroll.layoutParams = scroll.layoutParams.apply { height = alto }
+            }
+        }
     }
 
     /**
@@ -1831,4 +1858,15 @@ class DisenoNovaActivity : AppCompatActivity() {
             .firstOrNull { it is TextView && it.text.toString() == simbolo } ?: return false
         return boton.performClick()
     }
+
+    /** Abre el panel de cotas, como el botón de la cota. */
+    @androidx.annotation.VisibleForTesting
+    fun abrirCotasParaPruebas() {
+        if (binding.panelCotasPlanos.visibility != View.VISIBLE) togglePanelCotasPlanos()
+    }
+
+    /** Alto del panel de cotas en pantalla y alto de la pantalla, para comprobar que no la tapa. */
+    @androidx.annotation.VisibleForTesting
+    fun altoDelPanelParaPruebas(): Pair<Int, Int> =
+        binding.scrollCotas.height to resources.displayMetrics.heightPixels
 }
