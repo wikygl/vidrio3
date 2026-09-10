@@ -1986,6 +1986,32 @@ class DisenoNovaActivity : AppCompatActivity() {
         return pulsarEnFilaParaPruebas("$TAG_MODULOS$indiceTramo", simbolo)
     }
 
+
+    /** Las bandas de las franjas de un tramo, tal como las ve el toque. */
+    @androidx.annotation.VisibleForTesting
+    fun bandasDeFranjaParaPruebas(indiceTramo: Int) =
+        binding.vistaDiseno.bandasDeFranjaParaPruebas(indiceTramo)
+
+    /** Diagnóstico del dibujo. */
+    @androidx.annotation.VisibleForTesting
+    fun diagnosticoDibujoParaPruebas() = binding.vistaDiseno.diagnosticoParaPruebas()
+
+    /** El ancho en pantalla de cada tramo. */
+    @androidx.annotation.VisibleForTesting
+    fun anchosDeTramoParaPruebas() = binding.vistaDiseno.anchosDeTramoParaPruebas()
+
+    /** Toca el lienzo en ese punto y devuelve el (tramo, franja) que quedan seleccionados. */
+    @androidx.annotation.VisibleForTesting
+    fun tocarLienzoParaPruebas(x: Float, y: Float): Pair<Int, Int> {
+        val t = android.os.SystemClock.uptimeMillis()
+        val abajo = android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, x, y, 0)
+        val arriba = android.view.MotionEvent.obtain(t, t + 10, android.view.MotionEvent.ACTION_UP, x, y, 0)
+        binding.vistaDiseno.dispatchTouchEvent(abajo)
+        binding.vistaDiseno.dispatchTouchEvent(arriba)
+        abajo.recycle()
+        arriba.recycle()
+        return indiceTramoActivo to indiceFranjaActiva
+    }
     /** Toca el recuadro de un módulo, que es lo que cambia fijo por corrediza. */
     @androidx.annotation.VisibleForTesting
     fun tocarRecuadroModuloParaPruebas(indiceTramo: Int, indiceModulo: Int): Boolean {

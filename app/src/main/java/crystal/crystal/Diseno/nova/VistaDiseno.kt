@@ -145,6 +145,10 @@ class VistaDiseno @JvmOverloads constructor(
     private var indiceModuloResaltado: Int = -1
     private val rangosFranjaY = mutableListOf<Pair<Float, Float>>() // [top, bottom] por franja (abajo→arriba)
     private val rangosTramoX = mutableListOf<Pair<Float, Float>>() // [left, right] por tramo (izq→der)
+    // Las bandas de cada franja, tramo a tramo. Antes solo se guardaban las del primer tramo y
+    // valian para todos: con franjas distintas por tramo, la de arriba del segundo no se podia
+    // tocar porque su banda no existia.
+    private val rangosFranjaPorTramo = mutableListOf<MutableList<Pair<Float, Float>>>()
     private var ultimaVentanaX0 = 0f
     private var ultimaVentanaX1 = 0f
     private var franjaConfirmadaPorToque: Int = -1
@@ -1049,6 +1053,7 @@ class VistaDiseno @JvmOverloads constructor(
 
         // Limpiar rangos de franjas para este frame
         rangosFranjaY.clear()
+        rangosFranjaPorTramo.clear()
 
         val anchoVentPx = xVentFin - xVentIni
         construirRangosTramoX(xVentIni, xVentFin, anchoVentPx)
@@ -1228,6 +1233,8 @@ class VistaDiseno @JvmOverloads constructor(
         }
 
         rangosFranjaY.clear()
+
+        rangosFranjaPorTramo.clear()
         rangosFranjaY.add(Pair(top, bottom))
         ultimaVentanaX0 = left
         ultimaVentanaX1 = right
@@ -1385,6 +1392,7 @@ class VistaDiseno @JvmOverloads constructor(
     ) {
         if (segmentosNs.isEmpty()) return
         rangosFranjaY.clear()
+        rangosFranjaPorTramo.clear()
         var xCursor = xInicio
         var yTopPlanoActual = yTop
         var yBottomPlanoActual = yBottom
@@ -2285,6 +2293,7 @@ class VistaDiseno @JvmOverloads constructor(
             val yTop = yArriba
             val yBottom = yAbajo
             if (populateRangosFranjas) rangosFranjaY.add(Pair(yTop, yBottom))
+            registrarFranjaDeTramo(segmentoIndex, yTop, yBottom)
 
             // Cada frontera entre franjas lleva su puente: una banda gruesa, no una linea fina. Antes
             // solo se pintaba donde el sistema tocaba una mocheta; en el diseno a mano hay franjas
@@ -2469,6 +2478,17 @@ class VistaDiseno @JvmOverloads constructor(
         val yTop = yTopTotal + insetMarco
         val yBottom = yBotTotal - insetMarco
         if (populateRangosFranjas) rangosFranjaY.add(Pair(yTop, yBottom))
+        // Una banda por franja, no una sola para el tramo entero: sin esto, en INA no se puede
+        // seleccionar una mocheta por separado.
+        run {
+            var yAbajoBanda = yBottom
+            franjas.forEachIndexed { i, f ->
+                val hCm = (f.alturaCm ?: alturasFallback.getOrElse(i) { 0f }).coerceAtLeast(0f)
+                val hPx = hCm * escalaPxPorCm
+                registrarFranjaDeTramo(segmentoIndex, yAbajoBanda - hPx, yAbajoBanda)
+                yAbajoBanda -= hPx
+            }
+        }
 
         canvas.drawLine(xIni, yTop, xFin, yTop, pLinea)
         canvas.drawLine(xIni, yBottom, xFin, yBottom, pLinea)
@@ -3270,6 +3290,39 @@ class VistaDiseno @JvmOverloads constructor(
     }
 
     // ================== Toque / selección ==================
+
+    /** Guarda la banda de una franja dentro de su tramo, para poder tocarla por separado. */
+    private fun registrarFranjaDeTramo(indiceTramo: Int, top: Float, bottom: Float) {
+        if (indiceTramo < 0) return
+        while (rangosFranjaPorTramo.size <= indiceTramo) rangosFranjaPorTramo.add(mutableListOf())
+        rangosFranjaPorTramo[indiceTramo].add(Pair(top, bottom))
+    }
+
+    /**
+     * Las bandas de cada franja de un tramo, de abajo arriba. Es lo que mira el toque para saber
+     * qué franja se ha tocado; las pruebas lo usan para no depender de coordenadas a ojo.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun bandasDeFranjaParaPruebas(indiceTramo: Int): List<Pair<Float, Float>> =
+        rangosFranjaPorTramo.getOrNull(indiceTramo)?.toList() ?: emptyList()
+
+    /** Cuántos segmentos multi-tramo ve el dibujo, y el modelo que le llegó. */
+    @androidx.annotation.VisibleForTesting
+    fun diagnosticoParaPruebas(): String = "segmentos=${segmentosNs.size} franjas=${franjasAbajoArriba.size} modo=$modo"
+
+    /** El ancho en pantalla de cada tramo, para las pruebas. */
+    @androidx.annotation.VisibleForTesting
+    fun anchosDeTramoParaPruebas(): List<Pair<Float, Float>> = rangosTramoX.toList()
+
+    /** El tramo cuyo ancho contiene esa x, o -1 si el toque cae fuera. */
+    private fun tramoEnX(x: Float): Int {
+        for (t in rangosTramoX.indices) {
+            val (x0, x1) = rangosTramoX[t]
+            if (x >= x0 && x <= x1) return t
+        }
+        return -1
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -3280,8 +3333,13 @@ class VistaDiseno @JvmOverloads constructor(
                 val xMin = if (segmentosPlanoInfo.isNotEmpty()) segmentosPlanoInfo.first().first else ultimaVentanaX0
                 val xMax = if (segmentosPlanoInfo.isNotEmpty()) segmentosPlanoInfo.last().second else ultimaVentanaX1
                 if (x >= xMin && x <= xMax) {
-                    for (i in rangosFranjaY.indices) {
-                        val (top, bottom) = rangosFranjaY[i]
+                    // Primero el tramo donde cae el dedo, y dentro de él sus franjas: cada tramo tiene
+                    // las suyas. Si ese tramo no tiene bandas guardadas se usan las generales, que es
+                    // lo que hacen los dibujos de un solo tramo.
+                    val bandas = rangosFranjaPorTramo.getOrNull(tramoEnX(x))
+                        ?.takeIf { it.isNotEmpty() } ?: rangosFranjaY
+                    for (i in bandas.indices) {
+                        val (top, bottom) = bandas[i]
                         if (y >= top && y <= bottom) {
                             franjaDownIndex = i
                             return true // consumir para recibir ACTION_UP

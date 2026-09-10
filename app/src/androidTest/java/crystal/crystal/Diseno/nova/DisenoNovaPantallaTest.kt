@@ -334,4 +334,37 @@ class DisenoNovaPantallaTest {
         }
         assertTrue("el render se cae:\n" + fallos.joinToString("\n"), fallos.isEmpty())
     }
+
+    /**
+     * Con tres franjas en un tramo, la de arriba no se podía seleccionar: el dibujo guardaba las
+     * bandas del PRIMER tramo y las usaba para todos, así que la tercera franja del segundo tramo
+     * no existía para el toque.
+     */
+    @Test
+    fun se_puede_seleccionar_la_franja_de_arriba_de_cualquier_tramo() {
+        // Tramo 1 con dos franjas, tramo 2 con tres.
+        val desigual = "{nova,apa,[400,200:Tl<200>(s<160>(f<100>c<100>);m<40>(f<200>))" +
+            " P<2.5> Tl<200>(s<120>(f<100>c<100>);m<40>(f<200>);m<40>(f<200>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(desigual) }
+            esperar()
+
+            val bandas0 = enPantalla(esc) { it.bandasDeFranjaParaPruebas(0) }
+            val bandas1 = enPantalla(esc) { it.bandasDeFranjaParaPruebas(1) }
+            assertEquals("el tramo 1 no tiene sus dos bandas", 2, bandas0.size)
+            assertEquals("el tramo 2 no tiene sus tres bandas", 3, bandas1.size)
+
+            // Y un toque de verdad en la franja de arriba del tramo 2 la selecciona.
+            val anchos = enPantalla(esc) { it.anchosDeTramoParaPruebas() }
+            val (x0, x1) = anchos[1]
+            val (top, bottom) = bandas1[2]
+            val seleccion = enPantalla(esc) {
+                it.tocarLienzoParaPruebas((x0 + x1) / 2f, (top + bottom) / 2f)
+            }
+            esperar()
+            assertEquals("no seleccionó el tramo tocado", 1, seleccion.first)
+            assertEquals("no seleccionó la franja de arriba", 2, seleccion.second)
+        }
+    }
 }
