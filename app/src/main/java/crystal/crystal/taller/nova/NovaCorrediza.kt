@@ -346,7 +346,10 @@ class NovaCorrediza : AppCompatActivity() {
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etAncho.setText(df1(it)) }
         intent.getFloatExtra("alto", -1f).let { if (it > 0) binding.etAlto.setText(df1(it)) }
 
-        // Cola de medidas que viene de MedidaActivity: mostrar el gráfico original y habilitar arrastre.
+        // Los gestos sobre el diseño (arrastrar para elegir el reparto de tramos) valen siempre,
+        // vengan las medidas de MedidaActivity o se escriban a mano aquí.
+        configurarArrastreDiseno()
+        // Cola de medidas que viene de MedidaActivity: mostrar el gráfico original.
         inicializarDesdeMedidas()
     }
 
@@ -3967,17 +3970,18 @@ class NovaCorrediza : AppCompatActivity() {
 
     private fun inicializarDesdeMedidas() {
         if (!ColaCalculadoras.desdeMedidas(this)) return
-        configurarArrastreDiseno()
         cargarYMostrarBocetoOriginal(ColaCalculadoras.bocetoPath(this))
         navegadorCola.instalarChip()
     }
 
     /**
-     * Gestos sobre ivDiseno cuando la medida viene de MedidaActivity:
+     * Gestos sobre ivDiseno. Se instalan siempre; los que miran la medida original de
+     * MedidaActivity no hacen nada si no hay ninguna.
      * - doble toque -> diálogo grande con la medida original (con zoom)
      * - toque simple -> menú de opciones (igual que siempre)
      * - toque largo -> DisenoNova (igual que siempre)
-     * - arrastre horizontal -> alterna en el thumbnail entre diseño y medida original
+     * - arrastre horizontal -> recorre los repartos de módulos en tramos
+     * - arrastre vertical -> alterna en el thumbnail entre diseño y medida original
      * Al fijar este OnTouchListener reemplazamos los listeners de click/long-click nativos, por eso
      * el detector replica esas acciones.
      */

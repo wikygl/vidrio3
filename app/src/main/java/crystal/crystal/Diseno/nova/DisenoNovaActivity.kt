@@ -436,7 +436,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
         if (!manejado && franjas.isNotEmpty()) {
             estructuraEditada = true
-            franjas.removeLast()
+            franjas.removeAt(franjas.lastIndex)
             indiceFranjaActiva = franjas.lastIndex
             actualizarVista()
             return
@@ -1892,14 +1892,23 @@ class DisenoNovaActivity : AppCompatActivity() {
         return androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
     }
 
-    /** Vuelve al diseño de arranque: el reparto automático para las medidas actuales. */
+    /**
+     * Diseño en blanco: un solo tramo con un paño, sin reparto ni mochetas. Deja la pantalla como
+     * una hoja en blanco para empezar de cero, venga el diseño de donde venga.
+     */
+    private fun paqueteEnBlanco(): String {
+        val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
+        return "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
+    }
+
+    /** Borra el diseño actual y deja el lienzo en blanco. */
     private fun limpiarDiseno() {
         indiceFranjaActiva = -1
         indiceTramoActivo = -1
         indiceModuloActivo = -1
         corteVerticalCm = null
         tramosBlockeados.clear()
-        cargarDesdePaquete(paqueteBase())
+        cargarDesdePaquete(paqueteEnBlanco())
         actualizarVista()
     }
 
@@ -1934,6 +1943,22 @@ class DisenoNovaActivity : AppCompatActivity() {
      * por el intent: el celular restaura la pantalla que quedó abierta con SUS extras, y entonces
      * la prueba acabaría midiendo el diseño del usuario en lugar del suyo.
      */
+    /**
+     * ¿La VISTA acepta este paquete? Devuelve null si sí, y el motivo si no.
+     *
+     * `actualizarVista` se traga el fallo y dibuja un diseño de emergencia de un solo fijo, así
+     * que un paquete rechazado se ve como "no pasa nada" aunque el diseño sea correcto.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun vistaRechazaParaPruebas(paquete: String): String? =
+        runCatching { binding.vistaDiseno.actualizarDesdePaquete(paquete, 0f, 0f, mochetaLateralCm) }
+            .exceptionOrNull()?.let { "${it::class.simpleName}: ${it.message}" }
+
+    /** El dibujo tal cual se está viendo, para poder mirarlo desde fuera del celular. */
+    @androidx.annotation.VisibleForTesting
+    fun dibujoParaPruebas(): android.graphics.Bitmap =
+        binding.vistaDiseno.exportarSoloDisenoBitmap(paddingPx = 8)
+
     @androidx.annotation.VisibleForTesting
     fun cargarParaPruebas(paquete: String) {
         cargarDesdePaquete(paquete)
