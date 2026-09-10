@@ -182,15 +182,6 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.btnTipoEnsamble.setOnClickListener { alternarEnsamble() }
         binding.btnEnviarCalculadora.setOnClickListener { Toast.makeText(this, "No disponible", Toast.LENGTH_SHORT).show() }
         binding.btnLimpiarDiseno.setOnClickListener { limpiarDiseno() }
-        binding.btnProductos.setOnClickListener { togglePanelProductos() }
-
-        // Acciones rápidas (panel productos)
-        binding.cardFranja.setOnClickListener { dialogoAgregarFranja() }
-        binding.cardTramos.setOnClickListener { dialogoTramos() }
-        binding.fijo.setOnClickListener { agregarModuloDirecto(TipoModulo.FIJO) }
-        binding.corrediza.setOnClickListener { agregarModuloDirecto(TipoModulo.CORREDIZA) }
-        binding.parante.setOnClickListener { partirTramoConParante() }
-        binding.cardEliminarModulo.setOnClickListener { quitarModulo() }
 
         // Botón inferior: envía el diseño a NovaCorrediza (igual que el botón Atrás).
         binding.botonEditar.setOnClickListener {
@@ -231,29 +222,14 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun alternarColumnaBotones() {
         val mostrar = binding.panelControles.visibility != View.VISIBLE
         if (mostrar) {
-            binding.panelProductos.visibility = View.GONE
             binding.panelCotasPlanos.visibility = View.GONE
         }
         setPanelControlesVisible(mostrar)
     }
 
-    private fun togglePanelProductos() {
-        val panel = binding.panelProductos
-        if (panel.visibility == View.VISIBLE) {
-            panel.visibility = View.GONE
-            return
-        }
-        setPanelControlesVisible(false)
-        binding.panelCotasPlanos.visibility = View.GONE
-        panel.visibility = View.VISIBLE
-    }
-
-    /** Cierra los paneles de contenido (productos / cotas) si alguno está visible. */
+    /** Cierra el panel de cotas si está visible. */
     private fun cerrarPanelesContenido(): Boolean {
         var cerro = false
-        if (binding.panelProductos.visibility == View.VISIBLE) {
-            binding.panelProductos.visibility = View.GONE; cerro = true
-        }
         if (binding.panelCotasPlanos.visibility == View.VISIBLE) {
             binding.panelCotasPlanos.visibility = View.GONE; cerro = true
         }
@@ -267,7 +243,6 @@ class DisenoNovaActivity : AppCompatActivity() {
             return
         }
         setPanelControlesVisible(false)
-        binding.panelProductos.visibility = View.GONE
         actualizarPanelCotas()
         panel.visibility = View.VISIBLE
     }
@@ -521,80 +496,6 @@ class DisenoNovaActivity : AppCompatActivity() {
             tokens[idx] = "$head($nuevoInterior)"
         }
         return bloque.copy(contenido = tokens.joinToString(";"))
-    }
-
-
-    /**
-     * Parte el TRAMO en dos con un parante a la derecha del módulo seleccionado.
-     *
-     * El parante es vertical: va de piso a techo y parte el tramo **entero**, con todas sus
-     * franjas. La de mocheta se parte con él, en la misma proporción que la de sistema; si en esa
-     * franja solo había un módulo, cada tramo se queda con uno.
-     *
-     * Por eso no se toca `fr.parantes` —que son parantes dentro de una sola franja— sino la
-     * estructura del paquete: el bloque `Tl<w>(…)` se convierte en dos, y el ancho se reparte
-     * entre ellos según los módulos que le tocan a cada uno.
-     */
-    private fun partirTramoConParante() {
-        if (indiceFranjaActiva !in franjas.indices) {
-            Toast.makeText(this, "Primero agrega/selecciona una franja.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val fr = franjas[indiceFranjaActiva]
-        val tramoStart = inicioDelTramoActivo(fr)
-        val tramoSize = (finDelTramoActivo(fr) - tramoStart).coerceAtLeast(0)
-        if (indiceModuloActivo !in 0 until tramoSize) {
-            Toast.makeText(this, "Seleccione el módulo a cuya derecha va el parante.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        // Módulos que quedan a la izquierda del parante, dentro del tramo.
-        val corte = indiceModuloActivo + 1
-        if (corte >= tramoSize) {
-            Toast.makeText(this, "A la derecha de ese módulo no queda nada que partir.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val modelo = runCatching { DisenoNova.desdePaquete(paqueteActualLectura()) }.getOrNull()
-        if (modelo == null) {
-            Toast.makeText(this, "No se pudo leer el diseño.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val idx = indiceTramoActivo.coerceIn(0, (modelo.nTramos - 1).coerceAtLeast(0))
-        val nuevo = modelo.conTramoPartido(idx, indiceModuloActivo)
-        if (nuevo === modelo) {
-            Toast.makeText(this, "A la derecha de ese módulo no queda nada que partir.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        tramosBlockeados.clear()
-        indiceTramoActivo = idx
-        indiceModuloActivo = corte - 1
-        cargarDesdePaquete(nuevo.aPaquete())
-        actualizarVista()
-        Toast.makeText(this, "Tramo partido: ${nuevo.nTramos} tramos", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun agregarModuloDirecto(tipo: TipoModulo) {
-        if (indiceFranjaActiva !in franjas.indices) {
-            Toast.makeText(this, "Primero agrega/selecciona una franja.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val fr = franjas[indiceFranjaActiva]
-        val tramoStart = inicioDelTramoActivo(fr)
-        val tramoEnd   = finDelTramoActivo(fr)
-        val tramoSize  = (tramoEnd - tramoStart).coerceAtLeast(0)
-        // indiceModuloActivo es visual (relativo al tramo); convertir a absoluto
-        val insertIdx = if (indiceModuloActivo in 0 until tramoSize) {
-            tramoStart + indiceModuloActivo + 1
-        } else {
-            tramoEnd
-        }
-        val visualIdx = insertIdx - tramoStart
-        val letra = if (tipo == TipoModulo.CORREDIZA) 'c' else 'f'
-        aplicarAlModelo {
-            it.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visualIdx - 1, letra, tramosLibresBloqueados())
-        }
-        indiceModuloActivo = visualIdx
-        binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, visualIdx)
     }
 
     private fun quitarModulo() {
@@ -993,127 +894,6 @@ class DisenoNovaActivity : AppCompatActivity() {
                         ?.aPaquete()
                 }.getOrNull()
                 if (rehecho != null) cargarDesdePaquete(rehecho)
-                actualizarVista()
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun dialogoTramos() {
-        val opciones = arrayOf(
-            "Crear/ajustar corte vertical",
-            "Editar franjas por tramos (selección acumulativa)"
-        )
-        AlertDialog.Builder(this)
-            .setTitle("Tramo")
-            .setItems(opciones) { _, which ->
-                when (which) {
-                    0 -> dialogoCorteVerticalTramos()
-                    1 -> dialogoSeleccionAcumulativaTramos()
-                }
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun dialogoCorteVerticalTramos() {
-        val cont = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(32, 24, 32, 8)
-        }
-        val etMedida = EditText(this).apply {
-            hint = "Corte vertical desde la izquierda (cm)"
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText(corteVerticalCm?.let { df1(it) } ?: "")
-        }
-        cont.addView(etMedida)
-
-        AlertDialog.Builder(this)
-            .setTitle("Tramos")
-            .setView(cont)
-            .setPositiveButton("Aplicar") { _, _ ->
-                val medida = etMedida.text.toString().aNumeroSeguro()
-                if (medida <= 0f || medida >= anchoCm) {
-                    Toast.makeText(this, "Ingresa una medida mayor a 0 y menor que el ancho.", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                corteVerticalCm = medida
-                actualizarVista()
-            }
-            .setNeutralButton("Limpiar") { _, _ ->
-                corteVerticalCm = null
-                actualizarVista()
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun dialogoSeleccionAcumulativaTramos() {
-        val nTramos = contarTramosDesdePaqueteActual()
-        if (nTramos <= 1 || franjas.isEmpty()) {
-            Toast.makeText(this, "No hay tramos múltiples para edición acumulativa.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val etiquetas = mutableListOf<String>()
-        val refsFranja = mutableListOf<Int>()
-        for (t in 1..nTramos) {
-            franjas.forEachIndexed { idx, fr ->
-                val tipoTxt = if (fr.esSistema) "Sistema" else "Mocheta"
-                etiquetas.add("Tramo $t · $tipoTxt  h=${df1(fr.alturaCm)}")
-                refsFranja.add(idx)
-            }
-        }
-        val checks = BooleanArray(etiquetas.size)
-
-        AlertDialog.Builder(this)
-            .setTitle("Selecciona franjas")
-            .setMultiChoiceItems(etiquetas.toTypedArray(), checks) { _, which, checked ->
-                checks[which] = checked
-            }
-            .setPositiveButton("Aplicar altura") { _, _ ->
-                val seleccion = checks.indices
-                    .filter { checks[it] }
-                    .map { refsFranja[it] }
-                    .toSet()
-                if (seleccion.isEmpty()) {
-                    Toast.makeText(this, "Selecciona al menos una franja.", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                dialogoAplicarAlturaAcumulativa(seleccion)
-            }
-            .setNeutralButton("Igualar seleccionadas") { _, _ ->
-                val seleccion = checks.indices
-                    .filter { checks[it] }
-                    .map { refsFranja[it] }
-                    .toSet()
-                if (seleccion.size < 2) {
-                    Toast.makeText(this, "Selecciona 2 o más para igualar.", Toast.LENGTH_SHORT).show()
-                    return@setNeutralButton
-                }
-                val alturaBase = franjas[seleccion.first()].alturaCm
-                estructuraEditada = true
-                seleccion.forEach { idx -> franjas[idx].alturaCm = alturaBase }
-                actualizarVista()
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun dialogoAplicarAlturaAcumulativa(indicesFranjas: Set<Int>) {
-        val et = EditText(this).apply {
-            hint = "Altura (cm) 0 = auto"
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Aplicar altura")
-            .setView(et)
-            .setPositiveButton("Aplicar") { _, _ ->
-                val alt = et.text.toString().aNumeroSeguro().coerceAtLeast(0f)
-                estructuraEditada = true
-                indicesFranjas.forEach { idx ->
-                    if (idx in franjas.indices) franjas[idx].alturaCm = alt
-                }
                 actualizarVista()
             }
             .setNegativeButton("Cancelar", null)
@@ -1971,13 +1751,4 @@ class DisenoNovaActivity : AppCompatActivity() {
         indiceTramoActivo = tramo
         indiceModuloActivo = modulo
     }
-
-    @androidx.annotation.VisibleForTesting
-    fun pulsarFijoParaPruebas() = binding.fijo.performClick()
-
-    @androidx.annotation.VisibleForTesting
-    fun pulsarCorredizaParaPruebas() = binding.corrediza.performClick()
-
-    @androidx.annotation.VisibleForTesting
-    fun pulsarParanteParaPruebas() = binding.parante.performClick()
 }
