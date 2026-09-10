@@ -31,6 +31,8 @@ import kotlin.math.max
 class DisenoNovaActivity : AppCompatActivity() {
 
     companion object {
+        /** Marca la fila de módulos de cada tramo en el panel de cotas, para poder pulsarla. */
+        private const val TAG_MODULOS = "cotas_modulos_"
         const val EXTRA_PAQUETE = "extra_paquete_diseno"
         const val EXTRA_MOCHETA_LATERAL_CM = "extra_mocheta_lateral_cm"
         const val EXTRA_HEADLESS = "extra_headless"
@@ -1453,6 +1455,17 @@ class DisenoNovaActivity : AppCompatActivity() {
             })
             binding.contenedorCotas.addView(rowHead)
 
+            // Módulos del tramo: el patrón que tiene hoy y los botones para quitarlo, agregar un
+            // fijo o agregar una corrediza. Van a la franja del sistema, que es la que manda.
+            val modulosSistema = modulosDelSistema(bloque)
+            binding.contenedorCotas.addView(filaBotones(
+                etiqueta = modulosSistema.joinToString(" "),
+                dp = dp,
+                botonPanel("−", dp, modulosSistema.size > 1) { quitarModuloEnTramo(i) },
+                botonPanel("F", dp, true) { agregarModuloEnTramo(i, 'f') },
+                botonPanel("C", dp, true) { agregarModuloEnTramo(i, 'c') }
+            ).apply { tag = "$TAG_MODULOS$i" })
+
             // Helper para añadir fila label+edittext
             fun addRow(label: String, value: String): EditText {
                 val row = LinearLayout(this).apply {
@@ -1503,18 +1516,32 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     /**
-     * Una fila `etiqueta  [−][+]` para el panel de cotas, con la misma forma que los botones del
-     * editor de la mampara: cuadros de tamaño fijo, azules cuando se pueden pulsar y apagados
-     * cuando no, para que se vea de un vistazo que ya no queda nada que quitar.
+     * Un botón cuadrado del panel, con la forma de los del editor de la mampara: tamaño fijo,
+     * azul cuando se puede pulsar y apagado cuando no, para que se vea de un vistazo que ya no
+     * queda nada que quitar.
      */
-    private fun filaMasMenos(
-        etiqueta: String,
+    private fun botonPanel(
+        simbolo: String,
         dp: Float,
-        puedeQuitar: Boolean,
-        onQuitar: () -> Unit,
-        onAgregar: () -> Unit,
-        onAgregarLargo: (() -> Unit)? = null
-    ): View {
+        activo: Boolean,
+        accionLarga: (() -> Unit)? = null,
+        accion: () -> Unit
+    ): TextView = TextView(this).apply {
+        layoutParams = LinearLayout.LayoutParams((34 * dp).toInt(), (30 * dp).toInt())
+            .also { it.marginStart = (3 * dp).toInt() }
+        gravity = Gravity.CENTER
+        text = simbolo
+        textSize = 15f
+        setTypeface(null, Typeface.BOLD)
+        setTextColor(if (activo) Color.parseColor("#1565C0") else Color.parseColor("#BBBBBB"))
+        setBackgroundResource(R.drawable.bg_opcion_seleccionada)
+        isEnabled = activo
+        if (activo) setOnClickListener { accion() }
+        if (accionLarga != null) setOnLongClickListener { accionLarga(); true }
+    }
+
+    /** Una fila `etiqueta  [botones…]` del panel de cotas. */
+    private fun filaBotones(etiqueta: String, dp: Float, vararg botones: View): View {
         val fila = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1526,24 +1553,63 @@ class DisenoNovaActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             text = etiqueta
             textSize = 11f
+            setSingleLine(true)
+            ellipsize = android.text.TextUtils.TruncateAt.END
             setTypeface(null, Typeface.BOLD)
         })
-        fun boton(simbolo: String, activo: Boolean, accion: () -> Unit, accionLarga: (() -> Unit)?) =
-            TextView(this).apply {
-                layoutParams = LinearLayout.LayoutParams((36 * dp).toInt(), (32 * dp).toInt())
-                    .also { it.marginStart = (4 * dp).toInt() }
-                gravity = Gravity.CENTER
-                text = simbolo
-                textSize = 17f
-                setTextColor(if (activo) Color.parseColor("#1565C0") else Color.parseColor("#BBBBBB"))
-                setBackgroundResource(R.drawable.bg_opcion_seleccionada)
-                isEnabled = activo
-                if (activo) setOnClickListener { accion() }
-                if (accionLarga != null) setOnLongClickListener { accionLarga(); true }
-            }
-        fila.addView(boton("−", puedeQuitar, onQuitar, null))
-        fila.addView(boton("+", true, onAgregar, onAgregarLargo))
+        botones.forEach { fila.addView(it) }
         return fila
+    }
+
+    /** La fila `etiqueta [−][+]` de tramos y franjas. */
+    private fun filaMasMenos(
+        etiqueta: String,
+        dp: Float,
+        puedeQuitar: Boolean,
+        onQuitar: () -> Unit,
+        onAgregar: () -> Unit,
+        onAgregarLargo: (() -> Unit)? = null
+    ): View = filaBotones(
+        etiqueta, dp,
+        botonPanel("−", dp, puedeQuitar, accion = onQuitar),
+        botonPanel("+", dp, true, accionLarga = onAgregarLargo, accion = onAgregar)
+    )
+
+    /** Los módulos de la franja de sistema del tramo, como letras: `f c c f`. */
+    private fun modulosDelSistema(bloque: BloqueTramo): List<Char> {
+        val tokens = splitTopLevelSemicolon(bloque.contenido)
+        val sistema = tokens.firstOrNull { it.trim().startsWith("s", true) } ?: tokens.firstOrNull()
+        val mods = sistema?.let { extraerBloqueModulosFranja(it) } ?: return emptyList()
+        return Regex("""[fcFC]""").findAll(mods).map { it.value.first().lowercaseChar() }.toList()
+    }
+
+    /**
+     * Agrega un fijo o una corrediza al final de la franja de sistema del tramo [indiceTramo].
+     *
+     * No suelta los bloqueos, al revés que [cambiarEstructura]: los tramos siguen siendo los
+     * mismos y en el mismo orden, así que el ancho que el vidriero fijó sigue valiendo. Lo que
+     * hace el reparto es repartir de nuevo lo que queda entre los tramos libres.
+     */
+    private fun agregarModuloEnTramo(indiceTramo: Int, tipo: Char) {
+        val bloqueados = tramosLibresBloqueados()
+        aplicarAlModelo { d ->
+            val tramo = d.tramos.getOrNull(indiceTramo) ?: return@aplicarAlModelo d
+            val iSistema = tramo.franjas.indexOfFirst { it.esSistema }.takeIf { it >= 0 } ?: 0
+            val ultimo = tramo.franjas[iSistema].modulos.lastIndex
+            d.conModuloAgregado(indiceTramo, iSistema, ultimo, tipo, bloqueados)
+        }
+        actualizarPanelCotas()
+    }
+
+    /** Quita el último módulo de la franja de sistema del tramo. Siempre queda uno. */
+    private fun quitarModuloEnTramo(indiceTramo: Int) {
+        val bloqueados = tramosLibresBloqueados()
+        aplicarAlModelo { d ->
+            val tramo = d.tramos.getOrNull(indiceTramo) ?: return@aplicarAlModelo d
+            val iSistema = tramo.franjas.indexOfFirst { it.esSistema }.takeIf { it >= 0 } ?: 0
+            d.conModuloQuitado(indiceTramo, iSistema, tramo.franjas[iSistema].modulos.lastIndex, bloqueados)
+        }
+        actualizarPanelCotas()
     }
 
     /**
@@ -1747,6 +1813,22 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarPanelCotas()
         val row = binding.contenedorCotas.getChildAt(fila) as? LinearLayout ?: return false
         val boton = row.getChildAt(if (mas) 2 else 1) ?: return false
+        return boton.performClick()
+    }
+
+    /**
+     * Pulsa uno de los botones de módulos del tramo [indiceTramo] en el panel de cotas:
+     * `−`, `F` o `C`. Devuelve false si esa fila o ese botón no están.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun pulsarModuloParaPruebas(indiceTramo: Int, simbolo: String): Boolean {
+        actualizarPanelCotas()
+        val fila = (0 until binding.contenedorCotas.childCount)
+            .map { binding.contenedorCotas.getChildAt(it) }
+            .firstOrNull { it.tag == "$TAG_MODULOS$indiceTramo" } as? LinearLayout ?: return false
+        val boton = (0 until fila.childCount)
+            .map { fila.getChildAt(it) }
+            .firstOrNull { it is TextView && it.text.toString() == simbolo } ?: return false
         return boton.performClick()
     }
 }

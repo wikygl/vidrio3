@@ -132,4 +132,51 @@ class DisenoNovaPantallaTest {
             )
         }
     }
+
+    @Test
+    fun la_F_agrega_un_fijo_al_tramo() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            val antes = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            enPantalla(esc) { it.pulsarModuloParaPruebas(indiceTramo = 1, simbolo = "F") }
+            esperar()
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("la F no agregó nada", antes.nModulos + 1, d.nModulos)
+            assertEquals("no lo agregó al tramo pulsado", 4, d.tramos[1].nModulosSistema)
+            assertTrue("el módulo nuevo no es fijo", d.tramos[1].sistema!!.modulos.last().esFijo)
+        }
+    }
+
+    @Test
+    fun la_C_agrega_una_corrediza_al_tramo() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            val antes = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            enPantalla(esc) { it.pulsarModuloParaPruebas(indiceTramo = 0, simbolo = "C") }
+            esperar()
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("la C no agregó nada", antes.nCorredizas + 1, d.nCorredizas)
+            assertTrue("el módulo nuevo no es corrediza", !d.tramos[0].sistema!!.modulos.last().esFijo)
+        }
+    }
+
+    @Test
+    fun el_menos_de_modulos_quita_el_ultimo_del_tramo() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            enPantalla(esc) { it.pulsarModuloParaPruebas(indiceTramo = 2, simbolo = "−") }
+            esperar()
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el − no quitó nada", 3, d.tramos[2].nModulosSistema)
+            // Los otros tramos no se tocan.
+            assertEquals(4, d.tramos[0].nModulosSistema)
+            assertEquals(3, d.tramos[1].nModulosSistema)
+        }
+    }
 }
