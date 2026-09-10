@@ -182,6 +182,12 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.btnEnviarCalculadora.setOnClickListener { Toast.makeText(this, "No disponible", Toast.LENGTH_SHORT).show() }
         binding.btnLimpiarDiseno.setOnClickListener { limpiarDiseno() }
 
+        // El lienzo se sube o se baja solo, según lo que ocupe el bloque de controles: al abrir
+        // el panel de cotas con varios tramos el dibujo se encoge en vez de quedar tapado.
+        binding.overlayControles.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (bottom - top != oldBottom - oldTop) subirLienzoSobreLosControles()
+        }
+
         // Botón inferior: envía el diseño a NovaCorrediza (igual que el botón Atrás).
         binding.botonEditar.setOnClickListener {
             prepararResultadoDiseno()
@@ -1543,6 +1549,26 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     /**
+     * Deja el lienzo justo encima del bloque de controles, sea cual sea su altura.
+     *
+     * El margen fijo del layout valía mientras el panel medía siempre lo mismo; con el panel de
+     * cotas creciendo por tramos, el dibujo quedaba debajo y no se veía. Ahora el dibujo se
+     * encoge lo que haga falta y siempre se ve entero.
+     */
+    private fun subirLienzoSobreLosControles() {
+        val hueco = (8 * resources.displayMetrics.density).toInt()
+        // El bloque de controles tiene su propio margen contra el botón de abajo: si no se cuenta,
+        // el lienzo acaba justo esos milímetros por debajo de donde empieza el panel.
+        val margenControles =
+            (binding.overlayControles.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
+        val alto = binding.overlayControles.height + margenControles + hueco
+        val lp = binding.vistaDiseno.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        if (lp.bottomMargin == alto) return
+        lp.bottomMargin = alto
+        binding.vistaDiseno.layoutParams = lp
+    }
+
+    /**
      * Un botón cuadrado del panel, con la forma de los del editor de la mampara: tamaño fijo,
      * azul cuando se puede pulsar y apagado cuando no, para que se vea de un vistazo que ya no
      * queda nada que quitar.
@@ -1869,4 +1895,17 @@ class DisenoNovaActivity : AppCompatActivity() {
     @androidx.annotation.VisibleForTesting
     fun altoDelPanelParaPruebas(): Pair<Int, Int> =
         binding.scrollCotas.height to resources.displayMetrics.heightPixels
+
+    /**
+     * Dónde acaba el lienzo y dónde empieza el bloque de controles, en pantalla. Si el primero
+     * pasa del segundo, el panel está tapando el dibujo.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun bordesLienzoYControlesParaPruebas(): Pair<Int, Int> {
+        val lienzo = IntArray(2)
+        binding.vistaDiseno.getLocationOnScreen(lienzo)
+        val controles = IntArray(2)
+        binding.overlayControles.getLocationOnScreen(controles)
+        return (lienzo[1] + binding.vistaDiseno.height) to controles[1]
+    }
 }

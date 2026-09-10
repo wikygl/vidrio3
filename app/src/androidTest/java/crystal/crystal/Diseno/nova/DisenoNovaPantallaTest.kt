@@ -202,4 +202,25 @@ class DisenoNovaPantallaTest {
             )
         }
     }
+
+    @Test
+    fun el_lienzo_se_sube_por_encima_del_panel() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            enPantalla(esc) { it.abrirCotasParaPruebas() }
+            esperar()
+            repeat(3) {
+                enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 0, mas = true) }
+                esperar(300)
+            }
+            esperar()
+            val (abajoLienzo, arribaControles) = enPantalla(esc) { it.bordesLienzoYControlesParaPruebas() }
+            assertTrue(
+                "el panel tapa el dibujo: el lienzo acaba en $abajoLienzo y los controles empiezan en $arribaControles",
+                abajoLienzo <= arribaControles
+            )
+        }
+    }
 }
