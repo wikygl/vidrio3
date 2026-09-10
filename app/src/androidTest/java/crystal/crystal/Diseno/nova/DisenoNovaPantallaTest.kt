@@ -89,7 +89,7 @@ class DisenoNovaPantallaTest {
             esperar()
             enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
             esperar()
-            enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 0, mas = true) }
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_tramos", mas = true) }
             esperar()
             val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
             assertEquals("el + de tramos no agregó nada", 4, d.nTramos)
@@ -102,7 +102,7 @@ class DisenoNovaPantallaTest {
             esperar()
             enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
             esperar()
-            enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 0, mas = false) }
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_tramos", mas = false) }
             esperar()
             val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
             assertEquals("el − de tramos no quitó nada", 2, d.nTramos)
@@ -115,7 +115,7 @@ class DisenoNovaPantallaTest {
             esperar()
             enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
             esperar()
-            enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 1, mas = true) }
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas", mas = true) }
             esperar()
             val conMas = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
             assertTrue(
@@ -123,7 +123,7 @@ class DisenoNovaPantallaTest {
                 conMas.tramos.all { it.franjas.size == 3 }
             )
 
-            enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 1, mas = false) }
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas", mas = false) }
             esperar()
             val conMenos = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
             assertTrue(
@@ -190,7 +190,7 @@ class DisenoNovaPantallaTest {
             esperar()
             // Seis tramos: con el panel sin límite, esto tapaba el diseño entero.
             repeat(3) {
-                enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 0, mas = true) }
+                enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_tramos", mas = true) }
                 esperar(300)
             }
             esperar()
@@ -212,7 +212,7 @@ class DisenoNovaPantallaTest {
             enPantalla(esc) { it.abrirCotasParaPruebas() }
             esperar()
             repeat(3) {
-                enPantalla(esc) { it.pulsarEstructuraParaPruebas(fila = 0, mas = true) }
+                enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_tramos", mas = true) }
                 esperar(300)
             }
             esperar()

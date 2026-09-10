@@ -1387,31 +1387,44 @@ class DisenoNovaActivity : AppCompatActivity() {
         val dp4 = (4 * dp).toInt()
         val dp8 = (8 * dp).toInt()
 
-        // Arriba del todo, agregar y quitar tramos y franjas: igual que en la mampara, donde el
-        // editor lleva los botones de estructura y no un panel aparte.
-        binding.contenedorCotas.addView(filaMasMenos(
-            etiqueta = "Tramos",
-            dp = dp,
-            puedeQuitar = bloques.size > 1,
-            onQuitar = { cambiarEstructura { it.conTramoQuitado() } },
-            onAgregar = { cambiarEstructura { it.conTramoAgregado() } }
-        ))
+        // El panel ocupa todo el ancho, y ese sitio se usa para que quepan MÁS datos, no para
+        // estirar las casillas: todo va en dos columnas, incluidos los tramos, que de dos en dos
+        // ocupan la mitad de alto y tapan menos el dibujo.
+        val (vistaAncho, etAnchoVentana) = campoConEtiqueta("Ancho ventana:", df1(anchoCm), dp4)
+        val (vistaAlto, etAlto) = campoConEtiqueta("Alto ventana:", df1(altoCm), dp4)
+        etAnchoVentana.tag = "cotas_ancho"
+        etAlto.tag = "cotas_alto"
+        binding.contenedorCotas.addView(enDosColumnas(vistaAncho, vistaAlto, dp4))
+
+        // Agregar y quitar tramos y franjas: igual que en la mampara, donde el editor lleva los
+        // botones de estructura y no un panel aparte.
         val nFranjas = bloques.firstOrNull()?.let { splitTopLevelSemicolon(it.contenido).size } ?: 0
-        binding.contenedorCotas.addView(filaMasMenos(
-            etiqueta = "Franjas",
-            dp = dp,
-            puedeQuitar = nFranjas > 1,
-            onQuitar = { cambiarEstructura { it.conFranjaQuitada() } },
-            onAgregar = { cambiarEstructura { it.conFranjaAgregada() } },
-            // Un toque agrega una mocheta en automático; mantener pulsado deja elegir si es de
-            // sistema o de mocheta y con qué altura.
-            onAgregarLargo = { dialogoAgregarFranja() }
+        binding.contenedorCotas.addView(enDosColumnas(
+            filaMasMenos(
+                etiqueta = "Tramos",
+                dp = dp,
+                puedeQuitar = bloques.size > 1,
+                onQuitar = { cambiarEstructura { it.conTramoQuitado() } },
+                onAgregar = { cambiarEstructura { it.conTramoAgregado() } }
+            ).apply { tag = "cotas_tramos" },
+            filaMasMenos(
+                etiqueta = "Franjas",
+                dp = dp,
+                puedeQuitar = nFranjas > 1,
+                onQuitar = { cambiarEstructura { it.conFranjaQuitada() } },
+                onAgregar = { cambiarEstructura { it.conFranjaAgregada() } },
+                // Un toque agrega una mocheta en automático; mantener pulsado deja elegir si es de
+                // sistema o de mocheta y con qué altura.
+                onAgregarLargo = { dialogoAgregarFranja() }
+            ).apply { tag = "cotas_franjas" },
+            dp4
         ))
 
         if (bloques.isEmpty()) {
             binding.contenedorCotas.addView(TextView(this).apply {
                 text = "Sin tramos"; textSize = 11f
             })
+            limitarAltoDelPanel()
             return
         }
 
@@ -1423,93 +1436,17 @@ class DisenoNovaActivity : AppCompatActivity() {
         val etPuentes = mutableListOf<EditText>()
         val capturedBloques = bloques.toList()
 
-        // Fila `etiqueta [campo]` del panel.
-        fun addRow(label: String, value: String): EditText {
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
-                    it.setMargins(0, 1, 0, 1)
-                }
-            }
-            row.addView(TextView(this).apply {
-                text = label; textSize = 10f
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.42f)
-                setPadding(0, dp4, dp4, dp4)
-            })
-            val et = EditText(this).apply {
-                setText(value); textSize = 10f; setSingleLine(true)
-                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.58f)
-                setPadding(dp4, 2, dp4, 2)
-            }
-            row.addView(et)
-            binding.contenedorCotas.addView(row)
-            return et
+        val vistasTramo = bloques.mapIndexed { i, bloque ->
+            vistaDeTramo(i, bloque, tramoInfo.getOrNull(i), dp, dp4, etAnchos, etPuentes)
+        }
+        var i = 0
+        while (i < vistasTramo.size) {
+            binding.contenedorCotas.addView(
+                enDosColumnas(vistasTramo[i], vistasTramo.getOrNull(i + 1), dp4)
+            )
+            i += 2
         }
 
-        // Las medidas de la ventana entera, aquí mismo: antes había que ir al diálogo de medidas
-        // rápidas para cambiarlas. El alto salía repetido en cada tramo pero solo se leía el
-        // primero, así que los demás engañaban.
-        val etAnchoVentana = addRow("Ancho ventana:", df1(anchoCm)).apply { tag = "cotas_ancho" }
-        val etAlto = addRow("Alto ventana:", df1(altoCm)).apply { tag = "cotas_alto" }
-
-        bloques.forEachIndexed { i, bloque ->
-            val info = tramoInfo.getOrNull(i)
-            if (i > 0) {
-                binding.contenedorCotas.addView(View(this).apply {
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).also {
-                        it.setMargins(0, dp4, 0, dp4)
-                    }
-                    setBackgroundColor(Color.parseColor("#33000000"))
-                })
-            }
-
-            // Fila: label + botón bloqueo
-            val rowHead = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            }
-            rowHead.addView(TextView(this).apply {
-                text = "tramo ${i + 1}"
-                textSize = 11f
-                setTypeface(null, Typeface.BOLD)
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                setPadding(0, dp4, 0, dp4)
-            })
-            val locked = tramosBlockeados[i]
-            rowHead.addView(Button(this).apply {
-                text = if (locked) "Bloq." else "Libre"
-                textSize = 9f
-                isAllCaps = false
-                setPadding(dp4, 0, dp4, 0)
-                setBackgroundColor(if (locked) Color.parseColor("#E53935") else Color.parseColor("#78909C"))
-                setTextColor(Color.WHITE)
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, (22 * dp).toInt()).also {
-                    it.marginStart = dp4
-                }
-                setOnClickListener {
-                    tramosBlockeados[i] = !tramosBlockeados[i]
-                    actualizarPanelCotas()
-                }
-            })
-            binding.contenedorCotas.addView(rowHead)
-
-            // Módulos del tramo: el patrón que tiene hoy y los botones para quitarlo, agregar un
-            // fijo o agregar una corrediza. Van a la franja del sistema, que es la que manda.
-            val modulosSistema = modulosDelSistema(bloque)
-            binding.contenedorCotas.addView(filaBotones(
-                etiqueta = modulosSistema.joinToString(" "),
-                dp = dp,
-                botonPanel("−", dp, modulosSistema.size > 1) { quitarModuloEnTramo(i) },
-                botonPanel("F", dp, true) { agregarModuloEnTramo(i, 'f') },
-                botonPanel("C", dp, true) { agregarModuloEnTramo(i, 'c') }
-            ).apply { tag = "$TAG_MODULOS$i" })
-
-            etAnchos.add(addRow("Ancho:", df1(bloque.ancho)))
-            etPuentes.add(addRow("Puente:", df1(info?.sistemaAltura ?: 0f)))
-        }
-
-        // Botón Aplicar
         binding.contenedorCotas.addView(Button(this).apply {
             text = "Aplicar"
             tag = "cotas_aplicar"
@@ -1531,6 +1468,117 @@ class DisenoNovaActivity : AppCompatActivity() {
         })
 
         limitarAltoDelPanel()
+    }
+
+    /**
+     * Todo lo de un tramo en un bloque: la cabecera con el bloqueo, los módulos y sus dos
+     * medidas. Se devuelve montado para poder ponerlos de dos en dos.
+     */
+    private fun vistaDeTramo(
+        i: Int,
+        bloque: BloqueTramo,
+        info: InfoTramo?,
+        dp: Float,
+        dp4: Int,
+        etAnchos: MutableList<EditText>,
+        etPuentes: MutableList<EditText>
+    ): View {
+        val columna = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp4, dp4, dp4, dp4)
+            setBackgroundColor(Color.parseColor("#11000000"))
+        }
+
+        val cabecera = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        cabecera.addView(TextView(this).apply {
+            text = "tramo ${i + 1}"
+            textSize = 11f
+            setTypeface(null, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(0, dp4, 0, dp4)
+        })
+        val bloqueado = tramosBlockeados.getOrElse(i) { false }
+        cabecera.addView(Button(this).apply {
+            text = if (bloqueado) "Bloq." else "Libre"
+            textSize = 9f
+            isAllCaps = false
+            setPadding(dp4, 0, dp4, 0)
+            setBackgroundColor(if (bloqueado) Color.parseColor("#E53935") else Color.parseColor("#78909C"))
+            setTextColor(Color.WHITE)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, (22 * dp).toInt()).also {
+                it.marginStart = dp4
+            }
+            setOnClickListener {
+                tramosBlockeados[i] = !tramosBlockeados[i]
+                actualizarPanelCotas()
+            }
+        })
+        columna.addView(cabecera)
+
+        // Los módulos: el patrón que tiene hoy y los botones para quitar el último, agregar un
+        // fijo o agregar una corrediza. Van a la franja del sistema, que es la que manda.
+        val modulosSistema = modulosDelSistema(bloque)
+        columna.addView(filaBotones(
+            etiqueta = modulosSistema.joinToString(" "),
+            dp = dp,
+            botonPanel("−", dp, modulosSistema.size > 1) { quitarModuloEnTramo(i) },
+            botonPanel("F", dp, true) { agregarModuloEnTramo(i, 'f') },
+            botonPanel("C", dp, true) { agregarModuloEnTramo(i, 'c') }
+        ).apply { tag = "$TAG_MODULOS$i" })
+
+        val (vistaAncho, etAncho) = campoConEtiqueta("Ancho:", df1(bloque.ancho), dp4)
+        val (vistaPuente, etPuente) = campoConEtiqueta("Puente:", df1(info?.sistemaAltura ?: 0f), dp4)
+        etAnchos.add(etAncho)
+        etPuentes.add(etPuente)
+        columna.addView(enDosColumnas(vistaAncho, vistaPuente, dp4))
+        return columna
+    }
+
+    /** Un `etiqueta [casilla]`, suelto para poder meterlo en una columna. */
+    private fun campoConEtiqueta(label: String, valor: String, dp4: Int): Pair<View, EditText> {
+        val fila = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(0, 1, 0, 1) }
+        }
+        fila.addView(TextView(this).apply {
+            text = label; textSize = 10f
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.45f)
+            setSingleLine(true)
+            setPadding(0, dp4, dp4, dp4)
+        })
+        val et = EditText(this).apply {
+            setText(valor); textSize = 10f; setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.55f)
+            setPadding(dp4, 2, dp4, 2)
+        }
+        fila.addView(et)
+        return fila to et
+    }
+
+    /** Dos vistas lado a lado, a mitades. Si la segunda falta, la primera se queda con su mitad. */
+    private fun enDosColumnas(izquierda: View, derecha: View?, dp4: Int): View {
+        val fila = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(0, dp4 / 2, 0, dp4 / 2) }
+        }
+        fun mitad(v: View) = v.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .also { it.marginStart = dp4 / 2; it.marginEnd = dp4 / 2 }
+        }
+        fila.addView(mitad(izquierda))
+        // Sin pareja se deja el hueco: así las columnas no bailan de una fila a otra.
+        fila.addView(mitad(derecha ?: View(this)))
+        return fila
     }
 
     /**
@@ -1863,17 +1911,15 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     /**
-     * Pulsa el + o el − del panel de cotas: [fila] 0 son los tramos y 1 las franjas.
+     * Pulsa el + o el − de la fila marcada del panel de cotas: `cotas_tramos` o `cotas_franjas`.
      *
      * Va por las vistas de verdad, no por el modelo, porque el fallo que interesa cazar es
      * justamente el de un botón que no hace nada.
      */
     @androidx.annotation.VisibleForTesting
-    fun pulsarEstructuraParaPruebas(fila: Int, mas: Boolean): Boolean {
+    fun pulsarEstructuraParaPruebas(que: String, mas: Boolean): Boolean {
         actualizarPanelCotas()
-        val row = binding.contenedorCotas.getChildAt(fila) as? LinearLayout ?: return false
-        val boton = row.getChildAt(if (mas) 2 else 1) ?: return false
-        return boton.performClick()
+        return pulsarEnFilaParaPruebas(que, if (mas) "+" else "−")
     }
 
     /**
@@ -1883,9 +1929,12 @@ class DisenoNovaActivity : AppCompatActivity() {
     @androidx.annotation.VisibleForTesting
     fun pulsarModuloParaPruebas(indiceTramo: Int, simbolo: String): Boolean {
         actualizarPanelCotas()
-        val fila = (0 until binding.contenedorCotas.childCount)
-            .map { binding.contenedorCotas.getChildAt(it) }
-            .firstOrNull { it.tag == "$TAG_MODULOS$indiceTramo" } as? LinearLayout ?: return false
+        return pulsarEnFilaParaPruebas("$TAG_MODULOS$indiceTramo", simbolo)
+    }
+
+    /** Busca la fila por su marca —esté donde esté, que ahora van en columnas— y pulsa su botón. */
+    private fun pulsarEnFilaParaPruebas(marca: String, simbolo: String): Boolean {
+        val fila = binding.contenedorCotas.findViewWithTag<LinearLayout>(marca) ?: return false
         val boton = (0 until fila.childCount)
             .map { fila.getChildAt(it) }
             .firstOrNull { it is TextView && it.text.toString() == simbolo } ?: return false
