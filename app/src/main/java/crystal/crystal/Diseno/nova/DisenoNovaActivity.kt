@@ -1382,17 +1382,14 @@ class DisenoNovaActivity : AppCompatActivity() {
 
         val etAnchos = mutableListOf<EditText>()
         val etAlturas = mutableListOf<List<EditText>>()
+        val etAltosDeTramo = mutableListOf<EditText>()
         val capturedBloques = bloques.toList()
 
-        val vistasTramo = bloques.mapIndexed { i, bloque ->
-            vistaDeTramo(i, bloque, dp, dp4, etAnchos, etAlturas)
-        }
-        var i = 0
-        while (i < vistasTramo.size) {
+        // Los tramos, uno debajo de otro: cada tarjeta ya se reparte por dentro.
+        bloques.forEachIndexed { i, bloque ->
             binding.contenedorCotas.addView(
-                enDosColumnas(vistasTramo[i], vistasTramo.getOrNull(i + 1), dp4)
+                vistaDeTramo(i, bloque, dp, dp4, etAnchos, etAlturas, etAltosDeTramo)
             )
-            i += 2
         }
 
         binding.contenedorCotas.addView(Button(this).apply {
@@ -1407,7 +1404,11 @@ class DisenoNovaActivity : AppCompatActivity() {
             setOnClickListener {
                 val nuevosAnchos = etAnchos.map { it.text.toString().aNumeroSeguro() }
                 val nuevoAncho = etAnchoVentana.text.toString().aNumeroSeguro()
-                val nuevoAlto = etAlto.text.toString().aNumeroSeguro()
+                // El alto sale de la casilla que se haya tocado: la de arriba o la de cualquier
+                // tarjeta, que muestran el mismo alto de la ventana.
+                val nuevoAlto = (listOf(etAlto) + etAltosDeTramo)
+                    .map { it.text.toString().aNumeroSeguro() }
+                    .firstOrNull { it > 0f && abs(it - altoCm) > 0.05f } ?: altoCm
                 // Solo las alturas que el vidriero TOCÓ. Si se mandan todas, la última pisa a las
                 // anteriores: al subir el puente, la mocheta con su valor de antes lo devolvía a
                 // donde estaba.
@@ -1427,12 +1428,9 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     /**
-     * Un tramo entero en su tarjeta: arriba la cabecera con el bloqueo, y debajo dos columnas
-     * —a la izquierda sus franjas con la altura de cada una, a la derecha sus módulos y el ancho.
-     *
-     * Cada franja lleva su casilla porque en el diseño a mano las alturas no son una sola para
-     * toda la ventana: un tramo puede tener el puente a 130 y el de al lado una bandera con dos
-     * mochetas de 20.
+     * Un tramo en su tarjeta: arriba sus datos —nombre, ancho y alto—, y abajo el espacio partido
+     * en dos: a la izquierda sus franjas, cada una con su altura, y a la derecha sus módulos como
+     * recuadros que se tocan para cambiar de fijo a corrediza.
      */
     private fun vistaDeTramo(
         i: Int,
@@ -1440,18 +1438,24 @@ class DisenoNovaActivity : AppCompatActivity() {
         dp: Float,
         dp4: Int,
         etAnchos: MutableList<EditText>,
-        etAlturas: MutableList<List<EditText>>
+        etAlturas: MutableList<List<EditText>>,
+        etAltosDeTramo: MutableList<EditText>
     ): View {
         val tarjeta = androidx.cardview.widget.CardView(this).apply {
             radius = 6 * dp
             cardElevation = 2 * dp
             useCompatPadding = true
             setContentPadding(dp4, dp4, dp4, dp4)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(0, dp4 / 2, 0, dp4 / 2) }
         }
         val columna = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
+        // ---- Arriba: los datos del tramo ----
         val cabecera = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             )
@@ -1481,7 +1485,17 @@ class DisenoNovaActivity : AppCompatActivity() {
         })
         columna.addView(cabecera)
 
-        // ---- Izquierda: las franjas de este tramo, con su altura ----
+        val (vistaAncho, etAncho) = campoConEtiqueta("Ancho:", df1(bloque.ancho), dp4)
+        etAncho.tag = "cotas_ancho_$i"
+        etAnchos.add(etAncho)
+        // El alto es el de la ventana: todos los tramos llegan de piso a techo. Se muestra aquí
+        // para tener las dos medidas del tramo juntas, y editarlo cambia el alto de la ventana.
+        val (vistaAltoTramo, etAltoTramo) = campoConEtiqueta("Alto:", df1(altoCm), dp4)
+        etAltoTramo.tag = "cotas_alto_tramo_$i"
+        etAltosDeTramo.add(etAltoTramo)
+        columna.addView(enDosColumnas(vistaAncho, vistaAltoTramo, dp4))
+
+        // ---- Abajo: a la izquierda las franjas, a la derecha los módulos ----
         val franjas = franjasDelBloque(bloque)
         val ladoFranjas = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         ladoFranjas.addView(filaBotones(
@@ -1503,31 +1517,69 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
         etAlturas.add(campos)
 
-        // ---- Derecha: los módulos y el ancho del tramo ----
         val ladoModulos = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val modulosSistema = modulosDelSistema(bloque)
         ladoModulos.addView(filaBotones(
             etiqueta = "Módulos",
             dp = dp,
             botonPanel("−", dp, modulosSistema.size > 1) { quitarModuloEnTramo(i) },
-            botonPanel("F", dp, true) { agregarModuloEnTramo(i, 'f') },
-            botonPanel("C", dp, true) { agregarModuloEnTramo(i, 'c') }
+            botonPanel("+", dp, true) { agregarModuloEnTramo(i, 'f') }
         ).apply { tag = "$TAG_MODULOS$i" })
-        ladoModulos.addView(TextView(this).apply {
-            text = modulosSistema.joinToString(" ")
-            textSize = 11f
-            setSingleLine(true)
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            setPadding(0, dp4, 0, dp4)
-        })
-        val (vistaAncho, etAncho) = campoConEtiqueta("Ancho:", df1(bloque.ancho), dp4)
-        etAncho.tag = "cotas_ancho_$i"
-        etAnchos.add(etAncho)
-        ladoModulos.addView(vistaAncho)
+        ladoModulos.addView(recuadrosDeModulos(i, modulosSistema, dp))
 
         columna.addView(enDosColumnas(ladoFranjas, ladoModulos, dp4))
         tarjeta.addView(columna)
         return tarjeta
+    }
+
+    /**
+     * Los módulos del tramo como recuadros con su letra. Un toque cambia fijo por corrediza y al
+     * revés, sin diálogos, igual que en el editor de la mampara.
+     *
+     * Van dentro de un scroll horizontal y con el cuadro siempre del mismo tamaño: repartiendo el
+     * ancho, con muchos módulos acertar al que se quiere es una lotería.
+     */
+    private fun recuadrosDeModulos(indiceTramo: Int, modulos: List<Char>, dp: Float): View {
+        val fila = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        modulos.forEachIndexed { j, tipo ->
+            val esCorrediza = tipo == 'c'
+            fila.addView(TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams((34 * dp).toInt(), (34 * dp).toInt())
+                    .also { it.marginEnd = (3 * dp).toInt() }
+                gravity = Gravity.CENTER
+                text = if (esCorrediza) "C" else "F"
+                textSize = 14f
+                setTypeface(null, Typeface.BOLD)
+                // La corrediza se distingue por color además de por la letra: en obra se mira rápido.
+                setTextColor(if (esCorrediza) Color.parseColor("#1565C0") else Color.parseColor("#37474F"))
+                setBackgroundResource(R.drawable.bg_opcion_seleccionada)
+                tag = "cotas_modulo_${indiceTramo}_$j"
+                setOnClickListener { alternarTipoModuloEnTramo(indiceTramo, j) }
+            })
+        }
+        return android.widget.HorizontalScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(0, (4 * dp).toInt(), 0, 0) }
+            isHorizontalScrollBarEnabled = true
+            addView(fila)
+        }
+    }
+
+    /** Cambia un fijo por corrediza y al revés, en la franja de sistema de ese tramo. */
+    private fun alternarTipoModuloEnTramo(indiceTramo: Int, indiceModulo: Int) {
+        val bloqueados = tramosLibresBloqueados()
+        aplicarAlModelo { d ->
+            val tramo = d.tramos.getOrNull(indiceTramo) ?: return@aplicarAlModelo d
+            val iSistema = tramo.franjas.indexOfFirst { it.esSistema }.takeIf { it >= 0 } ?: 0
+            d.conTipoCambiado(indiceTramo, iSistema, indiceModulo, bloqueados)
+        }
+        actualizarPanelCotas()
     }
 
     /** Las franjas de un tramo tal como están en el paquete: tipo (`s`/`m`) y altura. */
@@ -1932,6 +1984,15 @@ class DisenoNovaActivity : AppCompatActivity() {
     fun pulsarModuloParaPruebas(indiceTramo: Int, simbolo: String): Boolean {
         actualizarPanelCotas()
         return pulsarEnFilaParaPruebas("$TAG_MODULOS$indiceTramo", simbolo)
+    }
+
+    /** Toca el recuadro de un módulo, que es lo que cambia fijo por corrediza. */
+    @androidx.annotation.VisibleForTesting
+    fun tocarRecuadroModuloParaPruebas(indiceTramo: Int, indiceModulo: Int): Boolean {
+        actualizarPanelCotas()
+        val recuadro = binding.contenedorCotas
+            .findViewWithTag<View>("cotas_modulo_${indiceTramo}_$indiceModulo") ?: return false
+        return recuadro.performClick()
     }
 
     /** Busca la fila por su marca —esté donde esté, que ahora van en columnas— y pulsa su botón. */

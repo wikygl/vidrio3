@@ -139,33 +139,41 @@ class DisenoNovaPantallaTest {
     }
 
     @Test
-    fun la_F_agrega_un_fijo_al_tramo() {
+    fun el_mas_agrega_un_modulo_al_tramo() {
         ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
             esperar()
             enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
             esperar()
             val antes = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
-            enPantalla(esc) { it.pulsarModuloParaPruebas(indiceTramo = 1, simbolo = "F") }
+            enPantalla(esc) { it.pulsarModuloParaPruebas(indiceTramo = 1, simbolo = "+") }
             esperar()
             val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
-            assertEquals("la F no agregó nada", antes.nModulos + 1, d.nModulos)
+            assertEquals("el + no agregó nada", antes.nModulos + 1, d.nModulos)
             assertEquals("no lo agregó al tramo pulsado", 4, d.tramos[1].nModulosSistema)
             assertTrue("el módulo nuevo no es fijo", d.tramos[1].sistema!!.modulos.last().esFijo)
         }
     }
 
     @Test
-    fun la_C_agrega_una_corrediza_al_tramo() {
+    fun tocar_el_recuadro_cambia_fijo_por_corrediza() {
         ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
             esperar()
             enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
             esperar()
             val antes = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
-            enPantalla(esc) { it.pulsarModuloParaPruebas(indiceTramo = 0, simbolo = "C") }
+            // El primer módulo del tramo 1 es un fijo: tocarlo lo convierte en corrediza.
+            assertTrue(antes.tramos[0].sistema!!.modulos[0].esFijo)
+            enPantalla(esc) { it.tocarRecuadroModuloParaPruebas(indiceTramo = 0, indiceModulo = 0) }
             esperar()
             val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
-            assertEquals("la C no agregó nada", antes.nCorredizas + 1, d.nCorredizas)
-            assertTrue("el módulo nuevo no es corrediza", !d.tramos[0].sistema!!.modulos.last().esFijo)
+            assertTrue("el toque no cambió el módulo", !d.tramos[0].sistema!!.modulos[0].esFijo)
+            assertEquals("cambió el número de módulos", antes.nModulos, d.nModulos)
+
+            // Y el toque de vuelta lo deja como estaba.
+            enPantalla(esc) { it.tocarRecuadroModuloParaPruebas(indiceTramo = 0, indiceModulo = 0) }
+            esperar()
+            val vuelta = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertTrue("no vuelve a fijo", vuelta.tramos[0].sistema!!.modulos[0].esFijo)
         }
     }
 
