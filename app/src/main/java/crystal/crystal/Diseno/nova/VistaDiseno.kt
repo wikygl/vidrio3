@@ -1729,18 +1729,13 @@ class VistaDiseno @JvmOverloads constructor(
 
             rangosFranjaY.add(Pair(yCurva(yTopNom, centroX), yCurva(yBottomNom, centroX)))
 
-            var hayMAbajo = false
-            var hayMArriba = false
-            if (modo == ModoEnsamble.APA && franja.tipo == TipoFranja.SISTEMA) {
-                if (idx > 0 && franjas[idx - 1].tipo == TipoFranja.MOCHETA) {
-                    hayMAbajo = true
-                    dibujarBandaCurva(yBottomNom - altoPuentePx, yBottomNom, pRellenoNegro)
-                }
-                if (idx < franjas.lastIndex && franjas[idx + 1].tipo == TipoFranja.MOCHETA) {
-                    hayMArriba = true
-                    dibujarBandaCurva(yTopNom, yTopNom + altoPuentePx, pRellenoNegro)
-                }
-            }
+            // Cada frontera entre franjas lleva su puente: una banda gruesa, no una linea fina. Antes
+            // solo se pintaba donde el sistema tocaba una mocheta; en el diseno a mano hay franjas
+            // seguidas del mismo tipo, y ahi tambien hay puente.
+            val hayMAbajo = idx > 0
+            val hayMArriba = idx < franjas.lastIndex
+            if (hayMAbajo) dibujarBandaCurva(yBottomNom - altoPuentePx, yBottomNom, pRellenoNegro)
+            if (hayMArriba) dibujarBandaCurva(yTopNom, yTopNom + altoPuentePx, pRellenoNegro)
 
             dibujarLineaCurva(yTopNom, pLinea)
             if (idx != 0) {
@@ -1849,18 +1844,13 @@ class VistaDiseno @JvmOverloads constructor(
             rangosFranjaY.add(Pair(yTop, yBottom))
 
             // Puentes M↔S (debajo)
-            var hayMAbajo = false
-            var hayMArriba = false
-            if (franja.tipo == TipoFranja.SISTEMA) {
-                if (idx > 0 && franjasAbajoArriba[idx - 1].tipo == TipoFranja.MOCHETA) {
-                    hayMAbajo = true
-                    canvas.drawRect(RectF(xIni, yBottom - altoPuentePx, xFin, yBottom), pRellenoNegro)
-                }
-                if (idx < franjasAbajoArriba.lastIndex && franjasAbajoArriba[idx + 1].tipo == TipoFranja.MOCHETA) {
-                    hayMArriba = true
-                    canvas.drawRect(RectF(xIni, yTop, xFin, yTop + altoPuentePx), pRellenoNegro)
-                }
-            }
+            // Cada frontera entre franjas lleva su puente: una banda gruesa, no una linea fina. Antes
+            // solo se pintaba donde el sistema tocaba una mocheta; en el diseno a mano hay franjas
+            // seguidas del mismo tipo, y ahi tambien hay puente.
+            val hayMAbajo = idx > 0
+            val hayMArriba = idx < franjasAbajoArriba.lastIndex
+            if (hayMAbajo) canvas.drawRect(RectF(xIni, yBottom - altoPuentePx, xFin, yBottom), pRellenoNegro)
+            if (hayMArriba) canvas.drawRect(RectF(xIni, yTop, xFin, yTop + altoPuentePx), pRellenoNegro)
 
             // Contornos y separadores
             canvas.drawLine(xIni, yTop,    xFin, yTop,    pLinea)
@@ -2050,8 +2040,9 @@ class VistaDiseno @JvmOverloads constructor(
 
             var tVidrioTop = tTop
             var tVidrioBottom = tBottom
-            val hayMAbajo = franja.tipo == TipoFranja.SISTEMA && idx > 0 && franjas[idx - 1].tipo == TipoFranja.MOCHETA
-            val hayMArriba = franja.tipo == TipoFranja.SISTEMA && idx < franjas.lastIndex && franjas[idx + 1].tipo == TipoFranja.MOCHETA
+            // Cada frontera entre franjas lleva su puente, del tipo que sean.
+            val hayMAbajo = idx > 0
+            val hayMArriba = idx < franjas.lastIndex
             if (hayMArriba) {
                 val tPuenteTop = (tTop + toleranciaPuenteT).coerceAtMost(tBottom)
                 dibujarBandaEntreT(canvas, perspectiva, tTop, tPuenteTop, pRellenoNegro)
@@ -2295,18 +2286,13 @@ class VistaDiseno @JvmOverloads constructor(
             val yBottom = yAbajo
             if (populateRangosFranjas) rangosFranjaY.add(Pair(yTop, yBottom))
 
-            var hayMAbajo = false
-            var hayMArriba = false
-            if (franja.tipo == TipoFranja.SISTEMA) {
-                if (idx > 0 && franjas[idx - 1].tipo == TipoFranja.MOCHETA) {
-                    hayMAbajo = true
-                    canvas.drawRect(RectF(xIni, yBottom - altoPuentePx, xFin, yBottom), pRellenoNegro)
-                }
-                if (idx < franjas.lastIndex && franjas[idx + 1].tipo == TipoFranja.MOCHETA) {
-                    hayMArriba = true
-                    canvas.drawRect(RectF(xIni, yTop, xFin, yTop + altoPuentePx), pRellenoNegro)
-                }
-            }
+            // Cada frontera entre franjas lleva su puente: una banda gruesa, no una linea fina. Antes
+            // solo se pintaba donde el sistema tocaba una mocheta; en el diseno a mano hay franjas
+            // seguidas del mismo tipo, y ahi tambien hay puente.
+            val hayMAbajo = idx > 0
+            val hayMArriba = idx < franjas.lastIndex
+            if (hayMAbajo) canvas.drawRect(RectF(xIni, yBottom - altoPuentePx, xFin, yBottom), pRellenoNegro)
+            if (hayMArriba) canvas.drawRect(RectF(xIni, yTop, xFin, yTop + altoPuentePx), pRellenoNegro)
 
             canvas.drawLine(xIni, yTop, xFin, yTop, pLinea)
             canvas.drawLine(xIni, yBottom, xFin, yBottom, pLinea)
@@ -2899,18 +2885,13 @@ class VistaDiseno @JvmOverloads constructor(
                     val yArriba = yAbajoL - altoFpx
                     val yTop = yArriba
                     val yBottom = yAbajoL
-                    var hayMAbajo = false
-                    var hayMArriba = false
-                    if (franja.tipo == TipoFranja.SISTEMA) {
-                        if (idx > 0 && mochetaLFranjas[idx - 1].tipo == TipoFranja.MOCHETA) {
-                            hayMAbajo = true
-                            rectFill(x0, yBottom - altoPuentePx, xVentIni, yBottom)
-                        }
-                        if (idx < mochetaLFranjas.lastIndex && mochetaLFranjas[idx + 1].tipo == TipoFranja.MOCHETA) {
-                            hayMArriba = true
-                            rectFill(x0, yTop, xVentIni, yTop + altoPuentePx)
-                        }
-                    }
+                    // Cada frontera entre franjas lleva su puente: una banda gruesa, no una linea fina. Antes
+                    // solo se pintaba donde el sistema tocaba una mocheta; en el diseno a mano hay franjas
+                    // seguidas del mismo tipo, y ahi tambien hay puente.
+                    val hayMAbajo = idx > 0
+                    val hayMArriba = idx < mochetaLFranjas.lastIndex
+                    if (hayMAbajo) rectFill(x0, yBottom - altoPuentePx, xVentIni, yBottom)
+                    if (hayMArriba) rectFill(x0, yTop, xVentIni, yTop + altoPuentePx)
                     line(x0, yTop, xVentIni, yTop, 3f)
                     line(x0, yBottom, xVentIni, yBottom, 3f)
                     val n = franja.modulos.size.coerceAtLeast(1)
@@ -3100,18 +3081,13 @@ class VistaDiseno @JvmOverloads constructor(
                 val yTop = yArriba
                 val yBottom = yAbajo
 
-                var hayMAbajo = false
-                var hayMArriba = false
-                if (franja.tipo == TipoFranja.SISTEMA) {
-                    if (idx > 0 && franjasAbajoArriba[idx - 1].tipo == TipoFranja.MOCHETA) {
-                        hayMAbajo = true
-                        rectFill(xVentIni, yBottom - altoPuentePx, xVentFin, yBottom)
-                    }
-                    if (idx < franjasAbajoArriba.lastIndex && franjasAbajoArriba[idx + 1].tipo == TipoFranja.MOCHETA) {
-                        hayMArriba = true
-                        rectFill(xVentIni, yTop, xVentFin, yTop + altoPuentePx)
-                    }
-                }
+                // Cada frontera entre franjas lleva su puente: una banda gruesa, no una linea fina. Antes
+                // solo se pintaba donde el sistema tocaba una mocheta; en el diseno a mano hay franjas
+                // seguidas del mismo tipo, y ahi tambien hay puente.
+                val hayMAbajo = idx > 0
+                val hayMArriba = idx < franjasAbajoArriba.lastIndex
+                if (hayMAbajo) rectFill(xVentIni, yBottom - altoPuentePx, xVentFin, yBottom)
+                if (hayMArriba) rectFill(xVentIni, yTop, xVentFin, yTop + altoPuentePx)
 
                 line(xVentIni, yTop,    xVentFin, yTop,    3f)
                 line(xVentIni, yBottom, xVentFin, yBottom, 3f)

@@ -309,6 +309,38 @@ data class DisenoNova(
         return copy(tramos = nuevos)
     }
 
+    /**
+     * Cambia el alto de UNA franja del tramo [indiceTramo]. Lo que sobra o falta lo absorbe el
+     * resto del tramo, para que las franjas sigan sumando el alto de la ventana:
+     *
+     * - si es la del sistema, absorben las mochetas a partes iguales (es [conPuenteCambiado]);
+     * - si es una mocheta, absorbe el puente, que es el que puede crecer o encoger sin que
+     *   cambie nada más.
+     *
+     * Un alto de 0 o menos no se toca: esa franja se sigue repartiendo sola.
+     */
+    fun conAlturaDeFranja(indiceTramo: Int, indiceFranja: Int, altoFranja: Float): DisenoNova {
+        val tramo = tramos.getOrNull(indiceTramo) ?: return this
+        val franja = tramo.franjas.getOrNull(indiceFranja) ?: return this
+        if (altoFranja <= 0f || alto <= 0f) return this
+        if (franja.esSistema) return conPuenteCambiado(indiceTramo, altoFranja, alto)
+
+        val otrasMochetas = tramo.franjas.filterIndexed { i, f -> i != indiceFranja && !f.esSistema }
+            .sumOf { it.alto.toDouble() }.toFloat()
+        val puente = (alto - altoFranja - otrasMochetas).coerceAtLeast(0f)
+        val franjas = tramo.franjas.mapIndexed { i, f ->
+            when {
+                i == indiceFranja -> f.copy(alto = altoFranja)
+                f.esSistema -> f.copy(alto = puente)
+                else -> f
+            }
+        }
+        if (franjas == tramo.franjas) return this
+        val nuevos = tramos.toMutableList()
+        nuevos[indiceTramo] = tramo.copy(franjas = franjas)
+        return copy(tramos = nuevos)
+    }
+
     /** Agrega un módulo [tipo] justo después del módulo [despuesDe] de esa franja. */
     fun conModuloAgregado(indiceTramo: Int, indiceFranja: Int, despuesDe: Int, tipo: Char, bloqueados: Set<Int> = emptySet()): DisenoNova =
         conFranjaCambiada(indiceTramo, indiceFranja, bloqueados) { mods ->

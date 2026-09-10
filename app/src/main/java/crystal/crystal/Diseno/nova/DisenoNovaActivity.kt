@@ -1268,7 +1268,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         nuevosAnchos: List<Float>,
         nuevoAncho: Float,
         nuevoAlto: Float,
-        nuevasPuentes: List<Float?>
+        nuevasAlturas: List<List<Float>>
     ) {
         if (bloques.isEmpty()) return
         // El ancho y el alto de la ventana entera mandan sobre lo demás: se fijan antes de repartir,
@@ -1310,25 +1310,26 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
 
         cargarDesdePaquete(reconstruirPaqueteConBloques(bloquesFinal))
-        aplicarPuentesPorTramo(nuevasPuentes)
+        aplicarAlturasDeFranjas(nuevasAlturas)
         actualizarVista()
         actualizarPanelCotas()
     }
 
     /**
-     * El puente de cada tramo, por el modelo: uno puede tener 130, el de al lado ninguno.
+     * Las alturas de las franjas, tramo a tramo y franja a franja, por el modelo.
      *
-     * Va por el modelo y no reescribiendo el texto porque cambiar el puente cambia también la
-     * mocheta de ese tramo —se queda con lo que sobra del alto, o desaparece si el puente ocupa
-     * todo—, y eso el reemplazo de `s<…>` no lo hacía: dejaba las dos alturas sumando más que la
-     * ventana.
+     * Va por el modelo y no reescribiendo el texto porque cambiar una franja cambia también las
+     * otras del tramo —el resto absorbe para que sigan sumando el alto de la ventana—, y el
+     * reemplazo de `s<…>` no lo hacía: dejaba las alturas sumando más que la ventana.
      */
-    private fun aplicarPuentesPorTramo(puentes: List<Float?>) {
-        if (puentes.all { it == null }) return
+    private fun aplicarAlturasDeFranjas(alturas: List<List<Float>>) {
+        if (alturas.all { fila -> fila.all { it <= 0f } }) return
         val nuevo = runCatching {
             var d = DisenoNova.desdePaquete(paqueteActualLectura()) ?: return@runCatching null
-            puentes.forEachIndexed { i, puente ->
-                if (puente != null && puente > 0f) d = d.conPuenteCambiado(i, puente, altoCm)
+            alturas.forEachIndexed { iTramo, fila ->
+                fila.forEachIndexed { iFranja, alto ->
+                    if (alto > 0f) d = d.conAlturaDeFranja(iTramo, iFranja, alto)
+                }
             }
             d.aPaquete()
         }.getOrNull() ?: return
@@ -1337,7 +1338,6 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     private fun actualizarPanelCotas() {
         val bloques = parsearBloquesTramo()
-        val tramoInfo = extraerInfoTramos()
         binding.tvTituloCotas.text = "Medidas"
         binding.contenedorCotas.removeAllViews()
 
@@ -1381,11 +1381,11 @@ class DisenoNovaActivity : AppCompatActivity() {
         while (tramosBlockeados.size > bloques.size) tramosBlockeados.removeAt(tramosBlockeados.lastIndex)
 
         val etAnchos = mutableListOf<EditText>()
-        val etPuentes = mutableListOf<EditText>()
+        val etAlturas = mutableListOf<List<EditText>>()
         val capturedBloques = bloques.toList()
 
         val vistasTramo = bloques.mapIndexed { i, bloque ->
-            vistaDeTramo(i, bloque, tramoInfo.getOrNull(i), dp, dp4, etAnchos, etPuentes)
+            vistaDeTramo(i, bloque, dp, dp4, etAnchos, etAlturas)
         }
         var i = 0
         while (i < vistasTramo.size) {
@@ -1408,10 +1408,18 @@ class DisenoNovaActivity : AppCompatActivity() {
                 val nuevosAnchos = etAnchos.map { it.text.toString().aNumeroSeguro() }
                 val nuevoAncho = etAnchoVentana.text.toString().aNumeroSeguro()
                 val nuevoAlto = etAlto.text.toString().aNumeroSeguro()
-                val nuevasPuentes = etPuentes.map { e ->
-                    e.text.toString().aNumeroSeguro().takeIf { it > 0f }
+                // Solo las alturas que el vidriero TOCÓ. Si se mandan todas, la última pisa a las
+                // anteriores: al subir el puente, la mocheta con su valor de antes lo devolvía a
+                // donde estaba.
+                val alturasDeAntes = capturedBloques.map { b -> franjasDelBloque(b).map { it.second } }
+                val nuevasAlturas = etAlturas.mapIndexed { iTramo, fila ->
+                    fila.mapIndexed { iFranja, et ->
+                        val valor = et.text.toString().aNumeroSeguro()
+                        val antes = alturasDeAntes.getOrNull(iTramo)?.getOrNull(iFranja) ?: 0f
+                        if (abs(valor - antes) > 0.05f) valor else 0f
+                    }
                 }
-                aplicarCambiosCotas(capturedBloques, nuevosAnchos, nuevoAncho, nuevoAlto, nuevasPuentes)
+                aplicarCambiosCotas(capturedBloques, nuevosAnchos, nuevoAncho, nuevoAlto, nuevasAlturas)
             }
         })
 
@@ -1419,23 +1427,28 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     /**
-     * Todo lo de un tramo en un bloque: la cabecera con el bloqueo, los módulos y sus dos
-     * medidas. Se devuelve montado para poder ponerlos de dos en dos.
+     * Un tramo entero en su tarjeta: arriba la cabecera con el bloqueo, y debajo dos columnas
+     * —a la izquierda sus franjas con la altura de cada una, a la derecha sus módulos y el ancho.
+     *
+     * Cada franja lleva su casilla porque en el diseño a mano las alturas no son una sola para
+     * toda la ventana: un tramo puede tener el puente a 130 y el de al lado una bandera con dos
+     * mochetas de 20.
      */
     private fun vistaDeTramo(
         i: Int,
         bloque: BloqueTramo,
-        info: InfoTramo?,
         dp: Float,
         dp4: Int,
         etAnchos: MutableList<EditText>,
-        etPuentes: MutableList<EditText>
+        etAlturas: MutableList<List<EditText>>
     ): View {
-        val columna = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp4, dp4, dp4, dp4)
-            setBackgroundColor(Color.parseColor("#11000000"))
+        val tarjeta = androidx.cardview.widget.CardView(this).apply {
+            radius = 6 * dp
+            cardElevation = 2 * dp
+            useCompatPadding = true
+            setContentPadding(dp4, dp4, dp4, dp4)
         }
+        val columna = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
         val cabecera = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1468,38 +1481,65 @@ class DisenoNovaActivity : AppCompatActivity() {
         })
         columna.addView(cabecera)
 
-        // Los módulos: el patrón que tiene hoy y los botones para quitar el último, agregar un
-        // fijo o agregar una corrediza. Van a la franja del sistema, que es la que manda.
+        // ---- Izquierda: las franjas de este tramo, con su altura ----
+        val franjas = franjasDelBloque(bloque)
+        val ladoFranjas = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        ladoFranjas.addView(filaBotones(
+            etiqueta = "Franjas",
+            dp = dp,
+            botonPanel("−", dp, franjas.size > 1) { cambiarEstructura { d -> d.conFranjaQuitadaEnTramo(i) } },
+            botonPanel("+", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(i) }) {
+                cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(i) }
+            }
+        ).apply { tag = "cotas_franjas_$i" })
+        val campos = mutableListOf<EditText>()
+        franjas.forEachIndexed { j, (tipo, altoFranja) ->
+            // El sistema es el puente; las mochetas se numeran para poder distinguirlas.
+            val nombre = if (tipo == 's') "puente:" else "mocheta ${franjas.take(j + 1).count { it.first != 's' }}:"
+            val (vista, et) = campoConEtiqueta(nombre, df1(altoFranja), dp4)
+            et.tag = "cotas_franja_${i}_$j"
+            campos.add(et)
+            ladoFranjas.addView(vista)
+        }
+        etAlturas.add(campos)
+
+        // ---- Derecha: los módulos y el ancho del tramo ----
+        val ladoModulos = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val modulosSistema = modulosDelSistema(bloque)
-        columna.addView(filaBotones(
-            etiqueta = modulosSistema.joinToString(" "),
+        ladoModulos.addView(filaBotones(
+            etiqueta = "Módulos",
             dp = dp,
             botonPanel("−", dp, modulosSistema.size > 1) { quitarModuloEnTramo(i) },
             botonPanel("F", dp, true) { agregarModuloEnTramo(i, 'f') },
             botonPanel("C", dp, true) { agregarModuloEnTramo(i, 'c') }
         ).apply { tag = "$TAG_MODULOS$i" })
-
-        // Las franjas de ESTE tramo: una mocheta más o una menos, sin tocar los demás tramos.
-        // Mantener pulsado el + deja elegir si es de sistema o de mocheta y con qué altura.
-        val nFranjas = splitTopLevelSemicolon(bloque.contenido).size
-        columna.addView(filaBotones(
-            etiqueta = "Franjas: $nFranjas",
-            dp = dp,
-            botonPanel("−", dp, nFranjas > 1) { cambiarEstructura { d -> d.conFranjaQuitadaEnTramo(i) } },
-            botonPanel("+", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(i) }) {
-                cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(i) }
-            }
-        ).apply { tag = "cotas_franjas_$i" })
-
+        ladoModulos.addView(TextView(this).apply {
+            text = modulosSistema.joinToString(" ")
+            textSize = 11f
+            setSingleLine(true)
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(0, dp4, 0, dp4)
+        })
         val (vistaAncho, etAncho) = campoConEtiqueta("Ancho:", df1(bloque.ancho), dp4)
-        val (vistaPuente, etPuente) = campoConEtiqueta("Puente:", df1(info?.sistemaAltura ?: 0f), dp4)
         etAncho.tag = "cotas_ancho_$i"
-        etPuente.tag = "cotas_puente_$i"
         etAnchos.add(etAncho)
-        etPuentes.add(etPuente)
-        columna.addView(enDosColumnas(vistaAncho, vistaPuente, dp4))
-        return columna
+        ladoModulos.addView(vistaAncho)
+
+        columna.addView(enDosColumnas(ladoFranjas, ladoModulos, dp4))
+        tarjeta.addView(columna)
+        return tarjeta
     }
+
+    /** Las franjas de un tramo tal como están en el paquete: tipo (`s`/`m`) y altura. */
+    private fun franjasDelBloque(bloque: BloqueTramo): List<Pair<Char, Float>> =
+        splitTopLevelSemicolon(bloque.contenido).map { token ->
+            val t = token.trim()
+            val tipo = if (t.firstOrNull()?.lowercaseChar() == 'm') 'm' else 's'
+            val alto = if (t.length > 1 && t[1] == '<') {
+                t.substringAfter('<').substringBefore('>').aNumeroSeguro()
+            } else 0f
+            tipo to alto
+        }
 
     /** Un `etiqueta [casilla]`, suelto para poder meterlo en una columna. */
     private fun campoConEtiqueta(label: String, valor: String, dp4: Int): Pair<View, EditText> {

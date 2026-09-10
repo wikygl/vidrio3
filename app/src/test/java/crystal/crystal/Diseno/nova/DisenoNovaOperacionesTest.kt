@@ -271,4 +271,34 @@ class DisenoNovaOperacionesTest {
     fun `el puente en cero no toca nada`() {
         assertSame(abel, abel.conPuenteCambiado(0, 0f, altoVentana = 160f))
     }
+
+    @Test
+    fun `subir una mocheta encoge el puente de su tramo`() {
+        // La mocheta del tramo 2 pasa de 43.3 a 60: el puente absorbe y el tramo sigue sumando 160.
+        val d = abel.conAlturaDeFranja(1, 1, 60f)
+        assertEquals(60f, d.tramos[1].mochetas[0].alto, 0.05f)
+        assertEquals(100f, d.tramos[1].sistema!!.alto, 0.05f)
+        val suma = d.tramos[1].franjas.sumOf { it.alto.toDouble() }.toFloat()
+        assertEquals(160f, suma, 0.05f)
+        // Y los otros tramos no se enteran.
+        assertEquals(abel.tramos[0].sistema!!.alto, d.tramos[0].sistema!!.alto, 0.05f)
+    }
+
+    @Test
+    fun `cambiar la franja del sistema es cambiar el puente`() {
+        val porFranja = abel.conAlturaDeFranja(0, 0, 130f)
+        val porPuente = abel.conPuenteCambiado(0, 130f, 160f)
+        assertEquals(porPuente.aPaquete(), porFranja.aPaquete())
+    }
+
+    @Test
+    fun `en una bandera cada mocheta se edita por su lado`() {
+        val bandera = abel.conFranjaAgregadaEnTramo(2)
+        val d = bandera.conAlturaDeFranja(2, 1, 30f)
+        assertEquals(30f, d.tramos[2].mochetas[0].alto, 0.05f)
+        // La otra mocheta se queda como estaba y el puente absorbe la diferencia.
+        assertEquals(bandera.tramos[2].mochetas[1].alto, d.tramos[2].mochetas[1].alto, 0.05f)
+        val suma = d.tramos[2].franjas.sumOf { it.alto.toDouble() }.toFloat()
+        assertEquals(160f, suma, 0.05f)
+    }
 }

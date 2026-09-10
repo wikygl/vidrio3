@@ -260,8 +260,8 @@ class DisenoNovaPantallaTest {
             enPantalla(esc) { it.abrirCotasParaPruebas() }
             esperar()
             // Tramo 1 con el puente a 130, tramo 2 sin puente (el alto entero), tramo 3 como está.
-            enPantalla(esc) { it.escribirMedidaParaPruebas("cotas_puente_0", "130") }
-            enPantalla(esc) { it.escribirMedidaParaPruebas("cotas_puente_1", "160") }
+            enPantalla(esc) { it.escribirMedidaParaPruebas("cotas_franja_0_0", "130") }
+            enPantalla(esc) { it.escribirMedidaParaPruebas("cotas_franja_1_0", "160") }
             esperar(300)
             enPantalla(esc) { it.pulsarAplicarCotasParaPruebas() }
             esperar()
@@ -275,5 +275,55 @@ class DisenoNovaPantallaTest {
             val error = enPantalla(esc) { it.vistaRechazaParaPruebas(d.aPaquete()) }
             assertNull("el dibujo rechaza el diseño: $error\n${d.aPaquete()}", error)
         }
+    }
+
+
+    /**
+     * El camino de vuelta a la calculadora: al enviar el diseño, NovaCorrediza vuelve a abrir
+     * esta pantalla sin interfaz para redibujar la miniatura. Si ese render se cae, se cae el app
+     * entera, y con tramos de distinta forma —uno sin mocheta, otro con dos— es justo donde el
+     * dibujo no había pisado nunca.
+     *
+     * Se hace aquí lo mismo que hace el modo headless, pero sin lanzar la actividad: esa se
+     * cierra dentro de onCreate y ActivityScenario no llega a verla.
+     */
+    @Test
+    fun el_render_sin_pantalla_aguanta_tramos_de_distinta_forma() {
+        val mezcla = "{nova,ina,[650,160:Tl<234.5>(s<160>(f<58.6>c<58.6>c<58.6>f<58.6>))" +
+            " P<2.5> Tl<175.9>(s<114.2>(f<58.6>c<58.6>f<58.6>);m<22.9>(f<175.9>);m<22.9>(f<175.9>))" +
+            " P<2.5> Tl<234.5>(s<114.2>(f<58.6>c<58.6>c<58.6>f<58.6>);m<43.3>(f<117.2>f<117.2>))]}"
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val fallo = runCatching {
+            val vista = VistaDiseno(ctx)
+            vista.actualizarDesdePaquete(mezcla, 0f, 0f, 0f)
+            vista.layout(0, 0, 1080, 1920)
+            vista.exportarSoloDisenoBitmap(paddingPx = 4)
+        }.exceptionOrNull()
+        assertNull("el render sin pantalla se cae: $fallo", fallo)
+    }
+
+    /**
+     * Lo que sale de empezar de cero: las franjas no llevan altura, se reparten solas. Al agregar
+     * una mocheta a un tramo cuyo sistema tampoco la lleva, queda `m(f)` —una franja sin altura—,
+     * y eso el dibujo no lo había visto nunca.
+     */
+    @Test
+    fun el_render_aguanta_franjas_sin_altura() {
+        val casos = listOf(
+            "{nova,ina,[150,120:Tl<150>(s(f))]}",
+            "{nova,ina,[150,120:Tl<150>(s(f);m(f))]}",
+            "{nova,ina,[150,120:Tl<73.7>(s(fc);m(f)) P<2.5> Tl<73.7>(s(f))]}",
+            "{nova,ina,[150,120:Tl<73.7>(s(fc);m(f);m(f)) P<2.5> Tl<73.7>(s(f);m(f))]}"
+        )
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val fallos = casos.mapNotNull { p ->
+            runCatching {
+                val vista = VistaDiseno(ctx)
+                vista.actualizarDesdePaquete(p, 0f, 0f, 0f)
+                vista.layout(0, 0, 1080, 1920)
+                vista.exportarSoloDisenoBitmap(paddingPx = 4)
+            }.exceptionOrNull()?.let { "$p -> ${it::class.simpleName}: ${it.message}" }
+        }
+        assertTrue("el render se cae:\n" + fallos.joinToString("\n"), fallos.isEmpty())
     }
 }
