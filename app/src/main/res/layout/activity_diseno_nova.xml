@@ -72,7 +72,7 @@
 
                 <LinearLayout
                     android:id="@+id/panelCotasPlanos"
-                    android:layout_width="210dp"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_control_panel"
                     android:elevation="8dp"
@@ -80,7 +80,8 @@
                     android:padding="10dp"
                     android:visibility="gone"
                     app:layout_constraintBottom_toTopOf="@+id/btnCotasPlanos"
-                    app:layout_constraintStart_toStartOf="@+id/btnCotasPlanos">
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
 
                     <TextView
                         android:id="@+id/tvTituloCotas"

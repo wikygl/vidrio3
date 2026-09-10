@@ -223,4 +223,26 @@ class DisenoNovaPantallaTest {
             )
         }
     }
+
+    @Test
+    fun cambiar_el_ancho_y_el_alto_de_la_ventana_desde_el_panel() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            enPantalla(esc) { it.abrirCotasParaPruebas() }
+            esperar()
+            enPantalla(esc) { it.escribirMedidaParaPruebas("cotas_ancho", "500") }
+            enPantalla(esc) { it.escribirMedidaParaPruebas("cotas_alto", "180") }
+            esperar(300)
+            enPantalla(esc) { it.pulsarAplicarCotasParaPruebas() }
+            esperar()
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el ancho de la ventana no cambió", 500f, d.ancho, 0.2f)
+            assertEquals("el alto de la ventana no cambió", 180f, d.alto, 0.2f)
+            // Y los tramos se reparten el ancho nuevo: su suma más los parantes lo cierra.
+            val suma = d.tramos.sumOf { it.ancho.toDouble() }.toFloat() + d.nParantes * 2.5f
+            assertEquals("los tramos no cierran el ancho nuevo", 500f, suma, 0.5f)
+        }
+    }
 }

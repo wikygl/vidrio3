@@ -1325,10 +1325,15 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun aplicarCambiosCotas(
         bloques: List<BloqueTramo>,
         nuevosAnchos: List<Float>,
+        nuevoAncho: Float,
         nuevoAlto: Float,
         nuevasPuentes: List<Float?>
     ) {
         if (bloques.isEmpty()) return
+        // El ancho y el alto de la ventana entera mandan sobre lo demás: se fijan antes de repartir,
+        // y los tramos que el vidriero no tocó absorben la diferencia.
+        if (nuevoAncho > 0f) anchoCm = nuevoAncho
+        if (nuevoAlto > 0f) altoCm = nuevoAlto
         val n = bloques.size
         val nParantes = (n - 1).coerceAtLeast(0)
         val totalUtil = anchoCm - nParantes * anchoParanteCm
@@ -1351,8 +1356,6 @@ class DisenoNovaActivity : AppCompatActivity() {
                 else -> bloques[i].ancho
             }
         }
-
-        if (nuevoAlto > 0f) altoCm = nuevoAlto
 
         val bloquesFinal = bloques.mapIndexed { i, bloque ->
             val nuevoPuente = nuevasPuentes.getOrElse(i) { null }
@@ -1377,7 +1380,7 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun actualizarPanelCotas() {
         val bloques = parsearBloquesTramo()
         val tramoInfo = extraerInfoTramos()
-        binding.tvTituloCotas.text = "Tramos"
+        binding.tvTituloCotas.text = "Medidas"
         binding.contenedorCotas.removeAllViews()
 
         val dp = resources.displayMetrics.density
@@ -1444,9 +1447,11 @@ class DisenoNovaActivity : AppCompatActivity() {
             return et
         }
 
-        // El alto es de la ventana entera, no de cada tramo: una sola casilla arriba. Antes salía
-        // repetida en cada tramo y solo se leía la primera, así que las demás engañaban.
-        val etAlto = addRow("Alto:", df1(altoCm))
+        // Las medidas de la ventana entera, aquí mismo: antes había que ir al diálogo de medidas
+        // rápidas para cambiarlas. El alto salía repetido en cada tramo pero solo se leía el
+        // primero, así que los demás engañaban.
+        val etAnchoVentana = addRow("Ancho ventana:", df1(anchoCm)).apply { tag = "cotas_ancho" }
+        val etAlto = addRow("Alto ventana:", df1(altoCm)).apply { tag = "cotas_alto" }
 
         bloques.forEachIndexed { i, bloque ->
             val info = tramoInfo.getOrNull(i)
@@ -1507,6 +1512,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         // Botón Aplicar
         binding.contenedorCotas.addView(Button(this).apply {
             text = "Aplicar"
+            tag = "cotas_aplicar"
             textSize = 11f; isAllCaps = false
             setBackgroundColor(Color.parseColor("#1976D2"))
             setTextColor(Color.WHITE)
@@ -1515,11 +1521,12 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
             setOnClickListener {
                 val nuevosAnchos = etAnchos.map { it.text.toString().aNumeroSeguro() }
+                val nuevoAncho = etAnchoVentana.text.toString().aNumeroSeguro()
                 val nuevoAlto = etAlto.text.toString().aNumeroSeguro()
                 val nuevasPuentes = etPuentes.map { e ->
                     e.text.toString().aNumeroSeguro().takeIf { it > 0f }
                 }
-                aplicarCambiosCotas(capturedBloques, nuevosAnchos, nuevoAlto, nuevasPuentes)
+                aplicarCambiosCotas(capturedBloques, nuevosAnchos, nuevoAncho, nuevoAlto, nuevasPuentes)
             }
         })
 
@@ -1908,4 +1915,17 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.overlayControles.getLocationOnScreen(controles)
         return (lienzo[1] + binding.vistaDiseno.height) to controles[1]
     }
+
+    /** Escribe en una casilla del panel de cotas: `cotas_ancho` o `cotas_alto`. */
+    @androidx.annotation.VisibleForTesting
+    fun escribirMedidaParaPruebas(cual: String, valor: String): Boolean {
+        val et = binding.contenedorCotas.findViewWithTag<EditText>(cual) ?: return false
+        et.setText(valor)
+        return true
+    }
+
+    /** Pulsa el Aplicar del panel de cotas. */
+    @androidx.annotation.VisibleForTesting
+    fun pulsarAplicarCotasParaPruebas(): Boolean =
+        binding.contenedorCotas.findViewWithTag<View>("cotas_aplicar")?.performClick() ?: false
 }
