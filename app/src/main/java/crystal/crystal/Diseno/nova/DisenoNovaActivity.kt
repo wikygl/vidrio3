@@ -1318,9 +1318,6 @@ class DisenoNovaActivity : AppCompatActivity() {
         return sb.toString()
     }
 
-    private fun actualizarAltoPuenteEnContenido(contenido: String, nuevoAlto: Float): String =
-        contenido.replace(Regex("""(?i)s<[^>]+>"""), "s<${df1(nuevoAlto)}>")
-
     private fun aplicarCambiosCotas(
         bloques: List<BloqueTramo>,
         nuevosAnchos: List<Float>,
@@ -1357,11 +1354,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
 
         val bloquesFinal = bloques.mapIndexed { i, bloque ->
-            val nuevoPuente = nuevasPuentes.getOrElse(i) { null }
-            val contenidoFinal = if (nuevoPuente != null && nuevoPuente > 0f) {
-                actualizarAltoPuenteEnContenido(bloque.contenido, nuevoPuente)
-            } else bloque.contenido
-            var bt = BloqueTramo(bloque.letra, anchosFinal[i], contenidoFinal)
+            var bt = BloqueTramo(bloque.letra, anchosFinal[i], bloque.contenido)
             // Reescribir los <w> de los módulos para que su suma sea el nuevo ancho del tramo,
             // en TODOS los tramos que cambian (editado y los que absorben). Si no, el motor
             // desigual deriva el puente de una suma de módulos desactualizada.
@@ -1372,8 +1365,29 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
 
         cargarDesdePaquete(reconstruirPaqueteConBloques(bloquesFinal))
+        aplicarPuentesPorTramo(nuevasPuentes)
         actualizarVista()
         actualizarPanelCotas()
+    }
+
+    /**
+     * El puente de cada tramo, por el modelo: uno puede tener 130, el de al lado ninguno.
+     *
+     * Va por el modelo y no reescribiendo el texto porque cambiar el puente cambia también la
+     * mocheta de ese tramo —se queda con lo que sobra del alto, o desaparece si el puente ocupa
+     * todo—, y eso el reemplazo de `s<…>` no lo hacía: dejaba las dos alturas sumando más que la
+     * ventana.
+     */
+    private fun aplicarPuentesPorTramo(puentes: List<Float?>) {
+        if (puentes.all { it == null }) return
+        val nuevo = runCatching {
+            var d = DisenoNova.desdePaquete(paqueteActualLectura()) ?: return@runCatching null
+            puentes.forEachIndexed { i, puente ->
+                if (puente != null && puente > 0f) d = d.conPuenteCambiado(i, puente, altoCm)
+            }
+            d.aPaquete()
+        }.getOrNull() ?: return
+        cargarDesdePaquete(nuevo)
     }
 
     private fun actualizarPanelCotas() {
@@ -1532,6 +1546,8 @@ class DisenoNovaActivity : AppCompatActivity() {
 
         val (vistaAncho, etAncho) = campoConEtiqueta("Ancho:", df1(bloque.ancho), dp4)
         val (vistaPuente, etPuente) = campoConEtiqueta("Puente:", df1(info?.sistemaAltura ?: 0f), dp4)
+        etAncho.tag = "cotas_ancho_$i"
+        etPuente.tag = "cotas_puente_$i"
         etAnchos.add(etAncho)
         etPuentes.add(etPuente)
         columna.addView(enDosColumnas(vistaAncho, vistaPuente, dp4))

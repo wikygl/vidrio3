@@ -238,6 +238,49 @@ data class DisenoNova(
         })
     }
 
+    /**
+     * Cambia el alto del puente —la franja de sistema— del tramo [indice], y solo de ese tramo.
+     *
+     * Es lo que hace falta para diseñar a mano lo que el diseño simbólico no da: un tramo con el
+     * puente a 130, el de al lado sin puente, y el siguiente con otra medida. Cada tramo lleva su
+     * altura porque el puente es horizontal dentro del tramo, no de la ventana entera.
+     *
+     * - [altoPuente] a 0 o menos: no se toca nada; la franja se sigue repartiendo sola.
+     * - [altoPuente] igual o mayor que el alto de la ventana: el sistema ocupa el tramo entero y
+     *   ese tramo se queda **sin mocheta**.
+     * - Entre medias: el sistema se queda con esa altura y las mochetas de ese tramo se reparten
+     *   lo que sobra. Si el tramo no tenía mocheta, se le agrega una con el resto.
+     */
+    fun conPuenteCambiado(indice: Int, altoPuente: Float, altoVentana: Float = alto): DisenoNova {
+        val tramo = tramos.getOrNull(indice) ?: return this
+        if (altoPuente <= 0f) return this
+        val sistema = tramo.franjas.firstOrNull { it.esSistema } ?: return this
+        val total = if (altoVentana > 0f) altoVentana else alto
+        if (total <= 0f) return this
+
+        val franjas: List<NovaFranja> = if (altoPuente >= total) {
+            listOf(sistema.copy(alto = total))
+        } else {
+            val resto = total - altoPuente
+            val mochetas = tramo.franjas.count { !it.esSistema }
+            if (mochetas == 0) {
+                // El tramo no tenía mocheta: la que aparece se queda con lo que sobra, con un
+                // paño del ancho del tramo.
+                tramo.franjas.map { if (it.esSistema) it.copy(alto = altoPuente) else it } +
+                    NovaFranja(false, resto, listOf(NovaModulo('f', tramo.ancho)))
+            } else {
+                val porMocheta = resto / mochetas
+                tramo.franjas.map {
+                    if (it.esSistema) it.copy(alto = altoPuente) else it.copy(alto = porMocheta)
+                }
+            }
+        }
+        if (franjas == tramo.franjas) return this
+        val nuevos = tramos.toMutableList()
+        nuevos[indice] = tramo.copy(franjas = franjas)
+        return copy(tramos = nuevos)
+    }
+
     /** Agrega un módulo [tipo] justo después del módulo [despuesDe] de esa franja. */
     fun conModuloAgregado(indiceTramo: Int, indiceFranja: Int, despuesDe: Int, tipo: Char, bloqueados: Set<Int> = emptySet()): DisenoNova =
         conFranjaCambiada(indiceTramo, indiceFranja, bloqueados) { mods ->

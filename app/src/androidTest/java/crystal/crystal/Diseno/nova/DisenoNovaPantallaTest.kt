@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -243,6 +244,32 @@ class DisenoNovaPantallaTest {
             // Y los tramos se reparten el ancho nuevo: su suma más los parantes lo cierra.
             val suma = d.tramos.sumOf { it.ancho.toDouble() }.toFloat() + d.nParantes * 2.5f
             assertEquals("los tramos no cierran el ancho nuevo", 500f, suma, 0.5f)
+        }
+    }
+
+    @Test
+    fun cada_tramo_con_su_puente_desde_el_panel() {
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
+            esperar()
+            enPantalla(esc) { it.abrirCotasParaPruebas() }
+            esperar()
+            // Tramo 1 con el puente a 130, tramo 2 sin puente (el alto entero), tramo 3 como está.
+            enPantalla(esc) { it.escribirMedidaParaPruebas("cotas_puente_0", "130") }
+            enPantalla(esc) { it.escribirMedidaParaPruebas("cotas_puente_1", "160") }
+            esperar(300)
+            enPantalla(esc) { it.pulsarAplicarCotasParaPruebas() }
+            esperar()
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el puente del tramo 1 no cambió", 130f, d.tramos[0].sistema!!.alto, 0.2f)
+            assertEquals("la mocheta del tramo 1 no absorbió el resto", 30f, d.tramos[0].mochetas[0].alto, 0.2f)
+            assertTrue("el tramo 2 se quedó con mocheta", d.tramos[1].mochetas.isEmpty())
+            assertEquals("el tramo 3 se movió", 114.2f, d.tramos[2].sistema!!.alto, 0.2f)
+
+            // Y el dibujo tiene que tragarse un diseño con tramos de distinta forma.
+            val error = enPantalla(esc) { it.vistaRechazaParaPruebas(d.aPaquete()) }
+            assertNull("el dibujo rechaza el diseño: $error\n${d.aPaquete()}", error)
         }
     }
 }

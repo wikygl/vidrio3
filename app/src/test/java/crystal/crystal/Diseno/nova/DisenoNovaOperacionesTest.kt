@@ -221,4 +221,43 @@ class DisenoNovaOperacionesTest {
         val soloSistema = DisenoNova.desdePaquete("{nova,apa,[240,200:Tl<240>(s<200>(f<120>c<120>))]}")!!
         assertSame(soloSistema, soloSistema.conFranjaQuitada())
     }
+
+    // ==================== EL PUENTE, TRAMO A TRAMO ====================
+    // Diseño a mano: cada tramo con su altura de puente, que es lo que el simbólico no da.
+
+    @Test
+    fun `el puente de un tramo no toca a los demas`() {
+        val d = abel.conPuenteCambiado(1, 130f, altoVentana = 160f)
+        assertEquals(130f, d.tramos[1].sistema!!.alto, 0.01f)
+        // La mocheta de ESE tramo se queda con lo que sobra.
+        assertEquals(30f, d.tramos[1].mochetas[0].alto, 0.01f)
+        // Los otros dos siguen como estaban.
+        assertEquals(abel.tramos[0].sistema!!.alto, d.tramos[0].sistema!!.alto, 0.01f)
+        assertEquals(abel.tramos[2].mochetas[0].alto, d.tramos[2].mochetas[0].alto, 0.01f)
+    }
+
+    @Test
+    fun `un puente del alto de la ventana deja el tramo sin mocheta`() {
+        val d = abel.conPuenteCambiado(0, 160f, altoVentana = 160f)
+        assertTrue("el tramo se quedó con mocheta", d.tramos[0].mochetas.isEmpty())
+        assertEquals(160f, d.tramos[0].sistema!!.alto, 0.01f)
+        // Y los demás la conservan: es un diseño con tramos distintos, que es de lo que se trata.
+        assertEquals(1, d.tramos[1].mochetas.size)
+        assertEquals(1, d.tramos[2].mochetas.size)
+    }
+
+    @Test
+    fun `un tramo sin mocheta recupera la suya al bajarle el puente`() {
+        val sinMocheta = abel.conPuenteCambiado(0, 160f, altoVentana = 160f)
+        val d = sinMocheta.conPuenteCambiado(0, 120f, altoVentana = 160f)
+        assertEquals(1, d.tramos[0].mochetas.size)
+        assertEquals(40f, d.tramos[0].mochetas[0].alto, 0.01f)
+        // El paño de la mocheta nueva cubre el ancho del tramo.
+        assertEquals(1, d.tramos[0].mochetas[0].modulos.size)
+    }
+
+    @Test
+    fun `el puente en cero no toca nada`() {
+        assertSame(abel, abel.conPuenteCambiado(0, 0f, altoVentana = 160f))
+    }
 }
