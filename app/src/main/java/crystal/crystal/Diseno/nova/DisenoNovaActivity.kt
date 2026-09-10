@@ -261,14 +261,16 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     // =========================== ACCIONES: FRANJAS / MÓDULOS ===========================
 
-    private fun dialogoAgregarFranja() {
-        var seleccion = 's'
-        val opciones = arrayOf("s (sistema)", "m (mocheta)")
+    /**
+     * Agrega una franja al tramo [indiceTramo] eligiendo qué es y cuánto mide. El toque simple
+     * del + agrega una mocheta en automático; esto es para cuando hace falta decidirlo.
+     */
+    private fun dialogoAgregarFranjaEnTramo(indiceTramo: Int) {
+        var esSistema = false
+        val opciones = arrayOf("m (mocheta)", "s (sistema)")
         AlertDialog.Builder(this)
-            .setTitle("Agregar franja")
-            .setSingleChoiceItems(opciones, 0) { _, which ->
-                seleccion = if (which == 0) 's' else 'm'
-            }
+            .setTitle("Agregar franja al tramo ${indiceTramo + 1}")
+            .setSingleChoiceItems(opciones, 0) { _, which -> esSistema = which == 1 }
             .setPositiveButton("Siguiente") { dlg, _ ->
                 dlg.dismiss()
                 val et = EditText(this).apply {
@@ -281,8 +283,12 @@ class DisenoNovaActivity : AppCompatActivity() {
                     .setTitle("Altura de la franja")
                     .setView(et)
                     .setPositiveButton("Agregar") { _, _ ->
-                        val alt = et.text.toString().aNumeroSeguro()
-                        agregarFranja(seleccion, alt)
+                        var alto = max(0f, et.text.toString().aNumeroSeguro())
+                        if (alto > altoCm) {
+                            Toast.makeText(this, "Altura > alto total. Se agrega en auto.", Toast.LENGTH_SHORT).show()
+                            alto = 0f
+                        }
+                        cambiarEstructura { it.conFranjaAgregadaEnTramo(indiceTramo, esSistema, alto) }
                     }
                     .setNegativeButton("Cancelar", null)
                     .show()
@@ -311,67 +317,6 @@ class DisenoNovaActivity : AppCompatActivity() {
         return true
     }
 
-    private fun agregarFranja(ms: Char, altura: Float) {
-        val esSistema = (ms == 's' || ms == 'S')
-        val pref = if (esSistema) "s" else "m"
-        var alt = max(0f, altura)
-        if (alt > altoCm) {
-            Toast.makeText(this, "Altura > alto total. Se agrega en auto.", Toast.LENGTH_SHORT).show()
-            alt = 0f
-        }
-        val tag = if (alt > 0f) "<${df1(alt)}>" else ""
-        val manejado = editarFranjasEnTramos { tokens -> tokens.add("$pref$tag(f)") }
-        if (!manejado) {
-            // Camino heredado (paquete sin bloques T<>)
-            estructuraEditada = true
-            franjas.add(
-                Franja(esSistema = esSistema, alturaCm = alt, modulos = mutableListOf(TipoModulo.FIJO))
-            )
-            indiceFranjaActiva = franjas.lastIndex
-            normalizarPorExcesoUltimaFranja()
-            actualizarVista()
-            return
-        }
-        indiceFranjaActiva = franjas.lastIndex
-    }
-
-    private fun normalizarPorExcesoUltimaFranja() {
-        if (franjas.isEmpty()) return
-        val sumaExplicita = franjas.sumOf { it.alturaCm.toDouble() }.toFloat()
-        if (sumaExplicita > altoCm + 1e-3f && franjas.size >= 2) {
-            // quitar la última y llevar la anterior a 100%
-            franjas.removeAt(franjas.lastIndex)
-            indiceFranjaActiva = franjas.lastIndex
-            if (indiceFranjaActiva >= 0) {
-                franjas[indiceFranjaActiva].alturaCm = altoCm
-            }
-            Toast.makeText(this, "Altura excede el total. Se descartó la última franja y la anterior ocupa 100%.", Toast.LENGTH_LONG).show()
-        } else if (sumaExplicita > altoCm + 1e-3f && franjas.size == 1) {
-            // solo una franja: clamp
-            franjas[0].alturaCm = altoCm
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-    private fun quitarFranja() {
-        val bloques = parsearBloquesTramo()
-        val nFranjas = bloques.firstOrNull()?.let { splitTopLevelSemicolon(it.contenido).size } ?: franjas.size
-        if (nFranjas <= 1) {
-            Toast.makeText(this, "Debe quedar al menos una franja.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val manejado = editarFranjasEnTramos { tokens ->
-            if (tokens.size > 1) tokens.removeAt(tokens.lastIndex)
-        }
-        if (!manejado && franjas.isNotEmpty()) {
-            estructuraEditada = true
-            franjas.removeAt(franjas.lastIndex)
-            indiceFranjaActiva = franjas.lastIndex
-            actualizarVista()
-            return
-        }
-        indiceFranjaActiva = franjas.lastIndex
-    }
 
     /**
      * Escala todas las anotaciones <w> de los módulos de un bloque por [factor].
@@ -1409,9 +1354,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         etAlto.tag = "cotas_alto"
         binding.contenedorCotas.addView(enDosColumnas(vistaAncho, vistaAlto, dp4))
 
-        // Agregar y quitar tramos y franjas: igual que en la mampara, donde el editor lleva los
-        // botones de estructura y no un panel aparte.
-        val nFranjas = bloques.firstOrNull()?.let { splitTopLevelSemicolon(it.contenido).size } ?: 0
+        // Agregar y quitar tramos. Las franjas ya no van aquí: cada tramo lleva las suyas, que es
+        // lo que permite una bandera en un tramo y ninguna mocheta en el de al lado.
         binding.contenedorCotas.addView(enDosColumnas(
             filaMasMenos(
                 etiqueta = "Tramos",
@@ -1420,16 +1364,7 @@ class DisenoNovaActivity : AppCompatActivity() {
                 onQuitar = { cambiarEstructura { it.conTramoQuitado() } },
                 onAgregar = { cambiarEstructura { it.conTramoAgregado() } }
             ).apply { tag = "cotas_tramos" },
-            filaMasMenos(
-                etiqueta = "Franjas",
-                dp = dp,
-                puedeQuitar = nFranjas > 1,
-                onQuitar = { cambiarEstructura { it.conFranjaQuitada() } },
-                onAgregar = { cambiarEstructura { it.conFranjaAgregada() } },
-                // Un toque agrega una mocheta en automático; mantener pulsado deja elegir si es de
-                // sistema o de mocheta y con qué altura.
-                onAgregarLargo = { dialogoAgregarFranja() }
-            ).apply { tag = "cotas_franjas" },
+            null,
             dp4
         ))
 
@@ -1543,6 +1478,18 @@ class DisenoNovaActivity : AppCompatActivity() {
             botonPanel("F", dp, true) { agregarModuloEnTramo(i, 'f') },
             botonPanel("C", dp, true) { agregarModuloEnTramo(i, 'c') }
         ).apply { tag = "$TAG_MODULOS$i" })
+
+        // Las franjas de ESTE tramo: una mocheta más o una menos, sin tocar los demás tramos.
+        // Mantener pulsado el + deja elegir si es de sistema o de mocheta y con qué altura.
+        val nFranjas = splitTopLevelSemicolon(bloque.contenido).size
+        columna.addView(filaBotones(
+            etiqueta = "Franjas: $nFranjas",
+            dp = dp,
+            botonPanel("−", dp, nFranjas > 1) { cambiarEstructura { d -> d.conFranjaQuitadaEnTramo(i) } },
+            botonPanel("+", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(i) }) {
+                cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(i) }
+            }
+        ).apply { tag = "cotas_franjas_$i" })
 
         val (vistaAncho, etAncho) = campoConEtiqueta("Ancho:", df1(bloque.ancho), dp4)
         val (vistaPuente, etPuente) = campoConEtiqueta("Puente:", df1(info?.sistemaAltura ?: 0f), dp4)

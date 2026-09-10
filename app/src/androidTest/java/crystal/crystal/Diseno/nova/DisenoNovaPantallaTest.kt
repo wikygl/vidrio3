@@ -111,26 +111,30 @@ class DisenoNovaPantallaTest {
     }
 
     @Test
-    fun el_mas_y_el_menos_de_franjas_mueven_la_mocheta_en_todos_los_tramos() {
+    fun las_franjas_se_agregan_y_se_quitan_tramo_a_tramo() {
         ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
             esperar()
             enPantalla(esc) { it.cargarParaPruebas(tresTramos) }
             esperar()
-            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas", mas = true) }
+            // Bandera en el tramo 2: una mocheta más, solo ahí.
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas_1", mas = true) }
             esperar()
             val conMas = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
-            assertTrue(
-                "el + de franjas no agregó en todos los tramos: ${conMas.aPaquete()}",
-                conMas.tramos.all { it.franjas.size == 3 }
-            )
+            assertEquals("el + no agregó en su tramo: ${conMas.aPaquete()}", 3, conMas.tramos[1].franjas.size)
+            assertEquals("tocó el tramo 1", 2, conMas.tramos[0].franjas.size)
+            assertEquals("tocó el tramo 3", 2, conMas.tramos[2].franjas.size)
 
-            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas", mas = false) }
+            // Y el tramo 1 se queda sin mocheta, sin que los otros se enteren.
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas_0", mas = false) }
             esperar()
-            val conMenos = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
-            assertTrue(
-                "el − de franjas no quitó en todos los tramos: ${conMenos.aPaquete()}",
-                conMenos.tramos.all { it.franjas.size == 2 }
-            )
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el − no quitó en su tramo: ${d.aPaquete()}", 1, d.tramos[0].franjas.size)
+            assertEquals(3, d.tramos[1].franjas.size)
+            assertEquals(2, d.tramos[2].franjas.size)
+
+            // Tres tramos con tres formas distintas: el dibujo tiene que aceptarlo.
+            val error = enPantalla(esc) { it.vistaRechazaParaPruebas(d.aPaquete()) }
+            assertNull("el dibujo rechaza el diseño: $error\n${d.aPaquete()}", error)
         }
     }
 

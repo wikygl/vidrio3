@@ -195,31 +195,42 @@ class DisenoNovaOperacionesTest {
     }
 
     @Test
-    fun `agregar una franja la agrega en todos los tramos`() {
-        val d = abel.conFranjaAgregada()
-        assertTrue(d.tramos.all { it.franjas.size == 3 })
-        // Una mocheta más, en cada tramo, con un paño y en altura automática.
-        assertTrue(d.tramos.all { it.mochetas.size == 2 })
-        assertTrue(d.tramos.all { it.franjas.last().modulos.size == 1 })
-        assertEquals(0f, d.tramos[0].franjas.last().alto, 0.001f)
-        // Las franjas nuevas no cambian el reparto del ancho: los tramos siguen midiendo igual.
+    fun `agregar una franja la agrega solo en su tramo`() {
+        val d = abel.conFranjaAgregadaEnTramo(1)
+        assertEquals(3, d.tramos[1].franjas.size)
+        assertEquals(2, d.tramos[1].mochetas.size)
+        // Los otros tramos no se enteran: eso es lo que el simbólico no sabe decir.
+        assertEquals(2, d.tramos[0].franjas.size)
+        assertEquals(2, d.tramos[2].franjas.size)
+        // La franja nueva nace con medida: las dos mochetas se reparten lo que sobra del puente.
+        assertEquals(114.2f, d.tramos[1].sistema!!.alto, 0.05f)
+        assertEquals(22.9f, d.tramos[1].mochetas[0].alto, 0.05f)
+        assertEquals(22.9f, d.tramos[1].mochetas[1].alto, 0.05f)
+        // Y no cambian los anchos: una franja más no mueve ningún tramo.
         assertEquals(abel.tramos.map { it.ancho }, d.tramos.map { it.ancho })
     }
 
     @Test
-    fun `quitar una franja quita la mocheta en todos los tramos`() {
-        val d = abel.conFranjaQuitada()
-        assertTrue(d.tramos.all { it.franjas.size == 1 })
-        assertTrue(d.tramos.all { it.mochetas.isEmpty() })
-        // Y el sistema se queda como estaba: mismos módulos por tramo.
+    fun `quitar una franja quita la mocheta solo de su tramo`() {
+        val d = abel.conFranjaQuitadaEnTramo(0)
+        assertTrue(d.tramos[0].mochetas.isEmpty())
+        assertEquals(1, d.tramos[1].mochetas.size)
+        assertEquals(1, d.tramos[2].mochetas.size)
+        // El sistema se queda como estaba: mismos módulos.
         assertEquals(abel.tramos.map { it.nModulosSistema }, d.tramos.map { it.nModulosSistema })
     }
 
     @Test
     fun `la franja del sistema no se quita`() {
-        // Un diseño sin mochetas: no hay nada que quitar y se devuelve tal cual.
+        // Un tramo sin mochetas: no hay nada que quitar y se devuelve tal cual.
         val soloSistema = DisenoNova.desdePaquete("{nova,apa,[240,200:Tl<240>(s<200>(f<120>c<120>))]}")!!
-        assertSame(soloSistema, soloSistema.conFranjaQuitada())
+        assertSame(soloSistema, soloSistema.conFranjaQuitadaEnTramo(0))
+    }
+
+    @Test
+    fun `una franja con altura pedida se respeta`() {
+        val d = abel.conFranjaAgregadaEnTramo(2, esSistema = false, altoFranja = 20f)
+        assertEquals(20f, d.tramos[2].franjas.last().alto, 0.05f)
     }
 
     // ==================== EL PUENTE, TRAMO A TRAMO ====================

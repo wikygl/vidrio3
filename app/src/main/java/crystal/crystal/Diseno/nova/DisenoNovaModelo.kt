@@ -204,38 +204,66 @@ data class DisenoNova(
     }
 
     /**
-     * Agrega una franja al final de TODOS los tramos, con un módulo del ancho del tramo.
+     * Agrega una franja al tramo [indiceTramo], y solo a ese, con un módulo del ancho del tramo.
      *
-     * Va en todos porque las franjas de un tramo empiezan y acaban juntas: una mocheta que
-     * existiera solo en un tramo no sería una franja, sería otro diseño. [alto] en 0 la deja en
-     * automático, que es como se reparte lo que sobra del alto.
+     * Cada tramo lleva las franjas que le hagan falta: uno con dos mochetas —bandera—, el de al
+     * lado con una, el siguiente con ninguna. Eso es lo que el diseño simbólico no sabe decir.
      *
-     * No toca el reparto: una franja más no cambia el ancho de ningún tramo, y volver a repartir
-     * borraría los anchos que el vidriero hubiera fijado a mano.
+     * Si el sistema de ese tramo tiene altura fija, las mochetas se reparten lo que sobra del
+     * alto de la ventana, así la franja nueva nace con medida en vez de con 0. No toca los
+     * anchos: una franja más no cambia el ancho de ningún tramo, y volver a repartir borraría
+     * los anchos fijados a mano.
      */
-    fun conFranjaAgregada(esSistema: Boolean = false, alto: Float = 0f): DisenoNova {
-        if (tramos.isEmpty()) return this
-        return copy(tramos = tramos.map { t ->
-            val nueva = NovaFranja(esSistema, alto.coerceAtLeast(0f), listOf(NovaModulo('f', t.ancho)))
-            t.copy(franjas = t.franjas + nueva)
-        })
+    fun conFranjaAgregadaEnTramo(
+        indiceTramo: Int,
+        esSistema: Boolean = false,
+        altoFranja: Float = 0f
+    ): DisenoNova {
+        val tramo = tramos.getOrNull(indiceTramo) ?: return this
+        val nueva = NovaFranja(esSistema, altoFranja.coerceAtLeast(0f), listOf(NovaModulo('f', tramo.ancho)))
+        val nuevos = tramos.toMutableList()
+        nuevos[indiceTramo] = tramo.copy(franjas = tramo.franjas + nueva)
+        val conFranja = copy(tramos = nuevos)
+        // Una franja con altura pedida se respeta; la automática se lleva lo que sobra del puente.
+        return if (esSistema || altoFranja > 0f) conFranja else conFranja.conAlturasRepartidas(indiceTramo)
     }
 
     /**
-     * Quita una franja de todos los tramos: por defecto la última mocheta. La del sistema no se
-     * toca —sin ella no hay ventana— y siempre queda al menos una franja.
-     *
-     * Tampoco toca el reparto, por lo mismo que [conFranjaAgregada].
+     * Quita una franja del tramo [indiceTramo]: por defecto su última mocheta. La del sistema no
+     * se toca —sin ella no hay ventana— y siempre queda al menos una franja en el tramo.
      */
-    fun conFranjaQuitada(indice: Int = -1): DisenoNova {
-        val franjas = tramos.firstOrNull()?.franjas ?: return this
-        if (franjas.size <= 1) return this
-        val idx = if (indice >= 0) indice else franjas.indexOfLast { !it.esSistema }
-        if (idx !in franjas.indices || franjas[idx].esSistema) return this
-        return copy(tramos = tramos.map { t ->
-            if (idx !in t.franjas.indices) t
-            else t.copy(franjas = t.franjas.filterIndexed { i, _ -> i != idx })
-        })
+    fun conFranjaQuitadaEnTramo(indiceTramo: Int, indice: Int = -1): DisenoNova {
+        val tramo = tramos.getOrNull(indiceTramo) ?: return this
+        if (tramo.franjas.size <= 1) return this
+        val idx = if (indice >= 0) indice else tramo.franjas.indexOfLast { !it.esSistema }
+        if (idx !in tramo.franjas.indices || tramo.franjas[idx].esSistema) return this
+        val nuevos = tramos.toMutableList()
+        nuevos[indiceTramo] = tramo.copy(franjas = tramo.franjas.filterIndexed { i, _ -> i != idx })
+        return copy(tramos = nuevos).conAlturasRepartidas(indiceTramo)
+    }
+
+    /**
+     * Reparte el alto dentro de un tramo: el puente se queda con el suyo y las mochetas de ese
+     * tramo con lo que sobra, a partes iguales.
+     *
+     * Nunca agrega ni quita franjas —al revés que [conPuenteCambiado], que sí puede crear la
+     * mocheta—: si al tramo no le queda ninguna, el sistema se queda con el alto entero.
+     */
+    private fun conAlturasRepartidas(indiceTramo: Int): DisenoNova {
+        val tramo = tramos.getOrNull(indiceTramo) ?: return this
+        val sistema = tramo.franjas.firstOrNull { it.esSistema } ?: return this
+        if (sistema.alto <= 0f || alto <= 0f) return this
+        val mochetas = tramo.franjas.count { !it.esSistema }
+        val franjas = if (mochetas == 0) {
+            tramo.franjas.map { if (it.esSistema) it.copy(alto = alto) else it }
+        } else {
+            val porMocheta = (alto - sistema.alto).coerceAtLeast(0f) / mochetas
+            tramo.franjas.map { if (it.esSistema) it else it.copy(alto = porMocheta) }
+        }
+        if (franjas == tramo.franjas) return this
+        val nuevos = tramos.toMutableList()
+        nuevos[indiceTramo] = tramo.copy(franjas = franjas)
+        return copy(tramos = nuevos)
     }
 
     /**
