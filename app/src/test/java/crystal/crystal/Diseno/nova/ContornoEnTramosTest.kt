@@ -166,4 +166,48 @@ class ContornoEnTramosTest {
         assertEquals(30f, bandas[1].caidaCm, 0.05f)
         assertEquals(150f, bandas[1].altoCm, 0.05f)
     }
+
+    @Test
+    fun `el escalón del costado es una banda más`() {
+        // Vano con una muesca a la IZQUIERDA: el trozo de la izquierda arranca 40 más abajo.
+        val muescaIzquierda = listOf(
+            0f to 40f,
+            120f to 40f,
+            120f to 0f,
+            400f to 0f,
+            400f to 200f,
+            0f to 200f
+        )
+        val bandas = ContornoEnTramos.bandas(muescaIzquierda)
+        assertEquals(2, bandas.size)
+        assertEquals(120f, bandas[0].anchoCm, 0.05f)
+        assertEquals(40f, bandas[0].caidaCm, 0.05f)
+        assertEquals(160f, bandas[0].altoCm, 0.05f)
+        assertEquals(280f, bandas[1].anchoCm, 0.05f)
+        assertEquals(0f, bandas[1].caidaCm, 0.05f)
+        assertEquals(200f, bandas[1].altoCm, 0.05f)
+    }
+
+    @Test
+    fun `un vano con escalones en los dos costados da tres tramos`() {
+        // Alto en el medio, bajo a los dos lados: lo que en obra sale con una viga en el centro.
+        val dosCostados = listOf(
+            0f to 50f,
+            100f to 50f,
+            100f to 0f,
+            300f to 0f,
+            300f to 50f,
+            400f to 50f,
+            400f to 220f,
+            0f to 220f
+        )
+        val bandas = ContornoEnTramos.bandas(dosCostados)
+        assertEquals(3, bandas.size)
+        assertEquals(50f, bandas[0].caidaCm, 0.05f)
+        assertEquals(0f, bandas[1].caidaCm, 0.05f)
+        assertEquals(50f, bandas[2].caidaCm, 0.05f)
+        assertEquals(220f, bandas[1].altoCm, 0.05f)
+        assertEquals(170f, bandas[0].altoCm, 0.05f)
+        assertEquals(170f, bandas[2].altoCm, 0.05f)
+    }
 }
