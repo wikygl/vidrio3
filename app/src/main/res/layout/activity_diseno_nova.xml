@@ -42,6 +42,26 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/panelInfoSeleccion" />
 
+
+    <!-- Mando de la franja o el módulo tocados. Va pegado encima del bloque de controles y no
+         sobre el dibujo: encima tapaba justo lo que se estaba editando. El lienzo se encoge solo
+         para dejarle sitio. -->
+    <LinearLayout
+        android:id="@+id/contenedorFlotante"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="9dp"
+        android:layout_marginEnd="9dp"
+        android:layout_marginBottom="4dp"
+        android:background="@drawable/bg_control_panel"
+        android:elevation="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="4dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/overlayControles"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
     <!-- Panel flotante de controles -->
     <FrameLayout
         android:id="@+id/overlayControles"

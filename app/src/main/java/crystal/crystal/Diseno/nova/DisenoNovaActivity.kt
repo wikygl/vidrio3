@@ -61,8 +61,6 @@ class DisenoNovaActivity : AppCompatActivity() {
     private var corteVerticalCm: Float? = null
     /** El mando flotante de módulos que sale junto a la franja tocada. */
     private var flotanteModulos: View? = null
-    /** Dónde quedó el mando, para no perderlo mientras el dibujo vuelve a medirse. */
-    private var flotantePos: Pair<Float, Float>? = null
     /** Qué mando está a la vista: FLOTANTE_MODULOS o FLOTANTE_FRANJAS. */
     private var modoFlotante = 0
     private var paqueteOriginal: String = ""
@@ -207,9 +205,11 @@ class DisenoNovaActivity : AppCompatActivity() {
 
         // El lienzo se sube o se baja solo, según lo que ocupe el bloque de controles: al abrir
         // el panel de cotas con varios tramos el dibujo se encoge en vez de quedar tapado.
-        binding.overlayControles.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+        val alCambiarAlto = View.OnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
             if (bottom - top != oldBottom - oldTop) subirLienzoSobreLosControles()
         }
+        binding.overlayControles.addOnLayoutChangeListener(alCambiarAlto)
+        binding.contenedorFlotante.addOnLayoutChangeListener(alCambiarAlto)
 
         actualizarInfoSeleccion()
         actualizarVista()
@@ -284,11 +284,11 @@ class DisenoNovaActivity : AppCompatActivity() {
      * Agrega una franja al tramo [indiceTramo] eligiendo qué es y cuánto mide. El toque simple
      * del + agrega una mocheta en automático; esto es para cuando hace falta decidirlo.
      */
-    private fun dialogoAgregarFranjaEnTramo(indiceTramo: Int) {
+    private fun dialogoAgregarFranjaEnTramo(indiceTramo: Int, arriba: Boolean = true) {
         var esSistema = false
         val opciones = arrayOf("m (mocheta)", "s (sistema)")
         AlertDialog.Builder(this)
-            .setTitle("Agregar franja al tramo ${indiceTramo + 1}")
+            .setTitle("Agregar franja " + (if (arriba) "arriba" else "abajo") + " · tramo ${indiceTramo + 1}")
             .setSingleChoiceItems(opciones, 0) { _, which -> esSistema = which == 1 }
             .setPositiveButton("Siguiente") { dlg, _ ->
                 dlg.dismiss()
@@ -307,7 +307,8 @@ class DisenoNovaActivity : AppCompatActivity() {
                             Toast.makeText(this, "Altura > alto total. Se agrega en auto.", Toast.LENGTH_SHORT).show()
                             alto = 0f
                         }
-                        cambiarEstructura { it.conFranjaAgregadaEnTramo(indiceTramo, esSistema, alto) }
+                        cambiarEstructura { it.conFranjaAgregadaEnTramo(indiceTramo, esSistema, alto, arriba) }
+                        refrescarFlotante()
                     }
                     .setNegativeButton("Cancelar", null)
                     .show()
@@ -508,46 +509,30 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     // =========================== MANDOS FLOTANTES ===========================
-    // Van pegados a la franja tocada porque el panel solo llega a la franja de sistema: con
-    // varias mochetas por tramo hacía falta un sitio donde lo que se toca sea de ESA franja.
+    // El panel solo llega a la franja de sistema: con varias mochetas por tramo hacía falta un
+    // sitio donde lo que se toca sea de ESA franja. Van pegados encima de los controles.
     // Un toque abre el de módulos; mantener pulsado, el de franjas.
 
-    /** Monta el mando junto a la franja: al lado del tramo y centrado en su banda. */
-    private fun montarFlotante(fila: LinearLayout, dp4: Int) {
-        val tramo = tramoActivoSeguro()
-        // Tras editar, el dibujo aún no ha vuelto a medir sus bandas: en ese caso el mando se
-        // queda donde estaba en vez de desaparecer.
-        val banda = binding.vistaDiseno.bandaDeFranja(tramo, indiceFranjaActiva)
-        val ancho = binding.vistaDiseno.anchoDeTramo(tramo)
-        if (banda == null && flotantePos == null) return
-
-        fila.tag = TAG_FLOTANTE
-        binding.contenedorPrincipal.addView(fila)
+    /**
+     * Deja el mando pegado encima del bloque de controles, no sobre el dibujo.
+     *
+     * Antes salía flotando junto a la franja y tapaba justo lo que se estaba editando: con las
+     * franjas había que pelearse para verlas. Aquí no estorba, y el lienzo se encoge solo porque
+     * mide lo que ocupa el bloque de abajo.
+     */
+    private fun montarFlotante(fila: LinearLayout) {
+        binding.contenedorFlotante.removeAllViews()
+        binding.contenedorFlotante.addView(fila)
+        binding.contenedorFlotante.visibility = View.VISIBLE
         flotanteModulos = fila
-        fila.post {
-            val pos = if (banda != null && ancho != null) {
-                val x = (binding.vistaDiseno.x + ancho.first).coerceAtMost(
-                    binding.contenedorPrincipal.width - fila.width.toFloat() - dp4
-                ).coerceAtLeast(dp4.toFloat())
-                val y = (binding.vistaDiseno.y + (banda.first + banda.second) / 2f - fila.height / 2f)
-                    .coerceIn(dp4.toFloat(), (binding.contenedorPrincipal.height - fila.height - dp4).toFloat())
-                x to y
-            } else flotantePos!!
-            flotantePos = pos
-            fila.x = pos.first
-            fila.y = pos.second
-        }
     }
 
-    /** La caja del mando, vacía. */
+    /** La caja del mando, vacía: una fila que se estira dentro del contenedor pegado. */
     private fun filaFlotante(dp: Float, dp4: Int) = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setBackgroundResource(R.drawable.bg_control_panel)
-        elevation = 10 * dp
-        setPadding(dp4, dp4, dp4, dp4)
-        layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         )
     }
 
@@ -577,7 +562,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             })
         }
         modoFlotante = FLOTANTE_MODULOS
-        montarFlotante(fila, dp4)
+        montarFlotante(fila)
     }
 
     /**
@@ -595,7 +580,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         val tramo = tramoActivoSeguro()
         val fila = filaFlotante(dp, dp4)
         fila.addView(TextView(this).apply {
-            text = "Franjas ${franjas.size}"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            text = "Franjas ${franjas.size} · tramo ${tramo + 1}"
             textSize = 11f
             setTypeface(null, Typeface.BOLD)
             setPadding(0, 0, dp4, 0)
@@ -606,23 +592,29 @@ class DisenoNovaActivity : AppCompatActivity() {
             cambiarEstructura { d -> d.conFranjaQuitadaEnTramo(tramo) }
             refrescarFlotante()
         })
-        fila.addView(botonPanel("+", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(tramo) }) {
-            cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(tramo) }
+        // Arriba o abajo: la mocheta salía siempre encima y para ponerla debajo había que dar un
+        // rodeo. Mantener pulsado cualquiera de los dos abre el diálogo con tipo y altura.
+        fila.addView(botonPanel("↓", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(tramo, arriba = false) }) {
+            cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(tramo, arriba = false) }
             refrescarFlotante()
-        })
+        }.apply { tag = "flotante_franja_abajo" })
+        fila.addView(botonPanel("↑", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(tramo, arriba = true) }) {
+            cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(tramo, arriba = true) }
+            refrescarFlotante()
+        }.apply { tag = "flotante_franja_arriba" })
         modoFlotante = FLOTANTE_FRANJAS
-        montarFlotante(fila, dp4)
+        montarFlotante(fila)
     }
 
     private fun quitarFlotanteModulos() {
-        flotanteModulos?.let { binding.contenedorPrincipal.removeView(it) }
+        binding.contenedorFlotante.removeAllViews()
+        binding.contenedorFlotante.visibility = View.GONE
         flotanteModulos = null
     }
 
     /** Cierra el mando y olvida dónde estaba. */
     private fun cerrarFlotanteModulos() {
         quitarFlotanteModulos()
-        flotantePos = null
         modoFlotante = 0
     }
 
@@ -1866,11 +1858,14 @@ class DisenoNovaActivity : AppCompatActivity() {
      */
     private fun subirLienzoSobreLosControles() {
         val hueco = (8 * resources.displayMetrics.density).toInt()
-        // El bloque de controles tiene su propio margen contra el botón de abajo: si no se cuenta,
-        // el lienzo acaba justo esos milímetros por debajo de donde empieza el panel.
-        val margenControles =
-            (binding.overlayControles.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
-        val alto = binding.overlayControles.height + margenControles + hueco
+        // Cada bloque de abajo tiene su propio margen: si no se cuentan, el lienzo acaba justo
+        // esos milímetros por debajo de donde empiezan.
+        fun altoCon(v: View): Int {
+            if (v.visibility == View.GONE) return 0
+            val m = (v.layoutParams as? ViewGroup.MarginLayoutParams)
+            return v.height + (m?.topMargin ?: 0) + (m?.bottomMargin ?: 0)
+        }
+        val alto = altoCon(binding.overlayControles) + altoCon(binding.contenedorFlotante) + hueco
         val lp = binding.vistaDiseno.layoutParams as? ViewGroup.MarginLayoutParams ?: return
         if (lp.bottomMargin == alto) return
         lp.bottomMargin = alto
@@ -2294,8 +2289,12 @@ class DisenoNovaActivity : AppCompatActivity() {
     fun bordesLienzoYControlesParaPruebas(): Pair<Int, Int> {
         val lienzo = IntArray(2)
         binding.vistaDiseno.getLocationOnScreen(lienzo)
+        // El borde de arriba del bloque de abajo: el mando pegado cuenta, porque también ocupa.
         val controles = IntArray(2)
-        binding.overlayControles.getLocationOnScreen(controles)
+        val bloque = if (binding.contenedorFlotante.visibility == View.VISIBLE) {
+            binding.contenedorFlotante
+        } else binding.overlayControles
+        bloque.getLocationOnScreen(controles)
         return (lienzo[1] + binding.vistaDiseno.height) to controles[1]
     }
 

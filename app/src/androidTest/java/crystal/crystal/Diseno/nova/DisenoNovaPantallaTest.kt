@@ -580,4 +580,56 @@ class DisenoNovaPantallaTest {
             assertEquals(listOf(false, false), enPantalla(esc) { it.bloqueadosParaPruebas() })
         }
     }
+
+    /**
+     * El mando de franjas pone la mocheta arriba o abajo, que es lo que no había forma de elegir:
+     * salía siempre encima. Las franjas se guardan de abajo arriba, así que "abajo" es la
+     * primera de la lista.
+     */
+    @Test
+    fun el_mando_pone_la_franja_arriba_o_abajo() {
+        val uno = "{nova,apa,[300,200:Tl<300>(s<200>(f<150>c<150>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(uno) }
+            esperar()
+            enPantalla(esc) { it.pulsacionLargaParaPruebas(tramo = 0, franja = 0) }
+            esperar()
+            assertTrue("no salió el mando", enPantalla(esc) { it.hayFlotanteParaPruebas() })
+
+            // Abajo: la mocheta queda ANTES del sistema.
+            enPantalla(esc) { it.pulsarFlotanteParaPruebas("↓") }
+            esperar()
+            val abajo = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals(2, abajo.tramos[0].franjas.size)
+            assertTrue("la franja nueva no quedó abajo", !abajo.tramos[0].franjas[0].esSistema)
+            assertTrue(abajo.tramos[0].franjas[1].esSistema)
+
+            // Arriba: la siguiente queda al final.
+            enPantalla(esc) { it.pulsarFlotanteParaPruebas("↑") }
+            esperar()
+            val arriba = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals(3, arriba.tramos[0].franjas.size)
+            assertTrue("la franja nueva no quedó arriba", !arriba.tramos[0].franjas[2].esSistema)
+            assertTrue("el sistema se movió de sitio", arriba.tramos[0].franjas[1].esSistema)
+        }
+    }
+
+    /** El mando va pegado encima de los controles, no sobre el dibujo. */
+    @Test
+    fun el_mando_no_se_pone_encima_del_dibujo() {
+        val uno = "{nova,apa,[300,200:Tl<300>(s<160>(f<150>c<150>);m<40>(f<300>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(uno) }
+            esperar()
+            enPantalla(esc) { it.pulsacionLargaParaPruebas(tramo = 0, franja = 1) }
+            esperar()
+            val (abajoLienzo, arribaControles) = enPantalla(esc) { it.bordesLienzoYControlesParaPruebas() }
+            assertTrue(
+                "el mando se come el dibujo: el lienzo acaba en $abajoLienzo y los controles empiezan en $arribaControles",
+                abajoLienzo <= arribaControles
+            )
+        }
+    }
 }

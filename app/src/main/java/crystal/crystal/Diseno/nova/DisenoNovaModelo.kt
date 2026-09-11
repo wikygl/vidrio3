@@ -222,12 +222,17 @@ data class DisenoNova(
     fun conFranjaAgregadaEnTramo(
         indiceTramo: Int,
         esSistema: Boolean = false,
-        altoFranja: Float = 0f
+        altoFranja: Float = 0f,
+        arriba: Boolean = true
     ): DisenoNova {
         val tramo = tramos.getOrNull(indiceTramo) ?: return this
         val nueva = NovaFranja(esSistema, altoFranja.coerceAtLeast(0f), listOf(NovaModulo('f', tramo.ancho)))
+        // Las franjas se guardan de abajo arriba: al final del todo va la de arriba y al principio
+        // la de abajo. Sin poder elegirlo, la mocheta salía siempre encima y para ponerla debajo
+        // había que dar un rodeo.
+        val franjas = if (arriba) tramo.franjas + nueva else listOf(nueva) + tramo.franjas
         val nuevos = tramos.toMutableList()
-        nuevos[indiceTramo] = tramo.copy(franjas = tramo.franjas + nueva)
+        nuevos[indiceTramo] = tramo.copy(franjas = franjas)
         val conFranja = copy(tramos = nuevos)
         // Una franja con altura pedida se respeta; la automática se lleva lo que sobra del puente.
         return if (esSistema || altoFranja > 0f) conFranja else conFranja.conAlturasRepartidas(indiceTramo)

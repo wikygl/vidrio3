@@ -301,4 +301,18 @@ class DisenoNovaOperacionesTest {
         val suma = d.tramos[2].franjas.sumOf { it.alto.toDouble() }.toFloat()
         assertEquals(160f, suma, 0.05f)
     }
+
+    @Test
+    fun `la franja nueva puede ir arriba o abajo`() {
+        // Las franjas se guardan de abajo arriba: la primera de la lista es la de abajo.
+        val arriba = unTramo.conFranjaAgregadaEnTramo(0, arriba = true)
+        assertTrue("no quedó arriba", !arriba.tramos[0].franjas.last().esSistema)
+        assertTrue("el sistema se movió", arriba.tramos[0].franjas[0].esSistema)
+
+        val abajo = unTramo.conFranjaAgregadaEnTramo(0, arriba = false)
+        assertTrue("no quedó abajo", !abajo.tramos[0].franjas[0].esSistema)
+        assertTrue("el sistema no subió un puesto", abajo.tramos[0].franjas[1].esSistema)
+        // Y el tramo sigue con las mismas franjas de antes más la nueva.
+        assertEquals(unTramo.tramos[0].franjas.size + 1, abajo.tramos[0].franjas.size)
+    }
 }
