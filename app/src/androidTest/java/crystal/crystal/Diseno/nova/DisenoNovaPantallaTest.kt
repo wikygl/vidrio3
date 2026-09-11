@@ -668,4 +668,41 @@ class DisenoNovaPantallaTest {
             assertNull("el dibujo rechaza la escalonada: $error\n${d.aPaquete()}", error)
         }
     }
+
+
+    /**
+     * El tramo escalonado se dibuja con SU alto y colgando del mismo dintel. Antes las franjas del
+     * tramo bajo se repartían contra el alto de la ventana y se estiraban hasta llenarlo: el tramo
+     * se dibujaba fuera de su sitio, por encima del dintel.
+     *
+     * Se mide sobre la vista suelta, sin abrir la pantalla, para que valga aunque el celular esté
+     * bloqueado: una actividad que no llega a dibujarse no tiene bandas que mirar.
+     */
+    @Test
+    fun el_tramo_escalonado_se_dibuja_con_su_alto() {
+        val escalonada = "{nova,apa,[446.3,160:Tl<280.3>(s<120>(f<140.1>c<140.1>);m<40>(f<280.3>))" +
+            " P<2.5> Tl<166>(H<106.2>;s<106.2>(f<166>))]}"
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vista = VistaDiseno(ctx)
+        vista.actualizarDesdePaquete(escalonada, 0f, 0f, 0f)
+        vista.layout(0, 0, 1080, 1200)
+        vista.draw(android.graphics.Canvas(android.graphics.Bitmap.createBitmap(1080, 1200, android.graphics.Bitmap.Config.ARGB_8888)))
+
+        val bajo = vista.bandasDeFranjaParaPruebas(0)
+        val alto = vista.bandasDeFranjaParaPruebas(1)
+        assertTrue("sin bandas que mirar", bajo.isNotEmpty() && alto.isNotEmpty())
+
+        // Los dos cuelgan del mismo dintel: su borde de arriba coincide.
+        val arribaTramo1 = bajo.minOf { it.first }
+        val arribaTramo2 = alto.minOf { it.first }
+        assertEquals("no cuelgan del mismo dintel", arribaTramo1, arribaTramo2, 2f)
+
+        // Y el segundo llega hasta 106.2 de 160: dos tercios largos del primero.
+        val altoTramo1 = bajo.maxOf { it.second } - arribaTramo1
+        val altoTramo2 = alto.maxOf { it.second } - arribaTramo2
+        assertEquals(
+            "el tramo escalonado no se dibuja con su alto",
+            106.2f / 160f, altoTramo2 / altoTramo1, 0.03f
+        )
+    }
 }

@@ -1454,7 +1454,8 @@ class VistaDiseno @JvmOverloads constructor(
                             anchoVentPx = anchoVentPx,
                             escalaPxPorCm = escalaLocal,
                             populateRangosFranjas = esPrimerPlano,
-                            segmentoIndex = segIdx
+                            segmentoIndex = segIdx,
+                            altoTramoCm = segmento.altoCm
                         )
                     } else {
                         dibujarINASoloFranja(
@@ -1467,7 +1468,8 @@ class VistaDiseno @JvmOverloads constructor(
                             anchoVentPx = anchoVentPx,
                             escalaPxPorCm = escalaLocal,
                             populateRangosFranjas = esPrimerPlano,
-                            segmentoIndex = segIdx
+                            segmentoIndex = segIdx,
+                            altoTramoCm = segmento.altoCm
                         )
                     }
                     ultimaVentanaX0 = xIni
@@ -2307,10 +2309,11 @@ class VistaDiseno @JvmOverloads constructor(
         anchoVentPx: Float,
         escalaPxPorCm: Float,
         populateRangosFranjas: Boolean = false,
-        segmentoIndex: Int = -1
+        segmentoIndex: Int = -1,
+        altoTramoCm: Float = 0f
     ) {
         if (franjas.isEmpty()) return
-        val alturasCm = distribuirAlturas(franjas)
+        val alturasCm = distribuirAlturas(franjas, if (altoTramoCm > 0f) altoTramoCm else altoCm)
         var yAbajo = yBotTotal
         val parantesX = mutableListOf<Float>()
         franjas.forEachIndexed { idx, franja ->
@@ -2479,7 +2482,8 @@ class VistaDiseno @JvmOverloads constructor(
         anchoVentPx: Float,
         escalaPxPorCm: Float,
         populateRangosFranjas: Boolean = false,
-        segmentoIndex: Int = -1
+        segmentoIndex: Int = -1,
+        altoTramoCm: Float = 0f
     ) {
         if (franjas.isEmpty()) return
         val idxS = franjas.indexOfFirst { it.tipo == TipoFranja.SISTEMA }
@@ -2489,7 +2493,7 @@ class VistaDiseno @JvmOverloads constructor(
         val sistemaMods = sistema.modulos
         if (sistemaMods.isEmpty()) return
 
-        val alturasFallback = distribuirAlturas(franjas)
+        val alturasFallback = distribuirAlturas(franjas, if (altoTramoCm > 0f) altoTramoCm else altoCm)
         var mTopCm = 0f
         var mBottomCm = 0f
         franjas.forEachIndexed { i, f ->
@@ -2614,7 +2618,16 @@ class VistaDiseno @JvmOverloads constructor(
 
     // Reparte alturas para cualquier lista de franjas (S y M)
 // Replica la lógica que tenías en distribuirAlturasAPA()
-    private fun distribuirAlturas(franjas: List<FranjaNova>): MutableList<Float> {
+    /**
+     * Reparte el alto entre las franjas. [altoTotal] es el del TRAMO: en una ventana escalonada
+     * no es el de la ventana, y midiendo contra ella las franjas del tramo bajo se estiraban hasta
+     * llenar los 160 y el tramo se dibujaba fuera de su sitio.
+     */
+    private fun distribuirAlturas(
+        franjas: List<FranjaNova>,
+        altoTotal: Float = altoCm
+    ): MutableList<Float> {
+        val altoCm = if (altoTotal > 0f) altoTotal else this.altoCm
         val n = franjas.size
         val alturas = MutableList(n) { 0f }
         if (n == 0) return alturas
@@ -2861,6 +2874,60 @@ class VistaDiseno @JvmOverloads constructor(
         canvas.rotate(-90f, xLineaV, yCentroV)
         canvas.drawText(textoAlto, xLineaV, yCentroV + 8f, pTextoCota)
         canvas.restore()
+
+        dibujarCotasEscalon(canvas, y0, y1, escala)
+    }
+
+    /**
+     * Las cotas que solo tiene una ventana escalonada: el ancho de cada tramo y lo que sube el
+     * alféizar en cada salto.
+     *
+     * Sin ellas el plano no sirve para el taller: se ve la forma, pero no de cuánto es cada trozo.
+     * En una ventana recta no se dibuja nada de esto, que ya está dicho con el ancho y el alto.
+     */
+    private fun dibujarCotasEscalon(canvas: Canvas, y0: Float, y1: Float, escala: Float) {
+        val planos = segmentosNs.filter { it.tipo == TipoSegmentoNs.PLANO }
+        if (planos.none { it.altoCm > 0f }) return
+        if (rangosTramoX.size < planos.size) return
+
+        fun fmt(v: Float) = if (v % 1 == 0f) v.toInt().toString() else "%.1f".format(v).replace(",", ".")
+        val flecha = 10f
+        val yFila = y1 + 78f
+
+        planos.forEachIndexed { i, seg ->
+            val (xIni, xFin) = rangosTramoX[i]
+            // Ancho del tramo, en una segunda fila debajo del ancho total.
+            val texto = fmt(seg.anchoCm)
+            val ancho = pTextoCota.measureText(texto)
+            val centro = (xIni + xFin) / 2f
+            canvas.drawLine(xIni, yFila, centro - ancho / 2 - 5f, yFila, pLineaCota)
+            canvas.drawLine(centro + ancho / 2 + 5f, yFila, xFin, yFila, pLineaCota)
+            canvas.drawLine(xIni, yFila, xIni + flecha, yFila - flecha / 2, pLineaCota)
+            canvas.drawLine(xIni, yFila, xIni + flecha, yFila + flecha / 2, pLineaCota)
+            canvas.drawLine(xFin, yFila, xFin - flecha, yFila - flecha / 2, pLineaCota)
+            canvas.drawLine(xFin, yFila, xFin - flecha, yFila + flecha / 2, pLineaCota)
+            canvas.drawText(texto, centro, yFila + 8f, pTextoCota)
+        }
+
+        // Lo que sube el alféizar en cada salto, en la propia esquina del escalón.
+        fun abajoDe(seg: SegmentoNs) =
+            if (seg.altoCm > 0f) (y0 + seg.altoCm * escala).coerceAtMost(y1) else y1
+        for (i in 0 until planos.size - 1) {
+            val arriba = abajoDe(planos[i])
+            val abajo = abajoDe(planos[i + 1])
+            if (kotlin.math.abs(arriba - abajo) < 2f) continue
+            val salto = kotlin.math.abs(planos[i].altoCm.takeIf { it > 0f } ?: altoCm) -
+                (planos[i + 1].altoCm.takeIf { it > 0f } ?: altoCm)
+            val x = rangosTramoX[i].second + 18f
+            val yA = min(arriba, abajo)
+            val yB = max(arriba, abajo)
+            canvas.drawLine(x, yA, x, yB, pLineaCota)
+            canvas.drawLine(x, yA, x - flecha / 2, yA + flecha, pLineaCota)
+            canvas.drawLine(x, yA, x + flecha / 2, yA + flecha, pLineaCota)
+            canvas.drawLine(x, yB, x - flecha / 2, yB - flecha, pLineaCota)
+            canvas.drawLine(x, yB, x + flecha / 2, yB - flecha, pLineaCota)
+            canvas.drawText(fmt(kotlin.math.abs(salto)), x + 6f, (yA + yB) / 2f, pTextoCota)
+        }
     }
 
     // ================= SVG: exporta solo el diseño (recortado) =================
