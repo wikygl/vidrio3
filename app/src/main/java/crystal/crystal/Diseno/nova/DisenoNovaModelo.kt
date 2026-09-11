@@ -181,26 +181,31 @@ data class DisenoNova(
      * cada una.
      *
      * Un tramo nuevo empieza con lo mínimo que se sostiene —un fijo por franja—, igual que en la
-     * mampara: el vidriero le añade después lo que necesite. El ancho lo pone el reparto, que es
-     * quien manda: los tramos y las medidas salen de contar módulos.
+     * mampara: el vidriero le añade después lo que necesite. El ancho lo pone el reparto, que
+     * respeta los tramos [bloqueados]: esos conservan su medida y el resto absorbe.
      */
-    fun conTramoAgregado(): DisenoNova {
+    fun conTramoAgregado(bloqueados: Set<Int> = emptySet()): DisenoNova {
         val ultimo = tramos.lastOrNull()
         val franjas = ultimo?.franjas?.map { it.copy(modulos = listOf(NovaModulo('f'))) }
             ?: listOf(NovaFranja(esSistema = true, alto = 0f, modulos = listOf(NovaModulo('f'))))
-        return copy(tramos = tramos + NovaTramo(0f, franjas)).conAnchosRepartidos()
+        return copy(tramos = tramos + NovaTramo(0f, franjas))
+            .conAnchosRepartidos(bloqueados = bloqueados)
     }
 
     /**
      * Quita el tramo [indice] entero —por defecto el último—, con todas sus franjas. Siempre
      * queda al menos un tramo.
      *
-     * Como [conTramoPartido] y [conTramosUnidos], corre los índices de los tramos: quien la llame
-     * tiene que soltar los bloqueos.
+     * Los [bloqueados] anteriores al quitado conservan su ancho; los de después ya no valen,
+     * porque al quitar uno los índices se corren.
      */
-    fun conTramoQuitado(indice: Int = tramos.lastIndex): DisenoNova {
+    fun conTramoQuitado(
+        indice: Int = tramos.lastIndex,
+        bloqueados: Set<Int> = emptySet()
+    ): DisenoNova {
         if (tramos.size <= 1 || indice !in tramos.indices) return this
-        return copy(tramos = tramos.filterIndexed { i, _ -> i != indice }).conAnchosRepartidos()
+        return copy(tramos = tramos.filterIndexed { i, _ -> i != indice })
+            .conAnchosRepartidos(bloqueados = bloqueados.filter { it < indice }.toSet())
     }
 
     /**

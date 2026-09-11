@@ -1739,6 +1739,7 @@ class VistaDiseno @JvmOverloads constructor(
             val yBottomNom = yAbajo
 
             rangosFranjaY.add(Pair(yCurva(yTopNom, centroX), yCurva(yBottomNom, centroX)))
+            registrarFranjaDeTramo(0, yCurva(yTopNom, centroX), yCurva(yBottomNom, centroX))
 
             // Cada frontera entre franjas lleva su puente: una banda gruesa, no una linea fina. Antes
             // solo se pintaba donde el sistema tocaba una mocheta; en el diseno a mano hay franjas
@@ -1853,6 +1854,9 @@ class VistaDiseno @JvmOverloads constructor(
 
             // Registrar rango (abajo→arriba, almacenamos [top,bottom])
             rangosFranjaY.add(Pair(yTop, yBottom))
+            // También como banda del tramo 0: así el toque encuentra las franjas por tramo en
+            // los dibujos de una sola ventana, igual que en los de varios tramos.
+            registrarFranjaDeTramo(0, yTop, yBottom)
 
             // Puentes M↔S (debajo)
             // Cada frontera entre franjas lleva su puente: una banda gruesa, no una linea fina. Antes

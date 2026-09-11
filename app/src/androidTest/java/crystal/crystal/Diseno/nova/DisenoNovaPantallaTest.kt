@@ -540,4 +540,44 @@ class DisenoNovaPantallaTest {
             assertEquals("con dos franjas ya no manda 5/7", 2.5f, sistema / mocheta, 0.15f)
         }
     }
+
+    /**
+     * El bloqueo de un tramo es una decisión del vidriero: solo lo suelta su botón. Antes se
+     * perdía en cuanto se tocaba cualquier otra cosa —agregar una franja en el tramo de al lado
+     * bastaba— y con él se iba el ancho fijado.
+     */
+    @Test
+    fun el_bloqueo_de_un_tramo_aguanta_los_cambios() {
+        val dos = "{nova,apa,[400,200:Tl<250>(s<160>(f<125>c<125>);m<40>(f<250>))" +
+            " P<2.5> Tl<147.5>(s<160>(f<147.5>);m<40>(f<147.5>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(dos) }
+            esperar()
+            enPantalla(esc) { it.abrirCotasParaPruebas() }
+            esperar()
+            enPantalla(esc) { it.pulsarBloqueoParaPruebas(0) }
+            esperar(300)
+            assertEquals("no quedó bloqueado", listOf(true, false), enPantalla(esc) { it.bloqueadosParaPruebas() })
+            val anchoAntes = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!!.tramos[0].ancho }
+
+            // Una franja en el otro tramo, un módulo en el otro tramo: el bloqueo sigue.
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas_1", mas = true) }
+            esperar(300)
+            enPantalla(esc) { it.pulsarModuloParaPruebas(indiceTramo = 1, simbolo = "+") }
+            esperar(300)
+            assertEquals(
+                "el bloqueo se perdió al editar",
+                listOf(true, false),
+                enPantalla(esc) { it.bloqueadosParaPruebas() }
+            )
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el tramo bloqueado cambió de ancho", anchoAntes, d.tramos[0].ancho, 0.2f)
+
+            // Y solo su botón lo suelta.
+            enPantalla(esc) { it.pulsarBloqueoParaPruebas(0) }
+            esperar(300)
+            assertEquals(listOf(false, false), enPantalla(esc) { it.bloqueadosParaPruebas() })
+        }
+    }
 }

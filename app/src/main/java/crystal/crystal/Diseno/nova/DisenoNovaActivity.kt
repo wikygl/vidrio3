@@ -1560,8 +1560,8 @@ class DisenoNovaActivity : AppCompatActivity() {
                 etiqueta = "Tramos",
                 dp = dp,
                 puedeQuitar = bloques.size > 1,
-                onQuitar = { cambiarEstructura { it.conTramoQuitado() } },
-                onAgregar = { cambiarEstructura { it.conTramoAgregado() } }
+                onQuitar = { cambiarEstructura { it.conTramoQuitado(bloqueados = tramosLibresBloqueados()) } },
+                onAgregar = { cambiarEstructura { it.conTramoAgregado(tramosLibresBloqueados()) } }
             ).apply { tag = "cotas_tramos" },
             null,
             dp4
@@ -1669,6 +1669,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         val bloqueado = tramosBlockeados.getOrElse(i) { false }
         cabecera.addView(Button(this).apply {
             text = if (bloqueado) "Bloq." else "Libre"
+            tag = "cotas_bloqueo_$i"
             textSize = 9f
             isAllCaps = false
             setPadding(dp4, 0, dp4, 0)
@@ -1976,11 +1977,14 @@ class DisenoNovaActivity : AppCompatActivity() {
     /**
      * Cambio de estructura del diseño —tramos o franjas— pasando por el modelo.
      *
-     * Agregar o quitar corre los índices de los tramos, así que los bloqueos dejarían de apuntar
-     * a donde apuntaban: se sueltan todos, igual que al partir un tramo.
+     * El bloqueo de un tramo NO se toca: es una decisión del vidriero y solo se suelta pulsando
+     * su botón. Antes se soltaban todos en cada cambio y una medida fijada se perdía al agregar
+     * una franja en el tramo de al lado.
+     *
+     * Al quitar un tramo se cae su marca junto con él —eso lo hace el ajuste de tamaño del panel—
+     * y los que quedan conservan la suya, porque solo se quita el último.
      */
     private fun cambiarEstructura(operacion: (DisenoNova) -> DisenoNova) {
-        tramosBlockeados.clear()
         indiceModuloActivo = -1
         if (!aplicarAlModelo(operacion)) {
             Toast.makeText(this, "No se pudo leer el diseño.", Toast.LENGTH_SHORT).show()
@@ -2219,6 +2223,19 @@ class DisenoNovaActivity : AppCompatActivity() {
     /** El módulo seleccionado ahora mismo, o -1. */
     @androidx.annotation.VisibleForTesting
     fun moduloActivoParaPruebas(): Int = indiceModuloActivo
+
+    /** Los tramos con el ancho bloqueado ahora mismo. */
+    @androidx.annotation.VisibleForTesting
+    fun bloqueadosParaPruebas(): List<Boolean> = tramosBlockeados.toList()
+
+    /** Pulsa el botón Libre/Bloq. de un tramo en el panel. */
+    @androidx.annotation.VisibleForTesting
+    fun pulsarBloqueoParaPruebas(indiceTramo: Int): Boolean {
+        actualizarPanelCotas()
+        val boton = binding.contenedorCotas.findViewWithTag<View>("cotas_bloqueo_$indiceTramo")
+            ?: return false
+        return boton.performClick()
+    }
 
     /** Simula la pulsación larga sobre una franja, que abre el mando de franjas. */
     @androidx.annotation.VisibleForTesting
