@@ -138,12 +138,15 @@ data class DisenoNova(
 
         return copy(tramos = tramos.mapIndexed { i, tramo ->
             val anchoTramo = if (i in fijos) tramo.ancho else porModulo * tramo.nModulosSistema
+            // Se conserva el alto propio del tramo: repartir anchos no tiene por qué borrar el
+            // escalón, y al perderlo la ventana volvía a salir rectangular en cuanto se editaba.
             NovaTramo(
                 ancho = anchoTramo,
                 franjas = tramo.franjas.map { fr ->
                     val w = if (fr.modulos.isEmpty()) anchoTramo else anchoTramo / fr.modulos.size
                     fr.copy(modulos = fr.modulos.map { it.copy(ancho = w) })
-                }
+                },
+                alto = tramo.alto
             )
         })
     }
@@ -176,8 +179,9 @@ data class DisenoNova(
             }
         }
         val nuevos = tramos.toMutableList()
-        nuevos[indice] = NovaTramo(tramo.ancho, izq)
-        nuevos.add(indice + 1, NovaTramo(tramo.ancho, der))
+        // Los dos trozos siguen siendo el mismo tramo de vano: conservan su alto.
+        nuevos[indice] = NovaTramo(tramo.ancho, izq, tramo.alto)
+        nuevos.add(indice + 1, NovaTramo(tramo.ancho, der, tramo.alto))
         return copy(tramos = nuevos).conAnchosRepartidos()
     }
 
@@ -205,7 +209,10 @@ data class DisenoNova(
         }
         franjas.addAll(pendientes)
         val nuevos = tramos.toMutableList()
-        nuevos[indice] = NovaTramo(a.ancho + b.ancho, franjas)
+        // Al unir dos tramos de distinta altura, el resultado llega hasta donde llegaba el más
+        // alto: el escalón que había entre ellos desaparece con el parante.
+        val altoUnido = if (a.alto <= 0f || b.alto <= 0f) 0f else maxOf(a.alto, b.alto)
+        nuevos[indice] = NovaTramo(a.ancho + b.ancho, franjas, altoUnido)
         nuevos.removeAt(indice + 1)
         return copy(tramos = nuevos).conAnchosRepartidos()
     }

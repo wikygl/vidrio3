@@ -705,4 +705,40 @@ class DisenoNovaPantallaTest {
             106.2f / 160f, altoTramo2 / altoTramo1, 0.03f
         )
     }
+
+    /**
+     * Editar una ventana escalonada no la vuelve rectangular.
+     *
+     * El alto del tramo se perdía al repartir los anchos —y todo acaba repartiendo—, así que al
+     * primer toque el escalón desaparecía. Y el tag del alto contaba como una franja más, con lo
+     * que los índices se corrían y se editaba la que no era.
+     */
+    @Test
+    fun editar_no_deshace_el_escalon() {
+        val escalonada = "{nova,apa,[446.3,160:Tl<280.3>(s<120>(f<140.1>c<140.1>);m<40>(f<280.3>))" +
+            " P<2.5> Tl<166>(H<106.2>;s<106.2>(f<166>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(escalonada) }
+            esperar()
+            val alEntrar = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertTrue("no entró como escalonada", alEntrar.esEscalonada)
+            // El tramo bajo tiene UNA franja, no dos: el tag del alto no cuenta.
+            assertEquals(1, alEntrar.tramos[1].franjas.size)
+
+            // Un módulo en el tramo bajo, que es la edición más común.
+            enPantalla(esc) { it.pulsarModuloParaPruebas(indiceTramo = 1, simbolo = "+") }
+            esperar()
+            val tras = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertTrue("editar deshizo el escalón: ${tras.aPaquete()}", tras.esEscalonada)
+            assertEquals(106.2f, tras.altoDeTramo(1), 0.05f)
+            assertEquals(2, tras.tramos[1].nModulosSistema)
+
+            // Y una franja más en el tramo alto tampoco lo deshace.
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas_0", mas = true) }
+            esperar()
+            val tras2 = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertTrue("agregar franja deshizo el escalón: ${tras2.aPaquete()}", tras2.esEscalonada)
+        }
+    }
 }

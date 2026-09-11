@@ -449,8 +449,9 @@ class DisenoNovaActivity : AppCompatActivity() {
         if (franjasTramo.isEmpty()) {
             Toast.makeText(this, "No hay franjas.", Toast.LENGTH_SHORT).show(); return
         }
+        val indices = indicesDeFranja(tokens)
         val items = franjasTramo.mapIndexed { i, (tipo, alto) ->
-            val patron = (extraerBloqueModulosFranja(tokens.getOrElse(i) { "" }) ?: "")
+            val patron = (extraerBloqueModulosFranja(indices.getOrNull(i)?.let { tokens[it] } ?: "") ?: "")
                 .filter { it.lowercaseChar() == 'f' || it.lowercaseChar() == 'c' }
             "[$i] ${tipo.uppercaseChar()}  h=${df1(alto)}  ($patron)"
         }.toTypedArray()
@@ -693,7 +694,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         if (bloques.isEmpty()) return emptyList()
         val idxTramo = if (indiceTramoActivo in bloques.indices) indiceTramoActivo else 0
         val tokens = splitTopLevelSemicolon(bloques[idxTramo].contenido)
-        val token = tokens.getOrNull(indiceFranjaActiva) ?: return emptyList()
+        val token = tokenDeFranja(tokens, indiceFranjaActiva)?.let { tokens[it] } ?: return emptyList()
         val mods = extraerBloqueModulosFranja(token) ?: return emptyList()
         return Regex("""[fcFC]""").findAll(mods).map { it.value.first().lowercaseChar() }.toList()
     }
@@ -779,8 +780,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         val bloque = bloques[tramoIdx]
 
         val franjaTokens = splitTopLevelSemicolon(bloque.contenido).toMutableList()
-        val franjaIdxInBloque = indiceFranjaActiva
-        if (franjaIdxInBloque !in franjaTokens.indices) return false
+        val franjaIdxInBloque = tokenDeFranja(franjaTokens, indiceFranjaActiva) ?: return false
         val franjaToken = franjaTokens[franjaIdxInBloque].trim()
         val esSistema = franjaToken.startsWith("s", ignoreCase = true)
         val openP = franjaToken.indexOf('(')
@@ -1312,6 +1312,10 @@ class DisenoNovaActivity : AppCompatActivity() {
                 splitTopLevelSemicolon(cuerpo).forEach { token ->
                     val trimmed = token.trim()
                     if (trimmed.isEmpty()) return@forEach
+                    // El tag `H<106.2>` es el alto del tramo, no una franja: colarlo aquí añadía
+                    // una franja fantasma y corría todos los índices.
+                    val inicial = trimmed.first().lowercaseChar()
+                    if (inicial != 's' && inicial != 'm') return@forEach
                     val esS = trimmed.startsWith("s", ignoreCase = true)
                     val alt = reAltura.find(trimmed)?.groupValues?.get(1)?.aNumeroSeguro() ?: 0f
                     val bloque = extraerBloqueModulosFranja(trimmed) ?: return@forEach
@@ -1825,16 +1829,34 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarPanelCotas()
     }
 
-    /** Las franjas de un tramo tal como están en el paquete: tipo (`s`/`m`) y altura. */
-    private fun franjasDelBloque(bloque: BloqueTramo): List<Pair<Char, Float>> =
-        splitTopLevelSemicolon(bloque.contenido).map { token ->
-            val t = token.trim()
+    /**
+     * Los índices, dentro de los tokens de un tramo, que son franjas de verdad.
+     *
+     * El alto propio del tramo viaja como token `H<106.2>` delante de las franjas, así que
+     * contarlo como una más corría todos los índices: el toque seleccionaba la franja de abajo y
+     * la pantalla editaba el tag, y en el panel aparecía una franja fantasma.
+     */
+    private fun indicesDeFranja(tokens: List<String>): List<Int> =
+        tokens.indices.filter {
+            val c = tokens[it].trim().firstOrNull()?.lowercaseChar()
+            c == 's' || c == 'm'
+        }
+
+    /** El token de la franja [indice] de ese tramo, ya saltándose el tag del alto. */
+    private fun tokenDeFranja(tokens: List<String>, indice: Int): Int? =
+        indicesDeFranja(tokens).getOrNull(indice)
+
+    private fun franjasDelBloque(bloque: BloqueTramo): List<Pair<Char, Float>> {
+        val tokens = splitTopLevelSemicolon(bloque.contenido)
+        return indicesDeFranja(tokens).map { i ->
+            val t = tokens[i].trim()
             val tipo = if (t.firstOrNull()?.lowercaseChar() == 'm') 'm' else 's'
             val alto = if (t.length > 1 && t[1] == '<') {
                 t.substringAfter('<').substringBefore('>').aNumeroSeguro()
             } else 0f
             tipo to alto
         }
+    }
 
     /** Un `etiqueta [casilla]`, suelto para poder meterlo en una columna. */
     private fun campoConEtiqueta(label: String, valor: String, dp4: Int): Pair<View, EditText> {

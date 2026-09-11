@@ -372,4 +372,34 @@ class DisenoNovaOperacionesTest {
         assertEquals(80f, d.tramos[1].sistema!!.alto, 0.05f)
         assertEquals(26.2f, d.tramos[1].mochetas[0].alto, 0.05f)
     }
+
+    @Test
+    fun `el escalón sobrevive a editar el diseño`() {
+        // Cualquier operación acaba repartiendo los anchos, y ahí se perdía el alto del tramo: la
+        // ventana volvía a salir rectangular al primer toque.
+        val casos = listOf<Pair<String, (DisenoNova) -> DisenoNova>>(
+            "agregar módulo" to { d -> d.conModuloAgregado(1, 0, 0, 'c') },
+            "quitar módulo" to { d -> d.conModuloQuitado(0, 0, 0) },
+            "cambiar tipo" to { d -> d.conTipoCambiado(0, 0, 0) },
+            "agregar franja" to { d -> d.conFranjaAgregadaEnTramo(1) },
+            "quitar franja" to { d -> d.conFranjaQuitadaEnTramo(0) },
+            "partir tramo" to { d -> d.conTramoPartido(0, 0) },
+            "agregar tramo" to { d -> d.conTramoAgregado() },
+            "cambiar el puente" to { d -> d.conPuenteCambiado(1, 80f) }
+        )
+        for ((nombre, operacion) in casos) {
+            val d = operacion(escalonada)
+            assertTrue("$nombre borra el escalón: ${d.aPaquete()}", d.esEscalonada)
+            val bajo = d.tramos.first { it.alto > 0f }
+            assertEquals("$nombre cambia el alto del tramo bajo", 106.2f, bajo.alto, 0.05f)
+        }
+    }
+
+    @Test
+    fun `unir dos tramos de distinta altura deshace el escalón`() {
+        // Al quitar el parante los dos trozos son uno solo: el que quedaba corto sube.
+        val d = escalonada.conTramosUnidos(0)
+        assertEquals(1, d.nTramos)
+        assertTrue("el tramo unido se quedó corto", !d.esEscalonada)
+    }
 }
