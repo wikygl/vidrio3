@@ -407,4 +407,29 @@ class DisenoNovaPantallaTest {
         }
         assertTrue(problemas.joinToString("\n"), problemas.isEmpty())
     }
+
+    /**
+     * El ancho del módulo tiene que abrirse desde CUALQUIER franja de CUALQUIER tramo. Las dos de
+     * arriba no abrían: el diálogo miraba la lista global de franjas de la pantalla —la del primer
+     * tramo— y buscaba la franja por su letra, así que la segunda mocheta ni existía.
+     */
+    @Test
+    fun el_ancho_del_modulo_se_abre_en_todas_las_franjas() {
+        val mezcla = "{nova,apa,[400,200:Tl<200>(s<160>(f<100>c<100>);m<40>(f<200>))" +
+            " P<2.5> Tl<200>(s<120>(f<100>c<100>);m<40>(f<200>);m<40>(f<200>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(mezcla) }
+            esperar()
+            val fallos = mutableListOf<String>()
+            // Tramo 1: dos franjas. Tramo 2: tres.
+            val aProbar = listOf(0 to 0, 0 to 1, 1 to 0, 1 to 1, 1 to 2)
+            for ((tramo, franja) in aProbar) {
+                enPantalla(esc) { it.seleccionarParaPruebas(franja = franja, tramo = tramo, modulo = 0) }
+                val abrio = enPantalla(esc) { it.abrirAnchoModuloParaPruebas() }
+                if (!abrio) fallos.add("tramo $tramo franja $franja")
+            }
+            assertTrue("no abre el ancho en: " + fallos.joinToString(", "), fallos.isEmpty())
+        }
+    }
 }

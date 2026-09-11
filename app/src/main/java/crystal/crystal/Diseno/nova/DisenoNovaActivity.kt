@@ -408,32 +408,58 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
 
+    /** Elegir franja de la lista, dentro del tramo activo. */
     private fun dialogoSeleccionarFranjaActiva() {
-        if (franjas.isEmpty()) {
+        val bloques = parsearBloquesTramo()
+        if (bloques.isEmpty()) {
             Toast.makeText(this, "No hay franjas.", Toast.LENGTH_SHORT).show(); return
         }
-        val items = franjas.mapIndexed { i, f ->
-            val tipoTxt = if (f.esSistema) "S" else "M"
-            val patron = f.modulos.joinToString("") { if (it == TipoModulo.CORREDIZA) "c" else "f" }
-            "[$i] $tipoTxt  h=${df1(f.alturaCm)}  ($patron)"
+        val idxTramo = if (indiceTramoActivo in bloques.indices) indiceTramoActivo else 0
+        val tokens = splitTopLevelSemicolon(bloques[idxTramo].contenido)
+        val franjasTramo = franjasDelBloque(bloques[idxTramo])
+        if (franjasTramo.isEmpty()) {
+            Toast.makeText(this, "No hay franjas.", Toast.LENGTH_SHORT).show(); return
+        }
+        val items = franjasTramo.mapIndexed { i, (tipo, alto) ->
+            val patron = (extraerBloqueModulosFranja(tokens.getOrElse(i) { "" }) ?: "")
+                .filter { it.lowercaseChar() == 'f' || it.lowercaseChar() == 'c' }
+            "[$i] ${tipo.uppercaseChar()}  h=${df1(alto)}  ($patron)"
         }.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle("Seleccionar franja")
+            .setTitle("Franja del tramo ${idxTramo + 1}")
             .setSingleChoiceItems(items, indiceFranjaActiva.coerceAtLeast(0)) { d, which ->
+                indiceTramoActivo = idxTramo
                 indiceFranjaActiva = which
-                binding.vistaDiseno.resaltarFranja(which)
+                indiceModuloActivo = -1
+                binding.vistaDiseno.resaltarFranja(which, idxTramo)
                 d.dismiss()
                 actualizarVista()
             }
             .show()
     }
 
+    /**
+     * Las franjas del tramo activo, tal como están en el paquete. Es lo que hay que mirar para
+     * cualquier acción sobre una franja: la lista global de la pantalla es la del primer tramo y
+     * se queda corta en cuanto los tramos tienen franjas distintas.
+     */
+    private fun franjasDelTramoActivo(): List<Pair<Char, Float>> {
+        val bloques = parsearBloquesTramo()
+        if (bloques.isEmpty()) return emptyList()
+        val idx = if (indiceTramoActivo in bloques.indices) indiceTramoActivo else 0
+        return franjasDelBloque(bloques[idx])
+    }
+
+    /** ¿Hay una franja elegida, y existe en el tramo activo? */
+    private fun hayFranjaElegida(): Boolean =
+        indiceFranjaActiva in franjasDelTramoActivo().indices
+
     private fun dialogoEditarFranjaAlturaSolo() {
+        val franjas = franjasDelTramoActivo()
         if (indiceFranjaActiva !in franjas.indices) {
             Toast.makeText(this, "Selecciona una franja primero.", Toast.LENGTH_SHORT).show()
             return
         }
-        val fr = franjas[indiceFranjaActiva]
         val cont = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 24, 32, 8)
@@ -441,7 +467,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         val etAltura = EditText(this).apply {
             hint = "Altura (cm)  0 = auto"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText(df1(fr.alturaCm))
+            setText(df1(franjas[indiceFranjaActiva].second))
         }
         cont.addView(etAltura)
 
@@ -450,38 +476,37 @@ class DisenoNovaActivity : AppCompatActivity() {
             .setView(cont)
             .setPositiveButton("Aplicar") { _, _ ->
                 val alt = etAltura.text.toString().aNumeroSeguro().coerceAtLeast(0f)
-                if (alt > altoCm && franjas.isNotEmpty()) {
+                if (alt > altoCm) {
                     Toast.makeText(this, "Altura > alto total. Se mantiene la anterior.", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                val idx = indiceFranjaActiva
-                val manejado = editarFranjasEnTramos { tokens ->
-                    val tk = tokens.getOrNull(idx)?.trim() ?: return@editarFranjasEnTramos
-                    val openP = tk.indexOf('(')
-                    if (openP < 0) return@editarFranjasEnTramos
-                    val pref = tk.first()
-                    val tag = if (alt > 0f) "<${df1(alt)}>" else ""
-                    tokens[idx] = "$pref$tag${tk.substring(openP)}"
-                }
-                if (!manejado) {
-                    estructuraEditada = true
-                    fr.alturaCm = alt
-                    actualizarVista()
-                }
+                // La misma regla que en el panel: lo que sobra lo absorbe el resto del tramo.
+                aplicarAlModelo { it.conAlturaDeFranja(tramoActivoSeguro(), indiceFranjaActiva, alt) }
+                actualizarPanelCotas()
             }
             .setNegativeButton("Cancelar", null)
             .show()
     }
 
+    /** Los módulos de la franja elegida del tramo activo, como letras. */
+    private fun modulosDeLaFranjaElegida(): List<Char> {
+        val bloques = parsearBloquesTramo()
+        if (bloques.isEmpty()) return emptyList()
+        val idxTramo = if (indiceTramoActivo in bloques.indices) indiceTramoActivo else 0
+        val tokens = splitTopLevelSemicolon(bloques[idxTramo].contenido)
+        val token = tokens.getOrNull(indiceFranjaActiva) ?: return emptyList()
+        val mods = extraerBloqueModulosFranja(token) ?: return emptyList()
+        return Regex("""[fcFC]""").findAll(mods).map { it.value.first().lowercaseChar() }.toList()
+    }
+
     private fun dialogoSeleccionarModulo() {
-        if (indiceFranjaActiva !in franjas.indices) {
+        val mods = modulosDeLaFranjaElegida()
+        if (mods.isEmpty()) {
             Toast.makeText(this, "Selecciona una franja primero.", Toast.LENGTH_SHORT).show()
             return
         }
-        val fr = franjas[indiceFranjaActiva]
-        val mods = fr.modulos
         val items = mods.mapIndexed { idx, m ->
-            "[$idx] " + if (m == TipoModulo.CORREDIZA) "c (corrediza)" else "f (fijo)"
+            "[$idx] " + if (m == 'c') "c (corrediza)" else "f (fijo)"
         }.toTypedArray()
 
         AlertDialog.Builder(this)
@@ -493,10 +518,16 @@ class DisenoNovaActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Alternar, insertar o eliminar el módulo de la franja elegida.
+     *
+     * El índice es el del módulo DENTRO de su franja y su tramo, que es lo que entiende el
+     * modelo: antes se restaba el arranque del tramo a un índice que ya era relativo, y con
+     * franjas distintas por tramo eso caía fuera.
+     */
     private fun dialogoEditarModulo(indiceModulo: Int) {
-        if (indiceFranjaActiva !in franjas.indices) return
-        val fr = franjas[indiceFranjaActiva]
-        if (indiceModulo !in fr.modulos.indices) return
+        val mods = modulosDeLaFranjaElegida()
+        if (indiceModulo !in mods.indices) return
 
         val opciones = arrayOf(
             "Alternar f ↔ c",
@@ -509,29 +540,24 @@ class DisenoNovaActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Editar módulo [$indiceModulo] en franja [$indiceFranjaActiva]")
             .setItems(opciones) { _, which ->
-                // El tramo activo es el que contiene el módulo editado.
-                val sorted = fr.parantes.sorted()
-                var t = 0
-                for (pp in sorted) { if (indiceModulo >= pp) t++ else break }
-                indiceTramoActivo = t.coerceIn(0, sorted.size)
-
-                val visual = indiceModulo - inicioDelTramoActivo(fr)
                 val bloqueados = tramosLibresBloqueados()
-                if (which == 5 && fr.modulos.size <= 1) {
+                if (which == 5 && mods.size <= 1) {
                     Toast.makeText(this, "Debe quedar al menos un módulo.", Toast.LENGTH_SHORT).show()
                     return@setItems
                 }
+                val t = tramoActivoSeguro()
                 aplicarAlModelo { d ->
                     when (which) {
-                        0 -> d.conTipoCambiado(tramoActivoSeguro(), indiceFranjaActiva, visual, bloqueados)
-                        1 -> d.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visual - 1, 'f', bloqueados)
-                        2 -> d.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visual - 1, 'c', bloqueados)
-                        3 -> d.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visual, 'f', bloqueados)
-                        4 -> d.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, visual, 'c', bloqueados)
-                        5 -> d.conModuloQuitado(tramoActivoSeguro(), indiceFranjaActiva, visual, bloqueados)
+                        0 -> d.conTipoCambiado(t, indiceFranjaActiva, indiceModulo, bloqueados)
+                        1 -> d.conModuloAgregado(t, indiceFranjaActiva, indiceModulo - 1, 'f', bloqueados)
+                        2 -> d.conModuloAgregado(t, indiceFranjaActiva, indiceModulo - 1, 'c', bloqueados)
+                        3 -> d.conModuloAgregado(t, indiceFranjaActiva, indiceModulo, 'f', bloqueados)
+                        4 -> d.conModuloAgregado(t, indiceFranjaActiva, indiceModulo, 'c', bloqueados)
+                        5 -> d.conModuloQuitado(t, indiceFranjaActiva, indiceModulo, bloqueados)
                         else -> d
                     }
                 }
+                actualizarPanelCotas()
             }
             .setNegativeButton("Cancelar", null)
             .show()
@@ -540,44 +566,39 @@ class DisenoNovaActivity : AppCompatActivity() {
     // =========================== EDITAR ANCHO DE MÓDULO ===========================
 
     /**
-     * Abre un diálogo para editar el ancho del módulo actualmente seleccionado.
-     * El módulo editado recibe el nuevo ancho; los demás módulos del mismo tramo
-     * se reparten el ancho restante de forma equitativa.
-     * Solo modifica el tramo activo (el parante no se mueve).
+     * El ancho del módulo seleccionado.
+     *
+     * Todo sale del TRAMO y de la franja que se tocó, por su índice: la lista global de franjas
+     * de la pantalla es la del primer tramo, y con franjas distintas por tramo se quedaba corta
+     * —las de arriba ni abrían el diálogo—. Y buscar la franja por su letra devolvía siempre la
+     * primera `m`, así que en una bandera las dos mochetas editaban la misma.
      */
-    private fun dialogoEditarAnchoModulo() {
-        val fr = franjas.getOrNull(indiceFranjaActiva) ?: return
+    private fun dialogoEditarAnchoModulo(): Boolean {
         val bloques = parsearBloquesTramo()
-        if (bloques.isEmpty()) return
+        if (bloques.isEmpty()) return false
         val tramoIdx = if (indiceTramoActivo in bloques.indices) indiceTramoActivo else 0
         val bloque = bloques[tramoIdx]
-        val prefix = if (fr.esSistema) "s" else "m"
 
         val franjaTokens = splitTopLevelSemicolon(bloque.contenido).toMutableList()
-        val franjaIdxInBloque = franjaTokens.indexOfFirst { it.trim().startsWith(prefix, ignoreCase = true) }
-        if (franjaIdxInBloque < 0) return
+        val franjaIdxInBloque = indiceFranjaActiva
+        if (franjaIdxInBloque !in franjaTokens.indices) return false
         val franjaToken = franjaTokens[franjaIdxInBloque].trim()
+        val esSistema = franjaToken.startsWith("s", ignoreCase = true)
         val openP = franjaToken.indexOf('(')
-        if (openP < 0) return
+        if (openP < 0) return false
         val franjaHead = franjaToken.substring(0, openP)
-        val modStr = extraerBloqueModulosFranja(franjaToken) ?: return
+        val modStr = extraerBloqueModulosFranja(franjaToken) ?: return false
         val mods = parsearModsSegmento(modStr)
-        if (indiceModuloActivo !in mods.indices) return
+        if (indiceModuloActivo !in mods.indices) return false
 
         val tramoAncho = bloque.ancho
         val modActual = mods[indiceModuloActivo]
         val anchoActual = modActual.medida ?: (tramoAncho / mods.size.coerceAtLeast(1))
 
-        // Altura del vidrio (informativo)
-        val infoTramos = extraerInfoTramos()
-        val info = infoTramos.getOrNull(tramoIdx)
-        val franjaAltura = when {
-            info != null && fr.esSistema  -> info.sistemaAltura
-            info != null && !fr.esSistema -> info.mochetaAltura
-            fr.alturaCm > 0f              -> fr.alturaCm
-            else                          -> altoCm
-        }
-        val altoVidrio = if (fr.esSistema) (franjaAltura - usCm - 0.2f).coerceAtLeast(0f)
+        // Altura del vidrio (informativo): la de ESA franja, no la del primer tramo.
+        val franjaAltura = franjasDelBloque(bloque).getOrNull(franjaIdxInBloque)?.second
+            ?.takeIf { it > 0f } ?: altoCm
+        val altoVidrio = if (esSistema) (franjaAltura - usCm - 0.2f).coerceAtLeast(0f)
                          else franjaAltura
 
         val cont = LinearLayout(this).apply {
@@ -633,32 +654,24 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancelar", null)
             .show()
+        return true
     }
 
     // =========================== MEDIDAS / ENSAMBLE ===========================
 
+    /** Cambia la franja elegida de sistema a mocheta y al revés, solo en su tramo. */
     private fun alternarTipoFranjaActiva() {
+        val franjas = franjasDelTramoActivo()
         if (indiceFranjaActiva !in franjas.indices) {
             Toast.makeText(this, "Selecciona una franja primero.", Toast.LENGTH_SHORT).show()
             return
         }
-        val fr = franjas[indiceFranjaActiva]
-        val idx = indiceFranjaActiva
-        val nuevoEsSistema = !fr.esSistema
-        val manejado = editarFranjasEnTramos { tokens ->
-            val tk = tokens.getOrNull(idx)?.trim()
-            if (tk.isNullOrEmpty()) return@editarFranjasEnTramos
-            val esS = tk.startsWith("s", ignoreCase = true)
-            tokens[idx] = (if (esS) "m" else "s") + tk.substring(1)
-        }
-        if (!manejado) {
-            estructuraEditada = true
-            fr.esSistema = nuevoEsSistema
-            actualizarVista()
-        }
+        val eraSistema = franjas[indiceFranjaActiva].first == 's'
+        aplicarAlModelo { it.conTipoDeFranjaCambiado(tramoActivoSeguro(), indiceFranjaActiva) }
+        actualizarPanelCotas()
         Toast.makeText(
             this,
-            if (nuevoEsSistema) "Franja cambiada a Sistema (S)" else "Franja cambiada a Mocheta (M)",
+            if (eraSistema) "Franja cambiada a Mocheta (M)" else "Franja cambiada a Sistema (S)",
             Toast.LENGTH_SHORT
         ).show()
     }
@@ -2012,6 +2025,10 @@ class DisenoNovaActivity : AppCompatActivity() {
         arriba.recycle()
         return indiceTramoActivo to indiceFranjaActiva
     }
+    /** Abre el ancho del módulo elegido; devuelve false si no llegó a abrirse. */
+    @androidx.annotation.VisibleForTesting
+    fun abrirAnchoModuloParaPruebas(): Boolean = dialogoEditarAnchoModulo()
+
     /** El módulo seleccionado ahora mismo, o -1. */
     @androidx.annotation.VisibleForTesting
     fun moduloActivoParaPruebas(): Int = indiceModuloActivo

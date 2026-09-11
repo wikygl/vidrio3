@@ -341,6 +341,22 @@ data class DisenoNova(
         return copy(tramos = nuevos)
     }
 
+    /**
+     * Cambia una franja de sistema a mocheta y al revés, en un solo tramo.
+     *
+     * Solo en ese tramo: con franjas distintas por tramo, cambiarlas todas a la vez era lo que
+     * hacía el camino viejo y ya no vale.
+     */
+    fun conTipoDeFranjaCambiado(indiceTramo: Int, indiceFranja: Int): DisenoNova {
+        val tramo = tramos.getOrNull(indiceTramo) ?: return this
+        val franja = tramo.franjas.getOrNull(indiceFranja) ?: return this
+        val franjas = tramo.franjas.toMutableList()
+        franjas[indiceFranja] = franja.copy(esSistema = !franja.esSistema)
+        val nuevos = tramos.toMutableList()
+        nuevos[indiceTramo] = tramo.copy(franjas = franjas)
+        return copy(tramos = nuevos)
+    }
+
     /** Agrega un módulo [tipo] justo después del módulo [despuesDe] de esa franja. */
     fun conModuloAgregado(indiceTramo: Int, indiceFranja: Int, despuesDe: Int, tipo: Char, bloqueados: Set<Int> = emptySet()): DisenoNova =
         conFranjaCambiada(indiceTramo, indiceFranja, bloqueados) { mods ->
