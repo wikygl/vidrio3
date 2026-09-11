@@ -35,7 +35,9 @@ data class SegmentoNs(
     val anchoCm: Float,
     val franjas: List<FranjaNova>,
     /** Alto propio del tramo en cm; 0 = el de la ventana. Es la ventana escalonada. */
-    val altoCm: Float = 0f
+    val altoCm: Float = 0f,
+    /** Lo que baja el dintel de este tramo; 0 = arranca en el dintel de la ventana. */
+    val caidaCm: Float = 0f
 )
 
 class VistaDiseno @JvmOverloads constructor(
@@ -765,7 +767,9 @@ class VistaDiseno @JvmOverloads constructor(
             // `H<106.2>` dentro del tramo: su alto propio, el de la ventana escalonada.
             val altoTramo = RE_ALTO_TRAMO.find(bloque.contenido)?.groupValues?.get(1)
                 ?.replace(",", ".")?.toFloatOrNull() ?: 0f
-            segs.add(SegmentoNs(bloque.tipo, bloque.ancho, franjas, altoTramo))
+            val caidaTramo = RE_CAIDA_TRAMO.find(bloque.contenido)?.groupValues?.get(1)
+                ?.replace(",", ".")?.toFloatOrNull() ?: 0f
+            segs.add(SegmentoNs(bloque.tipo, bloque.ancho, franjas, altoTramo, caidaTramo))
             if (primerFranjas.isEmpty()) primerFranjas = franjas
         }
 
@@ -1418,20 +1422,28 @@ class VistaDiseno @JvmOverloads constructor(
             val anchoParante = max(10f, 2.5f * escalaLocal)
             // Cada tramo cuelga del dintel con SU alto: el que no llega tan abajo es el escalón,
             // el trozo de vano donde el alféizar sube.
+            fun yArribaDe(seg: SegmentoNs?): Float {
+                val c = seg?.caidaCm ?: 0f
+                return if (c > 0f) (yTopPlanoActual + c * escalaLocal).coerceAtMost(yBottomPlanoActual)
+                else yTopPlanoActual
+            }
             fun yAbajoDe(seg: SegmentoNs?): Float {
                 val h = seg?.altoCm ?: 0f
-                return if (h > 0f) (yTopPlanoActual + h * escalaLocal).coerceAtMost(yBottomPlanoActual)
+                return if (h > 0f) (yArribaDe(seg) + h * escalaLocal).coerceAtMost(yBottomPlanoActual)
                 else yBottomPlanoActual
             }
+            val yArribaTramo = yArribaDe(segmento)
             val yAbajoTramo = yAbajoDe(segmento)
             if (idx > 0) {
                 // El parante solo existe donde los dos tramos se tocan: hasta donde llega el más corto.
-                val yAbajoParante = min(yAbajoTramo, yAbajoDe(segmentosNs.getOrNull(idx - 1)))
+                val vecino = segmentosNs.getOrNull(idx - 1)
+                val yAbajoParante = min(yAbajoTramo, yAbajoDe(vecino))
+                val yArribaParante = max(yArribaTramo, yArribaDe(vecino))
                 if (modo == ModoEnsamble.INA) {
-                    canvas.drawLine(xIni, yTopPlanoActual, xIni, yAbajoParante, pLineaIna)
+                    canvas.drawLine(xIni, yArribaParante, xIni, yAbajoParante, pLineaIna)
                 } else {
                     canvas.drawRect(
-                        RectF(xIni - anchoParante / 2, yTopPlanoActual, xIni + anchoParante / 2, yAbajoParante),
+                        RectF(xIni - anchoParante / 2, yArribaParante, xIni + anchoParante / 2, yAbajoParante),
                         pRellenoNegro
                     )
                 }
@@ -1442,7 +1454,7 @@ class VistaDiseno @JvmOverloads constructor(
                     rangosTramoX.add(Pair(xIni, xFin))
                     val segIdx = segmentosPlanoInfo.size
                     segmentosPlanoInfo.add(Triple(xIni, xFin, segmento.franjas))
-                    canvas.drawRect(RectF(xIni, yTopPlanoActual, xFin, yAbajoTramo), pMarco)
+                    canvas.drawRect(RectF(xIni, yArribaTramo, xFin, yAbajoTramo), pMarco)
                     val anchoVentPx = xFin - xIni
                     if (modo == ModoEnsamble.APA) {
                         dibujarAPASoloFranja(
@@ -1462,7 +1474,7 @@ class VistaDiseno @JvmOverloads constructor(
                             canvas = canvas,
                             franjas = segmento.franjas,
                             xIni = xIni,
-                            yTopTotal = yTopPlanoActual,
+                            yTopTotal = yArribaTramo,
                             xFin = xFin,
                             yBotTotal = yAbajoTramo,
                             anchoVentPx = anchoVentPx,
@@ -2909,24 +2921,31 @@ class VistaDiseno @JvmOverloads constructor(
             canvas.drawText(texto, centro, yFila + 8f, pTextoCota)
         }
 
-        // Lo que sube el alféizar en cada salto, en la propia esquina del escalón.
+        // El salto de cada escalón, en su propia esquina: arriba si lo que baja es el dintel,
+        // abajo si lo que sube es el alféizar. Un tramo recortado por los dos lados lleva las dos.
+        fun arribaDe(seg: SegmentoNs) =
+            if (seg.caidaCm > 0f) (y0 + seg.caidaCm * escala).coerceAtMost(y1) else y0
         fun abajoDe(seg: SegmentoNs) =
-            if (seg.altoCm > 0f) (y0 + seg.altoCm * escala).coerceAtMost(y1) else y1
-        for (i in 0 until planos.size - 1) {
-            val arriba = abajoDe(planos[i])
-            val abajo = abajoDe(planos[i + 1])
-            if (kotlin.math.abs(arriba - abajo) < 2f) continue
-            val salto = kotlin.math.abs(planos[i].altoCm.takeIf { it > 0f } ?: altoCm) -
-                (planos[i + 1].altoCm.takeIf { it > 0f } ?: altoCm)
-            val x = rangosTramoX[i].second + 18f
-            val yA = min(arriba, abajo)
-            val yB = max(arriba, abajo)
+            if (seg.altoCm > 0f) (arribaDe(seg) + seg.altoCm * escala).coerceAtMost(y1) else y1
+
+        fun cota(x: Float, ya: Float, yb: Float, medida: Float) {
+            if (kotlin.math.abs(ya - yb) < 2f) return
+            val yA = min(ya, yb)
+            val yB = max(ya, yb)
             canvas.drawLine(x, yA, x, yB, pLineaCota)
             canvas.drawLine(x, yA, x - flecha / 2, yA + flecha, pLineaCota)
             canvas.drawLine(x, yA, x + flecha / 2, yA + flecha, pLineaCota)
             canvas.drawLine(x, yB, x - flecha / 2, yB - flecha, pLineaCota)
             canvas.drawLine(x, yB, x + flecha / 2, yB - flecha, pLineaCota)
-            canvas.drawText(fmt(kotlin.math.abs(salto)), x + 6f, (yA + yB) / 2f, pTextoCota)
+            canvas.drawText(fmt(kotlin.math.abs(medida)), x + 6f, (yA + yB) / 2f, pTextoCota)
+        }
+
+        for (i in 0 until planos.size - 1) {
+            val x = rangosTramoX[i].second + 18f
+            cota(x, arribaDe(planos[i]), arribaDe(planos[i + 1]), planos[i].caidaCm - planos[i + 1].caidaCm)
+            val altoA = planos[i].caidaCm + (planos[i].altoCm.takeIf { it > 0f } ?: (altoCm - planos[i].caidaCm))
+            val altoB = planos[i + 1].caidaCm + (planos[i + 1].altoCm.takeIf { it > 0f } ?: (altoCm - planos[i + 1].caidaCm))
+            cota(x, abajoDe(planos[i]), abajoDe(planos[i + 1]), altoA - altoB)
         }
     }
 
@@ -3531,6 +3550,8 @@ class VistaDiseno @JvmOverloads constructor(
         private const val PAQUETE_NOVA_FALLBACK = "{nova,ina,[150,120:s(f)]}"
         /** El alto propio de un tramo dentro de su bloque: `H<106.2>`. */
         private val RE_ALTO_TRAMO = Regex("""[hH]\s*<\s*([\d.,-]+)\s*>""")
+        /** Lo que baja el dintel de ese tramo: `D<20>`. */
+        private val RE_CAIDA_TRAMO = Regex("""[dD]\s*<\s*([\d.,-]+)\s*>""")
     }
 }
 

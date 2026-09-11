@@ -108,4 +108,62 @@ class ContornoEnTramosTest {
         // Un punto suelto mal escrito se descarta y los demás se leen.
         assertEquals(2, ContornoEnTramos.desdeTexto("0,0;mal;10,5").size)
     }
+
+    /** El mismo vano pero con el escalón ARRIBA: el dintel baja 53.8 en los 166 finales. */
+    private val escalonArriba = listOf(
+        0f to 0f,
+        280.3f to 0f,
+        280.3f to 53.8f,
+        446.3f to 53.8f,
+        446.3f to 160f,
+        0f to 160f
+    )
+
+    @Test
+    fun `el escalón de arriba se lee como caída del dintel`() {
+        val bandas = ContornoEnTramos.bandas(escalonArriba)
+        assertEquals(2, bandas.size)
+        assertEquals(280.3f, bandas[0].anchoCm, 0.05f)
+        assertEquals(160f, bandas[0].altoCm, 0.05f)
+        assertEquals(0f, bandas[0].caidaCm, 0.05f)
+        assertEquals(166f, bandas[1].anchoCm, 0.05f)
+        assertEquals("el tramo de abajo no mide lo que queda", 106.2f, bandas[1].altoCm, 0.05f)
+        assertEquals("no se leyó lo que baja el dintel", 53.8f, bandas[1].caidaCm, 0.05f)
+    }
+
+    @Test
+    fun `el diseño del escalón de arriba lleva la caída`() {
+        val d = ContornoEnTramos.disenoDesdeContorno(escalonArriba)!!
+        assertEquals(160f, d.alto, 0.05f)
+        assertEquals(0f, d.caidaDeTramo(0), 0.05f)
+        assertEquals(53.8f, d.caidaDeTramo(1), 0.05f)
+        assertEquals(106.2f, d.altoDeTramo(1), 0.05f)
+        assertTrue(d.esEscalonada)
+        // Y sobrevive al paquete.
+        val ida = d.aPaquete()
+        assertTrue("falta la caída en el paquete: $ida", ida.contains("D<53.8>"))
+        val vuelta = DisenoNova.desdePaquete(ida)!!
+        assertEquals(53.8f, vuelta.caidaDeTramo(1), 0.05f)
+        assertEquals(ida, vuelta.aPaquete())
+    }
+
+    @Test
+    fun `un vano recortado por arriba y por abajo lleva las dos medidas`() {
+        // El trozo del medio empieza 30 más abajo y acaba 20 más arriba.
+        val doble = listOf(
+            0f to 0f,
+            300f to 0f,
+            300f to 30f,
+            500f to 30f,
+            500f to 180f,
+            300f to 180f,
+            300f to 200f,
+            0f to 200f
+        )
+        val bandas = ContornoEnTramos.bandas(doble)
+        assertEquals(2, bandas.size)
+        assertEquals(200f, bandas[0].altoCm, 0.05f)
+        assertEquals(30f, bandas[1].caidaCm, 0.05f)
+        assertEquals(150f, bandas[1].altoCm, 0.05f)
+    }
 }

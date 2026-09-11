@@ -45,14 +45,21 @@ data class NovaFranja(
  * Un tramo: el trozo de ventana entre dos parantes, con TODAS sus franjas. Un parante parte el
  * tramo entero, así que las franjas de un tramo empiezan y acaban juntas.
  *
- * [alto] en 0 quiere decir "el de la ventana", que es lo normal. Con una medida distinta el tramo
- * llega menos arriba —o menos abajo—: es la ventana escalonada, la que en obra sale cuando el
- * alféizar sube en un trozo del vano. Todos los tramos cuelgan del mismo dintel.
+ * Dos medidas propias lo colocan dentro del vano, y las dos en 0 son lo normal —el tramo ocupa
+ * todo el alto de la ventana:
+ *
+ * - [caida]: cuánto BAJA su dintel respecto al de la ventana. Es el escalón de arriba, el que sale
+ *   cuando una viga o un dintel más bajo come parte del vano.
+ * - [alto]: lo que mide el tramo desde su propio dintel. Es el escalón de abajo, el del alféizar
+ *   que sube en un trozo del vano.
+ *
+ * Las dos juntas describen un tramo recortado por arriba y por abajo.
  */
 data class NovaTramo(
     val ancho: Float,
     val franjas: List<NovaFranja>,
-    val alto: Float = 0f
+    val alto: Float = 0f,
+    val caida: Float = 0f
 ) {
     val sistema: NovaFranja? get() = franjas.firstOrNull { it.esSistema }
     val mochetas: List<NovaFranja> get() = franjas.filter { !it.esSistema }
@@ -80,8 +87,12 @@ data class DisenoNova(
     fun altoDeTramo(indice: Int): Float =
         tramos.getOrNull(indice)?.alto?.takeIf { it > 0f } ?: alto
 
-    /** ¿Hay tramos que no llegan al alto de la ventana? Es la ventana escalonada. */
-    val esEscalonada: Boolean get() = tramos.any { it.alto > 0f && it.alto != alto }
+    /** Cuánto baja el dintel de un tramo respecto al de la ventana. */
+    fun caidaDeTramo(indice: Int): Float = tramos.getOrNull(indice)?.caida ?: 0f
+
+    /** ¿Hay tramos recortados por arriba o por abajo? Es la ventana escalonada. */
+    val esEscalonada: Boolean
+        get() = tramos.any { (it.alto > 0f && it.alto != alto) || it.caida > 0f }
 
     /**
      * Cambia el alto de UN tramo —el escalón— y estira o encoge sus franjas en la misma
@@ -146,7 +157,8 @@ data class DisenoNova(
                     val w = if (fr.modulos.isEmpty()) anchoTramo else anchoTramo / fr.modulos.size
                     fr.copy(modulos = fr.modulos.map { it.copy(ancho = w) })
                 },
-                alto = tramo.alto
+                alto = tramo.alto,
+                caida = tramo.caida
             )
         })
     }
@@ -180,8 +192,8 @@ data class DisenoNova(
         }
         val nuevos = tramos.toMutableList()
         // Los dos trozos siguen siendo el mismo tramo de vano: conservan su alto.
-        nuevos[indice] = NovaTramo(tramo.ancho, izq, tramo.alto)
-        nuevos.add(indice + 1, NovaTramo(tramo.ancho, der, tramo.alto))
+        nuevos[indice] = NovaTramo(tramo.ancho, izq, tramo.alto, tramo.caida)
+        nuevos.add(indice + 1, NovaTramo(tramo.ancho, der, tramo.alto, tramo.caida))
         return copy(tramos = nuevos).conAnchosRepartidos()
     }
 
@@ -212,7 +224,8 @@ data class DisenoNova(
         // Al unir dos tramos de distinta altura, el resultado llega hasta donde llegaba el más
         // alto: el escalón que había entre ellos desaparece con el parante.
         val altoUnido = if (a.alto <= 0f || b.alto <= 0f) 0f else maxOf(a.alto, b.alto)
-        nuevos[indice] = NovaTramo(a.ancho + b.ancho, franjas, altoUnido)
+        val caidaUnida = minOf(a.caida, b.caida)
+        nuevos[indice] = NovaTramo(a.ancho + b.ancho, franjas, altoUnido, caidaUnida)
         nuevos.removeAt(indice + 1)
         return copy(tramos = nuevos).conAnchosRepartidos()
     }
@@ -464,7 +477,9 @@ data class DisenoNova(
             // parsers viejos parten por `;` y solo miran los tokens que empiezan por s o m, así
             // que lo ignoran sin romperse.
             val cabezaAlto = if (tramo.alto > 0f) "H<${df(tramo.alto)}>;" else ""
-            "Tl<${df(tramo.ancho)}>($cabezaAlto$franjas)"
+            // Y lo que baja su dintel, si baja: el escalón de arriba.
+            val cabezaCaida = if (tramo.caida > 0f) "D<${df(tramo.caida)}>;" else ""
+            "Tl<${df(tramo.ancho)}>($cabezaAlto$cabezaCaida$franjas)"
         }
         val tags = if (etiquetas.isEmpty()) "" else " " + etiquetas.joinToString(" ")
         return "{nova,$acabado,[${df(ancho)},${df(alto)}:$cuerpo$tags]}"
@@ -480,6 +495,8 @@ data class DisenoNova(
         // que la app se cae con ExceptionInInitializerError y las pruebas de escritorio no lo ven.
         /** El alto propio de un tramo: `H<106.2>`. Sin él, el tramo llega al alto de la ventana. */
         private val RE_ALTO_TRAMO = Regex("""^[hH]\s*<\s*([\d.,-]+)\s*>""")
+        /** Lo que baja el dintel de un tramo: `D<20>`. Sin él, el tramo arranca en el dintel. */
+        private val RE_CAIDA_TRAMO = Regex("""^[dD]\s*<\s*([\d.,-]+)\s*>""")
         private val RE_CABECERA = Regex("""\{nova\s*,\s*([a-z]+)\s*,\s*\[(.*)\]\}""", RegexOption.IGNORE_CASE)
         // La altura es OPCIONAL: los diseños viejos y el de arranque escriben la franja como
         // `s(f)`, sin `<alto>`. Exigirla hacía que el modelo no pudiera leerlos, y entonces las
@@ -577,8 +594,11 @@ data class DisenoNova(
                 val altoTramo = tokens.firstNotNullOfOrNull { tk ->
                     RE_ALTO_TRAMO.find(tk.trim())?.groupValues?.get(1)?.let { num(it) }
                 } ?: 0f
+                val caidaTramo = tokens.firstNotNullOfOrNull { tk ->
+                    RE_CAIDA_TRAMO.find(tk.trim())?.groupValues?.get(1)?.let { num(it) }
+                } ?: 0f
                 val franjas = tokens.mapNotNull { franjaDesdeTexto(it) }
-                if (franjas.isNotEmpty()) tramos.add(NovaTramo(anchoTramo, franjas, altoTramo))
+                if (franjas.isNotEmpty()) tramos.add(NovaTramo(anchoTramo, franjas, altoTramo, caidaTramo))
             }
             if (tramos.isEmpty()) return null
             return DisenoNova(acabado, ancho, alto, tramos, etiquetas)
