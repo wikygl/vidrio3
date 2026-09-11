@@ -33,6 +33,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import crystal.crystal.Diseno.nova.ContornoEnTramos
 import crystal.crystal.Diseno.nova.DisenoNovaActivity
 import crystal.crystal.R
 import crystal.crystal.casilla.DialogosProyecto
@@ -4177,7 +4178,39 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etAlto.setText(df1(item.alto))
         cargarYMostrarBocetoOriginal(item.bocetoArchivo)
         binding.etAncho.requestFocus()
-        Toast.makeText(this, "Medida cargada: revisa el gráfico y calcula", Toast.LENGTH_SHORT).show()
+        val escalonada = cargarDisenoDelContorno(item.contorno)
+        Toast.makeText(
+            this,
+            if (escalonada) "Vano escalonado: el diseño ya trae sus tramos"
+            else "Medida cargada: revisa el gráfico y calcula",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    /**
+     * Arma el diseño desde el contorno del vano, cuando la medida trae uno con escalones.
+     *
+     * Un vano recto se describe con el ancho y el alto y no necesita nada de esto; uno con el
+     * alféizar subido en un trozo, no: son tramos de distinto alto colgando del mismo dintel, y
+     * eso hay que traerlo hecho o el vidriero lo arma a mano cada vez.
+     *
+     * Devuelve true si el diseño se cargó desde el contorno.
+     */
+    private fun cargarDisenoDelContorno(contorno: String): Boolean {
+        val puntos = ContornoEnTramos.desdeTexto(contorno)
+        if (puntos.size < 4) return false
+        val acabado = when (tipoNova) {
+            TipoNova.APA -> "apa"
+            TipoNova.PIV -> "piv"
+            else -> "ina"
+        }
+        val hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
+        val diseno = runCatching {
+            ContornoEnTramos.disenoDesdeContorno(puntos, acabado, hoja)
+        }.getOrNull() ?: return false
+        if (!diseno.esEscalonada) return false
+        cargarDesdePaqueteDiseno(diseno.aPaquete())
+        return true
     }
 
     private fun mostrarDialogoMetadatosProduccion(onContinuar: () -> Unit) {

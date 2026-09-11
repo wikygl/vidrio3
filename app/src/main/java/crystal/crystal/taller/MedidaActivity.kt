@@ -1836,6 +1836,11 @@ class MedidaActivity : AppCompatActivity() {
                     png.absolutePath
                 }.getOrDefault("")
 
+                // El contorno del vano viaja con la medida: un vano escalonado no cabe en el ancho
+                // y el alto, y la calculadora lo necesita para armar los tramos.
+                val contorno = binding.sketchMedidas.contornoPrincipalEnCm()
+                    ?.let { crystal.crystal.Diseno.nova.ContornoEnTramos.aTexto(it) }
+                    .orEmpty()
                 resultado.add(
                     ColaCalculadoras.MedidaCalc(
                         producto = boceto.producto,

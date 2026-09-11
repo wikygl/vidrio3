@@ -1282,6 +1282,28 @@ class SketchMedidasView @JvmOverloads constructor(
     }
 
     /**
+     * El contorno del vano, en centímetros y con la Y hacia abajo: el dintel es la Y más pequeña.
+     *
+     * Se devuelve el contorno de la figura MÁS GRANDE del apunte, que es el hueco de la ventana;
+     * los puentes, símbolos y textos que haya alrededor no son vanos. Las coordenadas se dan
+     * relativas a su propia esquina superior izquierda, para que no arrastren dónde estaba
+     * dibujada.
+     *
+     * De aquí salen los tramos de la ventana: un vano con el alféizar subido en un trozo es, en el
+     * diseño, dos tramos de distinto alto colgando del mismo dintel.
+     */
+    fun contornoPrincipalEnCm(): List<Pair<Float, Float>>? {
+        val composites = elementos.filterIsInstance<Element.Composite>()
+        val elegido = composites.maxByOrNull { c ->
+            val b = boundsForElement(c)
+            b.width() * b.height()
+        } ?: return null
+        val contorno = elegido.contours.firstOrNull()?.takeIf { it.size >= 4 } ?: return null
+        val caja = boundsForElement(elegido)
+        return contorno.map { p -> pxToCm(p.x - caja.left) to pxToCm(p.y - caja.top) }
+    }
+
+    /**
      * Medida mayor del apunte: el lado horizontal y el vertical más grandes.
      *
      * Se leen primero los centímetros que cada figura guarda, porque son independientes del equipo.

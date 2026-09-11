@@ -34,6 +34,14 @@ object ColaCalculadoras {
         val cliente: String,
         /** Ruta absoluta del boceto (json) para recuperar el gráfico original en ivDiseno. */
         val bocetoArchivo: String,
+        /**
+         * El contorno del vano en cm, `x,y;x,y;…`, con la Y hacia abajo. Vacío para los vanos
+         * rectos, que con el ancho y el alto ya quedan descritos.
+         *
+         * Va aquí porque un vano escalonado —el alféizar que sube en un trozo— no cabe en dos
+         * números, y es la calculadora la que tiene que saberlo para armar los tramos.
+         */
+        val contorno: String = "",
         val estado: EstadoCola = EstadoCola.PENDIENTE
     ) : java.io.Serializable
 
