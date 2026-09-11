@@ -900,8 +900,9 @@ class VistaDiseno @JvmOverloads constructor(
         val altoDisp  = height - 2 * margenPx
         val anchoTotalCm = anchoEfectivoCm()
         val escala = min(anchoDisp / anchoTotalCm, altoDisp / altoCm)
-        // Puente proporcional (≈2.5 cm, como los parantes); evita que se vea como línea fina.
-        altoPuentePx = max(12f, 2.5f * escala)
+        // Medio puente: en cada frontera dibujan las DOS franjas que se tocan —una hacia abajo y
+        // otra hacia arriba—, así que lo que se ve es el doble de esto.
+        altoPuentePx = max(5f, 1.1f * escala)
 
         val x0 = (width  - anchoTotalCm * escala) / 2f
         val y0 = (height - altoCm * escala) / 2f
@@ -2609,9 +2610,11 @@ class VistaDiseno @JvmOverloads constructor(
         val idxS = (0 until n).filter { franjas[it].tipo == TipoFranja.SISTEMA }
         val idxM = (0 until n).filter { franjas[it].tipo == TipoFranja.MOCHETA }
 
-        // Sin alturas explícitas → 5/7 para S y 2/7 para M (o uniforme si solo hay un tipo)
+        // Sin alturas explícitas: con DOS franjas manda la proporción de siempre —5/7 el sistema
+        // y 2/7 la mocheta—. Con tres o más esa regla deja mochetas raquíticas, así que el alto
+        // se reparte en partes iguales; si solo hay un tipo de franja, también.
         if (!hayExp) {
-            if (idxS.isEmpty() || idxM.isEmpty()) {
+            if (idxS.isEmpty() || idxM.isEmpty() || n > 2) {
                 val cuota = altoCm / n
                 for (i in 0 until n) alturas[i] = cuota
             } else {
@@ -2854,7 +2857,7 @@ class VistaDiseno @JvmOverloads constructor(
         val altoDisp  = height - 2 * margenPx
         val anchoTotalCm = anchoCm + mochetaLateralCm + mochetaLateralDerechaCm
         val escala = min(anchoDisp / anchoTotalCm, altoDisp / altoCm)
-        altoPuentePx = max(12f, 2.5f * escala)
+        altoPuentePx = max(5f, 1.1f * escala)
 
         val x0 = (width  - (anchoTotalCm * escala)) / 2f
         val y0 = (height - (altoCm * escala)) / 2f

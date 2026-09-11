@@ -510,4 +510,34 @@ class DisenoNovaPantallaTest {
             assertEquals("tocó el otro tramo", 3, conMenos.tramos[1].franjas.size)
         }
     }
+
+    /**
+     * Franjas sin altura: con dos manda la proporción de siempre —5/7 el sistema—, pero con tres
+     * o más el alto se reparte en partes iguales. Con la regla vieja la tercera franja salía
+     * raquítica.
+     */
+    @Test
+    fun tres_franjas_sin_altura_se_reparten_el_alto_por_igual() {
+        val tres = "{nova,apa,[300,200:Tl<300>(s(f<150>c<150>);m(f<300>);m(f<300>))]}"
+        val dos = "{nova,apa,[300,200:Tl<300>(s(f<150>c<150>);m(f<300>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(tres) }
+            esperar()
+            val bandas = enPantalla(esc) { it.bandasDeFranjaParaPruebas(0) }
+            assertEquals(3, bandas.size)
+            val altos = bandas.map { it.second - it.first }
+            assertEquals("las tres no son iguales: $altos", altos[0], altos[1], 1f)
+            assertEquals("las tres no son iguales: $altos", altos[1], altos[2], 1f)
+
+            enPantalla(esc) { it.cargarParaPruebas(dos) }
+            esperar()
+            val dosBandas = enPantalla(esc) { it.bandasDeFranjaParaPruebas(0) }
+            assertEquals(2, dosBandas.size)
+            val sistema = dosBandas[0].second - dosBandas[0].first
+            val mocheta = dosBandas[1].second - dosBandas[1].first
+            // 5/7 contra 2/7: el sistema mide dos veces y media la mocheta.
+            assertEquals("con dos franjas ya no manda 5/7", 2.5f, sistema / mocheta, 0.15f)
+        }
+    }
 }
