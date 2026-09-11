@@ -4181,7 +4181,7 @@ class NovaCorrediza : AppCompatActivity() {
         val escalonada = cargarDisenoDelContorno(item.contorno)
         Toast.makeText(
             this,
-            if (escalonada) "Vano escalonado: el diseño ya trae sus tramos"
+            if (escalonada) "Vano escalonado: el diseño trae sus tramos, pero el cálculo aún no cuenta las piezas del escalón"
             else "Medida cargada: revisa el gráfico y calcula",
             Toast.LENGTH_SHORT
         ).show()

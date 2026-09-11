@@ -264,10 +264,18 @@ class DisenoNovaActivity : AppCompatActivity() {
     // --- Ver / copiar paquete ---
     private fun dialogoVerPaquete() {
         val paquete = paqueteActualLectura()
+        // En un vano escalonado se listan además las piezas que aparecen SOLO por el escalón: el
+        // alféizar partido en uno por tramo y la jamba de cada salto. Son medidas del vano, sin
+        // holguras, y todavía no entran en el cálculo de materiales: están aquí para verlas.
+        val escalon = runCatching {
+            DisenoNova.desdePaquete(paquete)?.let { PiezasDelEscalon.texto(it) }
+        }.getOrNull().orEmpty()
+        val mensaje = if (escalon.isBlank()) paquete
+        else "$paquete\n\nPiezas del escalón (medidas del vano):\n$escalon"
         AlertDialog.Builder(this)
             .setTitle("Paquete")
-            .setMessage(paquete)
-            .setPositiveButton("Copiar") { _, _ -> copiarAlPortapapeles(paquete) }
+            .setMessage(mensaje)
+            .setPositiveButton("Copiar") { _, _ -> copiarAlPortapapeles(mensaje) }
             .setNegativeButton("Cerrar", null)
             .show()
     }
