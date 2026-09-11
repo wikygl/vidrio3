@@ -497,10 +497,10 @@ class DisenoNovaPantallaTest {
             esperar()
             assertTrue("no salió el mando de franjas", enPantalla(esc) { it.hayFlotanteParaPruebas() })
 
-            enPantalla(esc) { it.pulsarFlotanteParaPruebas("+") }
+            enPantalla(esc) { it.pulsarFlotanteParaPruebas("↑") }
             esperar()
             val conMas = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
-            assertEquals("el + no agregó en su tramo", 3, conMas.tramos[0].franjas.size)
+            assertEquals("el ↑ no agregó en su tramo", 3, conMas.tramos[0].franjas.size)
             assertEquals("tocó el otro tramo", 3, conMas.tramos[1].franjas.size)
 
             enPantalla(esc) { it.pulsarFlotanteParaPruebas("−") }
@@ -625,10 +625,15 @@ class DisenoNovaPantallaTest {
             esperar()
             enPantalla(esc) { it.pulsacionLargaParaPruebas(tramo = 0, franja = 1) }
             esperar()
-            val (abajoLienzo, arribaControles) = enPantalla(esc) { it.bordesLienzoYControlesParaPruebas() }
+            val (abajoDiseno, arribaMando) = enPantalla(esc) { it.bordesDisenoYMandoParaPruebas() }
             assertTrue(
-                "el mando se come el dibujo: el lienzo acaba en $abajoLienzo y los controles empiezan en $arribaControles",
-                abajoLienzo <= arribaControles
+                "el mando tapa el dibujo: el diseño acaba en $abajoDiseno y el mando empieza en $arribaMando",
+                abajoDiseno <= arribaMando
+            )
+            // Y pegado a él, no al fondo de la pantalla.
+            assertTrue(
+                "el mando queda demasiado lejos del diseño: ${arribaMando - abajoDiseno} px",
+                arribaMando - abajoDiseno < 120
             )
         }
     }

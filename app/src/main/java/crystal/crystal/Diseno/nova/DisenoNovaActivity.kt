@@ -514,17 +514,34 @@ class DisenoNovaActivity : AppCompatActivity() {
     // Un toque abre el de módulos; mantener pulsado, el de franjas.
 
     /**
-     * Deja el mando pegado encima del bloque de controles, no sobre el dibujo.
+     * Deja el mando pegado al DIBUJO, justo debajo de él.
      *
-     * Antes salía flotando junto a la franja y tapaba justo lo que se estaba editando: con las
-     * franjas había que pelearse para verlas. Aquí no estorba, y el lienzo se encoge solo porque
-     * mide lo que ocupa el bloque de abajo.
+     * Encima tapaba lo que se estaba editando y abajo del todo quedaba demasiado lejos: el dibujo
+     * va centrado en el lienzo y entre los dos había media pantalla de aire. Aquí cae a un dedo
+     * del diseño, en el hueco que el propio lienzo deja libre.
      */
     private fun montarFlotante(fila: LinearLayout) {
         binding.contenedorFlotante.removeAllViews()
         binding.contenedorFlotante.addView(fila)
         binding.contenedorFlotante.visibility = View.VISIBLE
         flotanteModulos = fila
+        binding.contenedorFlotante.post { pegarFlotanteAlDiseno() }
+    }
+
+    /**
+     * Sube el mando hasta debajo del dibujo. Si ahí no cabe —un diseño que llega casi al borde—
+     * se queda donde está, pegado encima de los controles, que es lo único que no lo tapa.
+     */
+    private fun pegarFlotanteAlDiseno() {
+        val caja = binding.contenedorFlotante
+        if (caja.visibility != View.VISIBLE || caja.height == 0) return
+        val hueco = 6 * resources.displayMetrics.density
+        val abajoDelDiseno = binding.vistaDiseno.y + binding.vistaDiseno.rectanguloDiseno().bottom
+        val destino = abajoDelDiseno + hueco
+        // `y` es donde lo dejó el layout; se mueve con translationY para no pelearse con él.
+        val yLayout = caja.y - caja.translationY
+        val desplazamiento = (destino - yLayout).coerceAtMost(0f)
+        if (caja.translationY != desplazamiento) caja.translationY = desplazamiento
     }
 
     /** La caja del mando, vacía: una fila que se estira dentro del contenedor pegado. */
@@ -607,6 +624,7 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     private fun quitarFlotanteModulos() {
+        binding.contenedorFlotante.translationY = 0f
         binding.contenedorFlotante.removeAllViews()
         binding.contenedorFlotante.visibility = View.GONE
         flotanteModulos = null
@@ -2289,13 +2307,20 @@ class DisenoNovaActivity : AppCompatActivity() {
     fun bordesLienzoYControlesParaPruebas(): Pair<Int, Int> {
         val lienzo = IntArray(2)
         binding.vistaDiseno.getLocationOnScreen(lienzo)
-        // El borde de arriba del bloque de abajo: el mando pegado cuenta, porque también ocupa.
         val controles = IntArray(2)
-        val bloque = if (binding.contenedorFlotante.visibility == View.VISIBLE) {
-            binding.contenedorFlotante
-        } else binding.overlayControles
-        bloque.getLocationOnScreen(controles)
+        binding.overlayControles.getLocationOnScreen(controles)
         return (lienzo[1] + binding.vistaDiseno.height) to controles[1]
+    }
+
+    /** Dónde acaba el DIBUJO y dónde empieza el mando, en pantalla. */
+    @androidx.annotation.VisibleForTesting
+    fun bordesDisenoYMandoParaPruebas(): Pair<Int, Int> {
+        val lienzo = IntArray(2)
+        binding.vistaDiseno.getLocationOnScreen(lienzo)
+        val abajoDiseno = lienzo[1] + binding.vistaDiseno.rectanguloDiseno().bottom.toInt()
+        val mando = IntArray(2)
+        binding.contenedorFlotante.getLocationOnScreen(mando)
+        return abajoDiseno to mando[1]
     }
 
     /** Escribe en una casilla del panel de cotas: `cotas_ancho` o `cotas_alto`. */

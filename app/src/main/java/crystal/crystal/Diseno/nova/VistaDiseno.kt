@@ -151,6 +151,8 @@ class VistaDiseno @JvmOverloads constructor(
     // valian para todos: con franjas distintas por tramo, la de arriba del segundo no se podia
     // tocar porque su banda no existia.
     private val rangosFranjaPorTramo = mutableListOf<MutableList<Pair<Float, Float>>>()
+    /** Dónde cae el dibujo dentro de la vista, para poder pegarle cosas al lado. */
+    private val rectDiseno = RectF()
     private var ultimaVentanaX0 = 0f
     private var ultimaVentanaX1 = 0f
     private var franjaConfirmadaPorToque: Int = -1
@@ -908,6 +910,8 @@ class VistaDiseno @JvmOverloads constructor(
         val y0 = (height - altoCm * escala) / 2f
         val x1 = x0 + anchoTotalCm * escala
         val y1 = y0 + altoCm * escala
+        // El rectángulo que ocupa el dibujo: lo usa el mando para ponerse justo debajo.
+        rectDiseno.set(x0, y0, x1, y1)
 
         if (segmentosNs.isNotEmpty()) {
             rangosTramoX.clear()
@@ -3310,6 +3314,9 @@ class VistaDiseno @JvmOverloads constructor(
     /** La banda (arriba, abajo) de una franja dentro de su tramo, en coordenadas de la vista. */
     fun bandaDeFranja(indiceTramo: Int, indiceFranja: Int): Pair<Float, Float>? =
         rangosFranjaPorTramo.getOrNull(indiceTramo)?.getOrNull(indiceFranja)
+
+    /** El rectángulo que ocupa el dibujo dentro de la vista. */
+    fun rectanguloDiseno(): RectF = RectF(rectDiseno)
 
     /** El ancho (izquierda, derecha) de un tramo en pantalla. */
     fun anchoDeTramo(indiceTramo: Int): Pair<Float, Float>? = rangosTramoX.getOrNull(indiceTramo)
