@@ -136,6 +136,11 @@ object ContornoEnTramos {
      * El alto de la ventana es el del vano entero, de lo más alto a lo más bajo. Cada tramo se
      * queda con lo suyo: lo que baja su dintel y lo que mide desde ahí. Los que van de punta a
      * punta no llevan ninguna de las dos, que es el caso normal.
+     *
+     * En los tramos INCLINADOS manda la regla del oficio: **la corrediza va en su rectángulo**. Una
+     * hoja corre por el riel y no puede seguir la pendiente, así que se queda en el trozo donde
+     * entra entera —el rectángulo que cabe bajo el lado que baja— y donde el vano se cierra, la
+     * punta de un triángulo, van fijos. Los tramos rectos no se tocan: ahí la hoja es la de siempre.
      */
     fun disenoDesdeContorno(
         puntos: List<Pair<Float, Float>>,
@@ -143,20 +148,45 @@ object ContornoEnTramos {
         altoHoja: Float = 0f,
         anchoParante: Float = 2.5f
     ): DisenoNova? {
-        val bandas = bandas(puntos)
-        if (bandas.isEmpty()) return null
-        val alto = bandas.maxOf { maxOf(it.caidaCm + it.altoCm, it.caidaDerCm + it.altoDerCm) }
-        val ancho = bandas.sumOf { it.anchoCm.toDouble() }.toFloat()
-        val tramos = bandas.map { banda ->
-            val base = DisenoNova.nuevo(
-                acabado = acabado,
-                ancho = banda.anchoCm,
-                alto = banda.altoCm,
-                altoHoja = if (altoHoja > 0f) min(altoHoja, banda.altoCm) else banda.altoCm,
-                anchoParante = anchoParante
-            )
-            // `nuevo` reparte el ancho de la banda en sus módulos; aquí solo se toman sus franjas.
-            val franjas = base.tramos.firstOrNull()?.franjas ?: return null
+        val leidas = bandas(puntos)
+        if (leidas.isEmpty()) return null
+        val alto = leidas.maxOf { maxOf(it.caidaCm + it.altoCm, it.caidaDerCm + it.altoDerCm) }
+        val ancho = leidas.sumOf { it.anchoCm.toDouble() }.toFloat()
+        // Contra qué alto se mide si la hoja entra: el que pidió el vidriero o, con el campo vacío,
+        // los cinco séptimos del alto con los que la calculadora trabaja cuando nadie lo llena.
+        val hoja = if (altoHoja > 0f) min(altoHoja, alto) else alto * 5f / 7f
+        val trozos = leidas.flatMap { trozosDe(it, altoHoja, hoja) }
+
+        val franjasPorTrozo = arrayOfNulls<List<NovaFranja>>(trozos.size)
+        // Los trozos inclinados seguidos que sí admiten la hoja son UN rectángulo partido por los
+        // picos del vano: sus módulos se reparten juntos. Contándolos por separado, el rectángulo
+        // central de un triángulo salía en dos mitades y ninguna daba para una hoja.
+        var i = 0
+        while (i < trozos.size) {
+            if (!(trozos[i].banda.esInclinada && trozos[i].llevaHoja)) { i++; continue }
+            var fin = i
+            while (fin + 1 < trozos.size &&
+                trozos[fin + 1].banda.esInclinada && trozos[fin + 1].llevaHoja
+            ) fin++
+            repartirGrupo(trozos, i, fin).forEachIndexed { k, fr -> franjasPorTrozo[i + k] = fr }
+            i = fin + 1
+        }
+
+        val tramos = trozos.mapIndexed { idx, trozo ->
+            val banda = trozo.banda
+            val franjas = franjasPorTrozo[idx] ?: if (trozo.llevaHoja) {
+                val base = DisenoNova.nuevo(
+                    acabado = acabado,
+                    ancho = banda.anchoCm,
+                    alto = altoLleno(banda),
+                    altoHoja = trozo.hoja,
+                    anchoParante = anchoParante
+                )
+                // `nuevo` reparte el ancho de la banda en sus módulos; aquí solo van sus franjas.
+                base.tramos.firstOrNull()?.franjas ?: return null
+            } else {
+                franjasDeFijos(banda.anchoCm, altoLleno(banda))
+            }
             val rectaYEntera = !banda.esInclinada &&
                 banda.caidaCm <= TOLERANCIA &&
                 abs(banda.altoCm - alto) <= TOLERANCIA
@@ -172,4 +202,125 @@ object ContornoEnTramos {
         }
         return DisenoNova(acabado, ancho, alto, tramos)
     }
+
+    /** Un trozo de vano ya decidido: si lleva hoja corrediza y con qué alto. */
+    private data class Trozo(val banda: Banda, val llevaHoja: Boolean, val hoja: Float)
+
+    /**
+     * Hasta dónde se llena un tramo: su lado MÁS alto. El dibujo lo recorta con la silueta, así que
+     * el fijo de encima sigue la forma en vez de dejar el pico del vano sin franja.
+     */
+    private fun altoLleno(banda: Banda): Float = maxOf(banda.altoCm, banda.altoDerCm)
+
+    /**
+     * Parte la banda por donde el vano baja de [hoja]: a un lado el trozo donde la corrediza entra
+     * entera, al otro el que solo admite fijos.
+     *
+     * Solo se parte si lo que queda fuera llega al módulo de la casa —60 cm, el mismo con el que se
+     * cuentan las divisiones—. Un dintel que roza el límite en el último palmo sigue siendo un tramo
+     * solo, con la hoja acortada a lo que entra: partirlo por ahí metería un parante y un tramo de
+     * nada donde el vidriero no lo pondría.
+     *
+     * Una banda recta pasa entera y con la hoja de siempre ([pedida] tal cual, que en 0 significa el
+     * alto del tramo): ahí la hoja se acorta sola al alto y no hay nada que decidir.
+     */
+    private fun trozosDe(banda: Banda, pedida: Float, hoja: Float): List<Trozo> {
+        if (!banda.esInclinada) {
+            val suya = if (pedida > 0f) min(pedida, banda.altoCm) else banda.altoCm
+            return listOf(Trozo(banda, true, suya))
+        }
+        val menor = minOf(banda.altoCm, banda.altoDerCm)
+        val mayor = maxOf(banda.altoCm, banda.altoDerCm)
+        if (menor >= hoja - TOLERANCIA) return listOf(Trozo(banda, true, hoja))
+        // Ni en su lado más alto entra la hoja: el vano ahí es un triángulo de vidrio fijo.
+        if (mayor < hoja - TOLERANCIA) return listOf(Trozo(banda, false, 0f))
+
+        val recorrido = banda.altoDerCm - banda.altoCm
+        if (abs(recorrido) <= TOLERANCIA) return listOf(Trozo(banda, true, menor))
+        val t = ((hoja - banda.altoCm) / recorrido).coerceIn(0f, 1f)
+        val anchoIzq = banda.anchoCm * t
+        val anchoDer = banda.anchoCm - anchoIzq
+        val cabeIzq = banda.altoCm >= hoja
+        val fuera = if (cabeIzq) anchoDer else anchoIzq
+        if (fuera < MODULO_CASA) return listOf(Trozo(banda, true, menor))
+        val caidaCorte = banda.caidaCm + (banda.caidaDerCm - banda.caidaCm) * t
+        return listOf(
+            Trozo(
+                Banda(anchoIzq, banda.altoCm, banda.caidaCm, hoja, caidaCorte),
+                cabeIzq, if (cabeIzq) hoja else 0f
+            ),
+            Trozo(
+                Banda(anchoDer, hoja, caidaCorte, banda.altoDerCm, banda.caidaDerCm),
+                !cabeIzq, if (cabeIzq) 0f else hoja
+            )
+        )
+    }
+
+    /**
+     * Reparte los módulos del rectángulo que forman los trozos [desde]..[hasta] y devuelve las
+     * franjas de cada uno.
+     *
+     * Las divisiones se cuentan sobre el ancho ENTERO del rectángulo, con las reglas de siempre, y
+     * después cada trozo se queda con los suyos en el orden en que salieron: así la corrediza cae
+     * donde tiene que caer aunque el pico del vano parta el rectángulo en dos.
+     */
+    private fun repartirGrupo(trozos: List<Trozo>, desde: Int, hasta: Int): List<List<NovaFranja>> {
+        val anchos = (desde..hasta).map { trozos[it].banda.anchoCm }
+        val anchoGrupo = anchos.sum()
+        val hoja = trozos[desde].hoja
+        val divs = NovaCalculos.divisiones(anchoGrupo, 0)
+        val tipos = NovaCalculos.ordenDivis(divs, anchoGrupo)
+            .filter { it == 'f' || it == 'c' }
+            .ifEmpty { "f" }
+        val cuotas = repartirModulos(anchos, tipos.length)
+        var leidos = 0
+        return anchos.mapIndexed { k, anchoTrozo ->
+            val hasta2 = (leidos + cuotas[k]).coerceAtMost(tipos.length)
+            val mios = (if (leidos < hasta2) tipos.substring(leidos, hasta2) else "").ifEmpty { "f" }
+            leidos += cuotas[k]
+            val alturaLlena = altoLleno(trozos[desde + k].banda)
+            val franjas = mutableListOf(
+                NovaFranja(
+                    esSistema = true,
+                    alto = min(hoja, alturaLlena),
+                    modulos = mios.map { NovaModulo(it, anchoTrozo / mios.length) }
+                )
+            )
+            val altoMocheta = (alturaLlena - hoja).coerceAtLeast(0f)
+            if (altoMocheta > TOLERANCIA) {
+                franjas.addAll(franjasDeFijos(anchoTrozo, altoMocheta, sistema = false))
+            }
+            franjas
+        }
+    }
+
+    /** Cuántos módulos se lleva cada trozo: por su ancho, y ninguno se queda sin uno. */
+    private fun repartirModulos(anchos: List<Float>, total: Int): List<Int> {
+        if (anchos.isEmpty()) return emptyList()
+        val suma = anchos.sum().coerceAtLeast(0.01f)
+        val cuotas = anchos.map { ((it / suma) * total).toInt().coerceAtLeast(1) }.toMutableList()
+        var sobran = total - cuotas.sum()
+        // Lo que quedó suelto por redondear va al trozo con los módulos más anchos, uno a uno.
+        while (sobran > 0) {
+            val mayor = anchos.indices.maxByOrNull { anchos[it] / cuotas[it] } ?: 0
+            cuotas[mayor] = cuotas[mayor] + 1
+            sobran--
+        }
+        return cuotas
+    }
+
+    /** Paños fijos para un trozo sin hoja, contados como los de la mocheta. */
+    private fun franjasDeFijos(ancho: Float, alto: Float, sistema: Boolean = true): List<NovaFranja> {
+        val panos = NovaCalculos.anchMota(ancho).coerceAtLeast(1)
+        return listOf(
+            NovaFranja(
+                esSistema = sistema,
+                alto = alto,
+                modulos = List(panos) { NovaModulo('f', ancho / panos) }
+            )
+        )
+    }
+
+    /** El ancho con el que la casa cuenta un módulo: una división cada 60 cm. */
+    private const val MODULO_CASA = 60f
 }

@@ -113,6 +113,16 @@ data class DisenoNova(
         get() = tramos.any { (it.alto > 0f && it.alto != alto) || it.caida > 0f }
 
     /**
+     * ¿La ventana deja de ser el rectángulo de siempre? Escalonada o con algún lado inclinado.
+     *
+     * Un triángulo con la punta a un costado no es escalonado —su único tramo llega de dintel a
+     * alféizar— pero tampoco es un rectángulo: preguntando solo por [esEscalonada] se colaba como
+     * tal y el vano perdía su forma antes de llegar al cálculo.
+     */
+    val esIrregular: Boolean
+        get() = esEscalonada || tramos.any { it.esInclinado }
+
+    /**
      * Cambia el alto de UN tramo —el escalón— y estira o encoge sus franjas en la misma
      * proporción, para que sigan llenándolo.
      *

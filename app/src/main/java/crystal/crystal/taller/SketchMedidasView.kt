@@ -2815,6 +2815,35 @@ class SketchMedidasView @JvmOverloads constructor(
         return elementos.lastIndex
     }
 
+    /**
+     * Pone un triángulo con la base arriba y la punta abajo —el vano invertido— y devuelve su
+     * índice. Es el que se dibuja con la herramienta de triángulo y luego se voltea con los nodos.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun agregarTrianguloInvertidoParaPruebas(izq: Float, arriba: Float, der: Float, abajo: Float): Int {
+        val indice = agregarRectanguloParaPruebas(izq, arriba, der, abajo)
+        val shape = elementos[indice] as Element.Shape
+        val volteado = Element.Shape(
+            tool = Tool.TRIANGLE,
+            rect = RectF(shape.rect),
+            start = PointF(shape.start), end = PointF(shape.end),
+            widthCm = shape.widthCm, heightCm = shape.heightCm,
+            diameterCm = shape.diameterCm, lengthCm = shape.lengthCm,
+            topLeft = PointF(shape.topLeft), topRight = PointF(shape.topRight),
+            bottomRight = PointF(shape.bottomRight), bottomLeft = PointF(shape.bottomLeft),
+            topCm = shape.topCm, rightCm = shape.rightCm,
+            bottomCm = shape.bottomCm, leftCm = shape.leftCm
+        )
+        elementos[indice] = volteado
+        fijarVerticesTriangulo(
+            volteado,
+            punta = PointF((izq + der) / 2f, abajo),
+            der = PointF(der, arriba),
+            izq = PointF(izq, arriba)
+        )
+        return indice
+    }
+
     /** Elige los elementos sobre los que trabajan cortar y unir. */
     @androidx.annotation.VisibleForTesting
     fun seleccionarParaPruebas(vararg indices: Int) {
@@ -3199,14 +3228,40 @@ class SketchMedidasView @JvmOverloads constructor(
      * diseño, dos tramos de distinto alto colgando del mismo dintel.
      */
     fun contornoPrincipalEnCm(): List<Pair<Float, Float>>? {
-        val composites = elementos.filterIsInstance<Element.Composite>()
-        val elegido = composites.maxByOrNull { c ->
-            val b = boundsForElement(c)
-            b.width() * b.height()
-        } ?: return null
-        val contorno = elegido.contours.firstOrNull()?.takeIf { it.size >= 4 } ?: return null
+        fun area(e: Element): Float = boundsForElement(e).let { it.width() * it.height() }
+        val composite = elementos.filterIsInstance<Element.Composite>().maxByOrNull { area(it) }
+        // El triángulo se dibuja con su herramienta, así que no es una figura recortada y no tiene
+        // contorno guardado: sin esto, un vano triangular llegaba a la calculadora como el
+        // rectángulo de su caja y el diseño salía recto.
+        val triangulo = elementos.filterIsInstance<Element.Shape>()
+            .filter { it.tool == Tool.TRIANGLE }
+            .maxByOrNull { area(it) }
+        if (triangulo != null && (composite == null || area(triangulo) > area(composite))) {
+            return contornoDeTriangulo(triangulo).takeIf { it.size >= 3 }
+        }
+        val elegido = composite ?: return null
+        // Tres puntos ya son un vano: un triángulo recortado es una ventana como cualquier otra.
+        val contorno = elegido.contours.firstOrNull()?.takeIf { it.size >= 3 } ?: return null
         val caja = boundsForElement(elegido)
         return contorno.map { p -> pxToCm(p.x - caja.left) to pxToCm(p.y - caja.top) }
+    }
+
+    /**
+     * Los tres vértices del triángulo en centímetros, referidos a su esquina superior izquierda.
+     *
+     * Se escalan con los centímetros ACOTADOS de la figura, no con la densidad de pantalla: así el
+     * contorno mide exactamente lo que la medida que viaja con él, que es de donde la calculadora
+     * saca el ancho y el alto.
+     */
+    private fun contornoDeTriangulo(shape: Element.Shape): List<Pair<Float, Float>> {
+        val caja = boundsForElement(shape)
+        if (caja.width() <= 1f || caja.height() <= 1f) return emptyList()
+        val kx = if (shape.widthCm > 0f) shape.widthCm / caja.width() else pxToCm(1f)
+        val ky = if (shape.heightCm > 0f) shape.heightCm / caja.height() else pxToCm(1f)
+        val (punta, der, izq) = verticesTriangulo(shape)
+        return listOf(izq, der, punta).map { p ->
+            (p.x - caja.left) * kx to (p.y - caja.top) * ky
+        }
     }
 
     /**

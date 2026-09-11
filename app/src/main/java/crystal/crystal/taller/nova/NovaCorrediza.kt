@@ -123,6 +123,10 @@ class NovaCorrediza : AppCompatActivity() {
     private var parantesDesiguales: List<Int> = emptyList()
     private var mochetaDesigual: List<ModuloDesigual> = emptyList()
     private var altoHojaDesigual: Float = 0f
+    /** El contorno del vano de la medida en curso, con lo que se armó su diseño. */
+    private var contornoMedida: String = ""
+    private var hojaDelDiseno: Float = 0f
+    private var medidaDelDiseno: Pair<Float, Float> = 0f to 0f
     // true mientras se cargan campos desde un diseño (evita que los TextWatchers que limpian
     // el estado desigual se disparen por los setText programáticos de la carga).
     private var cargandoDiseno = false
@@ -571,6 +575,10 @@ class NovaCorrediza : AppCompatActivity() {
                         Toast.LENGTH_LONG).show()
                     return@setOnClickListener
                 }
+
+                // El vano con forma se rehace si cambió el alto de hoja: es el dato que decide dónde
+                // cabe la corrediza.
+                rehacerDisenoSiCambioLaHoja()
 
                 if (modulosDesiguales.isNotEmpty()) {
                     calcularDesigual()
@@ -3245,6 +3253,8 @@ class NovaCorrediza : AppCompatActivity() {
             val modsAll = mutableListOf<ModuloDesigual>()
             val parantesAll = mutableListOf<Int>()
             val mochAll = mutableListOf<ModuloDesigual>()
+            // Alto de la franja de sistema de cada tramo, y si ese tramo lleva corrediza.
+            val altosSistema = mutableListOf<Pair<Float, Boolean>>()
 
             for ((bi, bloque) in bloquesTramo.withIndex()) {
                 val wTramo = bloque.first
@@ -3252,12 +3262,13 @@ class NovaCorrediza : AppCompatActivity() {
                 val sFranja = franjasBloque.firstOrNull { it.trim().lowercase().startsWith("s") }
                 val mFranja = franjasBloque.firstOrNull { it.trim().lowercase().startsWith("m") }
 
-                // altoHoja desde el primer s<...>
-                if (altoHojaDesigual == 0f && sFranja != null) {
+                // El alto de hoja del bloque: el de SU franja de sistema. Se anotan todos y al
+                // final manda el del tramo que lleva corrediza; ver [elegirAltoHoja].
+                if (sFranja != null) {
                     val low = sFranja.trim().lowercase()
                     if (low.length > 1 && low[1] == '<') {
                         val ah = low.substringAfter("<").substringBefore(">").replace(",", ".").toFloatOrNull() ?: 0f
-                        if (ah > 0f) { binding.etHoja.setText(df1(ah)); altoHojaDesigual = ah }
+                        if (ah > 0f) altosSistema.add(ah to low.substringAfter("(").contains('c'))
                     }
                 }
 
@@ -3298,6 +3309,11 @@ class NovaCorrediza : AppCompatActivity() {
                 }
             }
 
+            elegirAltoHoja(altosSistema)?.let {
+                binding.etHoja.setText(df1(it))
+                altoHojaDesigual = it
+            }
+
             val divs = modsAll.size
             if (divs > 0) binding.etPartes.setText(divs.toString())
 
@@ -3333,6 +3349,19 @@ class NovaCorrediza : AppCompatActivity() {
         } finally {
             cargandoDiseno = false
         }
+    }
+
+    /**
+     * El alto de hoja de la ventana entre los de todos sus tramos.
+     *
+     * La hoja es una sola y la manda el tramo donde va la corrediza. Tomar el del PRIMER tramo
+     * dejaba la ventana con el alto de un tramo sin hoja —en un triángulo, el de la punta, que
+     * puede medir un palmo— y con eso el cálculo salía disparatado.
+     */
+    private fun elegirAltoHoja(altos: List<Pair<Float, Boolean>>): Float? {
+        if (altos.isEmpty()) return null
+        val conCorrediza = altos.filter { it.second }.maxOfOrNull { it.first }
+        return conCorrediza ?: altos.maxOf { it.first }
     }
 
     /**
@@ -3979,7 +4008,7 @@ class NovaCorrediza : AppCompatActivity() {
         if (actual != null && cargarDisenoDelContorno(actual.contorno)) {
             Toast.makeText(
                 this,
-                "Vano escalonado: el diseño trae sus tramos, pero el cálculo aún no cuenta las piezas del escalón",
+                "Vano con forma: el diseño trae sus tramos, pero el cálculo aún no cuenta las piezas del escalón",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -4191,22 +4220,24 @@ class NovaCorrediza : AppCompatActivity() {
         val escalonada = cargarDisenoDelContorno(item.contorno)
         Toast.makeText(
             this,
-            if (escalonada) "Vano escalonado: el diseño trae sus tramos, pero el cálculo aún no cuenta las piezas del escalón"
+            if (escalonada) "Vano con forma: el diseño trae sus tramos, pero el cálculo aún no cuenta las piezas del escalón"
             else "Medida cargada: revisa el gráfico y calcula",
             Toast.LENGTH_SHORT
         ).show()
     }
 
     /**
-     * Arma el diseño desde el contorno del vano, cuando la medida trae uno con escalones.
+     * Arma el diseño desde el contorno del vano, cuando la medida trae uno que no es un rectángulo.
      *
      * Un vano recto se describe con el ancho y el alto y no necesita nada de esto; uno con el
-     * alféizar subido en un trozo, no: son tramos de distinto alto colgando del mismo dintel, y
-     * eso hay que traerlo hecho o el vidriero lo arma a mano cada vez.
+     * alféizar subido en un trozo, o con un lado inclinado, no: son tramos de distinto alto
+     * colgando del mismo dintel, y eso hay que traerlo hecho o el vidriero lo arma a mano cada vez.
      *
      * Devuelve true si el diseño se cargó desde el contorno.
      */
     private fun cargarDisenoDelContorno(contorno: String): Boolean {
+        // Cada medida trae el suyo: el de la anterior no vale para esta.
+        contornoMedida = ""
         val puntos = ContornoEnTramos.desdeTexto(contorno)
         if (puntos.size < 3) return false
         val acabado = when (tipoNova) {
@@ -4218,9 +4249,35 @@ class NovaCorrediza : AppCompatActivity() {
         val diseno = runCatching {
             ContornoEnTramos.disenoDesdeContorno(puntos, acabado, hoja)
         }.getOrNull() ?: return false
-        if (!diseno.esEscalonada) return false
+        if (!diseno.esIrregular) return false
         cargarDesdePaqueteDiseno(diseno.aPaquete())
+        contornoMedida = contorno
+        hojaDelDiseno = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
+        medidaDelDiseno = diseno.ancho to diseno.alto
         return true
+    }
+
+    /**
+     * Rehace el diseño del vano cuando el vidriero escribe otro alto de hoja.
+     *
+     * En un vano con forma la hoja no es un dato más: es la que dice DÓNDE cabe la corrediza —el
+     * rectángulo del medio de un triángulo, lo que queda bajo un dintel caído— y con ella cambia el
+     * reparto entero. Escribirla soltaba el diseño como cualquier otra edición a mano y la ventana
+     * volvía a salir rectangular, justo al dar el dato que hacía falta.
+     *
+     * Solo se rehace si el ancho y el alto siguen siendo los del vano: con otra medida en los campos
+     * el vidriero está en otra cosa y su diseño no se toca.
+     */
+    private fun rehacerDisenoSiCambioLaHoja() {
+        if (contornoMedida.isBlank()) return
+        val hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
+        if (kotlin.math.abs(hoja - hojaDelDiseno) <= 0.05f) return
+        val ancho = binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f
+        val alto = binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f
+        if (kotlin.math.abs(ancho - medidaDelDiseno.first) > 0.15f ||
+            kotlin.math.abs(alto - medidaDelDiseno.second) > 0.15f
+        ) return
+        cargarDisenoDelContorno(contornoMedida)
     }
 
     private fun mostrarDialogoMetadatosProduccion(onContinuar: () -> Unit) {

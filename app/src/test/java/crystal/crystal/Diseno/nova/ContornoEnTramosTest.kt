@@ -285,4 +285,54 @@ class ContornoEnTramosTest {
         assertEquals(200f, d.tramos[0].alto, 1f)
         assertEquals(140f, d.tramos[1].altoDerecho, 1f)
     }
+
+    // La corrediza va en su rectángulo: donde el vano se cierra, la hoja no entra y van fijos.
+
+    /** Triángulo invertido: base arriba, punta abajo en el centro. 200 de ancho por 160 de alto. */
+    private val trianguloInvertido = listOf(0f to 0f, 200f to 0f, 100f to 160f)
+
+    @Test
+    fun `el triángulo invertido deja la corrediza en el rectángulo del medio`() {
+        val d = ContornoEnTramos.disenoDesdeContorno(trianguloInvertido, altoHoja = 110f)!!
+        // El vano se parte donde la hoja de 110 deja de entrar: las dos puntas y el medio.
+        assertTrue("no se partió por donde la hoja deja de caber: ${d.aPaquete()}", d.nTramos >= 3)
+        assertTrue("el vano se quedó sin corrediza: ${d.aPaquete()}", d.nCorredizas >= 1)
+        assertEquals("la punta izquierda lleva corrediza", 0, d.tramos.first().sistema?.nCorredizas)
+        assertEquals("la punta derecha lleva corrediza", 0, d.tramos.last().sistema?.nCorredizas)
+        // Y el ancho del vano no se pierde al partirlo.
+        assertEquals(200f, d.tramos.sumOf { it.ancho.toDouble() }.toFloat(), 0.5f)
+    }
+
+    @Test
+    fun `ningún tramo del triángulo sale con una hoja de nada`() {
+        val d = ContornoEnTramos.disenoDesdeContorno(trianguloInvertido, altoHoja = 110f)!!
+        // La punta baja a cero, y con el alto del lado corto la franja de sistema salía de un palmo:
+        // la calculadora tomaba esa como el alto de hoja de toda la ventana.
+        d.tramos.forEachIndexed { i, t ->
+            val alto = t.sistema?.alto ?: 0f
+            assertTrue("el tramo $i trae una franja de sistema de $alto: ${d.aPaquete()}", alto >= 100f)
+        }
+    }
+
+    @Test
+    fun `el tramo del escalón conserva su hoja`() {
+        // La medida de la foto: el trozo bajo mide 106.2 y la hoja pedida es 110. Ese tramo no se
+        // convierte en un fijo: su hoja se acorta al alto del escalón, como siempre.
+        val d = ContornoEnTramos.disenoDesdeContorno(escalonada, acabado = "apa", altoHoja = 110f)!!
+        assertEquals(2, d.nTramos)
+        assertTrue("el tramo alto perdió sus corredizas", (d.tramos[0].sistema?.nCorredizas ?: 0) >= 1)
+        assertTrue("el escalón se quedó sin corrediza: ${d.aPaquete()}",
+            (d.tramos[1].sistema?.nCorredizas ?: 0) >= 1)
+    }
+
+    @Test
+    fun `un dintel que roza el límite no se parte`() {
+        // 300 de ancho, el dintel baja 60: la hoja no entra por poco en el último palmo. Meter ahí
+        // un parante y un tramo de nada no es lo que haría el vidriero: se acorta la hoja.
+        val d = ContornoEnTramos.disenoDesdeContorno(
+            listOf(0f to 0f, 300f to 60f, 300f to 200f, 0f to 200f)
+        )!!
+        assertEquals("se partió un vano que es un solo tramo: ${d.aPaquete()}", 1, d.nTramos)
+        assertTrue("el tramo se quedó sin corredizas", d.nCorredizas >= 1)
+    }
 }
