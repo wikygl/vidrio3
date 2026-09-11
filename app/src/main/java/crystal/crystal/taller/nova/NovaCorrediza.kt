@@ -4208,7 +4208,7 @@ class NovaCorrediza : AppCompatActivity() {
      */
     private fun cargarDisenoDelContorno(contorno: String): Boolean {
         val puntos = ContornoEnTramos.desdeTexto(contorno)
-        if (puntos.size < 4) return false
+        if (puntos.size < 3) return false
         val acabado = when (tipoNova) {
             TipoNova.APA -> "apa"
             TipoNova.PIV -> "piv"

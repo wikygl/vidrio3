@@ -210,4 +210,79 @@ class ContornoEnTramosTest {
         assertEquals(170f, bandas[0].altoCm, 0.05f)
         assertEquals(170f, bandas[2].altoCm, 0.05f)
     }
+
+    // ==================== FORMAS POLIGONALES ====================
+    // El vano con un lado inclinado: el dintel caído, el triángulo, el paralelogramo. El vidrio
+    // sigue la forma, y cada tramo pasa a ser un cuadrilátero con sus dos lados.
+
+    @Test
+    fun `un dintel inclinado da un tramo con los dos lados distintos`() {
+        // 300 de ancho; el dintel baja de 0 a 60 de izquierda a derecha, el alféizar es corrido.
+        val dintelInclinado = listOf(
+            0f to 0f,
+            300f to 60f,
+            300f to 200f,
+            0f to 200f
+        )
+        val bandas = ContornoEnTramos.bandas(dintelInclinado)
+        assertEquals(1, bandas.size)
+        val b = bandas[0]
+        assertTrue("no se leyó como inclinada", b.esInclinada)
+        assertEquals(300f, b.anchoCm, 0.05f)
+        // A la izquierda el vano mide los 200; a la derecha, 60 menos.
+        assertEquals(200f, b.altoCm, 3f)
+        assertEquals(140f, b.altoDerCm, 3f)
+        assertEquals(0f, b.caidaCm, 3f)
+        assertEquals(60f, b.caidaDerCm, 3f)
+    }
+
+    @Test
+    fun `el tramo inclinado sobrevive al paquete`() {
+        val d = ContornoEnTramos.disenoDesdeContorno(
+            listOf(0f to 0f, 300f to 60f, 300f to 200f, 0f to 200f)
+        )!!
+        val ida = d.aPaquete()
+        assertTrue("el paquete no lleva los dos lados: $ida", ida.contains("H<") && ida.contains(","))
+        val vuelta = DisenoNova.desdePaquete(ida)!!
+        assertEquals(ida, vuelta.aPaquete())
+        assertTrue("al releer se perdió la inclinación", vuelta.tramos[0].esInclinado)
+    }
+
+    @Test
+    fun `un triángulo punta abajo da dos tramos que bajan a cero`() {
+        // Punta en el centro y abajo: los dos lados caen hacia el medio.
+        val triangulo = listOf(
+            0f to 0f,
+            300f to 0f,
+            150f to 200f
+        )
+        val bandas = ContornoEnTramos.bandas(triangulo)
+        assertEquals(2, bandas.size)
+        // La punta está abajo y en el centro, así que el vano es un pico en cada esquina de
+        // arriba: el primer tramo crece hacia el centro y el segundo se cierra hacia la derecha.
+        assertTrue("el primero no crece hacia el centro", bandas[0].altoDerCm > bandas[0].altoCm)
+        assertTrue("el segundo no se cierra", bandas[1].altoCm > bandas[1].altoDerCm)
+        // Y en el centro los dos valen lo mismo: es la punta.
+        assertEquals(bandas[0].altoDerCm, bandas[1].altoCm, 10f)
+    }
+
+    @Test
+    fun `partir un tramo inclinado corta a media pendiente`() {
+        // Tramo con el dintel caído, cuatro módulos: al partirlo por la mitad, el corte queda a
+        // media altura y cada trozo se lleva su parte.
+        val inclinado = DisenoNova.desdePaquete(
+            "{nova,apa,[300,200:Tl<300>(H<200,140>;D<0,60>;s<200>(f<75>c<75>c<75>f<75>))]}"
+        )!!
+        assertTrue(inclinado.tramos[0].esInclinado)
+        val d = inclinado.conTramoPartido(0, despuesDelModulo = 1)
+        assertEquals(2, d.nTramos)
+        // El borde nuevo cae a mitad de la pendiente: 170 de alto y 30 de caída.
+        assertEquals(170f, d.tramos[0].altoDerecho, 1f)
+        assertEquals(30f, d.tramos[0].caidaDerecha, 1f)
+        assertEquals(170f, d.tramos[1].alto, 1f)
+        assertEquals(30f, d.tramos[1].caida, 1f)
+        // Y los extremos siguen como estaban.
+        assertEquals(200f, d.tramos[0].alto, 1f)
+        assertEquals(140f, d.tramos[1].altoDerecho, 1f)
+    }
 }

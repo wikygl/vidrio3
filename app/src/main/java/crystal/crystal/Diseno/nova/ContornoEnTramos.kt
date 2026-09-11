@@ -42,18 +42,34 @@ object ContornoEnTramos {
         }
     }
 
-    /** Un trozo de vano: lo ancho que es, dónde empieza y hasta dónde baja. */
-    data class Banda(val anchoCm: Float, val altoCm: Float, val caidaCm: Float = 0f)
+    /**
+     * Un trozo de vano. Con los dos lados iguales es un rectángulo; con lados distintos, el
+     * cuadrilátero que sale de un dintel o un alféizar inclinado.
+     */
+    data class Banda(
+        val anchoCm: Float,
+        val altoCm: Float,
+        val caidaCm: Float = 0f,
+        val altoDerCm: Float = altoCm,
+        val caidaDerCm: Float = caidaCm
+    ) {
+        val esInclinada: Boolean
+            get() = abs(altoDerCm - altoCm) > 0.15f || abs(caidaDerCm - caidaCm) > 0.15f
+    }
 
     /** Milímetro y medio: por debajo de eso son la misma medida, no un escalón. */
     private const val TOLERANCIA = 0.15f
 
     /**
      * Las bandas verticales del contorno, de izquierda a derecha. Dos bandas seguidas iguales
-     * —mismo alto y misma caída— se juntan en una: un vano recto da una sola banda.
+     * —mismas medidas y ninguna inclinada— se juntan en una: un vano recto da una sola banda.
+     *
+     * Cada banda se mide en sus DOS bordes, no en el medio: así un lado inclinado se lee como lo
+     * que es, un cuadrilátero, en vez de aplanarse a un rectángulo con la medida del centro.
      */
     fun bandas(puntos: List<Pair<Float, Float>>): List<Banda> {
-        if (puntos.size < 4) return emptyList()
+        // Tres puntos ya son un vano: el triángulo es una forma de ventana como cualquier otra.
+        if (puntos.size < 3) return emptyList()
         val xs = puntos.map { it.first }.distinctBy { Math.round(it / TOLERANCIA) }.sorted()
         if (xs.size < 2) return emptyList()
 
@@ -64,18 +80,28 @@ object ContornoEnTramos {
             val x1 = xs[i + 1]
             val ancho = x1 - x0
             if (ancho <= TOLERANCIA) continue
-            val (arriba, abajo) = bordesEn(puntos, (x0 + x1) / 2f) ?: continue
-            val alto = abajo - arriba
-            if (alto <= TOLERANCIA) continue
-            val caida = (arriba - dintel).coerceAtLeast(0f)
+            // Un pelo hacia dentro: justo en el vértice se cruzan dos lados y la medida sale doble.
+            val dentro = (ancho * 0.02f).coerceAtMost(0.5f)
+            val izq = bordesEn(puntos, x0 + dentro) ?: continue
+            val der = bordesEn(puntos, x1 - dentro) ?: continue
+            val altoIzq = izq.second - izq.first
+            val altoDer = der.second - der.first
+            if (altoIzq <= TOLERANCIA && altoDer <= TOLERANCIA) continue
+            val banda = Banda(
+                anchoCm = ancho,
+                altoCm = altoIzq,
+                caidaCm = (izq.first - dintel).coerceAtLeast(0f),
+                altoDerCm = altoDer,
+                caidaDerCm = (der.first - dintel).coerceAtLeast(0f)
+            )
             val ultima = bandas.lastOrNull()
-            if (ultima != null &&
-                abs(ultima.altoCm - alto) <= TOLERANCIA &&
-                abs(ultima.caidaCm - caida) <= TOLERANCIA
-            ) {
-                bandas[bandas.lastIndex] = ultima.copy(anchoCm = ultima.anchoCm + ancho)
+            val sigue = ultima != null && !ultima.esInclinada && !banda.esInclinada &&
+                abs(ultima.altoCm - banda.altoCm) <= TOLERANCIA &&
+                abs(ultima.caidaCm - banda.caidaCm) <= TOLERANCIA
+            if (sigue) {
+                bandas[bandas.lastIndex] = ultima!!.copy(anchoCm = ultima.anchoCm + ancho)
             } else {
-                bandas.add(Banda(ancho, alto, caida))
+                bandas.add(banda)
             }
         }
         return bandas
@@ -119,7 +145,7 @@ object ContornoEnTramos {
     ): DisenoNova? {
         val bandas = bandas(puntos)
         if (bandas.isEmpty()) return null
-        val alto = bandas.maxOf { it.caidaCm + it.altoCm }
+        val alto = bandas.maxOf { maxOf(it.caidaCm + it.altoCm, it.caidaDerCm + it.altoDerCm) }
         val ancho = bandas.sumOf { it.anchoCm.toDouble() }.toFloat()
         val tramos = bandas.map { banda ->
             val base = DisenoNova.nuevo(
@@ -131,13 +157,17 @@ object ContornoEnTramos {
             )
             // `nuevo` reparte el ancho de la banda en sus módulos; aquí solo se toman sus franjas.
             val franjas = base.tramos.firstOrNull()?.franjas ?: return null
-            val llegaAbajo = abs(banda.caidaCm + banda.altoCm - alto) <= TOLERANCIA
+            val rectaYEntera = !banda.esInclinada &&
+                banda.caidaCm <= TOLERANCIA &&
+                abs(banda.altoCm - alto) <= TOLERANCIA
             NovaTramo(
                 ancho = banda.anchoCm,
                 franjas = franjas,
-                // Solo se anota el alto propio si el tramo no llega al alféizar de la ventana.
-                alto = if (llegaAbajo && banda.caidaCm <= TOLERANCIA) 0f else banda.altoCm,
-                caida = if (banda.caidaCm <= TOLERANCIA) 0f else banda.caidaCm
+                // Un tramo que va de dintel a alféizar no anota nada: es el caso normal.
+                alto = if (rectaYEntera) 0f else banda.altoCm,
+                caida = if (rectaYEntera) 0f else banda.caidaCm,
+                altoDer = if (banda.esInclinada) banda.altoDerCm else null,
+                caidaDer = if (banda.esInclinada) banda.caidaDerCm else null
             )
         }
         return DisenoNova(acabado, ancho, alto, tramos)

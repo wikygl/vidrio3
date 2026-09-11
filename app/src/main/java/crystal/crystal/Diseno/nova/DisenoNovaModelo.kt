@@ -45,25 +45,43 @@ data class NovaFranja(
  * Un tramo: el trozo de ventana entre dos parantes, con TODAS sus franjas. Un parante parte el
  * tramo entero, así que las franjas de un tramo empiezan y acaban juntas.
  *
- * Dos medidas propias lo colocan dentro del vano, y las dos en 0 son lo normal —el tramo ocupa
- * todo el alto de la ventana:
+ * Cuatro medidas propias lo colocan dentro del vano, y todas en 0 son lo normal —el tramo ocupa
+ * el alto entero de la ventana:
  *
  * - [caida]: cuánto BAJA su dintel respecto al de la ventana. Es el escalón de arriba, el que sale
  *   cuando una viga o un dintel más bajo come parte del vano.
  * - [alto]: lo que mide el tramo desde su propio dintel. Es el escalón de abajo, el del alféizar
  *   que sube en un trozo del vano.
+ * - [caidaDer] y [altoDer]: lo mismo del lado derecho. En null valen lo que el lado izquierdo, que
+ *   es como se describe un tramo rectangular o un escalón.
  *
- * Las dos juntas describen un tramo recortado por arriba y por abajo.
+ * Con los dos lados distintos el tramo deja de ser un rectángulo y pasa a ser un cuadrilátero: así
+ * se describen el dintel inclinado, el triángulo y el paralelogramo. La franja de sistema se queda
+ * recta de todas formas —una hoja corrediza corre por el riel y tiene que ser rectangular—; lo
+ * inclinado se lo reparten las franjas de encima, que son fijas.
  */
 data class NovaTramo(
     val ancho: Float,
     val franjas: List<NovaFranja>,
     val alto: Float = 0f,
-    val caida: Float = 0f
+    val caida: Float = 0f,
+    val altoDer: Float? = null,
+    val caidaDer: Float? = null
 ) {
     val sistema: NovaFranja? get() = franjas.firstOrNull { it.esSistema }
     val mochetas: List<NovaFranja> get() = franjas.filter { !it.esSistema }
     val nModulosSistema: Int get() = sistema?.modulos?.size ?: 0
+
+    /** El alto del lado derecho: el suyo si lo tiene, y si no el del izquierdo. */
+    val altoDerecho: Float get() = altoDer ?: alto
+
+    /** Lo que baja el dintel del lado derecho. */
+    val caidaDerecha: Float get() = caidaDer ?: caida
+
+    /** ¿Tiene los dos lados distintos? Entonces es un tramo inclinado, no un rectángulo. */
+    val esInclinado: Boolean
+        get() = kotlin.math.abs(altoDerecho - alto) > 0.05f ||
+            kotlin.math.abs(caidaDerecha - caida) > 0.05f
 }
 
 /** El diseño completo. [etiquetas] son los tags sueltos del paquete (`A<90>`, `U<…>`, `O<1>`). */
@@ -158,7 +176,9 @@ data class DisenoNova(
                     fr.copy(modulos = fr.modulos.map { it.copy(ancho = w) })
                 },
                 alto = tramo.alto,
-                caida = tramo.caida
+                caida = tramo.caida,
+                altoDer = tramo.altoDer,
+                caidaDer = tramo.caidaDer
             )
         })
     }
@@ -191,9 +211,16 @@ data class DisenoNova(
             }
         }
         val nuevos = tramos.toMutableList()
-        // Los dos trozos siguen siendo el mismo tramo de vano: conservan su alto.
-        nuevos[indice] = NovaTramo(tramo.ancho, izq, tramo.alto, tramo.caida)
-        nuevos.add(indice + 1, NovaTramo(tramo.ancho, der, tramo.alto, tramo.caida))
+        // Los dos trozos siguen siendo el mismo tramo de vano: conservan sus medidas. Si el tramo
+        // iba inclinado, el corte cae a media pendiente y cada trozo se queda con su parte.
+        val t = if (nSistema > 0) corte / nSistema.toFloat() else 0.5f
+        val altoMedio = tramo.alto + (tramo.altoDerecho - tramo.alto) * t
+        val caidaMedia = tramo.caida + (tramo.caidaDerecha - tramo.caida) * t
+        nuevos[indice] = NovaTramo(tramo.ancho, izq, tramo.alto, tramo.caida, altoMedio, caidaMedia)
+        nuevos.add(
+            indice + 1,
+            NovaTramo(tramo.ancho, der, altoMedio, caidaMedia, tramo.altoDer, tramo.caidaDer)
+        )
         return copy(tramos = nuevos).conAnchosRepartidos()
     }
 
@@ -225,7 +252,11 @@ data class DisenoNova(
         // alto: el escalón que había entre ellos desaparece con el parante.
         val altoUnido = if (a.alto <= 0f || b.alto <= 0f) 0f else maxOf(a.alto, b.alto)
         val caidaUnida = minOf(a.caida, b.caida)
-        nuevos[indice] = NovaTramo(a.ancho + b.ancho, franjas, altoUnido, caidaUnida)
+        nuevos[indice] = NovaTramo(
+            a.ancho + b.ancho, franjas, altoUnido, caidaUnida,
+            // El cuadrilátero unido va del lado izquierdo del primero al derecho del segundo.
+            altoDer = b.altoDer, caidaDer = b.caidaDer
+        )
         nuevos.removeAt(indice + 1)
         return copy(tramos = nuevos).conAnchosRepartidos()
     }
@@ -475,10 +506,19 @@ data class DisenoNova(
             }
             // El alto propio del tramo va como tag `H<…>` dentro, delante de las franjas: los
             // parsers viejos parten por `;` y solo miran los tokens que empiezan por s o m, así
-            // que lo ignoran sin romperse.
-            val cabezaAlto = if (tramo.alto > 0f) "H<${df(tramo.alto)}>;" else ""
+            // que lo ignoran sin romperse. Con los dos lados distintos van las dos medidas
+            // separadas por coma: `H<160,106.2>` es izquierda y derecha.
+            val cabezaAlto = when {
+                tramo.alto <= 0f && tramo.altoDerecho <= 0f -> ""
+                tramo.esInclinado -> "H<${df(tramo.alto)},${df(tramo.altoDerecho)}>;"
+                else -> "H<${df(tramo.alto)}>;"
+            }
             // Y lo que baja su dintel, si baja: el escalón de arriba.
-            val cabezaCaida = if (tramo.caida > 0f) "D<${df(tramo.caida)}>;" else ""
+            val cabezaCaida = when {
+                tramo.caida <= 0f && tramo.caidaDerecha <= 0f -> ""
+                tramo.esInclinado -> "D<${df(tramo.caida)},${df(tramo.caidaDerecha)}>;"
+                else -> "D<${df(tramo.caida)}>;"
+            }
             "Tl<${df(tramo.ancho)}>($cabezaAlto$cabezaCaida$franjas)"
         }
         val tags = if (etiquetas.isEmpty()) "" else " " + etiquetas.joinToString(" ")
@@ -505,6 +545,17 @@ data class DisenoNova(
         private val RE_MODULO = Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>)?""")
         private val RE_TRAMO = Regex("""^t[a-z]?\s*<\s*([\d.,-]+)\s*>""", RegexOption.IGNORE_CASE)
         private val RE_ETIQUETA = Regex("""^[AUO]<[^>]*>$""", RegexOption.IGNORE_CASE)
+
+        /**
+         * Un tag de tramo con una o dos medidas: `160` vale para los dos lados, `160,106.2` es
+         * izquierda y derecha. La segunda en null quiere decir "igual que la primera".
+         */
+        private fun dosMedidas(texto: String): Pair<Float, Float?> {
+            val partes = texto.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            val izq = num(partes.getOrElse(0) { "0" })
+            val der = partes.getOrNull(1)?.let { num(it) }
+            return izq to der
+        }
 
         private fun num(s: String): Float = s.replace(",", ".").toFloatOrNull() ?: 0f
 
@@ -591,14 +642,25 @@ data class DisenoNova(
                 val anchoTramo = cab?.groupValues?.get(1)?.let { num(it) } ?: ancho
                 val interior = interiorDeParentesis(t) ?: continue
                 val tokens = partirNivelSuperior(interior, ';')
-                val altoTramo = tokens.firstNotNullOfOrNull { tk ->
-                    RE_ALTO_TRAMO.find(tk.trim())?.groupValues?.get(1)?.let { num(it) }
-                } ?: 0f
-                val caidaTramo = tokens.firstNotNullOfOrNull { tk ->
-                    RE_CAIDA_TRAMO.find(tk.trim())?.groupValues?.get(1)?.let { num(it) }
-                } ?: 0f
+                // `H<160>` vale para los dos lados; `H<160,106.2>` es izquierda y derecha, que es
+                // como se describe un tramo inclinado. Igual con la caída.
+                val alturas = tokens.firstNotNullOfOrNull { tk ->
+                    RE_ALTO_TRAMO.find(tk.trim())?.groupValues?.get(1)?.let { dosMedidas(it) }
+                }
+                val caidas = tokens.firstNotNullOfOrNull { tk ->
+                    RE_CAIDA_TRAMO.find(tk.trim())?.groupValues?.get(1)?.let { dosMedidas(it) }
+                }
                 val franjas = tokens.mapNotNull { franjaDesdeTexto(it) }
-                if (franjas.isNotEmpty()) tramos.add(NovaTramo(anchoTramo, franjas, altoTramo, caidaTramo))
+                if (franjas.isNotEmpty()) tramos.add(
+                    NovaTramo(
+                        ancho = anchoTramo,
+                        franjas = franjas,
+                        alto = alturas?.first ?: 0f,
+                        caida = caidas?.first ?: 0f,
+                        altoDer = alturas?.second,
+                        caidaDer = caidas?.second
+                    )
+                )
             }
             if (tramos.isEmpty()) return null
             return DisenoNova(acabado, ancho, alto, tramos, etiquetas)

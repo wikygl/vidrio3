@@ -37,8 +37,19 @@ data class SegmentoNs(
     /** Alto propio del tramo en cm; 0 = el de la ventana. Es la ventana escalonada. */
     val altoCm: Float = 0f,
     /** Lo que baja el dintel de este tramo; 0 = arranca en el dintel de la ventana. */
-    val caidaCm: Float = 0f
-)
+    val caidaCm: Float = 0f,
+    /** Las mismas dos medidas del lado derecho; null = iguales que las del izquierdo. */
+    val altoDerCm: Float? = null,
+    val caidaDerCm: Float? = null
+) {
+    val altoDerecho: Float get() = altoDerCm ?: altoCm
+    val caidaDerecha: Float get() = caidaDerCm ?: caidaCm
+
+    /** Con los dos lados distintos el tramo es un cuadrilátero, no un rectángulo. */
+    val esInclinado: Boolean
+        get() = kotlin.math.abs(altoDerecho - altoCm) > 0.05f ||
+            kotlin.math.abs(caidaDerecha - caidaCm) > 0.05f
+}
 
 class VistaDiseno @JvmOverloads constructor(
     contexto: Context,
@@ -387,6 +398,9 @@ class VistaDiseno @JvmOverloads constructor(
 
         val secciones = splitRespetandoParentesis(modelo.replace(" ", ""))
             .filter { it.isNotEmpty() }
+            // Los tags del tramo —`H<>` con su alto, `D<>` con lo que baja el dintel— no son
+            // franjas: se saltan aquí o el parser los rechaza y el dibujo se cae.
+            .filter { val c = it.first().lowercaseChar(); c == 's' || c == 'm' }
 
         var segmentosNsExtra: List<SegmentoNs> = emptyList()
         val franjasParseadas = secciones.map { frag ->
@@ -690,6 +704,16 @@ class VistaDiseno @JvmOverloads constructor(
      * Retorna las franjas del primer bloque T<>.
      * Para un único bloque T<>, delega al parser completo (arc/circular/esquinas).
      */
+    /**
+     * Un tag de tramo trae una medida o dos: `160` vale para los dos lados y `160,140` es
+     * izquierda y derecha, que es como se describe un tramo inclinado.
+     */
+    private fun medidaIzq(tag: String?): Float =
+        tag?.split(",")?.firstOrNull()?.trim()?.replace(",", ".")?.toFloatOrNull() ?: 0f
+
+    private fun medidaDer(tag: String?): Float? =
+        tag?.split(",")?.getOrNull(1)?.trim()?.replace(",", ".")?.toFloatOrNull()
+
     private fun parsearConTramos(cuerpo: String): List<FranjaNova> {
         val elementos = splitTopLevelElementos(cuerpo)
 
@@ -724,9 +748,25 @@ class VistaDiseno @JvmOverloads constructor(
             }
         }
 
-        // Caso simple: un solo bloque T<> → delegar al parser completo (maneja arc/circular/etc.)
+        // Caso simple: un solo bloque T<> → delegar al parser completo (maneja arc/circular/etc.).
+        // Salvo que ese tramo traiga sus propias medidas: un vano de una sola banda pero inclinado
+        // o escalonado necesita el camino de segmentos, que es el que sabe dibujarlo.
         if (bloques.size == 1) {
-            return parsearModeloConAlturas(bloques[0].contenido)
+            val b = bloques[0]
+            val tieneMedidas = RE_ALTO_TRAMO.containsMatchIn(b.contenido) ||
+                RE_CAIDA_TRAMO.containsMatchIn(b.contenido)
+            if (!tieneMedidas) return parsearModeloConAlturas(b.contenido)
+            val franjas = parsearFranjasDesdeModeloCompleto(b.contenido)
+            val alto = RE_ALTO_TRAMO.find(b.contenido)?.groupValues?.get(1)
+            val caida = RE_CAIDA_TRAMO.find(b.contenido)?.groupValues?.get(1)
+            segmentosNs = listOf(
+                SegmentoNs(
+                    b.tipo, b.ancho, franjas,
+                    altoCm = medidaIzq(alto), caidaCm = medidaIzq(caida),
+                    altoDerCm = medidaDer(alto), caidaDerCm = medidaDer(caida)
+                )
+            )
+            return franjas
         }
 
         // Si algún bloque contiene tag de arco (U<>): fusionar tramos en uno curvo
@@ -766,10 +806,14 @@ class VistaDiseno @JvmOverloads constructor(
             val franjas = parsearFranjasDesdeModeloCompleto(bloque.contenido)
             // `H<106.2>` dentro del tramo: su alto propio, el de la ventana escalonada.
             val altoTramo = RE_ALTO_TRAMO.find(bloque.contenido)?.groupValues?.get(1)
-                ?.replace(",", ".")?.toFloatOrNull() ?: 0f
             val caidaTramo = RE_CAIDA_TRAMO.find(bloque.contenido)?.groupValues?.get(1)
-                ?.replace(",", ".")?.toFloatOrNull() ?: 0f
-            segs.add(SegmentoNs(bloque.tipo, bloque.ancho, franjas, altoTramo, caidaTramo))
+            segs.add(
+                SegmentoNs(
+                    bloque.tipo, bloque.ancho, franjas,
+                    altoCm = medidaIzq(altoTramo), caidaCm = medidaIzq(caidaTramo),
+                    altoDerCm = medidaDer(altoTramo), caidaDerCm = medidaDer(caidaTramo)
+                )
+            )
             if (primerFranjas.isEmpty()) primerFranjas = franjas
         }
 
@@ -1422,14 +1466,14 @@ class VistaDiseno @JvmOverloads constructor(
             val anchoParante = max(10f, 2.5f * escalaLocal)
             // Cada tramo cuelga del dintel con SU alto: el que no llega tan abajo es el escalón,
             // el trozo de vano donde el alféizar sube.
-            fun yArribaDe(seg: SegmentoNs?): Float {
-                val c = seg?.caidaCm ?: 0f
+            fun yArribaDe(seg: SegmentoNs?, derecha: Boolean = false): Float {
+                val c = if (derecha) (seg?.caidaDerecha ?: 0f) else (seg?.caidaCm ?: 0f)
                 return if (c > 0f) (yTopPlanoActual + c * escalaLocal).coerceAtMost(yBottomPlanoActual)
                 else yTopPlanoActual
             }
-            fun yAbajoDe(seg: SegmentoNs?): Float {
-                val h = seg?.altoCm ?: 0f
-                return if (h > 0f) (yArribaDe(seg) + h * escalaLocal).coerceAtMost(yBottomPlanoActual)
+            fun yAbajoDe(seg: SegmentoNs?, derecha: Boolean = false): Float {
+                val h = if (derecha) (seg?.altoDerecho ?: 0f) else (seg?.altoCm ?: 0f)
+                return if (h > 0f) (yArribaDe(seg, derecha) + h * escalaLocal).coerceAtMost(yBottomPlanoActual)
                 else yBottomPlanoActual
             }
             val yArribaTramo = yArribaDe(segmento)
@@ -1454,8 +1498,22 @@ class VistaDiseno @JvmOverloads constructor(
                     rangosTramoX.add(Pair(xIni, xFin))
                     val segIdx = segmentosPlanoInfo.size
                     segmentosPlanoInfo.add(Triple(xIni, xFin, segmento.franjas))
-                    canvas.drawRect(RectF(xIni, yArribaTramo, xFin, yAbajoTramo), pMarco)
                     val anchoVentPx = xFin - xIni
+                    // Con los dos lados distintos el tramo es un cuadrilátero: se recorta el dibujo
+                    // con su silueta y las franjas de dentro salen cortadas por la inclinación, que
+                    // es lo que hace el vidrio al seguir la forma.
+                    val recorte = if (segmento.esInclinado) android.graphics.Path().apply {
+                        moveTo(xIni, yArribaTramo)
+                        lineTo(xFin, yArribaDe(segmento, derecha = true))
+                        lineTo(xFin, yAbajoDe(segmento, derecha = true))
+                        lineTo(xIni, yAbajoTramo)
+                        close()
+                    } else null
+                    if (recorte != null) {
+                        canvas.save()
+                        canvas.clipPath(recorte)
+                    }
+                    canvas.drawRect(RectF(xIni, yArribaTramo, xFin, yAbajoTramo), pMarco)
                     if (modo == ModoEnsamble.APA) {
                         dibujarAPASoloFranja(
                             canvas = canvas,
@@ -1483,6 +1541,12 @@ class VistaDiseno @JvmOverloads constructor(
                             segmentoIndex = segIdx,
                             altoTramoCm = segmento.altoCm
                         )
+                    }
+                    if (recorte != null) {
+                        canvas.restore()
+                        // El contorno del cuadrilátero se dibuja fuera del recorte para que se vea
+                        // entero, incluida la línea inclinada.
+                        canvas.drawPath(recorte, pMarco)
                     }
                     ultimaVentanaX0 = xIni
                     ultimaVentanaX1 = xFin
