@@ -3973,6 +3973,16 @@ class NovaCorrediza : AppCompatActivity() {
         if (!ColaCalculadoras.desdeMedidas(this)) return
         cargarYMostrarBocetoOriginal(ColaCalculadoras.bocetoPath(this))
         navegadorCola.instalarChip()
+        // La PRIMERA medida no pasa por el navegador: sus datos llegan en el intent. El contorno
+        // no viaja ahí, así que se aplica aquí o el vano escalonado entraría como un rectángulo.
+        val actual = ColaCalculadoras.cola(this).getOrNull(ColaCalculadoras.indice(this))
+        if (actual != null && cargarDisenoDelContorno(actual.contorno)) {
+            Toast.makeText(
+                this,
+                "Vano escalonado: el diseño trae sus tramos, pero el cálculo aún no cuenta las piezas del escalón",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     /**
