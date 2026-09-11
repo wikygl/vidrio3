@@ -34,24 +34,30 @@ class PiezasDelEscalonTest {
     }
 
     @Test
-    fun `cada escalón lleva su jamba, del alto que sube`() {
-        val jambas = PiezasDelEscalon.de(escalonada).filter { it.nombre.startsWith("jamba") }
-        assertEquals(1, jambas.size)
-        assertEquals("la jamba no mide lo que sube el alféizar", 53.8f, jambas[0].medidaCm, 0.05f)
+    fun `cada escalón lleva su parante, del alto que sube`() {
+        val parantes = PiezasDelEscalon.de(escalonada)
+            .filter { it.nombre.startsWith(PiezasDelEscalon.PARANTE_ESCALONADO) }
+        assertEquals(1, parantes.size)
+        assertEquals("el parante del escalón no mide lo que sube el alféizar", 53.8f, parantes[0].medidaCm, 0.05f)
+        // Con un solo escalón el nombre va sin números.
+        assertEquals(PiezasDelEscalon.PARANTE_ESCALONADO, parantes[0].nombre)
     }
 
     @Test
-    fun `con dos escalones salen dos jambas`() {
+    fun `con dos escalones salen dos parantes`() {
         val dosEscalones = DisenoNova.desdePaquete(
             "{nova,apa,[600,200:Tl<200>(s<200>(f<200>))" +
                 " P<2.5> Tl<200>(H<150>;s<150>(f<200>))" +
                 " P<2.5> Tl<200>(H<100>;s<100>(f<200>))]}"
         )!!
         val piezas = PiezasDelEscalon.de(dosEscalones)
-        val jambas = piezas.filter { it.nombre.startsWith("jamba") }
-        assertEquals(2, jambas.size)
-        assertEquals(50f, jambas[0].medidaCm, 0.05f)
-        assertEquals(50f, jambas[1].medidaCm, 0.05f)
+        val parantes = piezas.filter { it.nombre.startsWith(PiezasDelEscalon.PARANTE_ESCALONADO) }
+        assertEquals(2, parantes.size)
+        assertEquals(50f, parantes[0].medidaCm, 0.05f)
+        assertEquals(50f, parantes[1].medidaCm, 0.05f)
+        // Con varios, cada uno dice entre qué tramos está.
+        assertTrue(parantes[0].nombre.endsWith("1-2"))
+        assertTrue(parantes[1].nombre.endsWith("2-3"))
         assertEquals(3, piezas.count { it.nombre.startsWith("alféizar") })
     }
 }

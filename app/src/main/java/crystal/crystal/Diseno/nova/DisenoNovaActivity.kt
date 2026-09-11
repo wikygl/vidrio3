@@ -265,7 +265,8 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun dialogoVerPaquete() {
         val paquete = paqueteActualLectura()
         // En un vano escalonado se listan además las piezas que aparecen SOLO por el escalón: el
-        // alféizar partido en uno por tramo y la jamba de cada salto. Son medidas del vano, sin
+        // alféizar partido en uno por tramo y la U marco parante escalonado de cada salto. Son
+        // medidas del vano, sin
         // holguras, y todavía no entran en el cálculo de materiales: están aquí para verlas.
         val escalon = runCatching {
             DisenoNova.desdePaquete(paquete)?.let { PiezasDelEscalon.texto(it) }
