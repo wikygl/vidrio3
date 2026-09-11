@@ -140,6 +140,8 @@ class VistaDiseno @JvmOverloads constructor(
     var alClicFranja: ((Int) -> Unit)? = null
     var alClicFranjaTramo: ((Int, Int) -> Unit)? = null // (tramo, franja)
     var alDobleClicModulo: ((franja: Int, modulo: Int) -> Unit)? = null
+    /** Pulsación larga sobre una franja: (tramo, franja). La usa el mando de franjas. */
+    var alClicLargoFranja: ((tramo: Int, franja: Int) -> Unit)? = null
     private var indiceFranjaResaltada: Int = -1
     private var indiceTramoResaltado: Int = -1
     private var indiceModuloResaltado: Int = -1
@@ -3330,8 +3332,23 @@ class VistaDiseno @JvmOverloads constructor(
         return -1
     }
 
+    /** La pulsación larga sobre una franja abre su mando; el UP posterior ya no selecciona. */
+    private var largoYaDisparado = false
+    private val avisoLargo = Runnable {
+        val i = franjaDownIndex
+        if (i >= 0) {
+            largoYaDisparado = true
+            alClicLargoFranja?.invoke(tramoEnX(xDown), i)
+        }
+    }
+    private var xDown = 0f
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
+            MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(avisoLargo)
+                largoYaDisparado = false
+            }
             MotionEvent.ACTION_DOWN -> {
                 val x = event.x
                 val y = event.y
@@ -3349,12 +3366,21 @@ class VistaDiseno @JvmOverloads constructor(
                         val (top, bottom) = bandas[i]
                         if (y >= top && y <= bottom) {
                             franjaDownIndex = i
+                            xDown = x
+                            largoYaDisparado = false
+                            removeCallbacks(avisoLargo)
+                            postDelayed(avisoLargo, android.view.ViewConfiguration.getLongPressTimeout().toLong())
                             return true // consumir para recibir ACTION_UP
                         }
                     }
                 }
             }
             MotionEvent.ACTION_UP -> {
+                removeCallbacks(avisoLargo)
+                if (largoYaDisparado) {
+                    largoYaDisparado = false
+                    return true
+                }
                 val i = franjaDownIndex
                 if (i >= 0) {
                     val x = event.x

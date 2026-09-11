@@ -480,4 +480,34 @@ class DisenoNovaPantallaTest {
             assertEquals("el − no quitó en su franja", 1, conMenos.tramos[1].franjas[2].modulos.size)
         }
     }
+
+    /**
+     * Mantener pulsada una franja abre el mando de franjas: poner y quitar en ESE tramo, sin
+     * tocar los demás.
+     */
+    @Test
+    fun el_mando_de_franjas_pone_y_quita_en_su_tramo() {
+        val mezcla = "{nova,apa,[400,200:Tl<200>(s<160>(f<100>c<100>);m<40>(f<200>))" +
+            " P<2.5> Tl<200>(s<120>(f<100>c<100>);m<40>(f<200>);m<40>(f<200>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(mezcla) }
+            esperar()
+            enPantalla(esc) { it.pulsacionLargaParaPruebas(tramo = 0, franja = 1) }
+            esperar()
+            assertTrue("no salió el mando de franjas", enPantalla(esc) { it.hayFlotanteParaPruebas() })
+
+            enPantalla(esc) { it.pulsarFlotanteParaPruebas("+") }
+            esperar()
+            val conMas = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el + no agregó en su tramo", 3, conMas.tramos[0].franjas.size)
+            assertEquals("tocó el otro tramo", 3, conMas.tramos[1].franjas.size)
+
+            enPantalla(esc) { it.pulsarFlotanteParaPruebas("−") }
+            esperar()
+            val conMenos = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el − no quitó en su tramo", 2, conMenos.tramos[0].franjas.size)
+            assertEquals("tocó el otro tramo", 3, conMenos.tramos[1].franjas.size)
+        }
+    }
 }

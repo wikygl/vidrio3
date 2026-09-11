@@ -35,6 +35,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         /** Marca la fila de módulos de cada tramo en el panel de cotas, para poder pulsarla. */
         private const val TAG_MODULOS = "cotas_modulos_"
         private const val TAG_FLOTANTE = "flotante_modulos"
+        private const val FLOTANTE_MODULOS = 1
+        private const val FLOTANTE_FRANJAS = 2
         const val EXTRA_PAQUETE = "extra_paquete_diseno"
         const val EXTRA_MOCHETA_LATERAL_CM = "extra_mocheta_lateral_cm"
         const val EXTRA_HEADLESS = "extra_headless"
@@ -61,6 +63,8 @@ class DisenoNovaActivity : AppCompatActivity() {
     private var flotanteModulos: View? = null
     /** Dónde quedó el mando, para no perderlo mientras el dibujo vuelve a medirse. */
     private var flotantePos: Pair<Float, Float>? = null
+    /** Qué mando está a la vista: FLOTANTE_MODULOS o FLOTANTE_FRANJAS. */
+    private var modoFlotante = 0
     private var paqueteOriginal: String = ""
     private var estructuraEditada: Boolean = false
     private val franjas: MutableList<Franja> = mutableListOf() // orden: abajo→arriba
@@ -155,6 +159,15 @@ class DisenoNovaActivity : AppCompatActivity() {
             actualizarVista()
             // El mando de módulos sale junto a la franja recién tocada.
             mostrarFlotanteModulos()
+        }
+        // Mantener pulsada una franja abre su mando de franjas: poner y quitar en ese tramo.
+        binding.vistaDiseno.alClicLargoFranja = { tramo, franja ->
+            indiceTramoActivo = tramo.coerceAtLeast(0)
+            indiceFranjaActiva = franja
+            indiceModuloActivo = -1
+            binding.vistaDiseno.resaltarFranja(franja, indiceTramoActivo)
+            actualizarInfoSeleccion()
+            mostrarFlotanteFranjas()
         }
         // Doble click en módulo para seleccionarlo
         binding.vistaDiseno.alDobleClicModulo = { franja, modulo ->
@@ -494,19 +507,13 @@ class DisenoNovaActivity : AppCompatActivity() {
             .show()
     }
 
-    // =========================== FLOTANTE DE MÓDULOS ===========================
+    // =========================== MANDOS FLOTANTES ===========================
+    // Van pegados a la franja tocada porque el panel solo llega a la franja de sistema: con
+    // varias mochetas por tramo hacía falta un sitio donde lo que se toca sea de ESA franja.
+    // Un toque abre el de módulos; mantener pulsado, el de franjas.
 
-    /**
-     * El mando que sale junto a la franja tocada: poner, quitar y cambiar sus módulos.
-     *
-     * Va pegado a la franja y no en el panel porque el panel solo llega a la franja de sistema:
-     * con varias mochetas por tramo hacía falta un sitio donde el módulo que se toca sea el de
-     * esa franja y no el de otra.
-     */
-    private fun mostrarFlotanteModulos() {
-        cerrarFlotanteModulos()
-        val mods = modulosDeLaFranjaElegida()
-        if (mods.isEmpty()) return
+    /** Monta el mando junto a la franja: al lado del tramo y centrado en su banda. */
+    private fun montarFlotante(fila: LinearLayout, dp4: Int) {
         val tramo = tramoActivoSeguro()
         // Tras editar, el dibujo aún no ha vuelto a medir sus bandas: en ese caso el mando se
         // queda donde estaba en vez de desaparecer.
@@ -514,18 +521,44 @@ class DisenoNovaActivity : AppCompatActivity() {
         val ancho = binding.vistaDiseno.anchoDeTramo(tramo)
         if (banda == null && flotantePos == null) return
 
+        fila.tag = TAG_FLOTANTE
+        binding.contenedorPrincipal.addView(fila)
+        flotanteModulos = fila
+        fila.post {
+            val pos = if (banda != null && ancho != null) {
+                val x = (binding.vistaDiseno.x + ancho.first).coerceAtMost(
+                    binding.contenedorPrincipal.width - fila.width.toFloat() - dp4
+                ).coerceAtLeast(dp4.toFloat())
+                val y = (binding.vistaDiseno.y + (banda.first + banda.second) / 2f - fila.height / 2f)
+                    .coerceIn(dp4.toFloat(), (binding.contenedorPrincipal.height - fila.height - dp4).toFloat())
+                x to y
+            } else flotantePos!!
+            flotantePos = pos
+            fila.x = pos.first
+            fila.y = pos.second
+        }
+    }
+
+    /** La caja del mando, vacía. */
+    private fun filaFlotante(dp: Float, dp4: Int) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setBackgroundResource(R.drawable.bg_control_panel)
+        elevation = 10 * dp
+        setPadding(dp4, dp4, dp4, dp4)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+    }
+
+    /** Poner, quitar y cambiar los módulos de la franja tocada. */
+    private fun mostrarFlotanteModulos() {
+        quitarFlotanteModulos()
+        val mods = modulosDeLaFranjaElegida()
+        if (mods.isEmpty()) return
         val dp = resources.displayMetrics.density
         val dp4 = (4 * dp).toInt()
-        val fila = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundResource(R.drawable.bg_control_panel)
-            elevation = 10 * dp
-            setPadding(dp4, dp4, dp4, dp4)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        }
+        val fila = filaFlotante(dp, dp4)
         fila.addView(botonPanel("−", dp, mods.size > 1) { quitarModuloDeLaFranja() })
         fila.addView(botonPanel("+", dp, true) { agregarModuloALaFranja('f') })
         mods.forEachIndexed { j, tipo ->
@@ -543,26 +576,42 @@ class DisenoNovaActivity : AppCompatActivity() {
                 setOnClickListener { alternarTipoModuloDeLaFranja(j) }
             })
         }
-        fila.tag = TAG_FLOTANTE
-        binding.contenedorPrincipal.addView(fila)
-        flotanteModulos = fila
+        modoFlotante = FLOTANTE_MODULOS
+        montarFlotante(fila, dp4)
+    }
 
-        // Se coloca después de medir: centrado en la franja y pegado al tramo, sin salirse.
-        fila.post {
-            val pos = if (banda != null && ancho != null) {
-                val xLienzo = binding.vistaDiseno.x
-                val yLienzo = binding.vistaDiseno.y
-                val x = (xLienzo + ancho.first).coerceAtMost(
-                    binding.contenedorPrincipal.width - fila.width.toFloat() - dp4
-                ).coerceAtLeast(dp4.toFloat())
-                val y = (yLienzo + (banda.first + banda.second) / 2f - fila.height / 2f)
-                    .coerceIn(dp4.toFloat(), (binding.contenedorPrincipal.height - fila.height - dp4).toFloat())
-                x to y
-            } else flotantePos!!
-            flotantePos = pos
-            fila.x = pos.first
-            fila.y = pos.second
-        }
+    /**
+     * Poner y quitar franjas del tramo tocado, y ver cuántas tiene.
+     *
+     * Mantener pulsado el + abre el diálogo de siempre —sistema o mocheta, y con qué altura—;
+     * tocar el número abre la altura de la franja elegida.
+     */
+    private fun mostrarFlotanteFranjas() {
+        quitarFlotanteModulos()
+        val franjas = franjasDelTramoActivo()
+        if (franjas.isEmpty()) return
+        val dp = resources.displayMetrics.density
+        val dp4 = (4 * dp).toInt()
+        val tramo = tramoActivoSeguro()
+        val fila = filaFlotante(dp, dp4)
+        fila.addView(TextView(this).apply {
+            text = "Franjas ${franjas.size}"
+            textSize = 11f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, dp4, 0)
+            tag = "flotante_franjas_alto"
+            setOnClickListener { dialogoEditarFranjaAlturaSolo() }
+        })
+        fila.addView(botonPanel("−", dp, franjas.size > 1) {
+            cambiarEstructura { d -> d.conFranjaQuitadaEnTramo(tramo) }
+            refrescarFlotante()
+        })
+        fila.addView(botonPanel("+", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(tramo) }) {
+            cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(tramo) }
+            refrescarFlotante()
+        })
+        modoFlotante = FLOTANTE_FRANJAS
+        montarFlotante(fila, dp4)
     }
 
     private fun quitarFlotanteModulos() {
@@ -574,11 +623,16 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun cerrarFlotanteModulos() {
         quitarFlotanteModulos()
         flotantePos = null
+        modoFlotante = 0
     }
 
     /** Vuelve a montarlo tras cada cambio, para que las letras y el − sigan al día. */
-    private fun refrescarFlotanteModulos() {
-        if (flotanteModulos != null) binding.vistaDiseno.post { mostrarFlotanteModulos() }
+    private fun refrescarFlotante() {
+        if (flotanteModulos == null) return
+        val modo = modoFlotante
+        binding.vistaDiseno.post {
+            if (modo == FLOTANTE_FRANJAS) mostrarFlotanteFranjas() else mostrarFlotanteModulos()
+        }
     }
 
     private fun agregarModuloALaFranja(tipo: Char) {
@@ -588,7 +642,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             it.conModuloAgregado(tramoActivoSeguro(), indiceFranjaActiva, mods.lastIndex, tipo, bloqueados)
         }
         actualizarPanelCotas()
-        refrescarFlotanteModulos()
+        refrescarFlotante()
     }
 
     private fun quitarModuloDeLaFranja() {
@@ -602,7 +656,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             it.conModuloQuitado(tramoActivoSeguro(), indiceFranjaActiva, mods.lastIndex, bloqueados)
         }
         actualizarPanelCotas()
-        refrescarFlotanteModulos()
+        refrescarFlotante()
     }
 
     private fun alternarTipoModuloDeLaFranja(indiceModulo: Int) {
@@ -611,7 +665,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             it.conTipoCambiado(tramoActivoSeguro(), indiceFranjaActiva, indiceModulo, bloqueados)
         }
         actualizarPanelCotas()
-        refrescarFlotanteModulos()
+        refrescarFlotante()
     }
 
     /** Los módulos de la franja elegida del tramo activo, como letras. */
@@ -2165,6 +2219,12 @@ class DisenoNovaActivity : AppCompatActivity() {
     /** El módulo seleccionado ahora mismo, o -1. */
     @androidx.annotation.VisibleForTesting
     fun moduloActivoParaPruebas(): Int = indiceModuloActivo
+
+    /** Simula la pulsación larga sobre una franja, que abre el mando de franjas. */
+    @androidx.annotation.VisibleForTesting
+    fun pulsacionLargaParaPruebas(tramo: Int, franja: Int) {
+        binding.vistaDiseno.alClicLargoFranja?.invoke(tramo, franja)
+    }
 
     /** ¿Está a la vista el mando flotante de módulos? */
     @androidx.annotation.VisibleForTesting
