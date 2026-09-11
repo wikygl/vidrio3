@@ -2782,6 +2782,56 @@ class SketchMedidasView @JvmOverloads constructor(
             .show()
     }
 
+    // ==================== ENGANCHES PARA LAS PRUEBAS ====================
+    // Cortar y unir se hacen con el dedo y sobre lo que esté seleccionado. Para poder probarlo sin
+    // coordenadas de pantalla hace falta poner figuras y elegirlas a mano.
+
+    /** Pone un rectángulo en esas coordenadas de píxel y devuelve su índice. */
+    @androidx.annotation.VisibleForTesting
+    fun agregarRectanguloParaPruebas(izq: Float, arriba: Float, der: Float, abajo: Float): Int {
+        val rect = RectF(izq, arriba, der, abajo)
+        val ancho = pxToCm(rect.width())
+        val alto = pxToCm(rect.height())
+        elementos.add(
+            Element.Shape(
+                tool = Tool.RECTANGLE,
+                rect = rect,
+                start = PointF(rect.left, rect.top),
+                end = PointF(rect.right, rect.bottom),
+                widthCm = ancho,
+                heightCm = alto,
+                diameterCm = pxToCm(maxOf(rect.width(), rect.height())),
+                lengthCm = 0f,
+                topLeft = PointF(rect.left, rect.top),
+                topRight = PointF(rect.right, rect.top),
+                bottomRight = PointF(rect.right, rect.bottom),
+                bottomLeft = PointF(rect.left, rect.bottom),
+                topCm = ancho,
+                rightCm = alto,
+                bottomCm = ancho,
+                leftCm = alto
+            )
+        )
+        return elementos.lastIndex
+    }
+
+    /** Elige los elementos sobre los que trabajan cortar y unir. */
+    @androidx.annotation.VisibleForTesting
+    fun seleccionarParaPruebas(vararg indices: Int) {
+        selectedIndices.clear()
+        indices.forEach { selectedIndices.add(it) }
+    }
+
+    /** El contorno de la figura más grande, en píxeles, tal como se guarda. */
+    @androidx.annotation.VisibleForTesting
+    fun contornoGuardadoParaPruebas(): List<Pair<Float, Float>> {
+        val composite = elementos.filterIsInstance<Element.Composite>().maxByOrNull {
+            val b = boundsForElement(it)
+            b.width() * b.height()
+        } ?: return emptyList()
+        return composite.contours.firstOrNull()?.map { it.x to it.y }.orEmpty()
+    }
+
     fun weldSelected(): Boolean {
         if (selectedIndices.size != 2) return false
         val aIndex = selectedIndices[0]
@@ -4045,10 +4095,38 @@ class SketchMedidasView @JvmOverloads constructor(
         )
     }
 
+    /**
+     * ¿Ese elemento es un rectángulo de verdad?
+     *
+     * Importa para cortar: el atajo que calcula el contorno desde las CAJAS de las dos figuras
+     * solo vale si la que se corta es un rectángulo. Con una figura ya cortada, su caja vuelve a
+     * ser el rectángulo entero y el corte anterior se perdía —la figura se veía bien, porque el
+     * dibujo usa el camino de verdad, pero lo guardado tenía un solo corte.
+     */
+    private fun esRectangulo(elemento: Element): Boolean = when (elemento) {
+        is Element.Shape -> elemento.tool == Tool.RECTANGLE
+        is Element.Composite -> {
+            val contorno = elemento.contours.singleOrNull()
+            if (contorno == null || contorno.size != 4) false
+            else {
+                val caja = boundsForElement(elemento)
+                contorno.all { p ->
+                    (same(p.x, caja.left) || same(p.x, caja.right)) &&
+                        (same(p.y, caja.top) || same(p.y, caja.bottom))
+                }
+            }
+        }
+        else -> false
+    }
+
     private fun compositeFromDifference(path: Path, baseElement: Element, cutterElement: Element): Element.Composite {
         val bounds = RectF()
         path.computeBounds(bounds, true)
-        val contours = contoursFromRectDifference(boundsForElement(baseElement), boundsForElement(cutterElement))
+        // El atajo por cajas solo vale si lo que se corta es un rectángulo; si ya venía cortado,
+        // manda el camino de verdad o se perdería el corte anterior.
+        val contours = (if (esRectangulo(baseElement) && esRectangulo(cutterElement))
+            contoursFromRectDifference(boundsForElement(baseElement), boundsForElement(cutterElement))
+        else null)
             ?: contoursFromPath(path).ifEmpty { mutableListOf(rectContour(bounds)) }
         return Element.Composite(
             path = path,
@@ -4069,10 +4147,14 @@ class SketchMedidasView @JvmOverloads constructor(
 
             val points = mutableListOf<PointF>()
             var distance = 0f
+            // El paso tiene que ser MAYOR que las distancias con las que se descartan puntos: 1.5 px
+            // al recogerlos y 3 px al simplificar. Muestreando cada 1 px, cada punto caía
+            // demasiado cerca del anterior y se descartaban todos: el contorno salía vacío y la
+            // figura se guardaba como su caja —una L unida volvía a ser un rectángulo.
             while (distance < length) {
                 measure.getPosTan(distance, pos, null)
                 addPointIfDistinct(points, PointF(pos[0], pos[1]))
-                distance += 1f
+                distance += 4f
             }
             measure.getPosTan(length, pos, null)
             addPointIfDistinct(points, PointF(pos[0], pos[1]))
