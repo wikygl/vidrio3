@@ -1477,7 +1477,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         nuevosAnchos: List<Float>,
         nuevoAncho: Float,
         nuevoAlto: Float,
-        nuevasAlturas: List<List<Float>>
+        nuevasAlturas: List<List<Float>>,
+        altosDeTramo: List<Float> = emptyList()
     ) {
         if (bloques.isEmpty()) return
         // El ancho y el alto de la ventana entera mandan sobre lo demás: se fijan antes de repartir,
@@ -1519,10 +1520,27 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
 
         cargarDesdePaquete(reconstruirPaqueteConBloques(bloquesFinal))
+        aplicarAltosDeTramo(altosDeTramo)
         aplicarAlturasDeFranjas(nuevasAlturas)
         actualizarVista()
         actualizarPanelCotas()
     }
+
+    /** El alto propio de cada tramo: el que no llega al de la ventana es un escalón. */
+    private fun aplicarAltosDeTramo(altos: List<Float>) {
+        if (altos.all { it <= 0f }) return
+        val nuevo = runCatching {
+            var d = DisenoNova.desdePaquete(paqueteActualLectura()) ?: return@runCatching null
+            altos.forEachIndexed { i, alto -> if (alto > 0f) d = d.conAltoDeTramo(i, alto) }
+            d.aPaquete()
+        }.getOrNull() ?: return
+        cargarDesdePaquete(nuevo)
+    }
+
+    /** El alto de un tramo tal como está hoy: el suyo, o el de la ventana. */
+    private fun altoDelTramo(indice: Int): Float =
+        runCatching { DisenoNova.desdePaquete(paqueteActualLectura())?.altoDeTramo(indice) }
+            .getOrNull() ?: altoCm
 
     /**
      * Las alturas de las franjas, tramo a tramo y franja a franja, por el modelo.
@@ -1613,11 +1631,15 @@ class DisenoNovaActivity : AppCompatActivity() {
             setOnClickListener {
                 val nuevosAnchos = etAnchos.map { it.text.toString().aNumeroSeguro() }
                 val nuevoAncho = etAnchoVentana.text.toString().aNumeroSeguro()
-                // El alto sale de la casilla que se haya tocado: la de arriba o la de cualquier
-                // tarjeta, que muestran el mismo alto de la ventana.
-                val nuevoAlto = (listOf(etAlto) + etAltosDeTramo)
-                    .map { it.text.toString().aNumeroSeguro() }
-                    .firstOrNull { it > 0f && abs(it - altoCm) > 0.05f } ?: altoCm
+                val nuevoAlto = etAlto.text.toString().aNumeroSeguro()
+                // El alto de cada tarjeta es el de SU tramo: si no llega al de la ventana, ese
+                // tramo es un escalón. Solo se manda el que se tocó.
+                val altosDeAntes = capturedBloques.indices.map { altoDelTramo(it) }
+                val altosDeTramo = etAltosDeTramo.mapIndexed { i, et ->
+                    val valor = et.text.toString().aNumeroSeguro()
+                    val antes = altosDeAntes.getOrNull(i) ?: 0f
+                    if (valor > 0f && abs(valor - antes) > 0.05f) valor else 0f
+                }
                 // Solo las alturas que el vidriero TOCÓ. Si se mandan todas, la última pisa a las
                 // anteriores: al subir el puente, la mocheta con su valor de antes lo devolvía a
                 // donde estaba.
@@ -1629,7 +1651,9 @@ class DisenoNovaActivity : AppCompatActivity() {
                         if (abs(valor - antes) > 0.05f) valor else 0f
                     }
                 }
-                aplicarCambiosCotas(capturedBloques, nuevosAnchos, nuevoAncho, nuevoAlto, nuevasAlturas)
+                aplicarCambiosCotas(
+                    capturedBloques, nuevosAnchos, nuevoAncho, nuevoAlto, nuevasAlturas, altosDeTramo
+                )
             }
         })
 
@@ -1698,9 +1722,9 @@ class DisenoNovaActivity : AppCompatActivity() {
         val (vistaAncho, etAncho) = campoConEtiqueta("Ancho:", df1(bloque.ancho), dp4)
         etAncho.tag = "cotas_ancho_$i"
         etAnchos.add(etAncho)
-        // El alto es el de la ventana: todos los tramos llegan de piso a techo. Se muestra aquí
-        // para tener las dos medidas del tramo juntas, y editarlo cambia el alto de la ventana.
-        val (vistaAltoTramo, etAltoTramo) = campoConEtiqueta("Alto:", df1(altoCm), dp4)
+        // El alto de ESTE tramo. Normalmente es el de la ventana; si se le pone menos, ese tramo
+        // es un escalón: cuelga del mismo dintel y su alféizar sube.
+        val (vistaAltoTramo, etAltoTramo) = campoConEtiqueta("Alto:", df1(altoDelTramo(i)), dp4)
         etAltoTramo.tag = "cotas_alto_tramo_$i"
         etAltosDeTramo.add(etAltoTramo)
         columna.addView(enDosColumnas(vistaAncho, vistaAltoTramo, dp4))

@@ -41,12 +41,19 @@ data class NovaFranja(
     val nFijos: Int get() = modulos.count { it.esFijo }
     val nCorredizas: Int get() = modulos.count { !it.esFijo }
 }
-
 /**
  * Un tramo: el trozo de ventana entre dos parantes, con TODAS sus franjas. Un parante parte el
  * tramo entero, así que las franjas de un tramo empiezan y acaban juntas.
+ *
+ * [alto] en 0 quiere decir "el de la ventana", que es lo normal. Con una medida distinta el tramo
+ * llega menos arriba —o menos abajo—: es la ventana escalonada, la que en obra sale cuando el
+ * alféizar sube en un trozo del vano. Todos los tramos cuelgan del mismo dintel.
  */
-data class NovaTramo(val ancho: Float, val franjas: List<NovaFranja>) {
+data class NovaTramo(
+    val ancho: Float,
+    val franjas: List<NovaFranja>,
+    val alto: Float = 0f
+) {
     val sistema: NovaFranja? get() = franjas.firstOrNull { it.esSistema }
     val mochetas: List<NovaFranja> get() = franjas.filter { !it.esSistema }
     val nModulosSistema: Int get() = sistema?.modulos?.size ?: 0
@@ -68,6 +75,33 @@ data class DisenoNova(
     /** Parantes entre tramos: uno menos que los tramos. */
     val nParantes: Int get() = (tramos.size - 1).coerceAtLeast(0)
 
+
+    /** El alto de un tramo: el suyo si lo tiene, y si no el de la ventana. */
+    fun altoDeTramo(indice: Int): Float =
+        tramos.getOrNull(indice)?.alto?.takeIf { it > 0f } ?: alto
+
+    /** ¿Hay tramos que no llegan al alto de la ventana? Es la ventana escalonada. */
+    val esEscalonada: Boolean get() = tramos.any { it.alto > 0f && it.alto != alto }
+
+    /**
+     * Cambia el alto de UN tramo —el escalón— y estira o encoge sus franjas en la misma
+     * proporción, para que sigan llenándolo.
+     *
+     * [alto] igual al de la ventana, o 0, devuelve el tramo a ras de los demás.
+     */
+    fun conAltoDeTramo(indice: Int, altoTramo: Float): DisenoNova {
+        val tramo = tramos.getOrNull(indice) ?: return this
+        val nuevo = altoTramo.coerceAtLeast(0f)
+        val efectivo = if (nuevo <= 0f || kotlin.math.abs(nuevo - alto) < 0.05f) 0f else nuevo
+        if (kotlin.math.abs(efectivo - tramo.alto) < 0.05f) return this
+        val antes = altoDeTramo(indice)
+        val ahora = if (efectivo > 0f) efectivo else alto
+        val k = if (antes > 0f) ahora / antes else 1f
+        val franjas = tramo.franjas.map { if (it.alto > 0f) it.copy(alto = it.alto * k) else it }
+        val nuevos = tramos.toMutableList()
+        nuevos[indice] = tramo.copy(franjas = franjas, alto = efectivo)
+        return copy(tramos = nuevos)
+    }
     /** El ancho que queda para los módulos, descontando los parantes entre tramos. */
     fun anchoUtil(anchoParante: Float = 2.5f): Float =
         (ancho - nParantes * anchoParante).coerceAtLeast(0f)
@@ -262,12 +296,13 @@ data class DisenoNova(
     private fun conAlturasRepartidas(indiceTramo: Int): DisenoNova {
         val tramo = tramos.getOrNull(indiceTramo) ?: return this
         val sistema = tramo.franjas.firstOrNull { it.esSistema } ?: return this
-        if (sistema.alto <= 0f || alto <= 0f) return this
+        val altoT = altoDeTramo(indiceTramo)
+        if (sistema.alto <= 0f || altoT <= 0f) return this
         val mochetas = tramo.franjas.count { !it.esSistema }
         val franjas = if (mochetas == 0) {
-            tramo.franjas.map { if (it.esSistema) it.copy(alto = alto) else it }
+            tramo.franjas.map { if (it.esSistema) it.copy(alto = altoT) else it }
         } else {
-            val porMocheta = (alto - sistema.alto).coerceAtLeast(0f) / mochetas
+            val porMocheta = (altoT - sistema.alto).coerceAtLeast(0f) / mochetas
             tramo.franjas.map { if (it.esSistema) it else it.copy(alto = porMocheta) }
         }
         if (franjas == tramo.franjas) return this
@@ -289,11 +324,11 @@ data class DisenoNova(
      * - Entre medias: el sistema se queda con esa altura y las mochetas de ese tramo se reparten
      *   lo que sobra. Si el tramo no tenía mocheta, se le agrega una con el resto.
      */
-    fun conPuenteCambiado(indice: Int, altoPuente: Float, altoVentana: Float = alto): DisenoNova {
+    fun conPuenteCambiado(indice: Int, altoPuente: Float, altoVentana: Float = 0f): DisenoNova {
         val tramo = tramos.getOrNull(indice) ?: return this
         if (altoPuente <= 0f) return this
         val sistema = tramo.franjas.firstOrNull { it.esSistema } ?: return this
-        val total = if (altoVentana > 0f) altoVentana else alto
+        val total = if (altoVentana > 0f) altoVentana else altoDeTramo(indice)
         if (total <= 0f) return this
 
         val franjas: List<NovaFranja> = if (altoPuente >= total) {
@@ -332,12 +367,13 @@ data class DisenoNova(
     fun conAlturaDeFranja(indiceTramo: Int, indiceFranja: Int, altoFranja: Float): DisenoNova {
         val tramo = tramos.getOrNull(indiceTramo) ?: return this
         val franja = tramo.franjas.getOrNull(indiceFranja) ?: return this
-        if (altoFranja <= 0f || alto <= 0f) return this
-        if (franja.esSistema) return conPuenteCambiado(indiceTramo, altoFranja, alto)
+        val altoT = altoDeTramo(indiceTramo)
+        if (altoFranja <= 0f || altoT <= 0f) return this
+        if (franja.esSistema) return conPuenteCambiado(indiceTramo, altoFranja, altoT)
 
         val otrasMochetas = tramo.franjas.filterIndexed { i, f -> i != indiceFranja && !f.esSistema }
             .sumOf { it.alto.toDouble() }.toFloat()
-        val puente = (alto - altoFranja - otrasMochetas).coerceAtLeast(0f)
+        val puente = (altoT - altoFranja - otrasMochetas).coerceAtLeast(0f)
         val franjas = tramo.franjas.mapIndexed { i, f ->
             when {
                 i == indiceFranja -> f.copy(alto = altoFranja)
@@ -417,7 +453,11 @@ data class DisenoNova(
                 // Una franja sin altura se escribe sin `<alto>`, como venía.
                 if (fr.alto > 0f) "$cabeza<${df(fr.alto)}>($mods)" else "$cabeza($mods)"
             }
-            "Tl<${df(tramo.ancho)}>($franjas)"
+            // El alto propio del tramo va como tag `H<…>` dentro, delante de las franjas: los
+            // parsers viejos parten por `;` y solo miran los tokens que empiezan por s o m, así
+            // que lo ignoran sin romperse.
+            val cabezaAlto = if (tramo.alto > 0f) "H<${df(tramo.alto)}>;" else ""
+            "Tl<${df(tramo.ancho)}>($cabezaAlto$franjas)"
         }
         val tags = if (etiquetas.isEmpty()) "" else " " + etiquetas.joinToString(" ")
         return "{nova,$acabado,[${df(ancho)},${df(alto)}:$cuerpo$tags]}"
@@ -431,6 +471,8 @@ data class DisenoNova(
         // OJO con los cierres: hay que escapar `]` y `}` aunque en la JVM se acepten sueltos. El
         // motor de Android (ICU) los rechaza y revienta al inicializar la clase, no al usarla, así
         // que la app se cae con ExceptionInInitializerError y las pruebas de escritorio no lo ven.
+        /** El alto propio de un tramo: `H<106.2>`. Sin él, el tramo llega al alto de la ventana. */
+        private val RE_ALTO_TRAMO = Regex("""^[hH]\s*<\s*([\d.,-]+)\s*>""")
         private val RE_CABECERA = Regex("""\{nova\s*,\s*([a-z]+)\s*,\s*\[(.*)\]\}""", RegexOption.IGNORE_CASE)
         // La altura es OPCIONAL: los diseños viejos y el de arranque escriben la franja como
         // `s(f)`, sin `<alto>`. Exigirla hacía que el modelo no pudiera leerlos, y entonces las
@@ -524,8 +566,12 @@ data class DisenoNova(
                 val cab = RE_TRAMO.find(t)
                 val anchoTramo = cab?.groupValues?.get(1)?.let { num(it) } ?: ancho
                 val interior = interiorDeParentesis(t) ?: continue
-                val franjas = partirNivelSuperior(interior, ';').mapNotNull { franjaDesdeTexto(it) }
-                if (franjas.isNotEmpty()) tramos.add(NovaTramo(anchoTramo, franjas))
+                val tokens = partirNivelSuperior(interior, ';')
+                val altoTramo = tokens.firstNotNullOfOrNull { tk ->
+                    RE_ALTO_TRAMO.find(tk.trim())?.groupValues?.get(1)?.let { num(it) }
+                } ?: 0f
+                val franjas = tokens.mapNotNull { franjaDesdeTexto(it) }
+                if (franjas.isNotEmpty()) tramos.add(NovaTramo(anchoTramo, franjas, altoTramo))
             }
             if (tramos.isEmpty()) return null
             return DisenoNova(acabado, ancho, alto, tramos, etiquetas)

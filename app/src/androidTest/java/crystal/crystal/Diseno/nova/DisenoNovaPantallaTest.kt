@@ -637,4 +637,35 @@ class DisenoNovaPantallaTest {
             )
         }
     }
+
+    /**
+     * La ventana de la medida real: el alféizar sube en un trozo del vano. Se escribe el alto del
+     * tramo en su tarjeta y ese tramo pasa a ser un escalón, sin tocar el otro ni el alto de la
+     * ventana.
+     */
+    @Test
+    fun el_alto_de_la_tarjeta_hace_el_escalon() {
+        val recta = "{nova,apa,[446.3,160:Tl<280.3>(s<120>(f<140.1>c<140.1>);m<40>(f<280.3>))" +
+            " P<2.5> Tl<166>(s<160>(f<166>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(recta) }
+            esperar()
+            enPantalla(esc) { it.abrirCotasParaPruebas() }
+            esperar()
+            enPantalla(esc) { it.escribirMedidaParaPruebas("cotas_alto_tramo_1", "106.2") }
+            esperar(300)
+            enPantalla(esc) { it.pulsarAplicarCotasParaPruebas() }
+            esperar()
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el tramo no bajó a 106.2", 106.2f, d.altoDeTramo(1), 0.2f)
+            assertEquals("el otro tramo se movió", 160f, d.altoDeTramo(0), 0.2f)
+            assertEquals("cambió el alto de la ventana", 160f, d.alto, 0.2f)
+            assertTrue("no quedó como escalonada", d.esEscalonada)
+
+            // Y el dibujo se lo traga.
+            val error = enPantalla(esc) { it.vistaRechazaParaPruebas(d.aPaquete()) }
+            assertNull("el dibujo rechaza la escalonada: $error\n${d.aPaquete()}", error)
+        }
+    }
 }

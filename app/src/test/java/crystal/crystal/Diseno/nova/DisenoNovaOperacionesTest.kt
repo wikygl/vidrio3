@@ -315,4 +315,61 @@ class DisenoNovaOperacionesTest {
         // Y el tramo sigue con las mismas franjas de antes más la nueva.
         assertEquals(unTramo.tramos[0].franjas.size + 1, abajo.tramos[0].franjas.size)
     }
+
+    // ==================== VENTANA ESCALONADA ====================
+    // La de la medida real: 446.3 de ancho, dintel corrido, y el alféizar que sube en un trozo.
+    // 280.3 llega a 160 y 166 solo a 106.2; el escalón mide 53.8.
+
+    private val escalonada = DisenoNova.desdePaquete(
+        "{nova,apa,[446.3,160:Tl<280.3>(s<120>(f<140.1>c<140.1>);m<40>(f<280.3>))" +
+            " P<2.5> Tl<166>(H<106.2>;s<106.2>(f<166>))]}"
+    )!!
+
+    @Test
+    fun `el tramo puede llegar menos arriba que la ventana`() {
+        assertEquals(160f, escalonada.altoDeTramo(0), 0.01f)
+        assertEquals(106.2f, escalonada.altoDeTramo(1), 0.01f)
+        assertTrue("no se reconoce como escalonada", escalonada.esEscalonada)
+        // Y el ancho cierra: 280.3 + 2.5 + 166 = 448.8, que es lo que mide el vano con el parante.
+        assertEquals(2, escalonada.nTramos)
+    }
+
+    @Test
+    fun `el alto del tramo sobrevive al paquete`() {
+        val ida = escalonada.aPaquete()
+        assertTrue("el paquete no lleva el alto del tramo: $ida", ida.contains("H<106.2>"))
+        val vuelta = DisenoNova.desdePaquete(ida)!!
+        assertEquals(106.2f, vuelta.altoDeTramo(1), 0.05f)
+        assertEquals(160f, vuelta.altoDeTramo(0), 0.05f)
+        // Y no deriva: escribir otra vez da lo mismo.
+        assertEquals(ida, vuelta.aPaquete())
+    }
+
+    @Test
+    fun `cambiar el alto de un tramo estira sus franjas`() {
+        // El tramo 1 baja de 160 a 106.2: sus franjas se encogen en la misma proporción.
+        val d = escalonada.conAltoDeTramo(0, 106.2f)
+        val suma = d.tramos[0].franjas.sumOf { it.alto.toDouble() }.toFloat()
+        assertEquals("las franjas no siguen llenando el tramo", 106.2f, suma, 0.1f)
+        assertEquals(106.2f, d.altoDeTramo(0), 0.01f)
+    }
+
+    @Test
+    fun `devolver el tramo al alto de la ventana lo deja a ras`() {
+        val d = escalonada.conAltoDeTramo(1, 160f)
+        assertEquals(0f, d.tramos[1].alto, 0.01f)
+        assertTrue("sigue creyéndose escalonada", !d.esEscalonada)
+        // Y sin H<> en el paquete.
+        assertTrue(!d.aPaquete().contains("H<"))
+    }
+
+    @Test
+    fun `el puente y la mocheta de un tramo escalonado salen de SU alto`() {
+        // Puente a 80 en el tramo bajo: la mocheta se queda con 26.2, no con 80.
+        val d = escalonada
+            .conFranjaAgregadaEnTramo(1)
+            .conPuenteCambiado(1, 80f)
+        assertEquals(80f, d.tramos[1].sistema!!.alto, 0.05f)
+        assertEquals(26.2f, d.tramos[1].mochetas[0].alto, 0.05f)
+    }
 }

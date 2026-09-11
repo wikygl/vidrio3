@@ -33,7 +33,9 @@ enum class TipoSegmentoNs { PLANO, ALETA }
 data class SegmentoNs(
     val tipo: TipoSegmentoNs,
     val anchoCm: Float,
-    val franjas: List<FranjaNova>
+    val franjas: List<FranjaNova>,
+    /** Alto propio del tramo en cm; 0 = el de la ventana. Es la ventana escalonada. */
+    val altoCm: Float = 0f
 )
 
 class VistaDiseno @JvmOverloads constructor(
@@ -760,7 +762,10 @@ class VistaDiseno @JvmOverloads constructor(
         var primerFranjas: List<FranjaNova> = emptyList()
         for (bloque in bloques) {
             val franjas = parsearFranjasDesdeModeloCompleto(bloque.contenido)
-            segs.add(SegmentoNs(bloque.tipo, bloque.ancho, franjas))
+            // `H<106.2>` dentro del tramo: su alto propio, el de la ventana escalonada.
+            val altoTramo = RE_ALTO_TRAMO.find(bloque.contenido)?.groupValues?.get(1)
+                ?.replace(",", ".")?.toFloatOrNull() ?: 0f
+            segs.add(SegmentoNs(bloque.tipo, bloque.ancho, franjas, altoTramo))
             if (primerFranjas.isEmpty()) primerFranjas = franjas
         }
 
@@ -1411,12 +1416,22 @@ class VistaDiseno @JvmOverloads constructor(
             val xIni = xCursor
             var xFin = xCursor + anchoNominalPx
             val anchoParante = max(10f, 2.5f * escalaLocal)
+            // Cada tramo cuelga del dintel con SU alto: el que no llega tan abajo es el escalón,
+            // el trozo de vano donde el alféizar sube.
+            fun yAbajoDe(seg: SegmentoNs?): Float {
+                val h = seg?.altoCm ?: 0f
+                return if (h > 0f) (yTopPlanoActual + h * escalaLocal).coerceAtMost(yBottomPlanoActual)
+                else yBottomPlanoActual
+            }
+            val yAbajoTramo = yAbajoDe(segmento)
             if (idx > 0) {
+                // El parante solo existe donde los dos tramos se tocan: hasta donde llega el más corto.
+                val yAbajoParante = min(yAbajoTramo, yAbajoDe(segmentosNs.getOrNull(idx - 1)))
                 if (modo == ModoEnsamble.INA) {
-                    canvas.drawLine(xIni, yTopPlanoActual, xIni, yBottomPlanoActual, pLineaIna)
+                    canvas.drawLine(xIni, yTopPlanoActual, xIni, yAbajoParante, pLineaIna)
                 } else {
                     canvas.drawRect(
-                        RectF(xIni - anchoParante / 2, yTopPlanoActual, xIni + anchoParante / 2, yBottomPlanoActual),
+                        RectF(xIni - anchoParante / 2, yTopPlanoActual, xIni + anchoParante / 2, yAbajoParante),
                         pRellenoNegro
                     )
                 }
@@ -1427,7 +1442,7 @@ class VistaDiseno @JvmOverloads constructor(
                     rangosTramoX.add(Pair(xIni, xFin))
                     val segIdx = segmentosPlanoInfo.size
                     segmentosPlanoInfo.add(Triple(xIni, xFin, segmento.franjas))
-                    canvas.drawRect(RectF(xIni, yTopPlanoActual, xFin, yBottomPlanoActual), pMarco)
+                    canvas.drawRect(RectF(xIni, yTopPlanoActual, xFin, yAbajoTramo), pMarco)
                     val anchoVentPx = xFin - xIni
                     if (modo == ModoEnsamble.APA) {
                         dibujarAPASoloFranja(
@@ -1435,7 +1450,7 @@ class VistaDiseno @JvmOverloads constructor(
                             franjas = segmento.franjas,
                             xIni = xIni,
                             xFin = xFin,
-                            yBotTotal = yBottomPlanoActual,
+                            yBotTotal = yAbajoTramo,
                             anchoVentPx = anchoVentPx,
                             escalaPxPorCm = escalaLocal,
                             populateRangosFranjas = esPrimerPlano,
@@ -1448,7 +1463,7 @@ class VistaDiseno @JvmOverloads constructor(
                             xIni = xIni,
                             yTopTotal = yTopPlanoActual,
                             xFin = xFin,
-                            yBotTotal = yBottomPlanoActual,
+                            yBotTotal = yAbajoTramo,
                             anchoVentPx = anchoVentPx,
                             escalaPxPorCm = escalaLocal,
                             populateRangosFranjas = esPrimerPlano,
@@ -3447,6 +3462,8 @@ class VistaDiseno @JvmOverloads constructor(
 
     companion object {
         private const val PAQUETE_NOVA_FALLBACK = "{nova,ina,[150,120:s(f)]}"
+        /** El alto propio de un tramo dentro de su bloque: `H<106.2>`. */
+        private val RE_ALTO_TRAMO = Regex("""[hH]\s*<\s*([\d.,-]+)\s*>""")
     }
 }
 
