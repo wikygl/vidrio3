@@ -1,5 +1,7 @@
 package crystal.crystal.taller
 
+
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
@@ -15,6 +17,7 @@ import android.os.Environment
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
+import android.view.MotionEvent
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.EditText
@@ -154,16 +157,16 @@ class MedidaActivity : AppCompatActivity() {
     }
 
     private fun configurarAcciones() {
-        binding.btnGuardarMedida.setOnClickListener { guardarProyecto() }
-        binding.btnArchivarMedida.setOnClickListener { mostrarDialogoProductoParaArchivar() }
-        binding.btnAbrirMedida.setOnClickListener { mostrarGuardados() }
-        binding.btnEnviarMedida.setOnClickListener { enviarAMainActivity() }
-        binding.btnLimpiarMedida.setOnClickListener { confirmarLimpiar() }
+        binding.btnGuardarMedida.setOnClickListener { soltarHerramientaActiva(); guardarProyecto() }
+        binding.btnArchivarMedida.setOnClickListener { soltarHerramientaActiva(); mostrarDialogoProductoParaArchivar() }
+        binding.btnAbrirMedida.setOnClickListener { soltarHerramientaActiva(); mostrarGuardados() }
+        binding.btnEnviarMedida.setOnClickListener { soltarHerramientaActiva(); enviarAMainActivity() }
+        binding.btnLimpiarMedida.setOnClickListener { soltarHerramientaActiva(); confirmarLimpiar() }
         binding.btnDeshacerMedida.setOnClickListener { binding.sketchMedidas.undo() }
         binding.btnZoomMenosMedida.setOnClickListener { binding.sketchMedidas.zoomOut() }
         binding.btnZoomMasMedida.setOnClickListener { binding.sketchMedidas.zoomIn() }
         binding.btnAjustarMedida.setOnClickListener { binding.sketchMedidas.fitContentInView() }
-        binding.btnPdfMedida.setOnClickListener { generarYCompartirPdfMedida() }
+        binding.btnPdfMedida.setOnClickListener { soltarHerramientaActiva(); generarYCompartirPdfMedida() }
         binding.btProject.setOnClickListener { togglePanelProyecto() }
         binding.btArchivar.setOnClickListener { togglePanelArchivo() }
         binding.btFormas.setOnClickListener { togglePanelFormas() }
@@ -186,6 +189,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnMoverMedida.setOnClickListener { seleccionarHerramientaDesdePanelAjustes(SketchMedidasView.Tool.NONE) }
         binding.btnNuloMedida.setOnClickListener { seleccionarHerramientaDesdePanelAjustes(SketchMedidasView.Tool.NONE) }
         binding.btnLimpiaMedida.setOnClickListener {
+            soltarHerramientaActiva()
             confirmarLimpiar()
         }
         binding.btnArchivoArchivar.setOnClickListener {
@@ -212,16 +216,21 @@ class MedidaActivity : AppCompatActivity() {
             ocultarPanelesFlotantes()
             enviarAMainActivity()
         }
+        binding.btnArchivoCortes.setOnClickListener {
+            ocultarPanelesFlotantes()
+            enviarLadosACortes()
+        }
         binding.btnArchivoEnviarCalc.setOnClickListener {
             ocultarPanelesFlotantes()
             elegirClienteParaCalculadoras()
         }
         binding.btnHerramientaLapiz.setOnClickListener {
-            seleccionarHerramienta(SketchMedidasView.Tool.FREEHAND)
             ocultarPanelesFlotantes()
+            seleccionarHerramienta(SketchMedidasView.Tool.FREEHAND)
         }
         binding.btnHerramientaFormas.setOnClickListener { togglePanelFormas() }
         binding.btnFormaLapiz.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.FREEHAND) }
+        binding.btnFormaLapizIman.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.MAGNET_PEN) }
         binding.btnFormaRectangulo.setOnClickListener {
             binding.sketchMedidas.clearRectangleRoundedCorner()
             seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.RECTANGLE)
@@ -231,6 +240,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnFormaTexto.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.TEXT) }
         binding.btnFormaLinea.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.LINE) }
         binding.btnFormaLinea90.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.ORTHO_LINE) }
+        binding.btnFormaNodos.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.NODO) }
         binding.btnEngraBisagra.setOnClickListener { mostrarDialogoBisagra() }
         binding.btnEngraAdentro.setOnClickListener { insertarSimboloCentro("adentro") }
         binding.btnEngraAfuera.setOnClickListener { insertarSimboloCentro("afuera") }
@@ -239,8 +249,8 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnEngraExterior.setOnClickListener { insertarInteriorExterior("exterior") }
         binding.btnFuncionVano.setOnClickListener { mostrarDialogoPlantillaVano() }
         binding.btnHerramientaSeleccion.setOnClickListener {
-            seleccionarHerramienta(SketchMedidasView.Tool.SELECT)
             ocultarPanelesFlotantes()
+            seleccionarHerramienta(SketchMedidasView.Tool.SELECT)
         }
         binding.btnSoldarMedida.setOnClickListener { soldarSeleccion() }
         binding.btnRestarMedida.setOnClickListener { cortarSeleccion() }
@@ -255,14 +265,21 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnDesagruparPanelMedida.setOnClickListener { desagruparSeleccion() }
         binding.btnTabFormasBasicas.setOnClickListener { seleccionarTabFormas(true) }
         binding.btnTabFormasRecurrentes.setOnClickListener { seleccionarTabFormas(false) }
-        binding.btnPlantillaPuerta.setOnClickListener {
+        binding.btnPlantillaPuerta.setOnClickListener { insertarPuertaEstandar() }
+        binding.btnPlantillaPuerta.setOnLongClickListener {
             mostrarDialogoPlantilla("Puerta", incluyeBisagra = true, incluyeApertura = true, incluyeVista = true)
+            true
         }
-        binding.btnPlantillaVentana.setOnClickListener {
+        binding.btnPlantillaVentana.setOnClickListener { insertarVentanaEstandar() }
+        binding.btnPlantillaVentana.setOnLongClickListener {
             mostrarDialogoPlantilla("Ventana", incluyeBisagra = true, incluyeApertura = true, incluyeVista = true)
+            true
         }
-        binding.btnPlantillaMampara.setOnClickListener {
+        binding.btnPlantillaVentanaEsquina.setOnClickListener { insertarVentanaEsquinaEstandar() }
+        binding.btnPlantillaMampara.setOnClickListener { insertarMamparaEstandar() }
+        binding.btnPlantillaMampara.setOnLongClickListener {
             mostrarDialogoPlantilla("Mampara", incluyeBisagra = false, incluyeApertura = false, incluyeVista = true, hojasPorDefecto = 2)
+            true
         }
         binding.btnPlantillaCorrediza.setOnClickListener {
             mostrarDialogoPlantilla("Corrediza", incluyeBisagra = false, incluyeApertura = false, incluyeVista = true, hojasPorDefecto = 2)
@@ -297,6 +314,7 @@ class MedidaActivity : AppCompatActivity() {
             binding.sketchMedidas.insertarRecurrenteF5()
         }
         binding.btnRecurrenteF6.setOnClickListener { mostrarOpcionesRecurrenteF6() }
+        cerrarPanelesAlTocarElDibujo()
         seleccionarHerramienta(herramientaActual)
     }
 
@@ -347,6 +365,34 @@ class MedidaActivity : AppCompatActivity() {
         binding.panelPlantillasMedida.visibility = if (mostrar) View.VISIBLE else View.GONE
     }
 
+    private fun hayPanelAbierto(): Boolean = listOf(
+        binding.panelSuperiorMedida,
+        binding.panelFormasMedida,
+        binding.panelEngraMedida,
+        binding.panelArchivoMedida,
+        binding.panelOperacionesMedida,
+        binding.panelPlantillasMedida
+    ).any { it.visibility == View.VISIBLE }
+
+    /**
+     * Tocar el dibujo cierra el panel que estuviera abierto.
+     *
+     * El panel tapa media pantalla y hasta ahora solo se iba volviendo a pulsar su botón; lo que
+     * sale natural es apartarlo tocando fuera. Ese primer toque solo cierra —no dibuja ni
+     * selecciona— para no dejar un trazo suelto por quitarse el panel de encima.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun cerrarPanelesAlTocarElDibujo() {
+        binding.sketchMedidas.setOnTouchListener { _, evento ->
+            if (evento.actionMasked == MotionEvent.ACTION_DOWN && hayPanelAbierto()) {
+                ocultarPanelesFlotantes()
+                true
+            } else {
+                false
+            }
+        }
+    }
+
     private fun ocultarPanelesFlotantes() {
         binding.panelSuperiorMedida.visibility = View.GONE
         binding.panelFormasMedida.visibility = View.GONE
@@ -354,11 +400,24 @@ class MedidaActivity : AppCompatActivity() {
         binding.panelArchivoMedida.visibility = View.GONE
         binding.panelOperacionesMedida.visibility = View.GONE
         binding.panelPlantillasMedida.visibility = View.GONE
+        soltarHerramientaActiva()
+    }
+
+    /**
+     * Irse a otro botón apaga la herramienta que estuviera activa. El lápiz (normal o imán) se
+     * quedaba prendido al abrir plantillas u otro panel, y el siguiente toque en la pantalla
+     * dibujaba sin que nadie lo pidiera. Los botones de herramienta cierran los paneles antes de
+     * activarse, así que este apagado no los pisa.
+     */
+    private fun soltarHerramientaActiva() {
+        if (herramientaActual != SketchMedidasView.Tool.NONE) {
+            seleccionarHerramienta(SketchMedidasView.Tool.NONE)
+        }
     }
 
     private fun seleccionarHerramientaDesdePanel(tool: SketchMedidasView.Tool) {
-        seleccionarHerramienta(tool)
         ocultarPanelesFlotantes()
+        seleccionarHerramienta(tool)
     }
 
     private fun seleccionarHerramientaDesdePanelAjustes(tool: SketchMedidasView.Tool) {
@@ -475,6 +534,49 @@ class MedidaActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    /**
+     * La puerta se dibuja de un toque con lo de siempre: 90 x 240, puente a 200, bisagras a la
+     * izquierda, vista interior, abre hacia adentro y michi de 0.5. El diálogo de la plantilla
+     * (medidas de entrada y hojas) sigue estando en la pulsación larga.
+     */
+    private fun insertarPuertaEstandar() {
+        ocultarPanelesFlotantes()
+        binding.sketchMedidas.insertarPlantillaPuerta()
+        productoActual = "Puerta"
+        actualizarPanelInformacion()
+    }
+
+    /**
+     * La ventana también se dibuja de un toque: 150 x 120 con su puente, una cota de alto por
+     * dentro cada 120 cm de ancho y el alfeizar en 90. El diálogo de siempre queda en la pulsación
+     * larga.
+     */
+    private fun insertarVentanaEstandar() {
+        ocultarPanelesFlotantes()
+        binding.sketchMedidas.insertarPlantillaVentana()
+        productoActual = "Ventana"
+        actualizarPanelInformacion()
+    }
+
+    /**
+     * Ventana que dobla en esquina, en desarrollo: dos tramos (150 y 120) con su arista a 90°, la
+     * cota de alto clavada en la esquina y el ancho de cada tramo al pie.
+     */
+    private fun insertarVentanaEsquinaEstandar() {
+        ocultarPanelesFlotantes()
+        binding.sketchMedidas.insertarPlantillaVentanaEsquina()
+        productoActual = "Ventana"
+        actualizarPanelInformacion()
+    }
+
+    /** La mampara se toma como la ventana; cambian las medidas: 210 x 240 con el puente a 200. */
+    private fun insertarMamparaEstandar() {
+        ocultarPanelesFlotantes()
+        binding.sketchMedidas.insertarPlantillaMampara()
+        productoActual = "Mampara"
+        actualizarPanelInformacion()
     }
 
     private fun mostrarDialogoPlantilla(
@@ -825,6 +927,8 @@ class MedidaActivity : AppCompatActivity() {
             SketchMedidasView.Tool.TEXT -> "Texto"
             SketchMedidasView.Tool.LINE -> "Linea"
             SketchMedidasView.Tool.ORTHO_LINE -> "Linea 90"
+            SketchMedidasView.Tool.MAGNET_PEN -> "Lapiz iman"
+            SketchMedidasView.Tool.NODO -> "Nodos"
         }
         actualizarEstadoIconosFormas(tool)
     }
@@ -832,12 +936,14 @@ class MedidaActivity : AppCompatActivity() {
     private fun actualizarEstadoIconosFormas(tool: SketchMedidasView.Tool) {
         val estados = listOf(
             binding.btnFormaLapiz to (tool == SketchMedidasView.Tool.FREEHAND),
+            binding.btnFormaLapizIman to (tool == SketchMedidasView.Tool.MAGNET_PEN),
             binding.btnFormaRectangulo to (tool == SketchMedidasView.Tool.RECTANGLE),
             binding.btnFormaTriangulo to (tool == SketchMedidasView.Tool.TRIANGLE),
             binding.btnFormaCirculo to (tool == SketchMedidasView.Tool.CIRCLE),
             binding.btnFormaTexto to (tool == SketchMedidasView.Tool.TEXT),
             binding.btnFormaLinea to (tool == SketchMedidasView.Tool.LINE),
-            binding.btnFormaLinea90 to (tool == SketchMedidasView.Tool.ORTHO_LINE)
+            binding.btnFormaLinea90 to (tool == SketchMedidasView.Tool.ORTHO_LINE),
+            binding.btnFormaNodos to (tool == SketchMedidasView.Tool.NODO)
         )
         estados.forEach { (view, activo) ->
             view.isSelected = activo
@@ -852,7 +958,9 @@ class MedidaActivity : AppCompatActivity() {
             SketchMedidasView.Tool.CIRCLE,
             SketchMedidasView.Tool.TEXT,
             SketchMedidasView.Tool.LINE,
-            SketchMedidasView.Tool.ORTHO_LINE
+            SketchMedidasView.Tool.ORTHO_LINE,
+            SketchMedidasView.Tool.MAGNET_PEN,
+            SketchMedidasView.Tool.NODO
         )
     }
 
@@ -1144,34 +1252,187 @@ class MedidaActivity : AppCompatActivity() {
     }
 
     private fun mostrarDialogoProductoParaGuardar(onGuardado: ((String) -> Unit)? = null) {
-        mostrarDialogoProducto { producto ->
-            guardarApunte(producto)?.let { texto ->
-                onGuardado?.invoke(texto)
+        preguntarSiCorrige { sobrescribir ->
+            conProductoDeLaMedida(sobrescribir) { producto ->
+                guardarApunte(producto, sobrescribir)?.let { texto ->
+                    onGuardado?.invoke(texto)
+                }
             }
         }
     }
 
     private fun mostrarDialogoProductoParaArchivar() {
+        conProyectoDestino { archivarConProducto() }
+    }
+
+    private fun archivarConProducto() {
         if (!validarLienzoParaMedida()) return
-        mostrarDialogoProducto { producto ->
-            archivarMedida(producto)
+        preguntarSiCorrige { sobrescribir ->
+            conProductoDeLaMedida(sobrescribir) { producto ->
+                archivarMedida(producto, sobrescribir)
+            }
         }
+    }
+
+    /**
+     * Al corregir, el producto ya lo trae la medida archivada: se reutiliza y no se vuelve a
+     * preguntar. Si no, se mira si el propio dibujo lo declara —una puerta puesta desde su
+     * plantilla ya se sabe lo que es—. Solo se pregunta cuando ni una cosa ni la otra.
+     */
+    private fun conProductoDeLaMedida(sobrescribir: Boolean, accion: (String) -> Unit) {
+        val yaTiene = if (sobrescribir) bocetoActualEnIndice()?.producto?.trim().orEmpty() else ""
+        if (yaTiene.isNotBlank()) {
+            accion(yaTiene)
+            return
+        }
+        val delDibujo = binding.sketchMedidas.productoDelDibujo()
+        if (!delDibujo.isNullOrBlank()) {
+            productoActual = delDibujo
+            actualizarPanelInformacion()
+            accion(delDibujo)
+            return
+        }
+        mostrarDialogoProducto(accion)
+    }
+
+    /**
+     * Si el dibujo que hay en el lienzo salió de una medida YA archivada, pregunta si se la está
+     * corrigiendo o si es otra distinta.
+     *
+     * Hasta ahora solo se podía añadir: guardar siempre creaba una medida más, así que para
+     * corregir una había que dibujarla de nuevo y borrar la vieja. Se pregunta en vez de decidirlo
+     * solo porque las dos cosas son legítimas —corregir la que se abrió, o partir de ella para una
+     * parecida— y equivocarse hacia el lado de sobrescribir borraría trabajo hecho.
+     */
+    private fun preguntarSiCorrige(accion: (sobrescribir: Boolean) -> Unit) {
+        val destino = bocetoActualDesdeArchivo
+        val txt = archivoActualTxt
+        val archivada = destino != null && txt != null &&
+            cargarIndiceBocetos(txt.parentFile, txt.nameWithoutExtension).any { it.archivo == destino }
+        if (!archivada) {
+            accion(false)
+            return
+        }
+        val opciones = arrayOf(
+            "Corregir esta medida\nReemplaza el dibujo y la descripción de la que abriste.",
+            "Guardar como otra medida\nDeja la anterior como está y añade una nueva al proyecto."
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Esta medida ya está guardada")
+            .setItems(opciones) { _, cual -> accion(cual == 0) }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun guardarProyecto() {
-        val notas = binding.etNotasMedida.text?.toString()?.trim().orEmpty()
-        if (!binding.sketchMedidas.hasDrawing()) {
-            if (notas.isBlank()) {
-                mostrar("Dibuja una medida antes de guardar")
-                return
+        conProyectoDestino {
+            val notas = binding.etNotasMedida.text?.toString()?.trim().orEmpty()
+            if (!binding.sketchMedidas.hasDrawing()) {
+                if (notas.isBlank()) {
+                    mostrar("Dibuja una medida antes de guardar")
+                    return@conProyectoDestino
+                }
+                guardarTextoProyecto(productoActual.ifBlank { "Proyecto medidas" }, notas)
+                return@conProyectoDestino
             }
-            guardarTextoProyecto(productoActual.ifBlank { "Proyecto medidas" }, notas)
-            return
+            mostrarDialogoProductoParaGuardar()
         }
-        mostrarDialogoProductoParaGuardar()
     }
 
-    private fun guardarApunte(producto: String): String? {
+    /**
+     * Decide a qué proyecto va la medida cuando todavía no hay cliente puesto.
+     *
+     * Escribir otra vez el mismo nombre no reabre el proyecto: crea uno nuevo al lado, y la medida
+     * se queda separada de las que ya se tomaron para ese cliente. Por eso se pregunta: o se suma a
+     * un proyecto que ya existe —y entonces se elige de la lista— o se empieza uno nuevo con su
+     * nombre. Con el cliente ya puesto no se pregunta nada: se sigue donde se estaba.
+     */
+    private fun conProyectoDestino(accion: () -> Unit) {
+        if (clienteActual().isNotBlank()) {
+            accion()
+            return
+        }
+        val proyectos = proyectosGuardados()
+        if (proyectos.isEmpty()) {
+            pedirClienteNuevo(accion)
+            return
+        }
+        val opciones = arrayOf(
+            "Agregar a un proyecto\nSe suma a las medidas que ese proyecto ya tiene.",
+            "Crear un proyecto nuevo\nSe pide el nombre del cliente."
+        )
+        AlertDialog.Builder(this)
+            .setTitle("¿A dónde va esta medida?")
+            .setItems(opciones) { _, cual ->
+                if (cual == 0) elegirProyectoDestino(proyectos, accion) else pedirClienteNuevo(accion)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun proyectosGuardados(): List<File> = obtenerDirectorioMedidas()
+        .listFiles { file -> file.extension.equals("txt", ignoreCase = true) }
+        ?.sortedByDescending { it.lastModified() }
+        .orEmpty()
+
+    private fun elegirProyectoDestino(archivos: List<File>, accion: () -> Unit) {
+        val nombres = archivos.map { it.nameWithoutExtension }
+        AlertDialog.Builder(this)
+            .setTitle("Agregar a un proyecto")
+            .setAdapter(ArrayAdapter(this, android.R.layout.simple_list_item_1, nombres)) { _, cual ->
+                if (adjuntarAProyecto(archivos[cual])) accion()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun pedirClienteNuevo(accion: () -> Unit) {
+        val input = EditText(this).apply {
+            hint = "Cliente"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            setSingleLine(true)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Proyecto nuevo")
+            .setView(input)
+            .setPositiveButton("Continuar") { _, _ ->
+                val nombre = input.text?.toString()?.trim().orEmpty()
+                if (nombre.isBlank()) {
+                    mostrar("Ingresa el nombre del cliente")
+                    return@setPositiveButton
+                }
+                binding.etClienteMedida.setText(nombre)
+                // Proyecto nuevo de verdad: no se queda pegado a ningún archivo abierto antes.
+                archivoActualTxt = null
+                bocetoActualDesdeArchivo = null
+                actualizarPanelInformacion()
+                accion()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /**
+     * Apunta el trabajo a un proyecto ya guardado sin tocar el lienzo: se traen su cliente y sus
+     * notas, y lo que está dibujado ahora entra como una medida MÁS de ese proyecto.
+     */
+    private fun adjuntarAProyecto(txtFile: File): Boolean = runCatching {
+        val texto = txtFile.readText()
+        binding.etClienteMedida.setText(
+            extraerCampo(texto, "Cliente").ifBlank { txtFile.nameWithoutExtension }
+        )
+        binding.etNotasMedida.setText(extraerNotas(texto))
+        archivoActualTxt = txtFile
+        bocetoActualDesdeArchivo = null
+        actualizarPanelInformacion()
+        mostrar("Se agrega a ${txtFile.nameWithoutExtension}")
+        true
+    }.getOrElse {
+        mostrar("No se pudo abrir el proyecto: ${it.message}")
+        false
+    }
+
+    private fun guardarApunte(producto: String, sobrescribir: Boolean = false): String? {
         val cliente = clienteActual()
         val notas = binding.etNotasMedida.text?.toString()?.trim().orEmpty()
 
@@ -1185,20 +1446,23 @@ class MedidaActivity : AppCompatActivity() {
         }
 
         val textoGenerado = construirTextoMedidas(producto, notas)
-        return guardarTextoProyecto(producto, textoGenerado)?.also {
+        return guardarTextoProyecto(producto, textoGenerado, sobrescribir)?.also {
             binding.etNotasMedida.setText(it)
         }
     }
 
-    private fun archivarMedida(producto: String) {
+    private fun archivarMedida(producto: String, sobrescribir: Boolean = false) {
         if (!validarLienzoParaMedida()) return
-        val notas = binding.etNotasMedida.text?.toString()?.trim().orEmpty()
+        val notasActuales = binding.etNotasMedida.text?.toString()?.trim().orEmpty()
+        // Al corregir una medida, su línea vieja sale de las notas antes de escribir la nueva: si
+        // no, el proyecto acabaría con las dos, la corregida y la que ya no vale.
+        val notas = if (sobrescribir) quitarBloque(notasActuales, descripcionBocetoActual()) else notasActuales
         val medida = construirBloqueMedida(producto) ?: run {
             mostrar("No se pudo leer ancho y alto del dibujo")
             return
         }
         val textoArchivado = unirBloques(notas, medida)
-        guardarTextoProyecto(producto, textoArchivado)?.let {
+        guardarTextoProyecto(producto, textoArchivado, sobrescribir)?.let {
             binding.etNotasMedida.setText(it)
             binding.etInfoProductoMedida.setText("")
             binding.sketchMedidas.clear()
@@ -1208,7 +1472,11 @@ class MedidaActivity : AppCompatActivity() {
         }
     }
 
-    private fun guardarTextoProyecto(producto: String, texto: String): String? {
+    private fun guardarTextoProyecto(
+        producto: String,
+        texto: String,
+        sobrescribir: Boolean = false
+    ): String? {
         val cliente = clienteActual()
         if (cliente.isBlank()) {
             mostrar("Ingresa el nombre del cliente")
@@ -1227,17 +1495,25 @@ class MedidaActivity : AppCompatActivity() {
             var ultimoBoceto = bocetos.lastOrNull()?.archivo.orEmpty()
 
             if (binding.sketchMedidas.hasDrawing()) {
-                val sketchFile = File(dir, "${baseName}_${System.currentTimeMillis()}.json")
                 val descripcion = construirBloqueMedida(producto) ?: productoConInfoActual(producto)
+                // Corrección de una medida ya archivada: se reescribe SU archivo y su entrada del
+                // índice, así que la corregida ocupa el lugar de la vieja en vez de sumarse.
+                val corregido = bocetoActualDesdeArchivo
+                    ?.takeIf { sobrescribir }
+                    ?.let { nombre -> bocetos.indexOfFirst { it.archivo == nombre }.takeIf { it >= 0 } }
+                val sketchFile = if (corregido != null) {
+                    File(dir, bocetos[corregido].archivo)
+                } else {
+                    File(dir, "${baseName}_${System.currentTimeMillis()}.json")
+                }
                 sketchFile.writeText(binding.sketchMedidas.exportEditableState())
-                bocetos.add(
-                    BocetoProyecto(
-                        archivo = sketchFile.name,
-                        producto = productoConInfoActual(producto),
-                        descripcion = descripcion,
-                        fecha = System.currentTimeMillis()
-                    )
+                val entrada = BocetoProyecto(
+                    archivo = sketchFile.name,
+                    producto = productoConInfoActual(producto),
+                    descripcion = descripcion,
+                    fecha = System.currentTimeMillis()
                 )
+                if (corregido != null) bocetos[corregido] = entrada else bocetos.add(entrada)
                 guardarIndiceBocetos(dir, baseName, bocetos)
                 ultimoBoceto = sketchFile.name
                 bocetoActualDesdeArchivo = sketchFile.name
@@ -1848,7 +2124,8 @@ class MedidaActivity : AppCompatActivity() {
                         alto = medida.altoCm,
                         cantidad = 1f,
                         cliente = cliente,
-                        bocetoArchivo = rutaGrafico
+                        bocetoArchivo = rutaGrafico,
+                        contorno = contorno
                     )
                 )
             }
@@ -1860,10 +2137,42 @@ class MedidaActivity : AppCompatActivity() {
         return resultado
     }
 
+    /**
+     * La escoba borra, pero hay dos cosas muy distintas que borrar y confundirlas cuesta trabajo:
+     * el dibujo que se tiene delante, o el apunte entero.
+     *
+     * Lo primero es lo que se hace a cada rato —terminar una medida y empezar la siguiente del
+     * MISMO proyecto— y hasta ahora solo estaba en el panel de Archivo, donde no se encontraba. Va
+     * primero y dicho con todas sus letras; el apunte nuevo queda debajo y sigue pidiendo
+     * confirmación, que ahí sí se pierde el cliente y las notas.
+     */
     private fun confirmarLimpiar() {
+        val proyecto = archivoActualTxt?.nameWithoutExtension
+        val seguirEn = clienteActual().ifBlank { proyecto.orEmpty() }
+        val opciones = arrayOf(
+            "Limpiar el lienzo\n" +
+                if (seguirEn.isNotBlank()) {
+                    "Borra el dibujo para tomar otra medida. Se conservan el cliente y las medidas " +
+                        "ya archivadas: la siguiente se suma a $seguirEn."
+                } else {
+                    "Borra solo el dibujo. Las notas y el cliente se conservan."
+                },
+            "Limpiar todo\n" +
+                "Borra el dibujo, las notas y el cliente: empieza un apunte nuevo."
+        )
         AlertDialog.Builder(this)
             .setTitle("Limpiar apunte")
-            .setMessage("Se borrara el dibujo y las notas actuales.")
+            .setItems(opciones) { _, cual ->
+                if (cual == 0) confirmarLimpiarLienzoActual() else confirmarLimpiarTodo()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun confirmarLimpiarTodo() {
+        AlertDialog.Builder(this)
+            .setTitle("Limpiar todo")
+            .setMessage("Se borrara el dibujo y las notas actuales, y el apunte deja de estar unido a este proyecto.")
             .setPositiveButton("Limpiar") { _, _ -> limpiarProyectoEnPantalla() }
             .setNegativeButton("Cancelar", null)
             .show()
@@ -1890,7 +2199,52 @@ class MedidaActivity : AppCompatActivity() {
         binding.sketchMedidas.clear()
         seleccionarHerramienta(SketchMedidasView.Tool.NONE)
         actualizarPanelInformacion()
-        mostrar("Lienzo limpio")
+        // Se dice a dónde va lo que se dibuje ahora: el lienzo en blanco no deja ver que se sigue
+        // dentro del proyecto, y esa duda es la que hacía empezar de cero sin necesidad.
+        val seguirEn = clienteActual()
+        mostrar(
+            if (archivoActualTxt != null && seguirEn.isNotBlank()) {
+                "Lienzo limpio. La siguiente medida se suma a $seguirEn"
+            } else {
+                "Lienzo limpio"
+            }
+        )
+    }
+
+    /**
+     * Manda al optimizador de corte cada lado del perímetro de lo que hay dibujado.
+     *
+     * Un apunte con varias figuras es una lista de piezas: lo que se acotó lado por lado es
+     * justamente lo que hay que cortar, y hasta ahora había que volver a teclearlo en Cortes. Las
+     * medidas iguales de una misma figura se juntan en una fila con su cantidad, que es como se
+     * lee una lista de corte.
+     */
+    private fun enviarLadosACortes() {
+        val lados = binding.sketchMedidas.ladosDelPerimetro()
+        if (lados.isEmpty()) {
+            mostrar("No hay figuras con medidas para cortar")
+            return
+        }
+        val filas = lados
+            .groupBy { Math.round(it.cm * 10f) / 10f to it.etiqueta }
+            .toList()
+            .sortedWith(compareBy({ it.first.second }, { -it.first.first }))
+        val arreglo = JSONArray()
+        filas.forEach { (clave, iguales) ->
+            arreglo.put(
+                JSONObject()
+                    .put("l", clave.first.toDouble())
+                    .put("c", iguales.size)
+                    .put("r", clave.second.ifBlank { "-" })
+            )
+        }
+        startActivity(
+            Intent(this, crystal.crystal.optimizadores.corte.CorteActivity::class.java)
+                .putExtra("piezas_cortes_json", arreglo.toString())
+                // El apunte está en centímetros y en centímetros se lee en el taller.
+                .putExtra("piezas_cortes_escala", "CENTIMETRO")
+        )
+        mostrar("Enviando ${lados.size} lado(s) a cortes")
     }
 
     private fun mostrarOpcionesCompartirMedida() {
@@ -2499,6 +2853,27 @@ class MedidaActivity : AppCompatActivity() {
             .filter { it.isNotBlank() }
             .joinToString("\n\n")
     }
+
+    /** Quita del texto el bloque de una medida; los bloques van separados por una línea en blanco. */
+    private fun quitarBloque(texto: String, bloque: String): String {
+        val objetivo = bloque.trim()
+        if (objetivo.isBlank()) return texto
+        return texto.split("\n\n")
+            .filter { it.trim() != objetivo }
+            .joinToString("\n\n")
+            .trim()
+    }
+
+    /** La medida archivada que se tiene abierta en el lienzo, tal y como está hoy en el índice. */
+    private fun bocetoActualEnIndice(): BocetoProyecto? {
+        val destino = bocetoActualDesdeArchivo ?: return null
+        val txt = archivoActualTxt ?: return null
+        return cargarIndiceBocetos(txt.parentFile, txt.nameWithoutExtension)
+            .firstOrNull { it.archivo == destino }
+    }
+
+    /** La línea con la que está archivada hoy la medida que se tiene abierta en el lienzo. */
+    private fun descripcionBocetoActual(): String = bocetoActualEnIndice()?.descripcion.orEmpty()
 
     private fun validarLienzoParaMedida(): Boolean {
         if (clienteActual().isBlank()) {

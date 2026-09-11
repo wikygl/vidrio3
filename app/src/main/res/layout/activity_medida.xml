@@ -126,7 +126,7 @@
             android:id="@+id/btnHerramientaFormas"
             android:layout_width="0dp"
             android:layout_height="44dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:text="Formas"
             android:textAllCaps="false" />
@@ -136,15 +136,15 @@
         android:id="@+id/panelFormasMedida"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="6dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginEnd="8dp"
         android:background="@drawable/bg_control_panel"
         android:elevation="8dp"
         android:orientation="vertical"
-        android:paddingStart="6dp"
+        android:paddingStart="4dp"
         android:paddingTop="4dp"
-        android:paddingEnd="6dp"
+        android:paddingEnd="4dp"
         android:paddingBottom="6dp"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
@@ -179,543 +179,691 @@
         <LinearLayout
             android:id="@+id/contenidoFormasBasicas"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingStart="2dp"
-            android:paddingEnd="2dp">
+            android:orientation="vertical">
 
-            <ImageButton
-                android:id="@+id/btnFormaRectangulo"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Rectangulo"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/rect" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
-            <ImageButton
-                android:id="@+id/btnFormaTriangulo"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Triangulo"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/triang" />
+                <LinearLayout style="@style/CeldaIconoMedida">
 
-            <ImageButton
-                android:id="@+id/btnFormaCirculo"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Circulo"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/circ" />
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Rectangulo" />
 
-            <ImageButton
-                android:id="@+id/btnFormaLapiz"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Lapiz"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/lapiz" />
+                    <ImageButton
+                        android:id="@+id/btnFormaRectangulo"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Rectangulo"
+                        android:src="@drawable/rect" />
+                </LinearLayout>
 
-            <ImageButton
-                android:id="@+id/btnFormaTexto"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Texto"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/texto" />
+                <LinearLayout style="@style/CeldaIconoMedida">
 
-            <ImageButton
-                android:id="@+id/btnFormaLinea"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Linea"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/linea" />
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Triangulo" />
 
-            <ImageButton
-                android:id="@+id/btnFormaLinea90"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Linea 90"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/l90" />
+                    <ImageButton
+                        android:id="@+id/btnFormaTriangulo"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Triangulo"
+                        android:src="@drawable/triang" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Circulo" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaCirculo"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Circulo"
+                        android:src="@drawable/circ" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Texto" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaTexto"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Texto"
+                        android:src="@drawable/texto" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:orientation="horizontal">
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Lapiz" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaLapiz"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Lapiz"
+                        android:src="@drawable/lapiz" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Lapiz iman" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaLapizIman"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Lapiz magnetico"
+                        android:src="@drawable/lapiz_iman" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Linea" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaLinea"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Linea"
+                        android:src="@drawable/linea" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Linea 90" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaLinea90"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Linea 90"
+                        android:src="@drawable/l90" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Nodos" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaNodos"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Mover nodos"
+                        android:src="@drawable/nodos" />
+                </LinearLayout>
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/contenidoFormasRecurrentes"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingStart="2dp"
-            android:paddingEnd="2dp"
+            android:orientation="vertical"
             android:visibility="gone">
 
-            <ImageButton
-                android:id="@+id/btnRecurrenteF1"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Forma recurrente 1"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/f1" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
-            <ImageButton
-                android:id="@+id/btnRecurrenteF2"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Forma recurrente 2"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/f2" />
+                <LinearLayout style="@style/CeldaIconoMedida">
 
-            <ImageButton
-                android:id="@+id/btnRecurrenteF3"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Forma recurrente 3"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/f3" />
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="F1" />
 
-            <ImageButton
-                android:id="@+id/btnRecurrenteF4"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Forma recurrente 4"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/f4" />
+                    <ImageButton
+                        android:id="@+id/btnRecurrenteF1"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Forma recurrente 1"
+                        android:src="@drawable/f1" />
+                </LinearLayout>
 
-            <ImageButton
-                android:id="@+id/btnRecurrenteF5"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Forma recurrente 5"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/f5" />
+                <LinearLayout style="@style/CeldaIconoMedida">
 
-            <ImageButton
-                android:id="@+id/btnRecurrenteF6"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Forma recurrente 6"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/f6" />
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="F2" />
+
+                    <ImageButton
+                        android:id="@+id/btnRecurrenteF2"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Forma recurrente 2"
+                        android:src="@drawable/f2" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="F3" />
+
+                    <ImageButton
+                        android:id="@+id/btnRecurrenteF3"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Forma recurrente 3"
+                        android:src="@drawable/f3" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:orientation="horizontal">
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="F4" />
+
+                    <ImageButton
+                        android:id="@+id/btnRecurrenteF4"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Forma recurrente 4"
+                        android:src="@drawable/f4" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="F5" />
+
+                    <ImageButton
+                        android:id="@+id/btnRecurrenteF5"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Forma recurrente 5"
+                        android:src="@drawable/f5" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="F6" />
+
+                    <ImageButton
+                        android:id="@+id/btnRecurrenteF6"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Forma recurrente 6"
+                        android:src="@drawable/f6" />
+                </LinearLayout>
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/panelEngraMedida"
         android:layout_width="0dp"
-        android:layout_height="64dp"
-        android:layout_marginStart="12dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="6dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginEnd="8dp"
         android:background="@drawable/bg_control_panel"
         android:elevation="8dp"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="8dp"
+        android:orientation="vertical"
+        android:paddingStart="4dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="4dp"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <ImageButton
-            android:id="@+id/btnEngraBisagra"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Bisagra"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/bisagra" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
-        <ImageButton
-            android:id="@+id/btnEngraAdentro"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Adentro"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/adentro" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-        <ImageButton
-            android:id="@+id/btnEngraAfuera"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Afuera"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/afuera" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Bisagra" />
 
-        <ImageButton
-            android:id="@+id/btnEngraMichi"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Michi"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/michi" />
+                <ImageButton
+                    android:id="@+id/btnEngraBisagra"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Bisagra"
+                    android:src="@drawable/bisagra" />
+            </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/btnEngraInterior"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Interior"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/interior" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-        <ImageButton
-            android:id="@+id/btnEngraExterior"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Exterior"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/exterior" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Adentro" />
 
-        <ImageButton
-            android:id="@+id/btnFuncionVano"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Vano exacto"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/vano" />
+                <ImageButton
+                    android:id="@+id/btnEngraAdentro"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Adentro"
+                    android:src="@drawable/adentro" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Afuera" />
+
+                <ImageButton
+                    android:id="@+id/btnEngraAfuera"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Afuera"
+                    android:src="@drawable/afuera" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Michi" />
+
+                <ImageButton
+                    android:id="@+id/btnEngraMichi"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Michi"
+                    android:src="@drawable/michi" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal">
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Interior" />
+
+                <ImageButton
+                    android:id="@+id/btnEngraInterior"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Interior"
+                    android:src="@drawable/interior" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Exterior" />
+
+                <ImageButton
+                    android:id="@+id/btnEngraExterior"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Exterior"
+                    android:src="@drawable/exterior" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Vano" />
+
+                <ImageButton
+                    android:id="@+id/btnFuncionVano"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Vano exacto"
+                    android:src="@drawable/vano" />
+            </LinearLayout>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/panelArchivoMedida"
         android:layout_width="0dp"
-        android:layout_height="64dp"
-        android:layout_marginStart="12dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="6dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginEnd="8dp"
         android:background="@drawable/bg_control_panel"
         android:elevation="8dp"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="8dp"
+        android:orientation="vertical"
+        android:paddingStart="4dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="4dp"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <ImageButton
-            android:id="@+id/btnArchivoArchivar"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Archivar"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/archivar" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
-        <ImageButton
-            android:id="@+id/btnArchivoAbrir"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Abrir"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/abrir" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-        <ImageButton
-            android:id="@+id/btnArchivoVerBocetos"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Ver medida"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/lista" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Archivar" />
 
-        <ImageButton
-            android:id="@+id/btnArchivoLimpiarLienzo"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Limpiar lienzo"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/limpia" />
+                <ImageButton
+                    android:id="@+id/btnArchivoArchivar"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Archivar"
+                    android:src="@drawable/archivar" />
+            </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/btnArchivoCompartir"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Compartir"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/comptir" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-        <ImageButton
-            android:id="@+id/btnArchivoCalcul"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Calcular"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/calcul" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Abrir" />
 
-        <ImageButton
-            android:id="@+id/btnArchivoEnviarCalc"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Enviar a calculadoras"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_send_compact" />
+                <ImageButton
+                    android:id="@+id/btnArchivoAbrir"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Abrir"
+                    android:src="@drawable/abrir" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Medidas" />
+
+                <ImageButton
+                    android:id="@+id/btnArchivoVerBocetos"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Ver medidas del proyecto"
+                    android:src="@drawable/lista" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Limpiar" />
+
+                <ImageButton
+                    android:id="@+id/btnArchivoLimpiarLienzo"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Limpiar lienzo"
+                    android:src="@drawable/limpia" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal">
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Compartir" />
+
+                <ImageButton
+                    android:id="@+id/btnArchivoCompartir"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Compartir"
+                    android:src="@drawable/comptir" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Calcular" />
+
+                <ImageButton
+                    android:id="@+id/btnArchivoCalcul"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Calcular"
+                    android:src="@drawable/calcul" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Cortes" />
+
+                <ImageButton
+                    android:id="@+id/btnArchivoCortes"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Enviar lados a cortes"
+                    android:src="@drawable/cortes_m" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Enviar" />
+
+                <ImageButton
+                    android:id="@+id/btnArchivoEnviarCalc"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Enviar a calculadoras"
+                    android:src="@drawable/enviar_m" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/panelOperacionesMedida"
         android:layout_width="0dp"
-        android:layout_height="64dp"
-        android:layout_marginStart="12dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="6dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginEnd="8dp"
         android:background="@drawable/bg_control_panel"
         android:elevation="8dp"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="8dp"
+        android:orientation="vertical"
+        android:paddingStart="4dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="4dp"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <ImageButton
-            android:id="@+id/btnSoldarPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Soldar"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/soldar" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
-        <ImageButton
-            android:id="@+id/btnCortarPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Cortar"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/cortar" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-        <ImageButton
-            android:id="@+id/btnRedondearPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Redondear esquina"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/f6"
-            android:visibility="gone" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Soldar" />
 
-        <ImageButton
-            android:id="@+id/btnEspejoPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Espejo"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/espejo" />
+                <ImageButton
+                    android:id="@+id/btnSoldarPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Soldar"
+                    android:src="@drawable/soldar" />
+            </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/btnDuplicarPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Duplicar"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/duplicar" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-        <ImageButton
-            android:id="@+id/btnRotarPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Rotar"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/rotar" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Cortar" />
 
-        <ImageButton
-            android:id="@+id/btnEscalaPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Escala"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/escala" />
+                <ImageButton
+                    android:id="@+id/btnCortarPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Cortar"
+                    android:src="@drawable/cortar" />
+            </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/btnCompasPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Compas"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/compas" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-        <ImageButton
-            android:id="@+id/btnAgruparPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Agrupar"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/agrupar" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Espejo" />
 
-        <ImageButton
-            android:id="@+id/btnDesagruparPanelMedida"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Desagrupar"
-            android:padding="6dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/desagrupar" />
+                <ImageButton
+                    android:id="@+id/btnEspejoPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Espejo"
+                    android:src="@drawable/espejo" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Duplicar" />
+
+                <ImageButton
+                    android:id="@+id/btnDuplicarPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Duplicar"
+                    android:src="@drawable/duplicar" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Rotar" />
+
+                <ImageButton
+                    android:id="@+id/btnRotarPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Rotar"
+                    android:src="@drawable/rotar" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal">
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Escala" />
+
+                <ImageButton
+                    android:id="@+id/btnEscalaPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Escala"
+                    android:src="@drawable/escala" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Compas" />
+
+                <ImageButton
+                    android:id="@+id/btnCompasPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Compas"
+                    android:src="@drawable/compas" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Agrupar" />
+
+                <ImageButton
+                    android:id="@+id/btnAgruparPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Agrupar"
+                    android:src="@drawable/agrupar" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Separar" />
+
+                <ImageButton
+                    android:id="@+id/btnDesagruparPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Desagrupar"
+                    android:src="@drawable/desagrupar" />
+            </LinearLayout>
+
+            <LinearLayout
+                style="@style/CeldaIconoMedida"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Redondear" />
+
+                <ImageButton
+                    android:id="@+id/btnRedondearPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Redondear esquina"
+                    android:src="@drawable/f6" />
+            </LinearLayout>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/panelPlantillasMedida"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="6dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginEnd="8dp"
         android:background="@drawable/bg_control_panel"
         android:elevation="8dp"
         android:orientation="vertical"
-        android:paddingStart="8dp"
+        android:paddingStart="4dp"
         android:paddingTop="6dp"
-        android:paddingEnd="8dp"
+        android:paddingEnd="4dp"
         android:paddingBottom="6dp"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/panelAccionesMedida"
@@ -821,6 +969,27 @@
                 android:textAllCaps="false"
                 android:textSize="11sp" />
         </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnPlantillaVentanaEsquina"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:text="V. Esquina"
+                android:textAllCaps="false"
+                android:textSize="11sp" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="3" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
@@ -828,9 +997,9 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingStart="12dp"
+        android:paddingStart="4dp"
         android:paddingTop="6dp"
-        android:paddingEnd="12dp"
+        android:paddingEnd="4dp"
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -839,7 +1008,7 @@
         <Button
             android:id="@+id/btnHerramientaSeleccion"
             android:layout_width="0dp"
-            android:layout_height="42dp"
+            android:layout_height="46dp"
             android:layout_weight="1"
             android:text="Selec"
             android:textAllCaps="false" />
@@ -847,8 +1016,8 @@
         <Button
             android:id="@+id/btnSoldarMedida"
             android:layout_width="0dp"
-            android:layout_height="42dp"
-            android:layout_marginStart="6dp"
+            android:layout_height="46dp"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:text="Soldar"
 
@@ -857,8 +1026,8 @@
         <Button
             android:id="@+id/btnRestarMedida"
             android:layout_width="0dp"
-            android:layout_height="42dp"
-            android:layout_marginStart="6dp"
+            android:layout_height="46dp"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:text="Cortar"
             android:textAllCaps="false" />
@@ -904,7 +1073,7 @@
             android:id="@+id/btnZoomMasMedida"
             android:layout_width="0dp"
             android:layout_height="40dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:text="Z+"
             android:textAllCaps="false"
@@ -914,7 +1083,7 @@
             android:id="@+id/btnAjustarMedida"
             android:layout_width="0dp"
             android:layout_height="40dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:text="Ajustar"
             android:textAllCaps="false"
@@ -924,7 +1093,7 @@
             android:id="@+id/btnPdfMedida"
             android:layout_width="0dp"
             android:layout_height="40dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:text="PDF"
             android:textAllCaps="false"
@@ -1152,110 +1321,118 @@
         <LinearLayout
             android:id="@+id/panelAjustesMedida"
             android:layout_width="match_parent"
-            android:layout_height="54dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:background="@drawable/bg_control_panel"
-            android:gravity="center"
             android:orientation="horizontal"
             android:paddingStart="2dp"
             android:paddingTop="3dp"
             android:paddingEnd="2dp"
             android:paddingBottom="3dp">
 
-            <ImageButton
-                android:id="@+id/btnAjusteVistaPanel"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Ajustar"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/ajuste" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-            <ImageButton
-                android:id="@+id/btnAtrasMedida"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="1dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Deshacer"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/atras" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Ajustar" />
 
-            <ImageButton
-                android:id="@+id/btnAdelanteMedida"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="1dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Rehacer"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/adelante" />
+                <ImageButton
+                    android:id="@+id/btnAjusteVistaPanel"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Ajustar"
+                    android:src="@drawable/ajuste" />
+            </LinearLayout>
 
-            <ImageButton
-                android:id="@+id/btnZoomMasPanel"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="1dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Zoom mas"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/zoommas" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-            <ImageButton
-                android:id="@+id/btnZoomMenosPanel"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="1dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Zoom menos"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/zoommenos" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Deshacer" />
 
-            <ImageButton
-                android:id="@+id/btnMoverMedida"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="1dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Mover"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/mover" />
+                <ImageButton
+                    android:id="@+id/btnAtrasMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Deshacer"
+                    android:src="@drawable/atras" />
+            </LinearLayout>
 
-            <ImageButton
-                android:id="@+id/btnNuloMedida"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="1dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Nulo"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/nulo" />
+            <LinearLayout style="@style/CeldaIconoMedida">
 
-            <ImageButton
-                android:id="@+id/btnLimpiaMedida"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="1dp"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Limpiar"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/limpia" />
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Rehacer" />
+
+                <ImageButton
+                    android:id="@+id/btnAdelanteMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Rehacer"
+                    android:src="@drawable/adelante" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Acercar" />
+
+                <ImageButton
+                    android:id="@+id/btnZoomMasPanel"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Acercar"
+                    android:src="@drawable/zoommas" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Alejar" />
+
+                <ImageButton
+                    android:id="@+id/btnZoomMenosPanel"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Alejar"
+                    android:src="@drawable/zoommenos" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Mover" />
+
+                <ImageButton
+                    android:id="@+id/btnMoverMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Mover"
+                    android:src="@drawable/mover" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Nulo" />
+
+                <ImageButton
+                    android:id="@+id/btnNuloMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Nulo"
+                    android:src="@drawable/nulo" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Limpiar" />
+
+                <ImageButton
+                    android:id="@+id/btnLimpiaMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Limpiar"
+                    android:src="@drawable/limpia" />
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout
@@ -1276,7 +1453,7 @@
                 android:id="@+id/btnArchivarMedida"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
                 android:text="Archivar"
                 android:textAllCaps="false" />
@@ -1285,7 +1462,7 @@
                 android:id="@+id/btnAbrirMedida"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
                 android:text="Abrir"
                 android:textAllCaps="false" />
@@ -1294,7 +1471,7 @@
                 android:id="@+id/btnEnviarMedida"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
                 android:text="Enviar"
                 android:textAllCaps="false" />
@@ -1319,7 +1496,7 @@
                 android:id="@+id/btnLimpiarMedida"
                 android:layout_width="0dp"
                 android:layout_height="44dp"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
                 android:text="Limpiar"
                 android:textAllCaps="false" />
