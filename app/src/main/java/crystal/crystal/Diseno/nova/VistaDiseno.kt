@@ -3298,6 +3298,13 @@ class VistaDiseno @JvmOverloads constructor(
         rangosFranjaPorTramo[indiceTramo].add(Pair(top, bottom))
     }
 
+    /** La banda (arriba, abajo) de una franja dentro de su tramo, en coordenadas de la vista. */
+    fun bandaDeFranja(indiceTramo: Int, indiceFranja: Int): Pair<Float, Float>? =
+        rangosFranjaPorTramo.getOrNull(indiceTramo)?.getOrNull(indiceFranja)
+
+    /** El ancho (izquierda, derecha) de un tramo en pantalla. */
+    fun anchoDeTramo(indiceTramo: Int): Pair<Float, Float>? = rangosTramoX.getOrNull(indiceTramo)
+
     /**
      * Las bandas de cada franja de un tramo, de abajo arriba. Es lo que mira el toque para saber
      * qué franja se ha tocado; las pruebas lo usan para no depender de coordenadas a ojo.

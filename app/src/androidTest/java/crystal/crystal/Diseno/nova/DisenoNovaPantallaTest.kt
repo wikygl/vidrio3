@@ -432,4 +432,52 @@ class DisenoNovaPantallaTest {
             assertTrue("no abre el ancho en: " + fallos.joinToString(", "), fallos.isEmpty())
         }
     }
+
+    /**
+     * Al tocar una franja sale el mando flotante, y sus botones trabajan sobre ESA franja: poner,
+     * quitar y cambiar sus módulos. Se prueba en la mocheta de arriba de un tramo con tres, que
+     * es donde el panel no llega —el panel solo maneja la franja de sistema.
+     */
+    @Test
+    fun el_flotante_pone_quita_y_cambia_modulos_de_la_franja_tocada() {
+        val mezcla = "{nova,apa,[400,200:Tl<200>(s<160>(f<100>c<100>);m<40>(f<200>))" +
+            " P<2.5> Tl<200>(s<120>(f<100>c<100>);m<40>(f<200>);m<40>(f<200>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(mezcla) }
+            esperar()
+            val bandas = enPantalla(esc) { it.bandasDeFranjaParaPruebas(1) }
+            val anchos = enPantalla(esc) { it.anchosDeTramoParaPruebas() }
+            val x = (anchos[1].first + anchos[1].second) / 2f
+            val y = (bandas[2].first + bandas[2].second) / 2f
+
+            enPantalla(esc) { it.tocarLienzoParaPruebas(x, y) }
+            esperar()
+            assertTrue("no salió el mando flotante", enPantalla(esc) { it.hayFlotanteParaPruebas() })
+
+            // Poner: la mocheta de arriba pasa de un paño a dos, y nadie más se mueve.
+            enPantalla(esc) { it.pulsarFlotanteParaPruebas("+") }
+            esperar()
+            val conMas = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el + no agregó en su franja", 2, conMas.tramos[1].franjas[2].modulos.size)
+            assertEquals("tocó la otra mocheta", 1, conMas.tramos[1].franjas[1].modulos.size)
+            assertEquals("tocó el sistema", 2, conMas.tramos[1].sistema!!.modulos.size)
+
+            // Cambiar: el segundo paño de esa mocheta pasa a corrediza.
+            val toco = enPantalla(esc) { it.pulsarFlotanteParaPruebas("1") }
+            assertTrue("no encontró el recuadro 1 en el mando", toco)
+            esperar()
+            val conCambio = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertTrue(
+                "el recuadro no cambió el módulo: ${conCambio.aPaquete()}",
+                !conCambio.tramos[1].franjas[2].modulos[1].esFijo
+            )
+
+            // Quitar: vuelve a un paño.
+            enPantalla(esc) { it.pulsarFlotanteParaPruebas("−") }
+            esperar()
+            val conMenos = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("el − no quitó en su franja", 1, conMenos.tramos[1].franjas[2].modulos.size)
+        }
+    }
 }
