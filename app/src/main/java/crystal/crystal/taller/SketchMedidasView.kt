@@ -429,6 +429,7 @@ class SketchMedidasView @JvmOverloads constructor(
         canvas.scale(viewScale, viewScale)
         drawBackground(canvas)
         elementos.forEachIndexed { index, element -> drawElement(canvas, index, element, true) }
+        dibujarPlantasDeEsquina(canvas, true)
         drawSelection(canvas)
         drawNodos(canvas)
         if (dibujando) {
@@ -1233,6 +1234,171 @@ class SketchMedidasView @JvmOverloads constructor(
     }
 
     /** Los cortes en x que separan los tramos: cantos del marco incluidos. */
+    // ==================== VISTA EN PLANTA DE LA VENTANA DE ESQUINA ====================
+    // La alzada dice cómo es cada pared; la planta dice cómo se doblan entre ellas. Los altos que
+    // se miden dentro de cada tramo se leen aquí, sobre el punto donde se tomaron, y en la alzada
+    // queda solo su marca: con cuatro tramos, el desarrollo se llenaba de números y no había forma
+    // de saber cuál era de dónde.
+
+    /**
+     * Lo que baja la planta por debajo de la alzada.
+     *
+     * Tiene que dejar pasar lo que ya vive ahí abajo —la cota del ancho, el alféizar y el contador
+     * de altos de cada tramo—, o la planta se les monta encima.
+     */
+    private val huecoPlantaPx get() = maxOf(cmToPx(55f), 300f)
+
+    /** El punto donde se tomó un alto, marcado sobre la línea de la planta. */
+    private val cotaPuntoPlantaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#1565C0")
+        style = Paint.Style.FILL
+    }
+
+    /** ¿Esa cota de alto pertenece a una ventana de esquina, que lleva su número en la planta? */
+    private fun altoDeVentanaEsquina(altoIndex: Int): Boolean =
+        elementos.indices.any { esMarcoEsquina(it) && altoIndex in altosDelMarco(it, null) }
+
+    /** ¿Ese elemento es un marco de ventana de esquina con aristas? */
+    private fun esMarcoEsquina(index: Int): Boolean {
+        val s = elementos.getOrNull(index) as? Element.Shape ?: return false
+        return s.cotaHint == ESQUINA_MARCO && quiebresDelMarco(index).isNotEmpty()
+    }
+
+    /** El ángulo escrito en cada arista, de izquierda a derecha. 90° si no se entiende. */
+    private fun angulosDeEsquina(marcoIndex: Int): List<Float> =
+        etiquetasEsquina(marcoIndex).map { i ->
+            val t = (elementos[i] as Element.TextLabel).text
+            t.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", ".")
+                .toFloatOrNull()?.coerceIn(1f, 359f) ?: 90f
+        }
+
+    /**
+     * El recorrido de la ventana visto desde arriba: un punto por borde de tramo, doblando en cada
+     * arista por su ángulo.
+     *
+     * Arranca bajo el canto izquierdo de la alzada y va hacia la derecha; en cada arista gira lo
+     * que le falta al ángulo para ser una pared recta, así que 180° sigue de largo y 90° dobla en
+     * escuadra. El giro va hacia abajo, que es como se mira una planta puesta bajo su alzada.
+     */
+    private fun recorridoPlanta(marcoIndex: Int): List<PointF> {
+        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
+        val bordes = bordesDeTramos(marcoIndex)
+        if (bordes.size < 2) return emptyList()
+        val angulos = angulosDeEsquina(marcoIndex)
+        val puntos = mutableListOf<PointF>()
+        var x = marco.rect.left
+        var y = marco.rect.bottom + huecoPlantaPx
+        var dir = 0.0 // radianes; 0 = hacia la derecha
+        puntos.add(PointF(x, y))
+        for (t in 0 until bordes.size - 1) {
+            val largo = bordes[t + 1] - bordes[t]
+            x += (largo * cos(dir)).toFloat()
+            y += (largo * sin(dir)).toFloat()
+            puntos.add(PointF(x, y))
+            angulos.getOrNull(t)?.let { dir += Math.toRadians((180f - it).toDouble()) }
+        }
+        return puntos
+    }
+
+    /** Dibuja la planta de cada ventana de esquina del apunte. */
+    private fun dibujarPlantasDeEsquina(canvas: Canvas, collectHits: Boolean) {
+        elementos.indices.filter { esMarcoEsquina(it) }.forEach { marcoIndex ->
+            dibujarPlantaEsquina(canvas, marcoIndex, collectHits)
+        }
+    }
+
+    private fun dibujarPlantaEsquina(canvas: Canvas, marcoIndex: Int, collectHits: Boolean) {
+        val puntos = recorridoPlanta(marcoIndex)
+        if (puntos.size < 2) return
+        val bordes = bordesDeTramos(marcoIndex)
+        val angulos = angulosDeEsquina(marcoIndex)
+
+        // La pared vista desde arriba: un trazo por tramo.
+        for (i in 0 until puntos.size - 1) {
+            canvas.drawLine(puntos[i].x, puntos[i].y, puntos[i + 1].x, puntos[i + 1].y, cotaLinePaint)
+        }
+        // Y el ancho de cada tramo, sobre su lado.
+        for (i in 0 until puntos.size - 1) {
+            val medio = PointF((puntos[i].x + puntos[i + 1].x) / 2f, (puntos[i].y + puntos[i + 1].y) / 2f)
+            val grados = Math.toDegrees(
+                kotlin.math.atan2((puntos[i + 1].y - puntos[i].y).toDouble(), (puntos[i + 1].x - puntos[i].x).toDouble())
+            ).toFloat()
+            val fuera = perpendicular(puntos[i], puntos[i + 1], ce(20f))
+            drawCotaText(
+                canvas = canvas,
+                index = marcoIndex,
+                type = CotaType.COMPOSITE_SIDE,
+                cx = medio.x + fuera.x,
+                cy = medio.y + fuera.y,
+                value = pxToCm(bordes[i + 1] - bordes[i]),
+                collectHits = false,
+                angleDegrees = if (grados > 90f || grados < -90f) grados + 180f else grados
+            )
+        }
+        // El ángulo no se pinta aquí: es un rótulo de verdad —se toca para cambiarlo— y se coloca
+        // en su esquina de la planta desde `colocarBandaRotulos`.
+
+        // Los altos: un punto donde se tomó cada uno, con su medida por dentro de la pared. Es lo
+        // que se quita de la alzada, que se queda solo con la marca.
+        altosDelMarco(marcoIndex, null).forEach { i ->
+            val alto = elementos[i] as Element.Shape
+            val p = puntoEnPlanta(puntos, bordes, alto.start.x) ?: return@forEach
+            val tramo = tramoDeX(bordes, alto.start.x)
+            val a = puntos.getOrNull(tramo) ?: return@forEach
+            val b = puntos.getOrNull(tramo + 1) ?: return@forEach
+            val dentro = perpendicular(a, b, -ce(20f))
+            canvas.drawCircle(p.x, p.y, ce(5f), cotaPuntoPlantaPaint)
+            drawCotaText(
+                canvas = canvas,
+                index = i,
+                type = CotaType.LENGTH,
+                cx = p.x + dentro.x,
+                cy = p.y + dentro.y,
+                value = alto.lengthCm,
+                collectHits = collectHits
+            )
+        }
+    }
+
+    /**
+     * Dónde va el rótulo del ángulo de cada arista: por fuera de su esquina en la planta.
+     *
+     * Por fuera y no por dentro porque dentro ya está el alto que se midió justo en la arista.
+     */
+    private fun verticesDeAnguloEnPlanta(marcoIndex: Int): List<PointF> {
+        val puntos = recorridoPlanta(marcoIndex)
+        if (puntos.size < 3) return emptyList()
+        val fuera = cmToPx(20f)
+        return (1 until puntos.size - 1).map { i ->
+            val a = perpendicular(puntos[i - 1], puntos[i], fuera)
+            val b = perpendicular(puntos[i], puntos[i + 1], fuera)
+            PointF(puntos[i].x + (a.x + b.x) / 2f, puntos[i].y + (a.y + b.y) / 2f)
+        }
+    }
+
+    /** Dónde cae en la planta un punto que en la alzada está en esa x. */
+    private fun puntoEnPlanta(puntos: List<PointF>, bordes: List<Float>, x: Float): PointF? {
+        if (puntos.size < 2 || bordes.size < 2) return null
+        for (t in 0 until bordes.size - 1) {
+            val izq = bordes[t]
+            val der = bordes[t + 1]
+            if (x < izq - 0.5f || x > der + 0.5f) continue
+            val a = puntos.getOrNull(t) ?: return null
+            val b = puntos.getOrNull(t + 1) ?: return null
+            val k = if (der - izq > 0.01f) ((x - izq) / (der - izq)).coerceIn(0f, 1f) else 0f
+            return PointF(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k)
+        }
+        return null
+    }
+
+    /** Un desplazamiento perpendicular al lado, hacia el lado de fuera de la planta. */
+    private fun perpendicular(a: PointF, b: PointF, largo: Float): PointF {
+        val dx = b.x - a.x
+        val dy = b.y - a.y
+        val n = kotlin.math.hypot(dx, dy).coerceAtLeast(0.001f)
+        return PointF(dy / n * largo, -dx / n * largo)
+    }
+
     private fun bordesDeTramos(marcoIndex: Int): List<Float> {
         val marco = (elementos.getOrNull(marcoIndex) as? Element.Shape) ?: return emptyList()
         return listOf(marco.bottomLeft.x) +
@@ -1350,8 +1516,20 @@ class SketchMedidasView @JvmOverloads constructor(
 
         val angulos = etiquetasEsquina(marcoIndex)
         if (angulos.isNotEmpty()) {
-            val centros = quiebresDelMarco(marcoIndex).map { (elementos[it] as Element.Shape).end.x }
-            y = colocarFilaRotulos(angulos, centros, y) + ce(16f)
+            // El ángulo se lee en la planta, en su esquina, que es donde significa algo. Bajo la
+            // alzada solo estorbaba, y con tres o cuatro tramos se montaba con los contadores.
+            val enPlanta = verticesDeAnguloEnPlanta(marcoIndex)
+            if (enPlanta.size == angulos.size) {
+                angulos.forEachIndexed { orden, i ->
+                    val etiqueta = elementos.getOrNull(i) as? Element.TextLabel ?: return@forEachIndexed
+                    sketchTextPaint.textSize = tamanoTexto(etiqueta)
+                    etiqueta.x = enPlanta[orden].x - sketchTextPaint.measureText(etiqueta.text) / 2f
+                    etiqueta.y = enPlanta[orden].y
+                }
+            } else {
+                val centros = quiebresDelMarco(marcoIndex).map { (elementos[it] as Element.Shape).end.x }
+                y = colocarFilaRotulos(angulos, centros, y) + ce(16f)
+            }
         }
 
         val contadores = contadoresAltos(marcoIndex)
@@ -1614,6 +1792,12 @@ class SketchMedidasView @JvmOverloads constructor(
         return RectF(marco.rect).apply {
             inset(-margen, -margen)
             bottom += maxOf(symbolSize() * 2f, ce(180f))
+            // Y en la de esquina, la planta y sus ángulos, que cuelgan bastante más abajo: fuera de
+            // la zona dejaban de contarse como piezas del marco y el rótulo se quedaba colgado.
+            if (marco.cotaHint == ESQUINA_MARCO) {
+                bottom += huecoPlantaPx + marco.rect.width() + cmToPx(30f)
+                right += marco.rect.width()
+            }
         }
     }
 
@@ -3781,6 +3965,7 @@ class SketchMedidasView @JvmOverloads constructor(
         canvas.translate(-exportBounds.left, -exportBounds.top)
         cotaTextRects.clear()
         elementos.forEachIndexed { index, element -> drawElement(canvas, index, element, false) }
+        dibujarPlantasDeEsquina(canvas, false)
         cotaTextRects.clear()
         canvas.restore()
         escalaCota = escalaPrevia
@@ -4496,6 +4681,14 @@ class SketchMedidasView @JvmOverloads constructor(
                 union.union(bounds)
             }
         }
+        // La planta de una ventana de esquina no es un elemento —se dibuja desde la alzada— pero
+        // ocupa papel: sin contarla, el apunte exportado la dejaba cortada.
+        elementos.indices.filter { esMarcoEsquina(it) }.forEach { marcoIndex ->
+            recorridoPlanta(marcoIndex).forEach { p ->
+                val suyo = RectF(p.x, p.y, p.x, p.y).apply { inset(-cmToPx(12f), -cmToPx(12f)) }
+                if (union == null) union = RectF(suyo) else union!!.union(suyo)
+            }
+        }
         return union
     }
 
@@ -4965,6 +5158,15 @@ class SketchMedidasView @JvmOverloads constructor(
                 }
                 if (shape.cotaHint == ESQUINA_QUIEBRE) return
                 if (shape.cotaHint == VENTANA_ALTO || shape.cotaHint == VENTANA_ALTO_ESQUINA) {
+                    // En una ventana de esquina el número vive en la planta, sobre el punto donde
+                    // se midió: aquí queda la marca, para ver por dónde pasa, y el desarrollo deja
+                    // de ser una fila de números que no se sabe de qué tramo son.
+                    if (altoDeVentanaEsquina(index)) {
+                        canvas.drawLine(
+                            shape.start.x, shape.start.y, shape.end.x, shape.end.y, cotaGuiaPaint
+                        )
+                        return
+                    }
                     // Va por dentro del vano, en su sitio: es el alto de ESE punto.
                     drawVerticalCota(
                         canvas = canvas,
