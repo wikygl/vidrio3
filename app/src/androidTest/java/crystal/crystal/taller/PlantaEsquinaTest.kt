@@ -395,4 +395,64 @@ class PlantaEsquinaTest {
         assertEquals("la última pared también se fue: $anchos", 120f, anchos[1], 1f)
         assertEquals("el vano se quedó en nada", 120f, v.anchoDeLaVentanaParaPruebas(), 1f)
     }
+
+    /**
+     * El apunte de esquina sale lado por lado, que es lo que la calculadora necesita para armarlo
+     * en L, en C o en serie.
+     */
+    @Test
+    fun la_ventana_de_esquina_sale_lado_por_lado() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        val enL = v.esquinaPrincipalEnCm()!!
+        assertEquals("no salieron dos lados", 2, enL.lados.size)
+        assertEquals("nl", enL.geometria)
+        assertEquals(150f, enL.lados[0].ancho, 1f)
+        assertEquals(120f, enL.lados[1].ancho, 1f)
+        assertEquals(120f, enL.lados[0].alto, 1f)
+        assertEquals("cada pared lleva su puente", 90f, enL.lados[0].puente, 1f)
+        assertEquals("falta el ángulo de la arista", listOf("90"), enL.angulos)
+
+        // Con tres paredes es una C.
+        val w = vista()
+        w.insertarPlantillaVentanaEsquina(tramosCm = listOf(100f, 150f, 100f), altoCm = 120f)
+        val enC = w.esquinaPrincipalEnCm()!!
+        assertEquals("nu", enC.geometria)
+        assertEquals(3, enC.lados.size)
+        assertEquals(2, enC.angulos.size)
+    }
+
+    /** La pared curva ocupa su banda en el alzado, pero no es un lado que se corte. */
+    @Test
+    fun la_pared_curva_no_cuenta_como_lado() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("la curva se coló como pared: ${medida.lados.map { it.ancho }}", 2, medida.lados.size)
+        assertEquals("sigue siendo una L", "nl", medida.geometria)
+        assertEquals(150f, medida.lados[0].ancho, 1f)
+        assertEquals(120f, medida.lados[1].ancho, 1f)
+        assertEquals(listOf(EsquinaMedida.CURVA), medida.angulos)
+        assertTrue("no avisa de la curva", medida.hayCurva)
+
+        // Y con el primer lado a cero, la ventana empieza en la curva: queda una sola pared, que
+        // ya no es una esquina que la calculadora sepa armar.
+        v.anchoDeTramoEnPlantaParaPruebas(0, 0f)
+        assertNull("una pared suelta no es una ventana de esquina", v.esquinaPrincipalEnCm())
+    }
+
+    /** El descuadre viaja entero, y manda la medida mayor: la ventana tiene que tapar el hueco. */
+    @Test
+    fun el_lado_descuadrado_manda_su_medida_mayor() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        // El cabezal del primer lado, dos centímetros más largo que su pie.
+        v.anchoDeArribaParaPruebas(0, 152f)
+        val lado = v.esquinaPrincipalEnCm()!!.lados[0]
+        assertEquals("el pie cambió", 150f, lado.anchoAbajo, 1f)
+        assertEquals("el cabezal no se apuntó", 152f, lado.anchoArriba, 1f)
+        assertEquals("no manda el mayor", 152f, lado.ancho, 1f)
+        assertTrue("no avisa del descuadre", lado.descuadrado)
+    }
 }

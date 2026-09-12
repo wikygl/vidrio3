@@ -42,7 +42,17 @@ object ColaCalculadoras {
          * números, y es la calculadora la que tiene que saberlo para armar los tramos.
          */
         val contorno: String = "",
+        /**
+         * La ventana de esquina, lado por lado: `anchoAbajo,anchoArriba,altoIzq,altoDer,puente`
+         * por pared y los ángulos detrás del `@`. Vacío cuando la medida no es de esquina.
+         *
+         * Va aquí por lo mismo que el contorno: una ventana en L no cabe en un ancho y un alto, y
+         * es la calculadora la que tiene que saber cuántos lados son para armarla en L, en C o en
+         * serie. Ver [LadoEsquina].
+         */
+        val esquina: String = "",
         val estado: EstadoCola = EstadoCola.PENDIENTE
+
     ) : java.io.Serializable
 
     /** true cuando la calculadora fue abierta desde MedidaActivity con una cola de medidas. */

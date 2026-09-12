@@ -2125,7 +2125,12 @@ class MedidaActivity : AppCompatActivity() {
                         cantidad = 1f,
                         cliente = cliente,
                         bocetoArchivo = rutaGrafico,
-                        contorno = contorno
+                        contorno = contorno,
+                        // Y si es una ventana de esquina, sus lados: la calculadora los necesita
+                        // para armarla en L, en C o en serie, que con el ancho total no se sabe.
+                        esquina = binding.sketchMedidas.esquinaPrincipalEnCm()
+                            ?.let { EsquinaMedida.aTexto(it) }
+                            .orEmpty()
                     )
                 )
             }

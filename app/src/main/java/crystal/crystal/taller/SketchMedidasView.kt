@@ -4186,7 +4186,62 @@ class SketchMedidasView @JvmOverloads constructor(
      * De aquí salen los tramos de la ventana: un vano con el alféizar subido en un trozo es, en el
      * diseño, dos tramos de distinto alto colgando del mismo dintel.
      */
+    /**
+     * La ventana de esquina del apunte, lado por lado, para que la calculadora la arme en L, en C
+     * o en serie. Null si el apunte no tiene ninguna.
+     *
+     * Una pared curva NO es un lado: en la alzada ocupa su banda como un tramo más, pero no es una
+     * pared que se mida y se corte como las otras. Se salta, y su arista queda marcada como curva
+     * para que la calculadora avise de que ese trozo no entra en el cálculo.
+     */
+    fun esquinaPrincipalEnCm(): EsquinaMedida? {
+        val marcoIndex = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return null
+        val marco = elementos[marcoIndex] as Element.Shape
+        val bordes = bordesDeTramos(marcoIndex)
+        val arriba = puntosArriba(marcoIndex)
+        if (bordes.size < 3 || arriba.size != bordes.size) return null
+        val bandas = bandasDeCurva(marcoIndex).map { (elementos[it] as Element.Shape).end.x }
+        val puentes = puentesDelMarco(marcoIndex).map { elementos[it] as Element.Shape }
+        val esquinas = esquinasDeVentana(marcoIndex)
+        val pie = marco.rect.bottom
+
+        val lados = mutableListOf<LadoEsquina>()
+        val angulos = mutableListOf<String>()
+        var arista = 0
+        for (tramo in 0 until bordes.size - 1) {
+            val izq = bordes[tramo]
+            val der = bordes[tramo + 1]
+            val esBanda = bandas.any { abs(it - der) < 0.5f }
+            if (!esBanda && der - izq >= cmToPx(0.5f)) {
+                // El puente de ESTE tramo: cada pared lleva el suyo y puede estar a otra altura.
+                val puente = puentes.firstOrNull {
+                    it.rect.centerX() > izq - 0.5f && it.rect.centerX() < der + 0.5f
+                }
+                lados.add(
+                    LadoEsquina(
+                        anchoAbajo = pxToCm(der - izq),
+                        anchoArriba = pxToCm(arriba[tramo + 1].x - arriba[tramo].x),
+                        altoIzq = pxToCm(pie - arriba[tramo].y),
+                        altoDer = pxToCm(pie - arriba[tramo + 1].y),
+                        puente = puente?.let { pxToCm(pie - it.start.y) } ?: 0f
+                    )
+                )
+            }
+            // El borde derecho de una pared es una arista: ahí dobla, en punta o en curva.
+            if (!esBanda && tramo < bordes.size - 2) {
+                val esquina = esquinas.getOrNull(arista)
+                arista++
+                angulos.add(
+                    if (esquina?.arco != null) EsquinaMedida.CURVA
+                    else formatCm(esquina?.grados ?: 90f)
+                )
+            }
+        }
+        return if (lados.size >= 2) EsquinaMedida(lados, angulos) else null
+    }
+
     fun contornoPrincipalEnCm(): List<Pair<Float, Float>>? {
+
         fun area(e: Element): Float = boundsForElement(e).let { it.width() * it.height() }
         val composite = elementos.filterIsInstance<Element.Composite>().maxByOrNull { area(it) }
         // El triángulo se dibuja con su herramienta, así que no es una figura recortada y no tiene

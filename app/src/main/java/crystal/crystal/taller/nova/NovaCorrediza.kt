@@ -42,6 +42,7 @@ import crystal.crystal.casilla.MapStorage
 import crystal.crystal.casilla.ProyectoManager
 import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityNovaCorredizaBinding
+import crystal.crystal.taller.EsquinaMedida
 import crystal.crystal.taller.ColaCalculadoras
 import crystal.crystal.taller.ModoMasivoHelper
 import crystal.crystal.taller.NavegadorCola
@@ -1237,86 +1238,96 @@ class NovaCorrediza : AppCompatActivity() {
                 Toast.makeText(this, "Ingrese ancho y alto válidos", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            if (texto == "nl") {
-                primeraMedidaNl = MedidaNl(ancho, alto, hoja, divisManual)
-                binding.etAncho2.setText(df1(ancho))
-                binding.etAlto2.setText(df1(alto))
-                binding.etPuente2.setText(df1(hoja))
-                binding.etDivi2.setText(divisManual.toString())
-                binding.lyAncho2.visibility = View.VISIBLE
-                binding.lyAlto2.visibility = View.VISIBLE
-                binding.lyPuente2.visibility = View.VISIBLE
-                binding.lyDivi2.visibility = View.VISIBLE
-                binding.tvLado1.visibility = View.VISIBLE
-                binding.etAncho.setText("")
-                binding.etAlto.setText("")
-                binding.etPartes.setText("0")
-                binding.btAgregar.visibility = View.GONE
-                binding.btAgregar.isEnabled = false
-                contadorLado = 2
-                binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
-                actualizarTxDatosLadoNl(1)
-            } else {
-                val medida = MedidaNl(ancho, alto, hoja, divisManual)
-                if (texto == "nu") {
-                    when (contadorLado) {
-                        1 -> {
-                            primeraMedidaNu = medida
-                            binding.etAncho2.setText(df1(ancho))
-                            binding.etAlto2.setText(df1(alto))
-                            binding.etPuente2.setText(df1(hoja))
-                            binding.etDivi2.setText(divisManual.toString())
-                            binding.lyAncho2.visibility = View.VISIBLE
-                            binding.lyAlto2.visibility = View.VISIBLE
-                            binding.lyPuente2.visibility = View.VISIBLE
-                            binding.lyDivi2.visibility = View.VISIBLE
-                            binding.tvLado1.visibility = View.VISIBLE
-                            binding.etAncho.setText("")
-                            binding.etAlto.setText("")
-                            binding.etHoja.setText("")
-                            binding.etPartes.setText("0")
-                            contadorLado = 2
-                            binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
-                            actualizarTxDatosLadoNl(1)
-                        }
-                        2 -> {
-                            segundaMedidaNu = medida
-                            binding.etAncho3.setText(df1(ancho))
-                            binding.etAlto3.setText(df1(alto))
-                            binding.etPuente3.setText(df1(hoja))
-                            binding.etDivi3.setText(divisManual.toString())
-                            binding.lyAncho3.visibility = View.VISIBLE
-                            binding.lyAlto3.visibility = View.VISIBLE
-                            binding.lyPuente3.visibility = View.VISIBLE
-                            binding.lyDivi3.visibility = View.VISIBLE
-                            binding.etAncho.setText("")
-                            binding.etAlto.setText("")
-                            binding.etHoja.setText("")
-                            binding.etPartes.setText("0")
-                            contadorLado = 3
-                            binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
-                            binding.btAgregar.visibility = View.GONE
-                            binding.btAgregar.isEnabled = false
-                            actualizarTxDatosLadoNl(2)
-                        }
-                    }
-                } else if (texto == "ns") {
-                    ladosNs.add(medida)
-                    binding.etAncho.setText("")
-                    binding.etAlto.setText("")
-                    binding.etHoja.setText("")
-                    binding.etPartes.setText("0")
-                    contadorLado += 1
-                    binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
-                    actualizarTxDatosLadoNl(ladosNs.size)
-                }
-            }
+            agregarLado(ancho, alto, hoja, divisManual)
             // Tras agregar, devolver el foco a la primera medida (med1) para la siguiente.
             binding.etAncho.requestFocus()
         }
         binding.ivDiseno.setOnClickListener {
             // Estrategia tipo Puertas: un diálogo con todas las opciones agrupadas.
             abrirDialogoOpcionesNova()
+        }
+    }
+
+    /**
+     * Guarda un lado de una geometría compuesta y deja los campos listos para el siguiente.
+     *
+     * Es lo que hace el botón "Agregar", aparte: así un lado se puede meter también sin tocar la
+     * pantalla, que es como llegan los de una ventana de esquina medida en el apunte.
+     */
+    private fun agregarLado(ancho: Float, alto: Float, hoja: Float, divisManual: Int) {
+        if (texto == "nl") {
+            primeraMedidaNl = MedidaNl(ancho, alto, hoja, divisManual)
+            binding.etAncho2.setText(df1(ancho))
+            binding.etAlto2.setText(df1(alto))
+            binding.etPuente2.setText(df1(hoja))
+            binding.etDivi2.setText(divisManual.toString())
+            binding.lyAncho2.visibility = View.VISIBLE
+            binding.lyAlto2.visibility = View.VISIBLE
+            binding.lyPuente2.visibility = View.VISIBLE
+            binding.lyDivi2.visibility = View.VISIBLE
+            binding.tvLado1.visibility = View.VISIBLE
+            binding.etAncho.setText("")
+            binding.etAlto.setText("")
+            binding.etPartes.setText("0")
+            binding.btAgregar.visibility = View.GONE
+            binding.btAgregar.isEnabled = false
+            contadorLado = 2
+            binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+            actualizarTxDatosLadoNl(1)
+        } else {
+            val medida = MedidaNl(ancho, alto, hoja, divisManual)
+            if (texto == "nu") {
+                when (contadorLado) {
+                    1 -> {
+                        primeraMedidaNu = medida
+                        binding.etAncho2.setText(df1(ancho))
+                        binding.etAlto2.setText(df1(alto))
+                        binding.etPuente2.setText(df1(hoja))
+                        binding.etDivi2.setText(divisManual.toString())
+                        binding.lyAncho2.visibility = View.VISIBLE
+                        binding.lyAlto2.visibility = View.VISIBLE
+                        binding.lyPuente2.visibility = View.VISIBLE
+                        binding.lyDivi2.visibility = View.VISIBLE
+                        binding.tvLado1.visibility = View.VISIBLE
+                        binding.etAncho.setText("")
+                        binding.etAlto.setText("")
+                        binding.etHoja.setText("")
+                        binding.etPartes.setText("0")
+                        contadorLado = 2
+                        binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+                        actualizarTxDatosLadoNl(1)
+                    }
+                    2 -> {
+                        segundaMedidaNu = medida
+                        binding.etAncho3.setText(df1(ancho))
+                        binding.etAlto3.setText(df1(alto))
+                        binding.etPuente3.setText(df1(hoja))
+                        binding.etDivi3.setText(divisManual.toString())
+                        binding.lyAncho3.visibility = View.VISIBLE
+                        binding.lyAlto3.visibility = View.VISIBLE
+                        binding.lyPuente3.visibility = View.VISIBLE
+                        binding.lyDivi3.visibility = View.VISIBLE
+                        binding.etAncho.setText("")
+                        binding.etAlto.setText("")
+                        binding.etHoja.setText("")
+                        binding.etPartes.setText("0")
+                        contadorLado = 3
+                        binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+                        binding.btAgregar.visibility = View.GONE
+                        binding.btAgregar.isEnabled = false
+                        actualizarTxDatosLadoNl(2)
+                    }
+                }
+            } else if (texto == "ns") {
+                ladosNs.add(medida)
+                binding.etAncho.setText("")
+                binding.etAlto.setText("")
+                binding.etHoja.setText("")
+                binding.etPartes.setText("0")
+                contadorLado += 1
+                binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+                actualizarTxDatosLadoNl(ladosNs.size)
+            }
         }
     }
 
@@ -4005,6 +4016,7 @@ class NovaCorrediza : AppCompatActivity() {
         // La PRIMERA medida no pasa por el navegador: sus datos llegan en el intent. El contorno
         // no viaja ahí, así que se aplica aquí o el vano escalonado entraría como un rectángulo.
         val actual = ColaCalculadoras.cola(this).getOrNull(ColaCalculadoras.indice(this))
+        if (actual != null && cargarEsquinaDeMedida(actual.esquina)) return
         if (actual != null && cargarDisenoDelContorno(actual.contorno)) {
             Toast.makeText(
                 this,
@@ -4217,6 +4229,8 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etAlto.setText(df1(item.alto))
         cargarYMostrarBocetoOriginal(item.bocetoArchivo)
         binding.etAncho.requestFocus()
+        // Una ventana de esquina trae sus lados: se arma su geometría en vez de un vano plano.
+        if (cargarEsquinaDeMedida(item.esquina)) return
         val escalonada = cargarDisenoDelContorno(item.contorno)
         Toast.makeText(
             this,
@@ -4235,7 +4249,68 @@ class NovaCorrediza : AppCompatActivity() {
      *
      * Devuelve true si el diseño se cargó desde el contorno.
      */
+    /**
+     * Arma la geometría desde los lados de una ventana de esquina medida en el apunte.
+     *
+     * La CANTIDAD de lados es la que manda —2 en L, 3 en C, más en serie—, que es la misma regla
+     * con la que ya trabaja el paquete simbólico. Los lados entran como si se hubieran escrito a
+     * mano con "Agregar", y el último se queda en los campos, que es donde la pantalla lo busca al
+     * calcular.
+     *
+     * Devuelve true si la medida traía una esquina y quedó puesta.
+     */
+    private fun cargarEsquinaDeMedida(texto: String): Boolean {
+        val medida = EsquinaMedida.desdeTexto(texto) ?: return false
+        val geo = medida.geometria ?: return false
+        val dibujo = when (geo) {
+            "nl" -> R.drawable.venl
+            "nu" -> R.drawable.venc
+            else -> R.drawable.vserie
+        }
+        seleccionarDesdePanel(dibujo, geo)
+        contadorLado = 1
+        binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+        medida.lados.dropLast(1).forEach { agregarLado(it.ancho, it.alto, it.puente, 0) }
+        val ultimo = medida.lados.last()
+        binding.etAncho.setText(df1(ultimo.ancho))
+        binding.etAlto.setText(df1(ultimo.alto))
+        binding.etHoja.setText(df1(ultimo.puente))
+        binding.etPartes.setText("0")
+        avisarDeLaEsquina(medida)
+        return true
+    }
+
+    /**
+     * Lo que el vidriero tiene que mirar antes de calcular: qué se armó y qué se dio por supuesto.
+     *
+     * El apunte sabe más que la calculadora —el descuadre de cada pared, el ángulo real, la esquina
+     * curva—, así que en vez de callarse lo que se ha simplificado se dice, y el gráfico de la
+     * medida original está a un toque para comprobarlo.
+     */
+    private fun avisarDeLaEsquina(medida: EsquinaMedida) {
+        val partes = mutableListOf(
+            when (medida.lados.size) {
+                2 -> "en L"
+                3 -> "en C"
+                else -> "en serie de ${medida.lados.size} lados"
+            }
+        )
+        if (medida.hayCurva) partes.add("la pared curva no cuenta como lado: ese trozo va aparte")
+        val torcidos = medida.anguloDistinto
+        if (torcidos.isNotEmpty()) {
+            partes.add(
+                "dobla ${torcidos.joinToString(" y ") { df1(kotlin.math.abs(it)) }}°: " +
+                    "el esquinero se descuenta como si fuera de 90"
+            )
+        }
+        if (medida.lados.any { it.descuadrado }) {
+            partes.add("hay descuadre: se tomó la medida MAYOR de cada lado, revise el gráfico")
+        }
+        Toast.makeText(this, "Ventana de esquina ${partes.joinToString(". ")}", Toast.LENGTH_LONG).show()
+    }
+
     private fun cargarDisenoDelContorno(contorno: String): Boolean {
+
         // Cada medida trae el suyo: el de la anterior no vale para esta.
         contornoMedida = ""
         val puntos = ContornoEnTramos.desdeTexto(contorno)
