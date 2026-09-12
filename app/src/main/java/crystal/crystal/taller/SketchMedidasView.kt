@@ -169,6 +169,8 @@ class SketchMedidasView @JvmOverloads constructor(
         PUERTA_HOJA_DER,
         /** Ancho de un tramo de la ventana de esquina: el total es la suma de los tramos. */
         ESQUINA_TRAMO,
+        /** La cuerda de una pared curva: lo que mide de esquina a esquina, en recto. */
+        ESQUINA_CUERDA,
         /**
          * El mismo ancho, pero tocado en la planta: ahí el tramo es una pared entera, así que se
          * mueven sus dos lados —el de arriba y el de abajo— y el descuadre que tuviera se conserva.
@@ -1497,35 +1499,50 @@ class SketchMedidasView @JvmOverloads constructor(
                     caminoDeArco(curva.desde, curva.hasta, cmToPx(curva.arco.flecha), curva.sentido),
                     cotaArcoPaint
                 )
-                // La cuerda, por dentro de la panza: en planta es la medida que se ve de la curva.
-                // El desarrollo lo dice su cota, como el de las paredes rectas.
+                // Las tres medidas de la curva, cada una en su sitio y sin pisarse: la cuerda por
+                // dentro, y por fuera de la panza el desarrollo y encima lo que dobla.
                 val medio = PointF((a.x + b.x) / 2f, (a.y + b.y) / 2f)
-                val dentro = perpendicular(a, b, -ce(20f) * curva.sentido)
+                val panza = cmToPx(curva.arco.flecha)
+                val dentro = perpendicular(a, b, -ce(22f) * curva.sentido)
+                // La cuerda SÍ se toca: abre la esquina para cambiar la curva. Se apunta al rótulo
+                // que la guarda, que es lo que se edita.
+                val rotulo = rotulosDeCurva(marcoIndex).firstOrNull {
+                    tramoDeX(bordes, centroDeRotulo(elementos[it] as Element.TextLabel)) == i
+                }
                 drawCotaText(
                     canvas = canvas,
-                    index = marcoIndex,
-                    type = CotaType.LENGTH,
+                    index = rotulo ?: marcoIndex,
+                    type = if (rotulo != null) CotaType.ESQUINA_CUERDA else CotaType.LENGTH,
                     cx = medio.x + dentro.x,
                     cy = medio.y + dentro.y,
                     value = curva.arco.cuerda,
-                    collectHits = false
+                    collectHits = collectHits && rotulo != null
                 )
-                // Y lo que dobla la esquina, con su símbolo, en la panza: una pared curva también
-                // dobla, y eso es lo primero que se mira en una planta. Sale de sus dos medidas, no
-                // se escribe: por eso va como cota y no como rótulo.
-                val fuera = perpendicular(
-                    a, b, (cmToPx(curva.arco.flecha) + ce(30f)) * curva.sentido
+                val fueraDesarrollo = perpendicular(a, b, (panza + ce(22f)) * curva.sentido)
+                drawCotaText(
+                    canvas = canvas,
+                    index = marcoIndex,
+                    type = CotaType.ESQUINA_TRAMO_PLANTA,
+                    cx = medio.x + fueraDesarrollo.x,
+                    cy = medio.y + fueraDesarrollo.y,
+                    value = curva.arco.desarrollo,
+                    collectHits = collectHits,
+                    sideIndex = i
                 )
+                // Y lo que dobla la esquina, con su símbolo: es lo primero que se mira en una
+                // planta. Sale de las otras dos, así que no se escribe ni se toca.
+                val fueraAngulo = perpendicular(a, b, (panza + ce(56f)) * curva.sentido)
                 canvas.drawText(
                     "${formatCm(curva.arco.anguloGrados)}°",
-                    medio.x + fuera.x,
-                    medio.y + fuera.y,
+                    medio.x + fueraAngulo.x,
+                    medio.y + fueraAngulo.y,
                     cotaTextPaint
                 )
             }
         }
-        // Y el ancho de cada pared, sobre su lado.
+        // Y el ancho de cada pared RECTA, sobre su lado: las curvas ya llevan sus tres medidas.
         planta.paredes.forEachIndexed { i, (desde, hasta) ->
+            if (planta.curvas.containsKey(i)) return@forEachIndexed
             val medio = PointF((desde.x + hasta.x) / 2f, (desde.y + hasta.y) / 2f)
             val grados = Math.toDegrees(
                 kotlin.math.atan2((hasta.y - desde.y).toDouble(), (hasta.x - desde.x).toDouble())
@@ -4936,6 +4953,10 @@ class SketchMedidasView @JvmOverloads constructor(
                 // Una esquina de 180° no dobla: no hay nada que decir ahí. Pasa con las dos aristas
                 // de una pared curva, que es la que hace todo el giro.
                 if (element.rol == ROL_ESQUINA && noDobla(element.text)) return
+                // La cuerda de una pared curva no se escribe en el desarrollo: ahí dentro no es una
+                // medida de nada. Se lee en la planta, como cota de su curva, y se toca allí. Este
+                // rótulo es solo donde vive el dato.
+                if (element.rol == ROL_CURVA) return
                 sketchTextPaint.textSize = tamanoTexto(element)
                 if (element.rol == ROL_ALFEIZAR) dibujarIconoAlfeizar(canvas, element)
                 canvas.drawText(element.text, element.x, element.y, sketchTextPaint)
@@ -6654,6 +6675,16 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun editarCota(hit: CotaHit) {
         val element = elementos.getOrNull(hit.elementIndex) ?: return
+        // La cuerda de una curva abre su esquina: ahí se cambian las dos medidas juntas, porque una
+        // sola no describe un arco.
+        if (hit.type == CotaType.ESQUINA_CUERDA) {
+            val marco = marcoDePieza(hit.elementIndex) ?: return
+            val bordes = bordesDeTramos(marco)
+            val tramo = tramoDeX(bordes, centroDeRotulo(element as? Element.TextLabel ?: return))
+            // La esquina de esa pared curva es la arista que la abre, la de su izquierda.
+            etiquetasEsquina(marco).getOrNull(tramo - 1)?.let { editarAnguloEsquina(it) }
+            return
+        }
         val actual = when (hit.type) {
             CotaType.WIDTH -> when (element) {
                 // En el triángulo la cota es la BASE, no el ancho de la caja: girado, no son lo
@@ -6719,6 +6750,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 val marco = (elementos.getOrNull(marcoDePieza(hit.elementIndex) ?: -1) as? Element.Shape) ?: return
                 pxToCm(marco.rect.bottom - puente.start.y)
             }
+            CotaType.ESQUINA_CUERDA -> return
             CotaType.ESQUINA_TRAMO, CotaType.ESQUINA_TRAMO_PLANTA -> {
                 val bordes = bordesDeTramos(hit.elementIndex)
                 val tramo = hit.sideIndex ?: return
@@ -7210,6 +7242,7 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.PUERTA_HOJA_IZQ, CotaType.PUERTA_HOJA_DER -> {
                 aplicarAnchoHoja(elementIndex ?: return, type, abs(valueCm))
             }
+            CotaType.ESQUINA_CUERDA -> Unit
             CotaType.ESQUINA_TRAMO -> {
                 aplicarAnchoTramo(elementIndex ?: return, sideIndex ?: return, abs(valueCm))
             }
@@ -7538,6 +7571,7 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.PUERTA_ALTURA,
             CotaType.PUERTA_HOJA_IZQ,
             CotaType.PUERTA_HOJA_DER,
+            CotaType.ESQUINA_CUERDA,
             CotaType.ESQUINA_TRAMO,
             CotaType.ESQUINA_TRAMO_PLANTA,
             CotaType.ESQUINA_TRAMO_ARRIBA -> Unit
