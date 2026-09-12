@@ -153,27 +153,34 @@ class PlantaEsquinaTest {
      * pared a la de la otra. Lo que dobla sale de su desarrollo y su cuerda.
      */
     @Test
-    fun la_esquina_curva_une_las_dos_paredes() {
+    fun la_esquina_curva_es_una_pared_mas() {
         val v = vista()
         v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        assertEquals("no arrancó con dos paredes", 2, v.tramosParaPruebas())
+        assertEquals("el vano no mide la suma de sus paredes", 270f, v.anchoDeLaVentanaParaPruebas(), 1f)
+
         // Un cuarto de círculo de radio 100: 157.1 de desarrollo y 141.4 de cuerda.
         v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
 
-        val arco = v.esquinaCurvaParaPruebas(0)!!
-        assertEquals("el desarrollo no es el escrito", 157.1f, arco[0], 0.5f)
+        // En la alzada la curva es una pared más, y el vano crece con su desarrollo.
+        assertEquals("la curva no entró como pared", 3, v.tramosParaPruebas())
+        assertEquals(
+            "el desarrollo de la curva no sumó al vano",
+            270f + 157.1f, v.anchoDeLaVentanaParaPruebas(), 2f
+        )
+
+        val arco = v.curvaDeTramoParaPruebas(1) ?: throw AssertionError(v.diagCurvasParaPruebas())
+        assertEquals("el desarrollo no es el ancho de su pared", 157.1f, arco[0], 1f)
         assertEquals("la cuerda no es la escrita", 141.4f, arco[1], 0.5f)
         assertEquals("la flecha no sale del arco", 29.3f, arco[2], 0.5f)
         assertEquals("la curva no dobla los 90°", 90f, arco[3], 1f)
 
-        // En la planta hay un punto más: la curva separa el final de una pared del principio de la
-        // otra, y entre esas dos puntas va su cuerda.
+        // Y en la planta esa pared avanza su CUERDA, no su desarrollo.
         val recorrido = v.recorridoPlantaParaPruebas()
-        assertEquals("la curva no se metió entre las paredes", 4, recorrido.size)
         val cuerda = kotlin.math.hypot(
             recorrido[2].first - recorrido[1].first, recorrido[2].second - recorrido[1].second
         )
-        assertEquals("entre las dos esquinas no está la cuerda", 141.4f, cuerda, 2f)
-        // Y las paredes siguen midiendo lo suyo: la curva no se las come.
+        assertEquals("la curva avanzó su desarrollo en vez de su cuerda", 141.4f, cuerda, 2f)
         assertEquals("la primera pared cambió", 150f, recorrido[1].first - recorrido[0].first, 1f)
     }
 
