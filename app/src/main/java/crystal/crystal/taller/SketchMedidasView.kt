@@ -90,10 +90,8 @@ class SketchMedidasView @JvmOverloads constructor(
         /** "Cotas de alto 1": se toca para añadir una y se mantiene pulsada para quitarla. */
         const val ROL_ALTOS = "ALTOS_VENTANA"
         /** La flecha de un tramo curvo. Va centrado en su tramo: de ahí se sabe de cuál es. */
-        /** Lo que lleva delante el rótulo de una esquina curva. */
+        /** Lo que lleva delante el rótulo de una arista cuando la esquina es curva. */
         const val MARCA_CURVA = "⌒"
-        /** La cuerda de un tramo curvo. Va centrado en su tramo: de ahí se sabe de cuál es. */
-        const val ROL_CURVA = "CURVA_TRAMO"
 
         // ===== Ventana de esquina =====
         /**
@@ -1331,39 +1329,6 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun angulosDeEsquina(marcoIndex: Int): List<Float> =
         esquinasDeVentana(marcoIndex).map { it.grados }
 
-    /** Los rótulos de cuerda de las paredes curvas de ese marco. */
-    private fun rotulosDeCurva(marcoIndex: Int): List<Int> {
-        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
-        val zona = zonaDelMarco(marco)
-        return elementos.indices.filter { i ->
-            val t = elementos.getOrNull(i) as? Element.TextLabel
-            t != null && t.rol == ROL_CURVA && zona.contains(t.x, t.y)
-        }.sortedBy { (elementos[it] as Element.TextLabel).x }
-    }
-
-    /**
-     * Las paredes curvas del marco: qué tramo es cada una y con qué arco.
-     *
-     * El tramo de una curva mide su DESARROLLO, que es lo que se corta, así que en la alzada ocupa
-     * su sitio como una pared más; el rótulo solo guarda la cuerda, y con las dos sale el resto. De
-     * qué tramo es lo dice dónde está el rótulo, centrado en él.
-     */
-    private fun curvasDeTramo(marcoIndex: Int): Map<Int, ArcoEsquina> {
-        val bordes = bordesDeTramos(marcoIndex)
-        if (bordes.size < 2) return emptyMap()
-        return rotulosDeCurva(marcoIndex).mapNotNull { i ->
-            val et = elementos[i] as Element.TextLabel
-            val cuerda = et.text.filter { it.isDigit() || it == '.' || it == ',' }
-                .replace(",", ".").toFloatOrNull() ?: return@mapNotNull null
-            // Por su x, que es donde se puso: en el centro de su pared.
-            val tramo = tramoDeX(bordes, et.x)
-            if (tramo + 1 >= bordes.size) return@mapNotNull null
-            val arco = ArcoEsquina.deDesarrolloYCuerda(pxToCm(bordes[tramo + 1] - bordes[tramo]), cuerda)
-                ?: return@mapNotNull null
-            tramo to arco
-        }.toMap()
-    }
-
     /**
      * El recorrido de la ventana visto desde arriba: un punto por borde de tramo, doblando en cada
      * arista por su ángulo.
@@ -1399,41 +1364,39 @@ class SketchMedidasView @JvmOverloads constructor(
         if (bordes.size < 2) return vacia
         val esquinas = esquinasDeVentana(marcoIndex)
 
-        val arcos = curvasDeTramo(marcoIndex)
         val paredes = mutableListOf<Pair<PointF, PointF>>()
         val curvas = mutableMapOf<Int, ArcoEnPlanta>()
         var x = marco.rect.left
         var y = marco.rect.bottom + huecoPlantaPx
         var dir = 0.0 // radianes; 0 = hacia la derecha
         for (t in 0 until bordes.size - 1) {
+            val largo = bordes[t + 1] - bordes[t]
             val desde = PointF(x, y)
-            val arco = arcos[t]
-            if (arco != null) {
-                // La pared curva mide su desarrollo en la alzada, pero en planta avanza solo su
-                // cuerda —que sale a media apertura— y al acabar ya mira girada el arco entero. El
-                // sentido lo marca la esquina que sigue, o la anterior si es la última pared.
-                val sentido = if (
-                    (esquinas.getOrNull(t)?.grados ?: esquinas.getOrNull(t - 1)?.grados ?: 90f) < 0f
-                ) -1.0 else 1.0
-                val giro = Math.toRadians(arco.anguloGrados.toDouble())
-                val rumbo = dir + sentido * giro / 2.0
-                val cuerda = cmToPx(arco.cuerda)
-                x += (cuerda * cos(rumbo)).toFloat()
-                y += (cuerda * sin(rumbo)).toFloat()
-                val hasta = PointF(x, y)
-                paredes.add(desde to hasta)
-                curvas[t] = ArcoEnPlanta(arco, desde, hasta, sentido.toFloat())
-                dir += sentido * giro
-            } else {
-                val largo = bordes[t + 1] - bordes[t]
-                x += (largo * cos(dir)).toFloat()
-                y += (largo * sin(dir)).toFloat()
-                paredes.add(desde to PointF(x, y))
-            }
-            // Y en la esquina, lo que le falta al ángulo para ser una pared recta.
+            x += (largo * cos(dir)).toFloat()
+            y += (largo * sin(dir)).toFloat()
+            paredes.add(desde to PointF(x, y))
+
             val esquina = esquinas.getOrNull(t) ?: continue
             val sentido = if (esquina.grados < 0f) -1.0 else 1.0
-            dir += sentido * Math.toRadians((180f - abs(esquina.grados)).toDouble())
+            val giro = Math.toRadians(abs(esquina.grados).toDouble())
+            val arco = esquina.arco
+            if (arco != null) {
+                // La curva va de la esquina de esta pared a la de la siguiente: avanza su cuerda,
+                // que sale a media apertura, y al acabar la pared ya mira girada el arco entero.
+                val rumbo = dir + sentido * giro / 2.0
+                val cuerda = cmToPx(arco.cuerda)
+                val fin = PointF(
+                    x + (cuerda * cos(rumbo)).toFloat(),
+                    y + (cuerda * sin(rumbo)).toFloat()
+                )
+                curvas[t] = ArcoEnPlanta(arco, PointF(x, y), fin, sentido.toFloat())
+                x = fin.x
+                y = fin.y
+                dir += sentido * giro
+            } else {
+                // En punta: lo que le falta al ángulo para ser una pared recta.
+                dir += sentido * Math.toRadians((180f - abs(esquina.grados)).toDouble())
+            }
         }
 
         // Doblando hacia afuera la planta sube, y ahí arriba están los rótulos de la alzada: se
@@ -1471,17 +1434,16 @@ class SketchMedidasView @JvmOverloads constructor(
         val bordes = bordesDeTramos(marcoIndex)
         val angulos = angulosDeEsquina(marcoIndex)
 
-        // Cada pared: recta de una punta a otra, o con su panza si es curva.
-        planta.paredes.forEachIndexed { i, (a, b) ->
-            val curva = planta.curvas[i]
-            if (curva == null) {
-                canvas.drawLine(a.x, a.y, b.x, b.y, cotaLinePaint)
-            } else {
-                canvas.drawPath(
-                    caminoDeArco(curva.desde, curva.hasta, cmToPx(curva.arco.flecha), curva.sentido),
-                    cotaArcoPaint
-                )
-            }
+        // Cada pared, y en las esquinas curvas el arco que las une, con su panza.
+        planta.paredes.forEach { (a, b) -> canvas.drawLine(a.x, a.y, b.x, b.y, cotaLinePaint) }
+        planta.curvas.forEach { (arista, curva) ->
+            canvas.drawPath(
+                caminoDeArco(curva.desde, curva.hasta, cmToPx(curva.arco.flecha), curva.sentido),
+                cotaArcoPaint
+            )
+            // El desarrollo y la cuerda no se pintan aquí: los dice su rótulo, que es el que se
+            // toca para cambiarlos y ya se coloca junto a la panza.
+            if (arista < 0) return@forEach
         }
         // Y el ancho de cada pared, sobre su lado.
         planta.paredes.forEachIndexed { i, (desde, hasta) ->
@@ -1745,20 +1707,6 @@ class SketchMedidasView @JvmOverloads constructor(
         if (contadores.isNotEmpty() && bordes.size >= 2) {
             val centros = (0 until bordes.size - 1).map { (bordes[it] + bordes[it + 1]) / 2f }
             y = colocarFilaRotulos(contadores, centros, y) + ce(16f)
-        }
-
-        // Las paredes curvas dicen su cuerda bajo la suya: arriba se montaban con las cotas.
-        val curvas = rotulosDeCurva(marcoIndex)
-        if (curvas.isNotEmpty() && bordes.size >= 2) {
-            val centros = curvas.map { i ->
-                val tramo = tramoDeX(bordes, (elementos[i] as Element.TextLabel).x)
-                (bordes[tramo] + bordes[tramo + 1]) / 2f
-            }
-            // Se coloca centrado, pero el dato de a qué pared es va por su x: se deja en el centro.
-            y = colocarFilaRotulos(curvas, centros, y) + ce(16f)
-            curvas.forEachIndexed { orden, i ->
-                (elementos[i] as Element.TextLabel).x = centros[orden]
-            }
         }
 
         etiquetaDelMarco(marcoIndex, ROL_ALFEIZAR)?.let { i ->
@@ -2784,119 +2732,6 @@ class SketchMedidasView @JvmOverloads constructor(
             .show()
     }
 
-    /**
-     * Convierte una esquina en punta en una pared curva, o le cambia las medidas si ya lo era.
-     *
-     * La curva es una pared más: ocupa su DESARROLLO en la alzada —que es lo que hay que cortar— y
-     * por eso el vano crece con ella, igual que al añadir un tramo. Entra entre las dos paredes que
-     * doblaban, con su arista a cada lado; esas dos ya no doblan nada, porque todo el giro lo hace
-     * la curva.
-     */
-    private fun curvarEsquina(marcoIndex: Int, arista: Int, desarrolloCm: Float, cuerdaCm: Float) {
-        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
-        if (ArcoEsquina.deDesarrolloYCuerda(desarrolloCm, cuerdaCm) == null) return
-        val quiebres = quiebresDelMarco(marcoIndex)
-        val quiebre = quiebres.getOrNull(arista) ?: return
-        val bordes = bordesDeTramos(marcoIndex)
-        val xa = (elementos[quiebre] as Element.Shape).end.x
-        val tramoCurvo = tramoDeX(bordes, xa + 0.5f)
-
-        // Si ese tramo ya es la curva, solo cambian sus medidas.
-        val yaCurvo = curvasDeTramo(marcoIndex).containsKey(tramoCurvo)
-        if (yaCurvo) {
-            rotulosDeCurva(marcoIndex).firstOrNull {
-                tramoDeX(bordes, (elementos[it] as Element.TextLabel).x) == tramoCurvo
-            }?.let { (elementos[it] as Element.TextLabel).text = "$MARCA_CURVA ${formatCm(cuerdaCm)}" }
-            aplicarAnchoTramoEnPlanta(marcoIndex, tramoCurvo, desarrolloCm)
-            sincronizarMarco(marcoIndex, reinterpolarAltos = false)
-            return
-        }
-
-        val desarrollo = cmToPx(desarrolloCm)
-        val alturaPuente = puentesDelMarco(marcoIndex).firstOrNull()
-            ?.let { (elementos[it] as Element.Shape).start.y }
-            ?: (marco.rect.bottom - marco.rect.height() * 0.75f)
-
-        // Todo lo que está a la derecha de la arista se corre: la pared nueva se mete ahí.
-        piezasYCotasALaDerecha(marcoIndex, xa).forEach { correrEnX(it, desarrollo) }
-        marco.topRight.x += desarrollo
-        marco.bottomRight.x += desarrollo
-        actualizarBoundsRectangulo(marco)
-
-        val xb = xa + desarrollo
-        elementos.add(crearShape(Tool.LINE, PointF(xb, marco.rect.top), PointF(xb, marco.rect.bottom), ESQUINA_QUIEBRE))
-        elementos.add(crearShape(Tool.LINE, PointF(xb, marco.rect.bottom), PointF(xb, marco.rect.top), VENTANA_ALTO_ESQUINA))
-        elementos.add(crearShape(Tool.LINE, PointF(xa, alturaPuente), PointF(xb, alturaPuente), PUERTA_PUENTE))
-        // La arista de salida tampoco dobla: el giro entero lo hace la curva.
-        elementos.add(
-            Element.TextLabel(
-                text = textoEsquina(180f), x = xb, y = marco.rect.top, textSize = 44f, rol = ROL_ESQUINA
-            )
-        )
-        elementos.add(
-            Element.TextLabel(
-                text = textoAltos(0), x = xa + desarrollo / 2f, y = marco.rect.bottom,
-                textSize = 44f, rol = ROL_ALTOS
-            )
-        )
-        elementos.add(
-            Element.TextLabel(
-                text = "$MARCA_CURVA ${formatCm(cuerdaCm)}", x = xa + desarrollo / 2f,
-                y = marco.rect.top, textSize = 40f, rol = ROL_CURVA
-            )
-        )
-        val ahora = elementos.indexOfFirst { it === marco }
-        if (ahora < 0) return
-        (elementos[quiebres[arista]] as? Element.TextLabel)
-        etiquetasEsquina(ahora).getOrNull(arista)?.let {
-            (elementos[it] as Element.TextLabel).text = textoEsquina(180f)
-        }
-        etiquetaDelMarco(ahora, ROL_TRAMOS)?.let {
-            (elementos[it] as Element.TextLabel).text = textoTramos(quiebresDelMarco(ahora).size + 1)
-        }
-        sincronizarMarco(ahora, reinterpolarAltos = false)
-    }
-
-    /** Las piezas y cotas del marco que están a la derecha de esa x. */
-    private fun piezasYCotasALaDerecha(marcoIndex: Int, x: Float): List<Int> {
-        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
-        val zona = zonaDelMarco(marco)
-        return elementos.indices.filter { i ->
-            if (i == marcoIndex) return@filter false
-            when (val e = elementos[i]) {
-                is Element.Shape -> {
-                    val izq = minOf(e.start.x, e.end.x)
-                    val suyo = zona.contains(e.rect.centerX(), e.rect.centerY())
-                    when (e.cotaHint) {
-                        // El puente de la pared de la derecha ARRANCA en la arista: se corre con
-                        // ella. La arista y su alto están justo ahí y se quedan donde están, que
-                        // son el final de la pared de la izquierda.
-                        PUERTA_PUENTE -> suyo && izq >= x - 0.5f
-                        ESQUINA_QUIEBRE, VENTANA_ALTO_ESQUINA, VENTANA_ALTO -> suyo && izq > x + 0.5f
-                        else -> false
-                    }
-                }
-                is Element.TextLabel -> e.rol in setOf(ROL_ESQUINA, ROL_ALTOS, ROL_CURVA) &&
-                    zona.contains(e.x, e.y) && e.x > x + 0.5f
-                else -> false
-            }
-        }
-    }
-
-    /** Corre una pieza a lo ancho, sin tocar nada más. */
-    private fun correrEnX(index: Int, dx: Float) {
-        when (val e = elementos.getOrNull(index)) {
-            is Element.Shape -> {
-                e.start.x += dx; e.end.x += dx
-                e.topLeft.x += dx; e.topRight.x += dx
-                e.bottomLeft.x += dx; e.bottomRight.x += dx
-                e.rect.offset(dx, 0f)
-            }
-            is Element.TextLabel -> e.x += dx
-            else -> Unit
-        }
-    }
-
     /** El ángulo con el que dobla la ventana en esa arista; de ahí sale el inglete del parante. */
     private fun editarAnguloEsquina(index: Int) {
         val etiqueta = elementos.getOrNull(index) as? Element.TextLabel ?: return
@@ -2923,30 +2758,24 @@ class SketchMedidasView @JvmOverloads constructor(
         }
         cont.addView(afuera)
 
-        // La esquina curva: en vez de doblar en punta, la unen con una pared curva que va de la
-        // esquina de una a la de la otra. Se describe con lo que se corta y lo que mide en recto.
-        val arcoActual = marcoDePieza(index)?.let { marco ->
-            val arista = etiquetasEsquina(marco).indexOf(index)
-            val bordes = bordesDeTramos(marco)
-            val quiebre = quiebresDelMarco(marco).getOrNull(arista)
-            val xa = quiebre?.let { (elementos[it] as Element.Shape).end.x }
-            xa?.let { curvasDeTramo(marco)[tramoDeX(bordes, it + 0.5f)] }
-        }
+        // La esquina curva: en vez de doblar en punta, la unen con un arco que va de la esquina de
+        // una pared a la de la otra. Se describe con lo que se corta y lo que mide en recto.
+        val esquinaActual = esquinaDesdeTexto(etiqueta.text)
         val curva = android.widget.CheckBox(context).apply {
             text = "Esquina curva"
-            isChecked = arcoActual != null
+            isChecked = esquinaActual.arco != null
             setPadding(0, (10 * dp).toInt(), 0, 0)
         }
         cont.addView(curva)
         val etDesarrollo = EditText(context).apply {
             hint = "Desarrollo de la curva (lo que se corta)"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText(arcoActual?.let { formatCm(it.desarrollo) } ?: "")
+            setText(esquinaActual.arco?.let { formatCm(it.desarrollo) } ?: "")
         }
         val etCuerda = EditText(context).apply {
             hint = "Cuerda: de esquina a esquina"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText(arcoActual?.let { formatCm(it.cuerda) } ?: "")
+            setText(esquinaActual.arco?.let { formatCm(it.cuerda) } ?: "")
         }
         cont.addView(etDesarrollo)
         cont.addView(etCuerda)
@@ -3031,12 +2860,12 @@ class SketchMedidasView @JvmOverloads constructor(
             .setTitle("Ángulo de la esquina")
             .setView(cont)
             .setPositiveButton("Aceptar") { _, _ ->
-                val marco = marcoDePieza(index)
+                val signo = if (afuera.isChecked) "-" else ""
                 if (curva.isChecked) {
                     val d = etDesarrollo.text?.toString()?.replace(",", ".")?.toFloatOrNull()
                     val c = etCuerda.text?.toString()?.replace(",", ".")?.toFloatOrNull()
                     val arco = if (d != null && c != null) ArcoEsquina.deDesarrolloYCuerda(d, c) else null
-                    if (arco == null || marco == null) {
+                    if (arco == null) {
                         Toast.makeText(
                             context,
                             "La curva necesita su desarrollo y su cuerda, y la cuerda más corta.",
@@ -3044,18 +2873,15 @@ class SketchMedidasView @JvmOverloads constructor(
                         ).show()
                         return@setPositiveButton
                     }
-                    // La curva es una pared más: entra en la alzada con su desarrollo y el vano
-                    // crece con ella.
-                    val arista = etiquetasEsquina(marco).indexOf(index)
-                    if (arista >= 0) curvarEsquina(marco, arista, d!!, c!!)
+                    etiqueta.text = "$signo$MARCA_CURVA ${formatCm(d!!)}|${formatCm(c!!)}"
                 } else {
                     val nuevo = input.text?.toString()?.replace(",", ".")?.toFloatOrNull()
                         ?: return@setPositiveButton
                     // El signo guarda el sentido: en menos, la pared dobla hacia afuera.
                     val grados = abs(nuevo).coerceIn(1f, 359f)
                     etiqueta.text = textoEsquina(if (afuera.isChecked) -grados else grados)
-                    marco?.let { sincronizarMarco(it, reinterpolarAltos = false) }
                 }
+                marcoDePieza(index)?.let { sincronizarMarco(it, reinterpolarAltos = false) }
                 registrarAccion()
                 invalidate()
             }
@@ -3596,42 +3422,19 @@ class SketchMedidasView @JvmOverloads constructor(
     @androidx.annotation.VisibleForTesting
     fun curvarEsquinaParaPruebas(arista: Int, desarrolloCm: Float, cuerdaCm: Float) {
         val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
-        curvarEsquina(marco, arista, desarrolloCm, cuerdaCm)
+        val etiqueta = etiquetasEsquina(marco).getOrNull(arista) ?: return
+        (elementos[etiqueta] as Element.TextLabel).text =
+            "$MARCA_CURVA ${formatCm(desarrolloCm)}|${formatCm(cuerdaCm)}"
+        sincronizarMarco(marco, reinterpolarAltos = false)
         invalidate()
     }
 
-    /** El arco de la pared curva de ese tramo: desarrollo, cuerda, flecha y cuánto dobla. */
+    /** El arco de una arista curva: desarrollo, cuerda, flecha y cuánto dobla. Null si va en punta. */
     @androidx.annotation.VisibleForTesting
-    fun curvaDeTramoParaPruebas(tramo: Int): List<Float>? {
+    fun esquinaCurvaParaPruebas(arista: Int): List<Float>? {
         val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return null
-        val a = curvasDeTramo(marco)[tramo] ?: return null
+        val a = esquinasDeVentana(marco).getOrNull(arista)?.arco ?: return null
         return listOf(a.desarrollo, a.cuerda, a.flecha, a.anguloGrados)
-    }
-
-    /** Qué ve el apunte de sus paredes curvas. Solo para diagnosticar desde las pruebas. */
-    @androidx.annotation.VisibleForTesting
-    fun diagCurvasParaPruebas(): String {
-        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return "sin marco"
-        val bordes = bordesDeTramos(marco).map { pxToCm(it - bordesDeTramos(marco).first()) }
-        val rotulos = rotulosDeCurva(marco).map { i ->
-            val et = elementos[i] as Element.TextLabel
-            "'${et.text}'@${pxToCm(et.x)}"
-        }
-        return "bordes=$bordes rotulos=$rotulos curvas=${curvasDeTramo(marco).keys}"
-    }
-
-    /** El ancho de la ventana en la alzada, que es la suma de sus paredes. */
-    @androidx.annotation.VisibleForTesting
-    fun anchoDeLaVentanaParaPruebas(): Float {
-        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return 0f
-        return pxToCm((elementos[marco] as Element.Shape).rect.width())
-    }
-
-    /** Cuántas paredes tiene la ventana ahora mismo. */
-    @androidx.annotation.VisibleForTesting
-    fun tramosParaPruebas(): Int {
-        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return 0
-        return quiebresDelMarco(marco).size + 1
     }
 
     /** Escribe el ángulo de una arista, con su signo: en menos, la pared dobla hacia afuera. */
