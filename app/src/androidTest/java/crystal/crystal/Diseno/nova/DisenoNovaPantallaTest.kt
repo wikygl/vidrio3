@@ -847,6 +847,41 @@ class DisenoNovaPantallaTest {
         }
     }
 
+    /**
+     * Tocar el papel, fuera del dibujo, suelta lo elegido.
+     *
+     * La selección se quedaba pegada: el primer toque elige la franja, el segundo un módulo, y a
+     * partir de ahí cada toque elegía otro módulo. Con el mando puesto se podían agregar, quitar y
+     * cambiar módulos, pero no había manera de deseleccionar.
+     */
+    @Test
+    fun tocar_fuera_del_dibujo_suelta_la_seleccion() {
+        val normal = "{nova,apa,[200,160:Tl<200>(s<110>(f<100>c<100>);m<50>(f<200>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(normal) }
+            esperar()
+            val (ancho, alto) = enPantalla(esc) { it.tamanoLienzoParaPruebas() }
+
+            // Dos toques en el centro: el primero elige la franja, el segundo el módulo.
+            enPantalla(esc) { it.tocarLienzoParaPruebas(ancho / 2f, alto / 2f) }
+            esperar(200)
+            enPantalla(esc) { it.tocarLienzoParaPruebas(ancho / 2f, alto / 2f) }
+            esperar(200)
+            assertTrue("no llegó a haber selección", enPantalla(esc) { it.haySeleccionParaPruebas() })
+
+            // Y ahora el papel, en la esquina: fuera del dibujo.
+            enPantalla(esc) { it.tocarLienzoParaPruebas(4f, 4f) }
+            esperar(200)
+            assertTrue(
+                "la selección se quedó pegada",
+                !enPantalla(esc) { it.haySeleccionParaPruebas() }
+            )
+            assertEquals("el módulo siguió elegido", -1, enPantalla(esc) { it.moduloActivoParaPruebas() })
+            assertTrue("el mando se quedó puesto", !enPantalla(esc) { it.hayMandoParaPruebas() })
+        }
+    }
+
     /** Deja los dibujos en PNG del celular para poder mirarlos desde fuera. */
     @Test
     fun retratos_de_vanos_con_forma() {

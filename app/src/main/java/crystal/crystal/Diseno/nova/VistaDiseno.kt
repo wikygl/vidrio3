@@ -164,6 +164,8 @@ class VistaDiseno @JvmOverloads constructor(
     var alDobleClicModulo: ((franja: Int, modulo: Int) -> Unit)? = null
     /** Pulsación larga sobre una franja: (tramo, franja). La usa el mando de franjas. */
     var alClicLargoFranja: ((tramo: Int, franja: Int) -> Unit)? = null
+    /** Toque en el papel, fuera del dibujo: con algo elegido, es soltarlo. */
+    var alTocarFuera: (() -> Unit)? = null
     private var indiceFranjaResaltada: Int = -1
     private var indiceTramoResaltado: Int = -1
     private var indiceModuloResaltado: Int = -1
@@ -222,6 +224,25 @@ class VistaDiseno @JvmOverloads constructor(
     fun resaltarModulo(franja: Int, modulo: Int) {
         indiceFranjaResaltada = franja
         indiceModuloResaltado = modulo
+        invalidate()
+    }
+
+    /** ¿Hay algo elegido ahora mismo en el dibujo? */
+    fun haySeleccion(): Boolean =
+        indiceFranjaResaltada >= 0 || indiceModuloResaltado >= 0 || franjaConfirmadaPorToque >= 0
+
+    /**
+     * Suelta lo que estuviera elegido, incluidas las confirmaciones del toque.
+     *
+     * Sin esto la selección se quedaba pegada: una vez tocado un módulo, cada toque siguiente
+     * elegía otro módulo y no había forma de volver a empezar.
+     */
+    fun limpiarSeleccion() {
+        indiceFranjaResaltada = -1
+        indiceTramoResaltado = -1
+        indiceModuloResaltado = -1
+        franjaConfirmadaPorToque = -1
+        tramoConfirmadoPorToque = -1
         invalidate()
     }
 
@@ -3629,6 +3650,14 @@ class VistaDiseno @JvmOverloads constructor(
                         }
                     }
                 }
+                // Fuera del dibujo y con algo elegido: el toque se consume para poder soltarlo en
+                // el UP. Sin nada elegido no se toca, para no tragarse gestos que no son nuestros.
+                if (haySeleccion()) {
+                    franjaDownIndex = TOQUE_FUERA
+                    removeCallbacks(avisoLargo)
+                    largoYaDisparado = false
+                    return true
+                }
             }
             MotionEvent.ACTION_UP -> {
                 removeCallbacks(avisoLargo)
@@ -3637,6 +3666,12 @@ class VistaDiseno @JvmOverloads constructor(
                     return true
                 }
                 val i = franjaDownIndex
+                if (i == TOQUE_FUERA) {
+                    franjaDownIndex = -1
+                    limpiarSeleccion()
+                    alTocarFuera?.invoke()
+                    return true
+                }
                 if (i >= 0) {
                     val x = event.x
                     var tramo = -1
@@ -3688,6 +3723,8 @@ class VistaDiseno @JvmOverloads constructor(
 
     companion object {
         private const val PAQUETE_NOVA_FALLBACK = "{nova,ina,[150,120:s(f)]}"
+        /** Marca de que el dedo bajó fuera del dibujo, teniendo algo elegido. */
+        private const val TOQUE_FUERA = -2
         /** El alto propio de un tramo dentro de su bloque: `H<106.2>`. */
         private val RE_ALTO_TRAMO = Regex("""[hH]\s*<\s*([\d.,-]+)\s*>""")
         /** Lo que baja el dintel de ese tramo: `D<20>`. */

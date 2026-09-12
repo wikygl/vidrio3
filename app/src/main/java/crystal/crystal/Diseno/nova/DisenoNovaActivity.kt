@@ -160,6 +160,15 @@ class DisenoNovaActivity : AppCompatActivity() {
             // El mando de módulos sale junto a la franja recién tocada.
             mostrarFlotanteModulos()
         }
+        // Tocar el papel, fuera del dibujo, suelta lo elegido y cierra el mando. Antes no había
+        // manera de deseleccionar: una vez tocado un módulo, cada toque elegía otro módulo y el
+        // mando se quedaba puesto.
+        binding.vistaDiseno.alTocarFuera = {
+            indiceFranjaActiva = -1
+            indiceModuloActivo = -1
+            cerrarFlotanteModulos()
+            actualizarInfoSeleccion()
+        }
         // Mantener pulsada una franja abre su mando de franjas: poner y quitar en ese tramo.
         binding.vistaDiseno.alClicLargoFranja = { tramo, franja ->
             indiceTramoActivo = tramo.coerceAtLeast(0)
@@ -2333,6 +2342,19 @@ class DisenoNovaActivity : AppCompatActivity() {
     /** El módulo seleccionado ahora mismo, o -1. */
     @androidx.annotation.VisibleForTesting
     fun moduloActivoParaPruebas(): Int = indiceModuloActivo
+
+    /** ¿Está puesto el mando flotante de módulos o de franjas? */
+    @androidx.annotation.VisibleForTesting
+    fun hayMandoParaPruebas(): Boolean = flotanteModulos != null
+
+    /** ¿Queda algo resaltado en el dibujo? */
+    @androidx.annotation.VisibleForTesting
+    fun haySeleccionParaPruebas(): Boolean = binding.vistaDiseno.haySeleccion()
+
+    /** El tamaño del lienzo, para poder tocar dentro y fuera del dibujo. */
+    @androidx.annotation.VisibleForTesting
+    fun tamanoLienzoParaPruebas(): Pair<Int, Int> =
+        binding.vistaDiseno.width to binding.vistaDiseno.height
 
     /** Los tramos con el ancho bloqueado ahora mismo. */
     @androidx.annotation.VisibleForTesting
