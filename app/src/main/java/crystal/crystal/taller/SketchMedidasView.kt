@@ -1510,6 +1510,18 @@ class SketchMedidasView @JvmOverloads constructor(
                     value = curva.arco.cuerda,
                     collectHits = false
                 )
+                // Y lo que dobla la esquina, con su símbolo, en la panza: una pared curva también
+                // dobla, y eso es lo primero que se mira en una planta. Sale de sus dos medidas, no
+                // se escribe: por eso va como cota y no como rótulo.
+                val fuera = perpendicular(
+                    a, b, (cmToPx(curva.arco.flecha) + ce(30f)) * curva.sentido
+                )
+                canvas.drawText(
+                    "${formatCm(curva.arco.anguloGrados)}°",
+                    medio.x + fuera.x,
+                    medio.y + fuera.y,
+                    cotaTextPaint
+                )
             }
         }
         // Y el ancho de cada pared, sobre su lado.

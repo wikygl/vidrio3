@@ -62,6 +62,20 @@ class ArcoEsquinaTest {
     }
 
     @Test
+    fun la_curva_dobla_lo_que_dan_sus_medidas() {
+        // Un caso de los de probar en el celular: 78 de desarrollo y 72 de cuerda. No dobla 90 —le
+        // faltan dos centímetros de desarrollo para eso—, y la planta tiene que salir así: con la
+        // pared de después girada 78.8°, no a escuadra.
+        val a = ArcoEsquina.deDesarrolloYCuerda(78f, 72f)!!
+        assertEquals(78.8f, a.anguloGrados, 0.2f)
+        assertEquals(12.9f, a.flecha, 0.2f)
+        // Para que esa misma cuerda doble 90, el desarrollo tiene que ser 80.
+        val escuadra = ArcoEsquina.deCuerdaYFlecha(72f, 14.9f)!!
+        assertEquals(90f, escuadra.anguloGrados, 0.5f)
+        assertEquals(80f, escuadra.desarrollo, 0.5f)
+    }
+
+    @Test
     fun lo_que_no_es_un_arco_no_se_inventa() {
         // Sin curva no hay arco.
         assertNull(ArcoEsquina.deCuerdaYFlecha(180f, 0f))
