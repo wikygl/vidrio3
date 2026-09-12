@@ -1278,12 +1278,20 @@ class SketchMedidasView @JvmOverloads constructor(
         return s.cotaHint == ESQUINA_MARCO && quiebresDelMarco(index).isNotEmpty()
     }
 
-    /** El ángulo escrito en cada arista, de izquierda a derecha. 90° si no se entiende. */
+    /**
+     * El ángulo escrito en cada arista, de izquierda a derecha. 90° si no se entiende.
+     *
+     * El SIGNO es el sentido en el que dobla la pared: en más, hacia adentro; en menos, hacia
+     * afuera. Una ventana que abraza la esquina de un edificio dobla al revés que la que se mete en
+     * un rincón, y las dos existen.
+     */
     private fun angulosDeEsquina(marcoIndex: Int): List<Float> =
         etiquetasEsquina(marcoIndex).map { i ->
-            val t = (elementos[i] as Element.TextLabel).text
-            t.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", ".")
+            val t = (elementos[i] as Element.TextLabel).text.trim()
+            val afuera = t.startsWith("-") || t.startsWith("−")
+            val valor = t.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", ".")
                 .toFloatOrNull()?.coerceIn(1f, 359f) ?: 90f
+            if (afuera) -valor else valor
         }
 
     /**
@@ -1309,8 +1317,18 @@ class SketchMedidasView @JvmOverloads constructor(
             x += (largo * cos(dir)).toFloat()
             y += (largo * sin(dir)).toFloat()
             puntos.add(PointF(x, y))
-            angulos.getOrNull(t)?.let { dir += Math.toRadians((180f - it).toDouble()) }
+            // El signo del ángulo dice hacia dónde dobla: en más hacia adentro —abajo en la
+            // planta—, en menos hacia afuera.
+            angulos.getOrNull(t)?.let { grados ->
+                val giro = Math.toRadians((180f - abs(grados)).toDouble())
+                dir += if (grados < 0f) -giro else giro
+            }
         }
+        // Doblando hacia afuera la planta sube, y ahí arriba están los rótulos de la alzada: se
+        // baja entera lo que haga falta para que nada quede por encima de su sitio.
+        val arranque = marco.rect.bottom + huecoPlantaPx
+        val sube = arranque - puntos.minOf { it.y }
+        if (sube > 0.5f) puntos.forEach { it.y += sube }
         return puntos
     }
 
@@ -1337,7 +1355,7 @@ class SketchMedidasView @JvmOverloads constructor(
             val grados = Math.toDegrees(
                 kotlin.math.atan2((puntos[i + 1].y - puntos[i].y).toDouble(), (puntos[i + 1].x - puntos[i].x).toDouble())
             ).toFloat()
-            val fuera = perpendicular(puntos[i], puntos[i + 1], ce(20f))
+            val fuera = perpendicular(puntos[i], puntos[i + 1], ce(20f) * sentidoDeTramo(angulos, i))
             // El ancho del tramo, tocable: aquí el tramo es una pared entera, así que al cambiarlo
             // se mueven sus DOS lados a la vez y se ve en la alzada. Los lados por separado —el
             // descuadre— se apuntan allí, cada uno con su cota.
@@ -1364,7 +1382,7 @@ class SketchMedidasView @JvmOverloads constructor(
             val tramo = tramoDeX(bordes, alto.start.x)
             val a = puntos.getOrNull(tramo) ?: return@forEach
             val b = puntos.getOrNull(tramo + 1) ?: return@forEach
-            val dentro = perpendicular(a, b, -ce(20f))
+            val dentro = perpendicular(a, b, -ce(20f) * sentidoDeTramo(angulos, tramo))
             canvas.drawCircle(p.x, p.y, ce(5f), cotaPuntoPlantaPaint)
             drawCotaText(
                 canvas = canvas,
@@ -1386,12 +1404,20 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun verticesDeAnguloEnPlanta(marcoIndex: Int): List<PointF> {
         val puntos = recorridoPlanta(marcoIndex)
         if (puntos.size < 3) return emptyList()
-        val fuera = cmToPx(20f)
+        val angulos = angulosDeEsquina(marcoIndex)
         return (1 until puntos.size - 1).map { i ->
+            // Hacia el lado contrario al que dobla la pared, que es por donde hay sitio.
+            val fuera = cmToPx(20f) * if ((angulos.getOrNull(i - 1) ?: 90f) < 0f) -1f else 1f
             val a = perpendicular(puntos[i - 1], puntos[i], fuera)
             val b = perpendicular(puntos[i], puntos[i + 1], fuera)
             PointF(puntos[i].x + (a.x + b.x) / 2f, puntos[i].y + (a.y + b.y) / 2f)
         }
+    }
+
+    /** Hacia qué lado queda el "fuera" de un tramo: lo marca la esquina con la que se encuentra. */
+    private fun sentidoDeTramo(angulos: List<Float>, tramo: Int): Float {
+        val suyo = angulos.getOrNull(tramo) ?: angulos.getOrNull(tramo - 1) ?: return 1f
+        return if (suyo < 0f) -1f else 1f
     }
 
     /** Dónde cae en la planta un punto que en la alzada está en esa x. */
@@ -2597,6 +2623,14 @@ class SketchMedidasView @JvmOverloads constructor(
             setSelectAllOnFocus(true)
         }
         cont.addView(input)
+        // Hacia dónde dobla la pared. Una ventana que abraza la esquina de un edificio dobla al
+        // revés que la que se mete en un rincón, y en la planta se ve una u otra.
+        val afuera = android.widget.CheckBox(context).apply {
+            text = "Dobla hacia afuera"
+            isChecked = etiqueta.text.trim().let { it.startsWith("-") || it.startsWith("−") }
+            setPadding(0, (6 * dp).toInt(), 0, 0)
+        }
+        cont.addView(afuera)
         // En obra nadie lleva goniómetro: se marca lo mismo a cada lado de la esquina y se mide de
         // marca a marca. Con los dos lados y esa distancia sale el ángulo, y sale bien.
         cont.addView(TextView(context).apply {
@@ -2647,7 +2681,9 @@ class SketchMedidasView @JvmOverloads constructor(
             .setPositiveButton("Aceptar") { _, _ ->
                 val nuevo = input.text?.toString()?.replace(",", ".")?.toFloatOrNull()
                     ?: return@setPositiveButton
-                etiqueta.text = textoEsquina(abs(nuevo).coerceIn(1f, 359f))
+                // El signo guarda el sentido: en menos, la pared dobla hacia afuera.
+                val grados = abs(nuevo).coerceIn(1f, 359f)
+                etiqueta.text = textoEsquina(if (afuera.isChecked) -grados else grados)
                 marcoDePieza(index)?.let { colocarPiezasDelMarco(it) }
                 registrarAccion()
                 invalidate()
@@ -3183,6 +3219,25 @@ class SketchMedidasView @JvmOverloads constructor(
         val arriba = puntosArriba(marco)
         if (tramo + 1 >= bordes.size || tramo + 1 >= arriba.size) return null
         return pxToCm(bordes[tramo + 1] - bordes[tramo]) to pxToCm(arriba[tramo + 1].x - arriba[tramo].x)
+    }
+
+    /** Escribe el ángulo de una arista, con su signo: en menos, la pared dobla hacia afuera. */
+    @androidx.annotation.VisibleForTesting
+    fun anguloDeEsquinaParaPruebas(arista: Int, grados: Float) {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+        val etiqueta = etiquetasEsquina(marco).getOrNull(arista) ?: return
+        (elementos[etiqueta] as Element.TextLabel).text = textoEsquina(grados)
+        colocarPiezasDelMarco(marco)
+        invalidate()
+    }
+
+    /** El recorrido de la planta en centímetros, desde su arranque. */
+    @androidx.annotation.VisibleForTesting
+    fun recorridoPlantaParaPruebas(): List<Pair<Float, Float>> {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return emptyList()
+        val puntos = recorridoPlanta(marco)
+        val origen = puntos.firstOrNull() ?: return emptyList()
+        return puntos.map { pxToCm(it.x - origen.x) to pxToCm(it.y - origen.y) }
     }
 
     /** El ángulo que sale de medir a los dos lados de la esquina. Nulo si esa medida no puede ser. */

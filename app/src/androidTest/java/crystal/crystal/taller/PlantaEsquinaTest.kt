@@ -94,6 +94,31 @@ class PlantaEsquinaTest {
         )
     }
 
+    /**
+     * La pared puede doblar hacia los dos lados, y lo dice el signo del ángulo: en más hacia
+     * adentro, en menos hacia afuera. La que abraza la esquina de un edificio dobla al revés que la
+     * que se mete en un rincón.
+     */
+    @Test
+    fun el_signo_del_angulo_dice_hacia_donde_dobla() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+
+        v.anguloDeEsquinaParaPruebas(0, 90f)
+        val adentro = v.recorridoPlantaParaPruebas()
+        assertEquals(3, adentro.size)
+        // El primer tramo va a la derecha y el segundo baja: dobla hacia adentro.
+        assertEquals("el primer tramo no va a lo ancho", 150f, adentro[1].first, 1f)
+        assertTrue("el segundo tramo no dobló hacia adentro: $adentro", adentro[2].second > 100f)
+        assertEquals("el segundo tramo se salió de la vertical", adentro[1].first, adentro[2].first, 1f)
+
+        v.anguloDeEsquinaParaPruebas(0, -90f)
+        val afuera = v.recorridoPlantaParaPruebas()
+        assertEquals(3, afuera.size)
+        assertEquals("el primer tramo cambió", 150f, afuera[1].first, 1f)
+        assertTrue("el segundo tramo no dobló hacia afuera: $afuera", afuera[2].second < -100f)
+    }
+
     @Test
     fun el_angulo_sale_de_medir_a_los_dos_lados() {
         val v = vista()
@@ -120,5 +145,18 @@ class PlantaEsquinaTest {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val f = java.io.File(ctx.getExternalFilesDir(null), "planta_esquina3.png")
         f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    /** Y el mismo vano doblando hacia afuera, para poder mirarlo. */
+    @Test
+    fun retrato_de_la_planta_hacia_afuera() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        v.anguloDeEsquinaParaPruebas(0, -90f)
+        val bmp = v.exportBitmap()
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val f = java.io.File(ctx.getExternalFilesDir(null), "planta_afuera.png")
+        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
     }
 }
