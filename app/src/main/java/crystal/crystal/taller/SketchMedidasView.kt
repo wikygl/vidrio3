@@ -1331,6 +1331,12 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun angulosDeEsquina(marcoIndex: Int): List<Float> =
         esquinasDeVentana(marcoIndex).map { it.grados }
 
+    /** El centro de un rótulo, medido con su misma letra: así coincide con donde se colocó. */
+    private fun centroDeRotulo(et: Element.TextLabel): Float {
+        sketchTextPaint.textSize = tamanoTexto(et)
+        return et.x + sketchTextPaint.measureText(et.text) / 2f
+    }
+
     /** ¿Ese rótulo de esquina dice que la pared sigue recta? */
     private fun noDobla(texto: String): Boolean {
         if (texto.contains(MARCA_CURVA)) return false
@@ -1363,8 +1369,10 @@ class SketchMedidasView @JvmOverloads constructor(
             val et = elementos[i] as Element.TextLabel
             val cuerda = et.text.filter { it.isDigit() || it == '.' || it == ',' }
                 .replace(",", ".").toFloatOrNull() ?: return@mapNotNull null
-            // Por su x, que es donde se puso: en el centro de su pared.
-            val tramo = tramoDeX(bordes, et.x)
+            // Por el centro del texto, medido igual que al colocarlo: el rótulo se centra en su
+            // pared, así que su x queda media palabra a la izquierda y en una pared estrecha eso
+            // lo mandaba a la de al lado.
+            val tramo = tramoDeX(bordes, centroDeRotulo(et))
             if (tramo + 1 >= bordes.size) return@mapNotNull null
             val arco = ArcoEsquina.deDesarrolloYCuerda(pxToCm(bordes[tramo + 1] - bordes[tramo]), cuerda)
                 ?: return@mapNotNull null
@@ -1488,6 +1496,19 @@ class SketchMedidasView @JvmOverloads constructor(
                 canvas.drawPath(
                     caminoDeArco(curva.desde, curva.hasta, cmToPx(curva.arco.flecha), curva.sentido),
                     cotaArcoPaint
+                )
+                // La cuerda, por dentro de la panza: en planta es la medida que se ve de la curva.
+                // El desarrollo lo dice su cota, como el de las paredes rectas.
+                val medio = PointF((a.x + b.x) / 2f, (a.y + b.y) / 2f)
+                val dentro = perpendicular(a, b, -ce(20f) * curva.sentido)
+                drawCotaText(
+                    canvas = canvas,
+                    index = marcoIndex,
+                    type = CotaType.LENGTH,
+                    cx = medio.x + dentro.x,
+                    cy = medio.y + dentro.y,
+                    value = curva.arco.cuerda,
+                    collectHits = false
                 )
             }
         }
@@ -1746,17 +1767,16 @@ class SketchMedidasView @JvmOverloads constructor(
             y = colocarFilaRotulos(contadores, centros, y) + ce(16f)
         }
 
-        // Las paredes curvas dicen su cuerda bajo la suya: arriba se montaban con las cotas.
-        val curvas = rotulosDeCurva(marcoIndex)
-        if (curvas.isNotEmpty() && bordes.size >= 2) {
-            val centros = curvas.map { i ->
-                val tramo = tramoDeX(bordes, (elementos[i] as Element.TextLabel).x)
-                (bordes[tramo] + bordes[tramo + 1]) / 2f
-            }
-            // Se coloca centrado, pero el dato de a qué pared es va por su x: se deja en el centro.
-            y = colocarFilaRotulos(curvas, centros, y) + ce(16f)
-            curvas.forEachIndexed { orden, i ->
-                (elementos[i] as Element.TextLabel).x = centros[orden]
+        // La cuerda de cada pared curva va DENTRO de su pared, en el desarrollo: ahí se ve de cuál
+        // es y no se pelea con nada. En la banda de abajo se montaba con el contador de altos.
+        if (bordes.size >= 2) {
+            rotulosDeCurva(marcoIndex).forEach { i ->
+                val et = elementos[i] as Element.TextLabel
+                val tramo = tramoDeX(bordes, et.x)
+                sketchTextPaint.textSize = tamanoTexto(et)
+                val centro = (bordes[tramo] + bordes[tramo + 1]) / 2f
+                et.x = centro - sketchTextPaint.measureText(et.text) / 2f
+                et.y = marco.rect.top + marco.rect.height() * 0.86f
             }
         }
 
@@ -2882,7 +2902,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     .getOrNull(tramoCurvo),
                 puentesDelMarco(marcoIndex).getOrNull(tramoCurvo),
                 rotulosDeCurva(marcoIndex).firstOrNull {
-                    tramoDeX(bordes, (elementos[it] as Element.TextLabel).x) == tramoCurvo
+                    tramoDeX(bordes, centroDeRotulo(elementos[it] as Element.TextLabel)) == tramoCurvo
                 }
             ) + altosLibresPorTramo(marcoIndex).getOrNull(tramoCurvo).orEmpty()
             ).distinct().sortedDescending()
