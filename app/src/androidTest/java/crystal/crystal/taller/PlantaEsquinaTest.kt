@@ -148,6 +148,48 @@ class PlantaEsquinaTest {
         f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    /**
+     * La esquina curva: en vez de doblar en punta, la unen con un arco que va de la esquina de una
+     * pared a la de la otra. Lo que dobla sale de su desarrollo y su cuerda.
+     */
+    @Test
+    fun la_esquina_curva_une_las_dos_paredes() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        // Un cuarto de círculo de radio 100: 157.1 de desarrollo y 141.4 de cuerda.
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+
+        val arco = v.esquinaCurvaParaPruebas(0)!!
+        assertEquals("el desarrollo no es el escrito", 157.1f, arco[0], 0.5f)
+        assertEquals("la cuerda no es la escrita", 141.4f, arco[1], 0.5f)
+        assertEquals("la flecha no sale del arco", 29.3f, arco[2], 0.5f)
+        assertEquals("la curva no dobla los 90°", 90f, arco[3], 1f)
+
+        // En la planta hay un punto más: la curva separa el final de una pared del principio de la
+        // otra, y entre esas dos puntas va su cuerda.
+        val recorrido = v.recorridoPlantaParaPruebas()
+        assertEquals("la curva no se metió entre las paredes", 4, recorrido.size)
+        val cuerda = kotlin.math.hypot(
+            recorrido[2].first - recorrido[1].first, recorrido[2].second - recorrido[1].second
+        )
+        assertEquals("entre las dos esquinas no está la cuerda", 141.4f, cuerda, 2f)
+        // Y las paredes siguen midiendo lo suyo: la curva no se las come.
+        assertEquals("la primera pared cambió", 150f, recorrido[1].first - recorrido[0].first, 1f)
+    }
+
+    /** Y un retrato de la esquina curva, para poder mirarla. */
+    @Test
+    fun retrato_de_la_esquina_curva() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+        val bmp = v.exportBitmap()
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val f = java.io.File(ctx.getExternalFilesDir(null), "planta_curva.png")
+        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
+    }
+
     /** Y el mismo vano doblando hacia afuera, para poder mirarlo. */
     @Test
     fun retrato_de_la_planta_hacia_afuera() {
@@ -157,62 +199,6 @@ class PlantaEsquinaTest {
         val bmp = v.exportBitmap()
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val f = java.io.File(ctx.getExternalFilesDir(null), "planta_afuera.png")
-        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-        assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
-    }
-
-    /**
-     * Una pared curva: el tramo sigue midiendo su desarrollo —lo que se corta— y en la planta se
-     * dibuja con su panza, avanzando solo la cuerda.
-     */
-    @Test
-    fun un_tramo_curvo_avanza_su_cuerda() {
-        val v = vista()
-        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(157f, 120f), altoCm = 120f)
-        val recto = v.recorridoPlantaParaPruebas()
-        assertEquals("el tramo recto no avanza su medida", 157f, recto[1].first, 1f)
-
-        // Ese primer tramo, curvo con 29.3 de panza: es el cuarto de círculo de radio 100.
-        v.curvarTramoParaPruebas(0, 29.3f)
-        val arco = v.arcoDeTramoParaPruebas(0)!!
-        assertEquals("el desarrollo no es el del tramo", 157f, arco.first, 1f)
-        assertEquals("la cuerda no sale del arco", 141.4f, arco.second, 1.5f)
-        assertEquals("la flecha no es la escrita", 29.3f, arco.third, 0.2f)
-
-        // Y en la planta avanza la CUERDA, no el desarrollo.
-        val curvo = v.recorridoPlantaParaPruebas()
-        val avance = kotlin.math.hypot(
-            curvo[1].first - curvo[0].first, curvo[1].second - curvo[0].second
-        )
-        assertEquals("la curva avanzó su desarrollo en vez de su cuerda", 141.4f, avance, 2f)
-    }
-
-    @Test
-    fun quitar_la_flecha_devuelve_la_pared_a_recta() {
-        val v = vista()
-        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(157f, 120f), altoCm = 120f)
-        v.curvarTramoParaPruebas(0, 29.3f)
-        assertNotNull(v.arcoDeTramoParaPruebas(0))
-        v.curvarTramoParaPruebas(0, 0f)
-        assertNull("la pared se quedó curva", v.arcoDeTramoParaPruebas(0))
-        assertEquals(
-            "no volvió a avanzar su medida",
-            157f, v.recorridoPlantaParaPruebas()[1].first, 1f
-        )
-    }
-
-    /** Y un retrato de la esquina curva, para poder mirarla. */
-    @Test
-    fun retrato_de_la_esquina_curva() {
-        val v = vista()
-        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(120f, 157f, 120f), altoCm = 120f)
-        v.curvarTramoParaPruebas(1, 29.3f)
-        // La curva ya dobla los 90°, así que las aristas de sus puntas van rectas.
-        v.anguloDeEsquinaParaPruebas(0, 180f)
-        v.anguloDeEsquinaParaPruebas(1, 180f)
-        val bmp = v.exportBitmap()
-        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val f = java.io.File(ctx.getExternalFilesDir(null), "planta_curva.png")
         f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
     }
