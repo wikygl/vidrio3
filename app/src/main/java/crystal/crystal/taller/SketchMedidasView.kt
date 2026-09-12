@@ -1331,6 +1331,14 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun angulosDeEsquina(marcoIndex: Int): List<Float> =
         esquinasDeVentana(marcoIndex).map { it.grados }
 
+    /** ¿Ese rótulo de esquina dice que la pared sigue recta? */
+    private fun noDobla(texto: String): Boolean {
+        if (texto.contains(MARCA_CURVA)) return false
+        val grados = texto.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", ".")
+            .toFloatOrNull() ?: return false
+        return abs(grados - 180f) < 0.5f
+    }
+
     /** Los rótulos de cuerda de las paredes curvas de ese marco. */
     private fun rotulosDeCurva(marcoIndex: Int): List<Int> {
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
@@ -2857,6 +2865,55 @@ class SketchMedidasView @JvmOverloads constructor(
         sincronizarMarco(ahora, reinterpolarAltos = false)
     }
 
+    /**
+     * Devuelve una pared curva a esquina en punta, con ese ángulo.
+     *
+     * Se va la pared entera con lo suyo —su arista de salida, su puente, su contador y las cotas de
+     * alto que tuviera— y el vano se encoge lo que medía, que es lo contrario de haberla metido. La
+     * arista que queda vuelve a doblar.
+     */
+    private fun descurvarEsquina(marcoIndex: Int, tramoCurvo: Int, grados: Float) {
+        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
+        val bordes = bordesDeTramos(marcoIndex)
+        if (tramoCurvo + 1 >= bordes.size || tramoCurvo < 1) return
+        val ancho = bordes[tramoCurvo + 1] - bordes[tramoCurvo]
+
+        // La arista de ENTRADA se queda y vuelve a doblar; la de salida se va con la pared.
+        val aristaEntrada = tramoCurvo - 1
+        etiquetasEsquina(marcoIndex).getOrNull(aristaEntrada)?.let {
+            (elementos[it] as Element.TextLabel).text = textoEsquina(grados)
+        }
+        val sobran = (
+            listOfNotNull(
+                quiebresDelMarco(marcoIndex).getOrNull(tramoCurvo),
+                altosDelMarco(marcoIndex, VENTANA_ALTO_ESQUINA).getOrNull(tramoCurvo),
+                etiquetasEsquina(marcoIndex).getOrNull(tramoCurvo),
+                contadoresAltos(marcoIndex).filterNot { (elementos[it] as Element.TextLabel).titulo }
+                    .getOrNull(tramoCurvo),
+                puentesDelMarco(marcoIndex).getOrNull(tramoCurvo),
+                rotulosDeCurva(marcoIndex).firstOrNull {
+                    tramoDeX(bordes, (elementos[it] as Element.TextLabel).x) == tramoCurvo
+                }
+            ) + altosLibresPorTramo(marcoIndex).getOrNull(tramoCurvo).orEmpty()
+            ).distinct().sortedDescending()
+
+        // Lo que quedaba a la derecha de la pared vuelve a su sitio.
+        val aLaDerecha = piezasYCotasALaDerecha(marcoIndex, bordes[tramoCurvo + 1])
+            .filterNot { it in sobran }
+        aLaDerecha.forEach { correrEnX(it, -ancho) }
+        sobran.forEach { if (it in elementos.indices) elementos.removeAt(it) }
+
+        val ahora = elementos.indexOfFirst { it === marco }
+        if (ahora < 0) return
+        marco.topRight.x -= ancho
+        marco.bottomRight.x -= ancho
+        actualizarBoundsRectangulo(marco)
+        etiquetaDelMarco(ahora, ROL_TRAMOS)?.let {
+            (elementos[it] as Element.TextLabel).text = textoTramos(quiebresDelMarco(ahora).size + 1)
+        }
+        sincronizarMarco(ahora, reinterpolarAltos = false)
+    }
+
     /** Las piezas y cotas del marco que están a la derecha de esa x. */
     private fun piezasYCotasALaDerecha(marcoIndex: Int, x: Float): List<Int> {
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
@@ -2925,12 +2982,16 @@ class SketchMedidasView @JvmOverloads constructor(
 
         // La esquina curva: en vez de doblar en punta, la unen con una pared curva que va de la
         // esquina de una a la de la otra. Se describe con lo que se corta y lo que mide en recto.
-        val arcoActual = marcoDePieza(index)?.let { marco ->
+        // La pared curva de esta esquina, si la tiene: es el tramo que sigue a su arista.
+        val tramoDelArco = marcoDePieza(index)?.let { marco ->
             val arista = etiquetasEsquina(marco).indexOf(index)
-            val bordes = bordesDeTramos(marco)
             val quiebre = quiebresDelMarco(marco).getOrNull(arista)
-            val xa = quiebre?.let { (elementos[it] as Element.Shape).end.x }
-            xa?.let { curvasDeTramo(marco)[tramoDeX(bordes, it + 0.5f)] }
+            quiebre?.let {
+                tramoDeX(bordesDeTramos(marco), (elementos[it] as Element.Shape).end.x + 0.5f)
+            }
+        } ?: -1
+        val arcoActual = marcoDePieza(index)?.let { marco ->
+            if (tramoDelArco >= 0) curvasDeTramo(marco)[tramoDelArco] else null
         }
         val curva = android.widget.CheckBox(context).apply {
             text = "Esquina curva"
@@ -3053,8 +3114,14 @@ class SketchMedidasView @JvmOverloads constructor(
                         ?: return@setPositiveButton
                     // El signo guarda el sentido: en menos, la pared dobla hacia afuera.
                     val grados = abs(nuevo).coerceIn(1f, 359f)
-                    etiqueta.text = textoEsquina(if (afuera.isChecked) -grados else grados)
-                    marco?.let { sincronizarMarco(it, reinterpolarAltos = false) }
+                    val conSigno = if (afuera.isChecked) -grados else grados
+                    // Si era curva y se desmarcó, la pared curva se va y la esquina vuelve a doblar.
+                    if (arcoActual != null && marco != null && tramoDelArco >= 1) {
+                        descurvarEsquina(marco, tramoDelArco, conSigno)
+                    } else {
+                        etiqueta.text = textoEsquina(conSigno)
+                        marco?.let { sincronizarMarco(it, reinterpolarAltos = false) }
+                    }
                 }
                 registrarAccion()
                 invalidate()
@@ -3597,6 +3664,14 @@ class SketchMedidasView @JvmOverloads constructor(
     fun curvarEsquinaParaPruebas(arista: Int, desarrolloCm: Float, cuerdaCm: Float) {
         val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
         curvarEsquina(marco, arista, desarrolloCm, cuerdaCm)
+        invalidate()
+    }
+
+    /** Quita la pared curva de ese tramo y deja su esquina doblando esos grados. */
+    @androidx.annotation.VisibleForTesting
+    fun descurvarParaPruebas(tramo: Int, grados: Float) {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+        descurvarEsquina(marco, tramo, grados)
         invalidate()
     }
 
@@ -4812,6 +4887,9 @@ class SketchMedidasView @JvmOverloads constructor(
         when (element) {
             is Element.Freehand -> canvas.drawPath(element.path, paint)
             is Element.TextLabel -> {
+                // Una esquina de 180° no dobla: no hay nada que decir ahí. Pasa con las dos aristas
+                // de una pared curva, que es la que hace todo el giro.
+                if (element.rol == ROL_ESQUINA && noDobla(element.text)) return
                 sketchTextPaint.textSize = tamanoTexto(element)
                 if (element.rol == ROL_ALFEIZAR) dibujarIconoAlfeizar(canvas, element)
                 canvas.drawText(element.text, element.x, element.y, sketchTextPaint)

@@ -184,6 +184,24 @@ class PlantaEsquinaTest {
         assertEquals("la primera pared cambió", 150f, recorrido[1].first - recorrido[0].first, 1f)
     }
 
+    /** Y quitarla la devuelve a esquina en punta, con el vano como estaba. */
+    @Test
+    fun quitar_la_curva_devuelve_la_esquina_a_punta() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+        assertEquals(3, v.tramosParaPruebas())
+
+        v.descurvarParaPruebas(1, 90f)
+        assertEquals("la pared curva no se fue", 2, v.tramosParaPruebas())
+        assertNull("la curva sigue ahí", v.curvaDeTramoParaPruebas(1))
+        assertEquals("el vano no volvió a su medida", 270f, v.anchoDeLaVentanaParaPruebas(), 1f)
+        // Y la esquina vuelve a doblar: el segundo tramo baja en la planta.
+        val recorrido = v.recorridoPlantaParaPruebas()
+        assertEquals(3, recorrido.size)
+        assertTrue("la esquina no volvió a doblar: $recorrido", recorrido[2].second > 100f)
+    }
+
     /** Y un retrato de la esquina curva, para poder mirarla. */
     @Test
     fun retrato_de_la_esquina_curva() {
