@@ -1063,6 +1063,12 @@ class VistaDiseno @JvmOverloads constructor(
         // El rectángulo que ocupa el dibujo: lo usa el mando para ponerse justo debajo.
         rectDiseno.set(x0, y0, x1, y1)
 
+        // Los rangos del toque son de ESTE dibujo. Sin limpiarlos, un diseño con tramos dejaba los
+        // suyos puestos y el siguiente —sin tramos, como el que queda al limpiar— seguía
+        // preguntándoles: decían que la franja de arriba no tenía módulos, así que el segundo
+        // toque no elegía ninguno y parecía que la selección no llegaba.
+        if (segmentosNs.isEmpty()) segmentosPlanoInfo.clear()
+
         if (segmentosNs.isNotEmpty()) {
             rangosTramoX.clear()
             segmentosPlanoInfo.clear()
@@ -3618,6 +3624,7 @@ class VistaDiseno @JvmOverloads constructor(
         }
     }
     private var xDown = 0f
+
 
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

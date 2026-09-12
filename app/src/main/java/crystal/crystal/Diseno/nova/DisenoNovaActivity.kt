@@ -193,13 +193,20 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
         }
 
-        // Tocar el lienzo cierra los paneles de contenido abiertos, pero NO se queda con el toque:
-        // se lo comía entero, y como el mando queda abierto tras elegir una franja, el toque en la
-        // franja de al lado solo servía para cerrar el mando. Peor aún: el dedo al levantarse sí
-        // llegaba al lienzo, con la franja del toque ANTERIOR, así que elegía un módulo de esa. De
-        // ahí que la selección pareciera quedarse pegada y no se pudiera pasar a la otra franja.
+        // Tocar el lienzo cierra el panel de medidas, pero ni se queda con el toque ni toca el
+        // mando:
+        // - Se lo comía entero, y como el mando queda abierto tras elegir una franja, el toque en
+        //   la de al lado solo servía para cerrarlo; el dedo al levantarse sí llegaba al dibujo,
+        //   pero con la franja del toque ANTERIOR, así que elegía un módulo de esa.
+        // - Y cerrarlo al BAJAR el dedo cambiaba el layout en mitad del gesto, con lo que el
+        //   sistema lo cancelaba y el segundo toque —el que elige el módulo— no llegaba nunca.
+        // Por eso se cierra al levantar, y el mando lo gestiona la propia selección.
         binding.vistaDiseno.setOnTouchListener { _, event ->
-            if (event.action == android.view.MotionEvent.ACTION_DOWN) cerrarPanelesContenido()
+            if (event.action == android.view.MotionEvent.ACTION_UP &&
+                binding.panelCotasPlanos.visibility == View.VISIBLE
+            ) {
+                binding.vistaDiseno.post { binding.panelCotasPlanos.visibility = View.GONE }
+            }
             false
         }
 

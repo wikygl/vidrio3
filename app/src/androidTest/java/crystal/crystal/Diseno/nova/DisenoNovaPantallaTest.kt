@@ -932,6 +932,70 @@ class DisenoNovaPantallaTest {
                 "el toque acabó eligiendo un módulo en vez de la franja",
                 -1, enPantalla(esc) { it.moduloActivoParaPruebas() }
             )
+
+            // Y el segundo toque en la MISMA franja elige su módulo, que es el paso siguiente.
+            tocar(centroDe(0))
+            assertTrue(
+                "el segundo toque no eligió módulo",
+                enPantalla(esc) { it.moduloActivoParaPruebas() } >= 0
+            )
+        }
+    }
+
+    /**
+     * El camino entero de diseñar a mano un vano con forma: limpiar, dar altura a la franja y
+     * elegir en las dos franjas, franja y módulo.
+     *
+     * Al limpiar, el dibujo deja de tener tramos, pero los rangos del toque del diseño anterior se
+     * quedaban puestos: decían que la franja de arriba no tenía módulos y el segundo toque no
+     * elegía ninguno. En el dibujo de abajo sí funcionaba, que es lo que despistaba.
+     */
+    @Test
+    fun tras_limpiar_se_elige_franja_y_modulo_en_las_dos() {
+        val repartido = "{nova,apa,[200,160:Tl<68.9>(H<0,110>;s<110>(f<68.9>))" +
+            " P<2.5> Tl<31>(H<110,160>;s<110>(f<31>);m<50>(f<31>))" +
+            " P<2.5> Tl<31>(H<160,110>;s<110>(c<31>);m<50>(f<31>))" +
+            " P<2.5> Tl<68.9>(H<110,0>;s<110>(f<68.9>)) V<0/0|200/0|100/160>]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(repartido) }
+            esperar()
+            enPantalla(esc) { it.limpiarParaPruebas() }
+            esperar()
+            assertTrue(
+                "no se pudo dar altura a la franja",
+                enPantalla(esc) { it.editarCotaParaPruebas("cotas_franja_0_0", "40") }
+            )
+            esperar()
+
+            val bandas = enPantalla(esc) { it.bandasDeFranjaParaPruebas(0) }
+            assertEquals("no aparecieron las dos franjas: $bandas", 2, bandas.size)
+            val origen = enPantalla(esc) { it.posicionLienzoParaPruebas() }
+            val (ancho, _) = enPantalla(esc) { it.tamanoLienzoParaPruebas() }
+            fun tocar(yVista: Float) {
+                val inst = InstrumentationRegistry.getInstrumentation()
+                val t = android.os.SystemClock.uptimeMillis()
+                val px = origen.first + ancho / 2f
+                val py = origen.second + yVista
+                inst.sendPointerSync(
+                    android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, px, py, 0)
+                )
+                inst.sendPointerSync(
+                    android.view.MotionEvent.obtain(t, t + 80, android.view.MotionEvent.ACTION_UP, px, py, 0)
+                )
+                esperar(350)
+            }
+
+            bandas.forEachIndexed { i, banda ->
+                val y = (banda.first + banda.second) / 2f
+                tocar(y)
+                assertEquals("no se eligió la franja $i", i, enPantalla(esc) { it.franjaActivaParaPruebas() })
+                tocar(y)
+                assertTrue(
+                    "el segundo toque no eligió módulo en la franja $i",
+                    enPantalla(esc) { it.moduloActivoParaPruebas() } >= 0
+                )
+            }
         }
     }
 
