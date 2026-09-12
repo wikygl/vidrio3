@@ -152,6 +152,37 @@ class PlantaEsquinaTest {
      * La esquina curva: en vez de doblar en punta, la unen con un arco que va de la esquina de una
      * pared a la de la otra. Lo que dobla sale de su desarrollo y su cuerda.
      */
+    /**
+     * La curva ocupa su desarrollo en el desarrollo de la ventana: es aluminio que hay que cortar.
+     *
+     * Se mete entre las dos paredes como un trozo más y el vano crece con él, pero sin ser una
+     * esquina: ahí no dobla nada —el giro lo lleva la curva— así que no pide ángulo ninguno.
+     */
+    @Test
+    fun la_curva_suma_su_desarrollo_en_el_alzado() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        assertEquals("el vano no mide la suma de sus paredes", 270f, v.anchoDeLaVentanaParaPruebas(), 1f)
+        assertEquals(listOf(150f, 120f), v.anchosDeParedParaPruebas().map { kotlin.math.round(it) })
+
+        // Un cuarto de círculo de radio 100: 157.1 de desarrollo y 141.4 de cuerda.
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+        assertEquals(
+            "el desarrollo de la curva no sumó al vano",
+            427.1f, v.anchoDeLaVentanaParaPruebas(), 2f
+        )
+        val anchos = v.anchosDeParedParaPruebas()
+        assertEquals("la curva no entró como un trozo más: $anchos", 3, anchos.size)
+        assertEquals("el trozo de la curva no mide su desarrollo", 157.1f, anchos[1], 2f)
+        assertEquals("las paredes rectas cambiaron", 150f, anchos[0], 1f)
+        assertEquals("las paredes rectas cambiaron", 120f, anchos[2], 1f)
+
+        // Y quitando la curva, el vano vuelve a lo que medían sus paredes.
+        v.curvarEsquinaParaPruebas(0, 0f, 0f)
+        assertEquals("el vano no volvió a su medida", 270f, v.anchoDeLaVentanaParaPruebas(), 1f)
+        assertEquals("el trozo de la curva se quedó", 2, v.anchosDeParedParaPruebas().size)
+    }
+
     @Test
     fun la_esquina_curva_une_las_dos_paredes() {
         val v = vista()
