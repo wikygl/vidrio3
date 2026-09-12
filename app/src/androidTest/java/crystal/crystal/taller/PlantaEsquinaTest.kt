@@ -170,6 +170,20 @@ class PlantaEsquinaTest {
         assertEquals("se montan al acercar", 0, v.rotulosMontadosParaPruebas())
     }
 
+    /** Un retrato de la pantalla con el apunte corrido, para mirar el identificador. */
+    @Test
+    fun retrato_de_la_pantalla_con_el_apunte_corrido() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(180f, 150f), altoCm = 120f)
+        v.zoomParaPruebas(0.8f)
+        v.desplazarParaPruebas(260f, 120f)
+        val bmp = v.pantallaParaPruebas()
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val f = java.io.File(ctx.getExternalFilesDir(null), "pantalla_titulo.png")
+        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
+    }
+
     /** El identificador se recorta a lo que hay de ancho, en vez de salirse del papel. */
     @Test
     fun el_identificador_cabe_en_la_pantalla() {
@@ -180,6 +194,11 @@ class PlantaEsquinaTest {
         assertTrue("no cabe al alejar", v.identificadorCabeParaPruebas())
         v.zoomParaPruebas(3f)
         assertTrue("no cabe al acercar", v.identificadorCabeParaPruebas())
+        // Y con el apunte corrido hacia la derecha, que es cuando de verdad se salía: el rótulo
+        // arranca en el canto del dibujo, no en el borde de la pantalla.
+        v.zoomParaPruebas(0.8f)
+        v.desplazarParaPruebas(420f, 0f)
+        assertTrue("no cabe con el dibujo corrido a la derecha", v.identificadorCabeParaPruebas())
     }
 
     /**

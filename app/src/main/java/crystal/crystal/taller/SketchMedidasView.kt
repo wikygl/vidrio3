@@ -3638,14 +3638,33 @@ class SketchMedidasView @JvmOverloads constructor(
             }
     }
 
-    /** ¿El identificador cabe a lo ancho de la pantalla? */
+    /** ¿El identificador cabe en la pantalla, desde donde empieza hasta el borde derecho? */
     @androidx.annotation.VisibleForTesting
     fun identificadorCabeParaPruebas(): Boolean {
         dibujarEnBitmapParaPruebas()
         val titulo = elementos.filterIsInstance<Element.TextLabel>().firstOrNull { it.titulo }
             ?: return true
         sketchTextPaint.textSize = tamanoTexto(titulo)
-        return sketchTextPaint.measureText(titulo.text) <= width * escalaCota
+        val derechaEnPantalla = mundoAPantallaX(titulo.x + sketchTextPaint.measureText(titulo.text))
+        return derechaEnPantalla <= width + 1f
+    }
+
+    /** Corre el dibujo por la pantalla, como el arrastre con el dedo. */
+    @androidx.annotation.VisibleForTesting
+    fun desplazarParaPruebas(dx: Float, dy: Float) {
+        viewOffsetX += dx
+        viewOffsetY += dy
+        dibujarEnBitmapParaPruebas()
+    }
+
+    /** La vista tal como se ve en la pantalla, para poder mirarla desde fuera. */
+    @androidx.annotation.VisibleForTesting
+    fun pantallaParaPruebas(): Bitmap {
+        val bmp = Bitmap.createBitmap(
+            width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888
+        )
+        draw(Canvas(bmp))
+        return bmp
     }
 
     /** Dibuja una vez en un bitmap aparte, para que se recoloquen las cotas y los rótulos. */
@@ -4627,6 +4646,7 @@ class SketchMedidasView @JvmOverloads constructor(
         // antes de medir el encuadre, para que no se salgan del papel.
         val escalaPrevia = escalaCota
         escalaCota = 1f
+        exportando = true
         reubicarTitulos()
         val contentBounds = boundsForContent()
         if (contentBounds == null) {
@@ -4653,6 +4673,7 @@ class SketchMedidasView @JvmOverloads constructor(
         cotaTextRects.clear()
         canvas.restore()
         escalaCota = escalaPrevia
+        exportando = false
         return out
     }
 
@@ -5325,14 +5346,21 @@ class SketchMedidasView @JvmOverloads constructor(
      * igual.
      */
     private fun tamanoQueQuepa(element: Element.TextLabel, tamanoPedido: Float): Float {
-        if (element.text.isBlank() || width <= 0) return tamanoPedido
-        val disponible = width * escalaCota * 0.94f
+        if (element.text.isBlank() || width <= 0 || exportando) return tamanoPedido
+        // Lo que hay DESDE DONDE EMPIEZA el rótulo hasta el borde derecho de la pantalla: el
+        // identificador arranca en el canto del dibujo, no en el borde, así que medirlo contra el
+        // ancho de la pantalla no servía —con el apunte a la derecha se salía igual—.
+        val margen = 8f * escalaCota
+        val disponible = pantallaAMundoX(width.toFloat()) - element.x - margen
         if (disponible <= 1f) return tamanoPedido
         sketchTextPaint.textSize = tamanoPedido
         val ancho = sketchTextPaint.measureText(element.text)
         if (ancho <= disponible || ancho <= 0f) return tamanoPedido
         return tamanoPedido * disponible / ancho
     }
+
+    /** Mientras se exporta no hay pantalla que respetar: el rótulo va a su tamaño. */
+    private var exportando = false
 
     private fun tamanoTexto(element: Element.TextLabel): Float = when {
         // El identificador se recorta a lo que hay de ancho: con la letra medida en pantalla, en un
