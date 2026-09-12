@@ -3621,6 +3621,14 @@ class SketchMedidasView @JvmOverloads constructor(
         invalidate()
     }
 
+    /** Escribe el ancho de un tramo como si se tocara la cota de ABAJO de la alzada. */
+    @androidx.annotation.VisibleForTesting
+    fun anchoDeAbajoParaPruebas(tramo: Int, valueCm: Float) {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+        aplicarAnchoTramo(marco, tramo, valueCm)
+        invalidate()
+    }
+
     /** Escribe el lado de ARRIBA de un tramo, como la cota de la alzada: así se apunta el descuadre. */
     @androidx.annotation.VisibleForTesting
     fun anchoDeArribaParaPruebas(tramo: Int, valueCm: Float) {
@@ -6823,7 +6831,15 @@ class SketchMedidasView @JvmOverloads constructor(
             .setView(input)
             .setPositiveButton("Aceptar") { _, _ ->
                 val nuevo = input.text?.toString()?.replace(",", ".")?.toFloatOrNull()
-                if (nuevo != null && nuevo != 0f) {
+                // El cero no es medida en casi nada —y escribirlo es la forma corta de salirse sin
+                // tocar nada—, pero en los tramos de la ventana de esquina sí dice algo: ese lado
+                // no existe, la ventana empieza o acaba en la esquina.
+                val ceroVale = hit.type in setOf(
+                    CotaType.ESQUINA_TRAMO,
+                    CotaType.ESQUINA_TRAMO_PLANTA,
+                    CotaType.ESQUINA_TRAMO_ARRIBA
+                )
+                if (nuevo != null && (nuevo != 0f || ceroVale)) {
                     if (porAnotar && element is Element.Composite) {
                         anotarMedidaLado(element, hit, nuevo)
                     } else {
@@ -7348,12 +7364,42 @@ class SketchMedidasView @JvmOverloads constructor(
      * edita crece o encoge, los de su derecha se corren enteros y el ancho total es la suma.
      */
     private fun aplicarAnchoTramo(marcoIndex: Int, tramo: Int, valueCm: Float) {
+        // Un lado puede medir CERO: es la ventana que empieza o acaba en la esquina, sin pared
+        // recta por ese lado. Y entonces se va ENTERO, por los dos lados: en una pared que no
+        // existe no hay descuadre que apuntar.
+        if (valueCm <= 0.5f) {
+            anularTramo(marcoIndex, tramo)
+            return
+        }
+        aplicarAnchoAbajoTramo(marcoIndex, tramo, cmToPx(valueCm))
+    }
+
+    /**
+     * Deja un tramo en cero, venga el cero de la cota que venga: la ventana arranca (o acaba) en la
+     * esquina. Alguna pared tiene que quedar en pie, que una ventana entera en cero no es ventana.
+     */
+    private fun anularTramo(marcoIndex: Int, tramo: Int) {
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
         val bordes = bordesDeTramos(marcoIndex)
         if (tramo + 1 >= bordes.size) return
-        // Un lado puede medir CERO: es la ventana que empieza o acaba en su curva, sin pared recta
-        // por ese lado. Lo que no puede es medir menos que nada.
-        val delta = cmToPx(valueCm.coerceAtLeast(0f)) - (bordes[tramo + 1] - bordes[tramo])
+        if (pxToCm(marco.rect.width() - (bordes[tramo + 1] - bordes[tramo])) < 0.5f) {
+            Toast.makeText(
+                context,
+                "Algún lado tiene que medir: la ventana no puede quedar toda en cero",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        aplicarAnchoAbajoTramo(marcoIndex, tramo, 0f)
+        aplicarAnchoArribaTramo(marcoIndex, tramo, 0f)
+    }
+
+    /** Ancho del lado de ABAJO de un tramo; el de arriba va con su propia cota. */
+    private fun aplicarAnchoAbajoTramo(marcoIndex: Int, tramo: Int, anchoPx: Float) {
+        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
+        val bordes = bordesDeTramos(marcoIndex)
+        if (tramo + 1 >= bordes.size) return
+        val delta = anchoPx.coerceAtLeast(0f) - (bordes[tramo + 1] - bordes[tramo])
         if (abs(delta) < 0.01f) return
         // Solo se mueve la línea de ABAJO: el lado de arriba es otra medida y se escribe aparte.
         val borde = bordes[tramo + 1]
@@ -7389,14 +7435,15 @@ class SketchMedidasView @JvmOverloads constructor(
         if (tramo + 1 >= bordes.size) return
         val arriba = puntosArriba(marcoIndex)
         val anchoArriba = if (tramo + 1 < arriba.size) arriba[tramo + 1].x - arriba[tramo].x else null
-        val delta = cmToPx(valueCm.coerceAtLeast(1f)) - (bordes[tramo + 1] - bordes[tramo])
+        // El cero se lo lleva el tramo entero, sin repartos: es la pared que no existe.
+        if (valueCm <= 0.5f) {
+            anularTramo(marcoIndex, tramo)
+            return
+        }
+        val delta = cmToPx(valueCm) - (bordes[tramo + 1] - bordes[tramo])
         if (abs(delta) < 0.01f) return
         aplicarAnchoTramo(marcoIndex, tramo, valueCm)
-        // Un lado a cero es cero por los dos sitios: no hay descuadre que guardar en una pared que
-        // no existe, y si no quedaba un centímetro de nada por arriba.
-        anchoArriba?.let {
-            aplicarAnchoArribaTramo(marcoIndex, tramo, if (valueCm <= 0.5f) 0f else it + delta)
-        }
+        anchoArriba?.let { aplicarAnchoArribaTramo(marcoIndex, tramo, it + delta) }
     }
 
     /**
@@ -7438,6 +7485,11 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun aplicarArribaTramo(marcoIndex: Int, tramo: Int, valueCm: Float) {
         val arriba = puntosArriba(marcoIndex)
         if (tramo + 1 >= arriba.size) return
+        // El cero no es un cabezal corto: es el tramo que desaparece, y se va por los dos lados.
+        if (valueCm <= 0.5f) {
+            anularTramo(marcoIndex, tramo)
+            return
+        }
         val desnivel = abs(arriba[tramo + 1].y - arriba[tramo].y)
         val largo = cmToPx(valueCm)
         if (largo <= desnivel + cmToPx(1f)) {

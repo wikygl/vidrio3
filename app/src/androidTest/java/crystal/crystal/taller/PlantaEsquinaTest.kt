@@ -2,6 +2,7 @@ package crystal.crystal.taller
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -346,5 +347,52 @@ class PlantaEsquinaTest {
         val f = java.io.File(ctx.getExternalFilesDir(null), "planta_empieza_en_curva.png")
         f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
+    }
+
+    /**
+     * El cero se escribe en cualquiera de las tres cotas del tramo y se lleva el lado entero.
+     *
+     * Da igual tocar el ancho al pie, el de arriba o el de la planta: una pared que no existe no
+     * tiene descuadre que apuntar, así que sus dos lados se van a cero. Y se vuelve de ahí sin más
+     * que escribirle una medida.
+     */
+    @Test
+    fun el_cero_se_lleva_el_lado_entero_desde_cualquier_cota() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+
+        // Por la cota del pie de la alzada.
+        v.anchoDeAbajoParaPruebas(0, 0f)
+        var lados = v.ladosDeTramoParaPruebas(0)!!
+        assertEquals("el pie no se fue a cero", 0f, lados.first, 0.5f)
+        assertEquals("el cabezal se quedó con medida", 0f, lados.second, 0.5f)
+
+        // Y se vuelve: el lado recupera su medida por los dos sitios.
+        v.anchoDeTramoEnPlantaParaPruebas(0, 150f)
+        lados = v.ladosDeTramoParaPruebas(0)!!
+        assertEquals("el lado no volvió", 150f, lados.first, 1f)
+        assertEquals("el cabezal no volvió", 150f, lados.second, 1f)
+
+        // Por la cota de arriba, que antes se quejaba del desnivel en vez de borrar el lado.
+        v.anchoDeArribaParaPruebas(0, 0f)
+        lados = v.ladosDeTramoParaPruebas(0)!!
+        assertEquals("el cabezal no se fue a cero", 0f, lados.second, 0.5f)
+        assertEquals("el pie se quedó con medida", 0f, lados.first, 0.5f)
+    }
+
+    /** Pero no todos a cero: sin ninguna pared no hay ventana que dibujar. */
+    @Test
+    fun la_ventana_no_se_queda_toda_en_cero() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        v.anchoDeTramoEnPlantaParaPruebas(0, 0f)
+        // El aviso sale por Toast, que pide el hilo de la interfaz.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.anchoDeTramoEnPlantaParaPruebas(1, 0f)
+        }
+        val anchos = v.anchosDeParedParaPruebas()
+        assertEquals("la última pared también se fue: $anchos", 120f, anchos[1], 1f)
+        assertEquals("el vano se quedó en nada", 120f, v.anchoDeLaVentanaParaPruebas(), 1f)
     }
 }
