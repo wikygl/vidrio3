@@ -64,6 +64,36 @@ class PlantaEsquinaTest {
         assertEquals("la planta no dejó su ancho tocable", 2, enPlanta)
     }
 
+    /**
+     * El ancho escrito en la planta mueve la pared entera: el lado de arriba y el de abajo.
+     *
+     * En la planta el tramo no es un lado, es la pared; los lados por separado —el descuadre— se
+     * apuntan en la alzada. Y ese descuadre no se pierde al escribir aquí: los dos lados se mueven
+     * lo mismo, no se igualan.
+     */
+    @Test
+    fun el_ancho_de_la_planta_mueve_los_dos_lados() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        val antes = v.ladosDeTramoParaPruebas(0)!!
+        assertEquals("no arrancó a escuadra", antes.first, antes.second, 0.5f)
+
+        v.anchoDeTramoEnPlantaParaPruebas(0, 170f)
+        val tras = v.ladosDeTramoParaPruebas(0)!!
+        assertEquals("el lado de abajo no tomó la medida", 170f, tras.first, 0.5f)
+        assertEquals("el lado de arriba se quedó donde estaba", 170f, tras.second, 0.5f)
+
+        // Con descuadre apuntado: arriba mide 3 más, y al cambiar el ancho lo sigue midiendo.
+        v.anchoDeArribaParaPruebas(0, 173f)
+        v.anchoDeTramoEnPlantaParaPruebas(0, 160f)
+        val conDescuadre = v.ladosDeTramoParaPruebas(0)!!
+        assertEquals("se perdió la medida de abajo", 160f, conDescuadre.first, 0.5f)
+        assertEquals(
+            "el descuadre apuntado se borró: ${conDescuadre.second}",
+            163f, conDescuadre.second, 0.6f
+        )
+    }
+
     @Test
     fun el_angulo_sale_de_medir_a_los_dos_lados() {
         val v = vista()

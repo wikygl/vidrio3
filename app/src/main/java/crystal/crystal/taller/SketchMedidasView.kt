@@ -164,6 +164,11 @@ class SketchMedidasView @JvmOverloads constructor(
         PUERTA_HOJA_DER,
         /** Ancho de un tramo de la ventana de esquina: el total es la suma de los tramos. */
         ESQUINA_TRAMO,
+        /**
+         * El mismo ancho, pero tocado en la planta: ahí el tramo es una pared entera, así que se
+         * mueven sus dos lados —el de arriba y el de abajo— y el descuadre que tuviera se conserva.
+         */
+        ESQUINA_TRAMO_PLANTA,
         /** Lado de arriba de un tramo: con los altos desiguales va inclinado y mide más que el ancho. */
         ESQUINA_TRAMO_ARRIBA
     }
@@ -1333,13 +1338,13 @@ class SketchMedidasView @JvmOverloads constructor(
                 kotlin.math.atan2((puntos[i + 1].y - puntos[i].y).toDouble(), (puntos[i + 1].x - puntos[i].x).toDouble())
             ).toFloat()
             val fuera = perpendicular(puntos[i], puntos[i + 1], ce(20f))
-            // Es la misma cota del ancho del tramo que hay al pie de la alzada: tocarla aquí lo
-            // cambia igual, y el tramo entero se mueve —arriba y abajo a la vez—. Los lados por
-            // separado, que es el descuadre, se apuntan en la alzada.
+            // El ancho del tramo, tocable: aquí el tramo es una pared entera, así que al cambiarlo
+            // se mueven sus DOS lados a la vez y se ve en la alzada. Los lados por separado —el
+            // descuadre— se apuntan allí, cada uno con su cota.
             drawCotaText(
                 canvas = canvas,
                 index = marcoIndex,
-                type = CotaType.ESQUINA_TRAMO,
+                type = CotaType.ESQUINA_TRAMO_PLANTA,
                 cx = medio.x + fuera.x,
                 cy = medio.y + fuera.y,
                 value = pxToCm(bordes[i + 1] - bordes[i]),
@@ -3154,6 +3159,32 @@ class SketchMedidasView @JvmOverloads constructor(
         indices.forEach { selectedIndices.add(it) }
     }
 
+    /** Escribe el ancho de un tramo como si se tocara la cota de la PLANTA. */
+    @androidx.annotation.VisibleForTesting
+    fun anchoDeTramoEnPlantaParaPruebas(tramo: Int, valueCm: Float) {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+        aplicarAnchoTramoEnPlanta(marco, tramo, valueCm)
+        invalidate()
+    }
+
+    /** Escribe el lado de ARRIBA de un tramo, como la cota de la alzada: así se apunta el descuadre. */
+    @androidx.annotation.VisibleForTesting
+    fun anchoDeArribaParaPruebas(tramo: Int, valueCm: Float) {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+        aplicarArribaTramo(marco, tramo, valueCm)
+        invalidate()
+    }
+
+    /** Lo que mide un tramo por abajo y por arriba, que con descuadre no es lo mismo. */
+    @androidx.annotation.VisibleForTesting
+    fun ladosDeTramoParaPruebas(tramo: Int): Pair<Float, Float>? {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return null
+        val bordes = bordesDeTramos(marco)
+        val arriba = puntosArriba(marco)
+        if (tramo + 1 >= bordes.size || tramo + 1 >= arriba.size) return null
+        return pxToCm(bordes[tramo + 1] - bordes[tramo]) to pxToCm(arriba[tramo + 1].x - arriba[tramo].x)
+    }
+
     /** El ángulo que sale de medir a los dos lados de la esquina. Nulo si esa medida no puede ser. */
     @androidx.annotation.VisibleForTesting
     fun anguloPorMedidasParaPruebas(ladoCm: Float, entreCm: Float): Float? =
@@ -3171,7 +3202,9 @@ class SketchMedidasView @JvmOverloads constructor(
         draw(Canvas(bmp))
         val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return 0 to 0
         val pie = (elementos[marco] as Element.Shape).rect.bottom
-        val deTramo = cotaHits.filter { it.type == CotaType.ESQUINA_TRAMO }
+        val deTramo = cotaHits.filter {
+            it.type == CotaType.ESQUINA_TRAMO || it.type == CotaType.ESQUINA_TRAMO_PLANTA
+        }
         return deTramo.size to deTramo.count { pantallaAMundoY(it.rect.centerY()) > pie + huecoPlantaPx / 2f }
     }
 
@@ -6094,7 +6127,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 val marco = (elementos.getOrNull(marcoDePieza(hit.elementIndex) ?: -1) as? Element.Shape) ?: return
                 pxToCm(marco.rect.bottom - puente.start.y)
             }
-            CotaType.ESQUINA_TRAMO -> {
+            CotaType.ESQUINA_TRAMO, CotaType.ESQUINA_TRAMO_PLANTA -> {
                 val bordes = bordesDeTramos(hit.elementIndex)
                 val tramo = hit.sideIndex ?: return
                 if (tramo + 1 >= bordes.size) return
@@ -6588,6 +6621,9 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.ESQUINA_TRAMO -> {
                 aplicarAnchoTramo(elementIndex ?: return, sideIndex ?: return, abs(valueCm))
             }
+            CotaType.ESQUINA_TRAMO_PLANTA -> {
+                aplicarAnchoTramoEnPlanta(elementIndex ?: return, sideIndex ?: return, abs(valueCm))
+            }
             CotaType.ESQUINA_TRAMO_ARRIBA -> {
                 aplicarArribaTramo(elementIndex ?: return, sideIndex ?: return, abs(valueCm))
             }
@@ -6668,6 +6704,25 @@ class SketchMedidasView @JvmOverloads constructor(
         marco.bottomRight.x += delta
         actualizarBoundsRectangulo(marco)
         sincronizarMarco(marcoIndex, reinterpolarAltos = false)
+    }
+
+    /**
+     * El ancho de un tramo escrito en la PLANTA: ahí el tramo es la pared entera, no uno de sus
+     * lados, así que se mueven los dos —el de arriba y el de abajo— y el cambio se ve en la alzada.
+     *
+     * El descuadre que ya estuviera apuntado se conserva: los dos lados se mueven lo MISMO, no se
+     * igualan. Si arriba medía un centímetro más que abajo, lo sigue midiendo; ese dato se tomó en
+     * obra y no lo borra una medida escrita en la planta.
+     */
+    private fun aplicarAnchoTramoEnPlanta(marcoIndex: Int, tramo: Int, valueCm: Float) {
+        val bordes = bordesDeTramos(marcoIndex)
+        if (tramo + 1 >= bordes.size) return
+        val arriba = puntosArriba(marcoIndex)
+        val anchoArriba = if (tramo + 1 < arriba.size) arriba[tramo + 1].x - arriba[tramo].x else null
+        val delta = cmToPx(valueCm.coerceAtLeast(1f)) - (bordes[tramo + 1] - bordes[tramo])
+        if (abs(delta) < 0.01f) return
+        aplicarAnchoTramo(marcoIndex, tramo, valueCm)
+        anchoArriba?.let { aplicarAnchoArribaTramo(marcoIndex, tramo, it + delta) }
     }
 
     /**
@@ -6892,6 +6947,7 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.PUERTA_HOJA_IZQ,
             CotaType.PUERTA_HOJA_DER,
             CotaType.ESQUINA_TRAMO,
+            CotaType.ESQUINA_TRAMO_PLANTA,
             CotaType.ESQUINA_TRAMO_ARRIBA -> Unit
         }
     }
