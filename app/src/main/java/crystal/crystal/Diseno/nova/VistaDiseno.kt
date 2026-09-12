@@ -137,6 +137,13 @@ class VistaDiseno @JvmOverloads constructor(
     private val pRellenoNegro = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = colorNegro; style = Paint.Style.FILL
     }
+    /** Borra lo que el dibujo saca fuera del vano, cuando el fondo va transparente (exportación). */
+    private val pBorrarVano = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+    }
+    /** La silueta del vano en cm, desde el tag `V<…>`. Vacía = el vano es el rectángulo de siempre. */
+    private var contornoVanoCm: List<Pair<Float, Float>> = emptyList()
     private val pVacioRelleno = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#33000000"); style = Paint.Style.FILL
     }
@@ -299,7 +306,12 @@ class VistaDiseno @JvmOverloads constructor(
         }
 
         // 3) Parseo del modelo (abajo → arriba)
-        val franjas = parsearModeloConAlturas(modeloCrudo)
+        // El contorno del vano se saca AQUÍ y una sola vez: `parsearModeloConAlturas` se llama a
+        // sí mismo para el tramo único, y con el contorno dentro la segunda pasada lo borraba.
+        contornoVanoCm = RE_VANO_PAQUETE.find(modeloCrudo)
+            ?.let { ContornoEnTramos.desdeEtiqueta(it.value) }
+            .orEmpty()
+        val franjas = parsearModeloConAlturas(RE_VANO_PAQUETE.replace(modeloCrudo, ""))
         if (this.mochetaLateralCm <= 0f && mochetaLDesdeModeloCm > 0f) {
             this.mochetaLateralCm = mochetaLDesdeModeloCm
         }
@@ -390,13 +402,17 @@ class VistaDiseno @JvmOverloads constructor(
         modoCircular = false
         modoCUSimétrico = false
 
+        // El contorno del vano ya se leyó en `actualizarDesdePaquete`; aquí solo se quita de en
+        // medio, que no es una franja ni un tramo.
+        val sinVano = RE_VANO_PAQUETE.replace(modelo, "")
+
         // Nuevo formato T<> o A<90>T<> (ns en serie): delegar a parsearConTramos
-        val modeloNorm = modelo.replace(" ", "")
+        val modeloNorm = sinVano.replace(" ", "")
         if (modeloNorm.lowercase().let { it.startsWith("t") || it.startsWith("a<") }) {
             return parsearConTramos(modeloNorm)
         }
 
-        val secciones = splitRespetandoParentesis(modelo.replace(" ", ""))
+        val secciones = splitRespetandoParentesis(modeloNorm)
             .filter { it.isNotEmpty() }
             // Los tags del tramo —`H<>` con su alto, `D<>` con lo que baja el dintel— no son
             // franjas: se saltan aquí o el parser los rechaza y el dibujo se cae.
@@ -944,8 +960,68 @@ class VistaDiseno @JvmOverloads constructor(
         }
     }
 
+    /** Las cotas se apuntan mientras se dibuja y se pintan al final, después de la silueta. */
+    private data class Cotas(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val escala: Float)
+    private var cotasPendientes: Cotas? = null
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        cotasPendientes = null
+        dibujarContenido(canvas)
+        // La silueta del vano manda sobre el reparto: lo que el dibujo saca fuera del hueco medido
+        // se recorta y el borde de la forma se traza encima.
+        enmascararVano(canvas)
+        // Las cotas van DESPUÉS de recortar: la del salto de un escalón se dibuja justo en el
+        // trozo de vano que no existe, y el recorte se la llevaba por delante.
+        cotasPendientes?.let { dibujarCotas(canvas, it.x0, it.y0, it.x1, it.y1, it.escala) }
+    }
+
+    /**
+     * Recorta el dibujo con la silueta del vano y traza su borde.
+     *
+     * La forma se guarda aparte del reparto (`V<…>` en el paquete), así que el diseño puede tener
+     * un solo tramo rectangular y aun así verse el hueco de verdad: el triángulo, el escalón o el
+     * dintel caído. Sin esto, limpiar el diseño para dibujarlo a mano devolvía un rectángulo.
+     */
+    private fun enmascararVano(canvas: Canvas) {
+        if (contornoVanoCm.size < 3 || anchoCm <= 0f || altoCm <= 0f) return
+        // El arco y el círculo traen su propio contorno: recortarlos con el polígono los partiría.
+        if (modoArcoCurvo || modoCircular) return
+        val anchoDisp = width - 2 * margenPx
+        val altoDisp = height - 2 * margenPx
+        val anchoTotalCm = anchoEfectivoCm()
+        if (anchoDisp <= 0f || altoDisp <= 0f) return
+        val escala = min(anchoDisp / anchoTotalCm, altoDisp / altoCm)
+        val x0 = (width - anchoTotalCm * escala) / 2f
+        val y0 = (height - altoCm * escala) / 2f
+        val silueta = android.graphics.Path().apply {
+            contornoVanoCm.forEachIndexed { i, (xCm, yCm) ->
+                val px = x0 + xCm * escala
+                val py = y0 + yCm * escala
+                if (i == 0) moveTo(px, py) else lineTo(px, py)
+            }
+            close()
+        }
+        // Un pelo más que el rectángulo del vano: el marco se traza centrado en el borde, así que
+        // media línea cae fuera y si no se pasa de ahí el rectángulo viejo sigue viéndose.
+        val borde = anchoMarcoPx
+        val fuera = android.graphics.Path().apply {
+            addRect(
+                RectF(
+                    x0 - borde, y0 - borde,
+                    x0 + anchoTotalCm * escala + borde, y0 + altoCm * escala + borde
+                ),
+                android.graphics.Path.Direction.CW
+            )
+            op(silueta, android.graphics.Path.Op.DIFFERENCE)
+        }
+        // Al exportar el fondo es transparente: ahí se BORRA en vez de pintar de blanco, o el
+        // recorte saldría como un bloque opaco sobre el papel.
+        canvas.drawPath(fuera, if (omitirFondoAlExportar) pBorrarVano else pFondo)
+        canvas.drawPath(silueta, pMarco)
+    }
+
+    private fun dibujarContenido(canvas: Canvas) {
         if (!omitirFondoAlExportar) {
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), pFondo)
         }
@@ -973,7 +1049,7 @@ class VistaDiseno @JvmOverloads constructor(
             dibujarCorteVerticalGlobal(canvas, x0, y0, y1, escala, anchoTotalCm)
             dibujarEncuentroVacio(canvas, x0, y0, x1, y1)
             if (!omitirFondoAlExportar) {
-                dibujarCotas(canvas, x0, y0, x1, y1, escala)
+                cotasPendientes = Cotas(x0, y0, x1, y1, escala)
             }
             return
         }
@@ -984,7 +1060,7 @@ class VistaDiseno @JvmOverloads constructor(
             dibujarCorteVerticalGlobal(canvas, x0, y0, y1, escala, anchoTotalCm)
             dibujarEncuentroVacio(canvas, x0, y0, x1, y1)
             if (!omitirFondoAlExportar) {
-                dibujarCotas(canvas, x0, y0, x1, y1, escala)
+                cotasPendientes = Cotas(x0, y0, x1, y1, escala)
             }
             return
         }
@@ -995,7 +1071,7 @@ class VistaDiseno @JvmOverloads constructor(
             dibujarCorteVerticalGlobal(canvas, x0, y0, y1, escala, anchoTotalCm)
             dibujarEncuentroVacio(canvas, x0, y0, x1, y1)
             if (!omitirFondoAlExportar) {
-                dibujarCotas(canvas, x0, y0, x1, y1, escala)
+                cotasPendientes = Cotas(x0, y0, x1, y1, escala)
             }
             return
         }
@@ -1127,7 +1203,7 @@ class VistaDiseno @JvmOverloads constructor(
 
         // Dibujar cotas exteriores (solo si no es exportación)
         if (!omitirFondoAlExportar) {
-            dibujarCotas(canvas, x0, y0, x1, y1, escala)
+            cotasPendientes = Cotas(x0, y0, x1, y1, escala)
         }
     }
 
@@ -3616,6 +3692,8 @@ class VistaDiseno @JvmOverloads constructor(
         private val RE_ALTO_TRAMO = Regex("""[hH]\s*<\s*([\d.,-]+)\s*>""")
         /** Lo que baja el dintel de ese tramo: `D<20>`. */
         private val RE_CAIDA_TRAMO = Regex("""[dD]\s*<\s*([\d.,-]+)\s*>""")
+        /** El contorno del vano: `V<x/y|x/y|…>`, en centímetros. */
+        private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
     }
 }
 

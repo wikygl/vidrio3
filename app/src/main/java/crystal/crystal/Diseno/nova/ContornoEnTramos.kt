@@ -31,6 +31,31 @@ object ContornoEnTramos {
     fun aTexto(puntos: List<Pair<Float, Float>>): String =
         puntos.joinToString(";") { (x, y) -> "${NovaCalculos.df1(x)},${NovaCalculos.df1(y)}" }
 
+    /**
+     * El contorno como etiqueta del paquete: `V<x/y|x/y|…>` en centímetros.
+     *
+     * Separadores raros a propósito: el `;` parte franjas y la `,` parte medidas en los otros tres
+     * parsers —VistaDiseno, NovaCorrediza y la pantalla de diseño—, así que un contorno escrito con
+     * ellos les daría medidas equivocadas en silencio. Con `|` y `/` la etiqueta les pasa de largo.
+     */
+    fun aEtiqueta(puntos: List<Pair<Float, Float>>): String =
+        "V<" + puntos.joinToString("|") { (x, y) ->
+            "${NovaCalculos.df1(x)}/${NovaCalculos.df1(y)}"
+        } + ">"
+
+    /** Lee la etiqueta `V<…>` del paquete. Lista vacía si no se entiende. */
+    fun desdeEtiqueta(etiqueta: String): List<Pair<Float, Float>> {
+        val dentro = etiqueta.substringAfter('<', "").substringBefore('>', "")
+        if (dentro.isBlank()) return emptyList()
+        val puntos = dentro.split("|").mapNotNull { par ->
+            val xy = par.split("/")
+            val x = xy.getOrNull(0)?.trim()?.toFloatOrNull()
+            val y = xy.getOrNull(1)?.trim()?.toFloatOrNull()
+            if (x == null || y == null) null else x to y
+        }
+        return if (puntos.size >= 3) puntos else emptyList()
+    }
+
     /** Lee el contorno que viene con la medida. Devuelve la lista vacía si no se entiende. */
     fun desdeTexto(texto: String): List<Pair<Float, Float>> {
         if (texto.isBlank()) return emptyList()
@@ -200,7 +225,9 @@ object ContornoEnTramos {
                 caidaDer = if (banda.esInclinada) banda.caidaDerCm else null
             )
         }
-        return DisenoNova(acabado, ancho, alto, tramos)
+        // La silueta viaja con el diseño, aparte del reparto: los tramos se pueden borrar y rehacer
+        // —limpiar es justo eso— y la forma del hueco sigue siendo la que se midió.
+        return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(puntos)
     }
 
     /** Un trozo de vano ya decidido: si lleva hoja corrediza y con qué alto. */

@@ -120,7 +120,82 @@ data class DisenoNova(
      * tal y el vano perdía su forma antes de llegar al cálculo.
      */
     val esIrregular: Boolean
-        get() = esEscalonada || tramos.any { it.esInclinado }
+        get() = esEscalonada || tramos.any { it.esInclinado } || contornoVano.isNotEmpty()
+
+    /**
+     * El contorno del vano, si el diseño lo trae: la silueta que se midió en obra.
+     *
+     * Viaja como etiqueta `V<…>` y es independiente del reparto: los tramos se pueden borrar y
+     * rehacer enteros, que la forma del hueco sigue siendo la misma. Vacío = el vano es el
+     * rectángulo de siempre.
+     */
+    val contornoVano: List<Pair<Float, Float>>
+        get() = etiquetas.firstOrNull { it.startsWith("V<", ignoreCase = true) }
+            ?.let { ContornoEnTramos.desdeEtiqueta(it) }
+            .orEmpty()
+
+    /**
+     * La silueta que dibujan los tramos: su contorno, de la esquina de arriba a la izquierda y en
+     * el sentido de las agujas del reloj.
+     *
+     * Sirve para los diseños que traen la forma en los tramos pero sin la etiqueta `V<…>`: los
+     * hechos a mano con las alturas del panel, y los guardados antes de que la forma viajara
+     * aparte. Un vano rectangular devuelve su rectángulo.
+     */
+    fun contornoDesdeTramos(): List<Pair<Float, Float>> {
+        if (tramos.isEmpty()) return emptyList()
+        fun arriba(t: NovaTramo, derecha: Boolean) = if (derecha) t.caidaDerecha else t.caida
+        fun abajo(t: NovaTramo, derecha: Boolean): Float {
+            val propio = if (derecha) t.altoDerecho else t.alto
+            return if (propio > 0f) arriba(t, derecha) + propio else alto
+        }
+        val techo = mutableListOf<Pair<Float, Float>>()
+        val piso = mutableListOf<Pair<Float, Float>>()
+        var x = 0f
+        for (t in tramos) {
+            techo.add(x to arriba(t, false))
+            piso.add(x to abajo(t, false))
+            x += t.ancho
+            techo.add(x to arriba(t, true))
+            piso.add(x to abajo(t, true))
+        }
+        // Del techo de izquierda a derecha y del piso de vuelta, sin repetir los puntos que ya
+        // están: dos tramos a la misma altura no necesitan un vértice entre ellos.
+        val vuelta = (techo + piso.reversed())
+        val limpio = mutableListOf<Pair<Float, Float>>()
+        for (p in vuelta) {
+            val ultimo = limpio.lastOrNull()
+            if (ultimo != null && kotlin.math.abs(ultimo.first - p.first) < 0.05f &&
+                kotlin.math.abs(ultimo.second - p.second) < 0.05f
+            ) continue
+            limpio.add(p)
+        }
+        // Y fuera los vértices que no doblan: la frontera entre dos tramos a la misma altura está
+        // en medio de un lado recto, y como vértice no dice nada.
+        return sinPuntosEnLinea(limpio)
+    }
+
+    /** Quita los puntos que caen en la recta de sus vecinos. */
+    private fun sinPuntosEnLinea(puntos: List<Pair<Float, Float>>): List<Pair<Float, Float>> {
+        if (puntos.size < 3) return puntos
+        val out = mutableListOf<Pair<Float, Float>>()
+        for (i in puntos.indices) {
+            val a = puntos[(i - 1 + puntos.size) % puntos.size]
+            val b = puntos[i]
+            val c = puntos[(i + 1) % puntos.size]
+            val cruz = (b.first - a.first) * (c.second - a.second) -
+                (b.second - a.second) * (c.first - a.first)
+            if (kotlin.math.abs(cruz) > 0.5f) out.add(b)
+        }
+        return if (out.size >= 3) out else puntos
+    }
+
+    /** El mismo diseño con esa silueta de vano. Una lista vacía la quita. */
+    fun conContornoVano(puntos: List<Pair<Float, Float>>): DisenoNova {
+        val otras = etiquetas.filterNot { it.startsWith("V<", ignoreCase = true) }
+        val nuevas = if (puntos.size < 3) otras else otras + ContornoEnTramos.aEtiqueta(puntos)
+        return copy(etiquetas = nuevas)
+    }
 
     /**
      * Cambia el alto de UN tramo —el escalón— y estira o encoge sus franjas en la misma
@@ -557,6 +632,15 @@ data class DisenoNova(
         private val RE_ETIQUETA = Regex("""^[AUO]<[^>]*>$""", RegexOption.IGNORE_CASE)
 
         /**
+         * El contorno del vano, `V<…>`, esté donde esté del cuerpo.
+         *
+         * Se busca suelto y no como trozo separado porque el paquete pasa por manos que quitan los
+         * espacios —la pantalla de diseño lo hace al reescribir las medidas—, y ahí la etiqueta se
+         * queda pegada al último tramo. Buscándola así, la forma del vano sobrevive igual.
+         */
+        private val RE_VANO = Regex("""[vV]<[^>]*>""")
+
+        /**
          * Un tag de tramo con una o dos medidas: `160` vale para los dos lados, `160,106.2` es
          * izquierda y derecha. La segunda en null quiere decir "igual que la primera".
          */
@@ -644,7 +728,14 @@ data class DisenoNova(
 
             val tramos = mutableListOf<NovaTramo>()
             val etiquetas = mutableListOf<String>()
-            for (trozo in partirPorTramos(dentro.substring(idx + 1))) {
+            // El contorno del vano se saca antes de partir: no es un tramo ni una franja, y puede
+            // venir pegado al último tramo si alguien quitó los espacios por el camino.
+            var cuerpo = dentro.substring(idx + 1)
+            RE_VANO.find(cuerpo)?.let { m ->
+                etiquetas.add(m.value)
+                cuerpo = cuerpo.removeRange(m.range)
+            }
+            for (trozo in partirPorTramos(cuerpo)) {
                 val t = trozo.trim()
                 if (t.isEmpty()) continue
                 if (RE_ETIQUETA.matches(t)) { etiquetas.add(t); continue }

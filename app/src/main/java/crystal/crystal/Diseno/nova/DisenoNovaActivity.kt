@@ -2156,34 +2156,27 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     /**
-     * Diseño en blanco: un paño por tramo, sin reparto ni mochetas. Deja la pantalla como una hoja
-     * en blanco para empezar de cero, venga el diseño de donde venga.
+     * Diseño en blanco: UN tramo con un paño, sin parantes, sin mochetas y sin reparto. Deja la
+     * pantalla como una hoja en blanco para empezar de cero, venga el diseño de donde venga.
      *
-     * La FORMA del vano no es diseño y no se borra: si la ventana es escalonada o tiene lados
-     * inclinados, la hoja en blanco conserva sus tramos con su ancho, su alto y su caída, cada uno
-     * con un fijo. Limpiar es para rediseñar a mano sobre el vano que se midió; devolviéndolo a un
-     * rectángulo, el vidriero perdía la forma justo cuando iba a dibujarla él.
+     * Lo que no se borra es la FORMA del vano, porque no es diseño: es el hueco que se midió en
+     * obra. Viaja como etiqueta `V<…>` aparte de los tramos, así que el reparto se puede tirar
+     * entero —que es lo que se pide al limpiar— y la silueta sigue ahí para dibujar encima.
      */
     private fun paqueteEnBlanco(): String {
         val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
-        val conForma = runCatching {
-            DisenoNova.desdePaquete(paqueteActualLectura())
-                ?.takeIf { it.esIrregular }
-                ?.let { d ->
-                    d.copy(
-                        acabado = tipoTxt,
-                        tramos = d.tramos.map { t ->
-                            // Alto 0 = "el que salga": la franja llena el tramo, como en `s(f)`.
-                            t.copy(
-                                franjas = listOf(
-                                    NovaFranja(esSistema = true, alto = 0f, modulos = listOf(NovaModulo('f')))
-                                )
-                            )
-                        }
-                    ).aPaquete()
-                }
-        }.getOrNull()
-        return conForma ?: "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
+        val vano = runCatching {
+            val d = DisenoNova.desdePaquete(paqueteActualLectura())
+            // Si el diseño no trae la silueta guardada, se saca de sus tramos: los escalones y las
+            // inclinaciones hechos a mano también son la forma del vano, y tampoco se tiran.
+            d?.contornoVano?.ifEmpty { if (d.esIrregular) d.contornoDesdeTramos() else emptyList() }
+                .orEmpty()
+        }.getOrElse { emptyList() }
+        val enBlanco = "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
+        if (vano.size < 3) return enBlanco
+        return runCatching {
+            DisenoNova.desdePaquete(enBlanco)?.conContornoVano(vano)?.aPaquete()
+        }.getOrNull() ?: enBlanco
     }
 
     /** Borra el diseño actual y deja el lienzo en blanco. */

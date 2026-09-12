@@ -767,18 +767,73 @@ class DisenoNovaPantallaTest {
             enPantalla(esc) { it.limpiarParaPruebas() }
             esperar()
             val limpio = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
-            assertTrue("limpiar devolvió un rectángulo: ${limpio.aPaquete()}", limpio.esIrregular)
-            assertEquals("se perdieron tramos al limpiar", alEntrar.nTramos, limpio.nTramos)
-            // Cada tramo conserva su sitio: su ancho, su alto y sus dos lados.
-            alEntrar.tramos.forEachIndexed { i, antes ->
-                val ahora = limpio.tramos[i]
-                assertEquals("ancho del tramo $i", antes.ancho, ahora.ancho, 0.1f)
-                assertEquals("alto del tramo $i", antes.alto, ahora.alto, 0.1f)
-                assertEquals("lado derecho del tramo $i", antes.altoDerecho, ahora.altoDerecho, 0.1f)
-            }
-            // Y queda en blanco de verdad: un paño por tramo, sin mochetas ni corredizas.
-            assertEquals("no quedó un paño por tramo", limpio.nTramos, limpio.nModulos)
+            // La hoja queda en blanco de verdad: UN tramo, un paño, sin parantes ni corredizas.
+            assertEquals("no quedó un solo tramo: ${limpio.aPaquete()}", 1, limpio.nTramos)
+            assertEquals("no quedó un solo paño", 1, limpio.nModulos)
             assertEquals("quedaron corredizas", 0, limpio.nCorredizas)
+            // Y la forma del vano sigue ahí, que no es diseño: es el hueco que se midió. Este
+            // diseño la trae en sus tramos, así que al limpiar se guarda la silueta que dibujaban.
+            val esperada = alEntrar.contornoDesdeTramos()
+            val guardada = limpio.contornoVano
+            assertEquals("se perdió la silueta del vano", esperada.size, guardada.size)
+            // Con un decimal, que es como se guardan todas las medidas del paquete.
+            esperada.forEachIndexed { i, (x, y) ->
+                assertEquals("vértice $i en x", x, guardada[i].first, 0.15f)
+                assertEquals("vértice $i en y", y, guardada[i].second, 0.15f)
+            }
+            assertTrue("el vano dejó de tener forma", limpio.esIrregular)
+            assertEquals("cambiaron las medidas", alEntrar.ancho, limpio.ancho, 0.1f)
+            assertEquals("cambiaron las medidas", alEntrar.alto, limpio.alto, 0.1f)
+        }
+    }
+
+    /** Y si el vano ya trae su silueta medida, limpiar la deja intacta. */
+    @Test
+    fun limpiar_respeta_la_silueta_medida() {
+        val conVano = "{nova,apa,[200,160:Tl<100>(H<0.8,159.2>;s<110>(f<50>c<50>))" +
+            " P<2.5> Tl<100>(H<159.2,0.8>;s<110>(c<50>f<50>)) V<0/0|200/0|100/160>]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(conVano) }
+            esperar()
+            enPantalla(esc) { it.limpiarParaPruebas() }
+            esperar()
+            val limpio = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("no quedó un solo tramo: ${limpio.aPaquete()}", 1, limpio.nTramos)
+            assertEquals(
+                "la silueta medida no se respetó",
+                listOf(0f to 0f, 200f to 0f, 100f to 160f), limpio.contornoVano
+            )
+        }
+    }
+
+    /** Deja los dibujos en PNG del celular para poder mirarlos desde fuera. */
+    @Test
+    fun retratos_de_vanos_con_forma() {
+        val retratos = mapOf(
+            // El vano limpio: un solo paño con la forma del hueco.
+            "vano_limpio" to "{nova,apa,[200,160:Tl<200>(s(f)) V<0/0|200/0|100/160>]}",
+            // El mismo vano repartido, tal como llega de la calculadora.
+            "vano_repartido" to ("{nova,apa,[200,159.2:Tl<68.9>(H<0.8,110>;s<110>(f<68.9>))" +
+                " P<2.5> Tl<31>(H<110,159.2>;s<110>(f<31>);m<49.1>(f<31>))" +
+                " P<2.5> Tl<31>(H<159.2,110>;s<110>(c<31>);m<49.1>(f<31>))" +
+                " P<2.5> Tl<68.9>(H<110,0.8>;s<110>(f<68.9>)) V<0/0|200/0|100/159.2>]}"),
+            // Y la escalonada de la medida de la foto, con su silueta.
+            "vano_escalonado" to ("{nova,apa,[446.3,160:Tl<280.3>(s<110>(f<56>c<56>f<56>c<56>f<56>);m<50>(f<140.1>f<140.1>))" +
+                " P<2.5> Tl<166>(H<106.2>;s<106.2>(f<55.3>c<55.3>f<55.3>))" +
+                " V<0/0|446.3/0|446.3/106.2|280.3/106.2|280.3/160|0/160>]}")
+        )
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            retratos.forEach { (nombre, paquete) ->
+                enPantalla(esc) { it.cargarParaPruebas(paquete) }
+                esperar()
+                val bmp = enPantalla(esc) { it.dibujoParaPruebas() }
+                val f = java.io.File(ctx.getExternalFilesDir(null), "$nombre.png")
+                f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                assertTrue("no se guardó $nombre", f.exists() && f.length() > 0)
+            }
         }
     }
 }

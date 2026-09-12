@@ -326,6 +326,31 @@ class ContornoEnTramosTest {
     }
 
     @Test
+    fun `la silueta del vano viaja con el diseño y sobrevive al paquete`() {
+        val d = ContornoEnTramos.disenoDesdeContorno(trianguloInvertido, altoHoja = 110f)!!
+        assertEquals("el diseño no se llevó la silueta", trianguloInvertido, d.contornoVano)
+        // Y vuelve entera del paquete, con o sin los espacios que otros le quitan por el camino.
+        val ida = d.aPaquete()
+        assertEquals(trianguloInvertido, DisenoNova.desdePaquete(ida)!!.contornoVano)
+        assertEquals(trianguloInvertido, DisenoNova.desdePaquete(ida.replace(" ", ""))!!.contornoVano)
+    }
+
+    @Test
+    fun `la silueta también se saca de los tramos`() {
+        // Los diseños hechos a mano traen la forma en los altos de sus tramos, sin etiqueta.
+        val escalon = DisenoNova.desdePaquete(
+            "{nova,apa,[446.3,160:Tl<280.3>(s<160>(f<280.3>)) P<2.5> Tl<166>(H<106.2>;s<106.2>(f<166>))]}"
+        )!!
+        val silueta = escalon.contornoDesdeTramos()
+        // El dintel es corrido y el alféizar sube en el último tramo: seis vértices.
+        assertEquals("la silueta no es la del escalón: $silueta", 6, silueta.size)
+        assertEquals(0f to 0f, silueta.first())
+        assertTrue("no aparece el salto del alféizar", silueta.any { it.second == 106.2f })
+        assertEquals("el vano no llega a lo ancho", 446.3f, silueta.maxOf { it.first }, 0.05f)
+        assertEquals("el vano no llega a lo alto", 160f, silueta.maxOf { it.second }, 0.05f)
+    }
+
+    @Test
     fun `un dintel que roza el límite no se parte`() {
         // 300 de ancho, el dintel baja 60: la hoja no entra por poco en el último palmo. Meter ahí
         // un parante y un tramo de nada no es lo que haría el vidriero: se acorta la hoja.
