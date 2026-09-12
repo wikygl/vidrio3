@@ -2,6 +2,8 @@ package crystal.crystal.taller
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,6 +52,29 @@ class PlantaEsquinaTest {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val f = java.io.File(ctx.getExternalFilesDir(null), "planta_esquina.png")
         f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test
+    fun el_ancho_de_cada_tramo_se_toca_tambien_en_la_planta() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        val (total, enPlanta) = v.cotasDeTramoParaPruebas()
+        // Una por tramo al pie de la alzada y otra por tramo en la planta.
+        assertEquals("no están las cotas de tramo de los dos sitios", 4, total)
+        assertEquals("la planta no dejó su ancho tocable", 2, enPlanta)
+    }
+
+    @Test
+    fun el_angulo_sale_de_medir_a_los_dos_lados() {
+        val v = vista()
+        // 10 a cada lado de la esquina: en escuadra, de marca a marca hay 14.1.
+        assertEquals(90f, v.anguloPorMedidasParaPruebas(10f, 14.14f)!!, 0.2f)
+        // Y en un chaflán de 135°, 18.5.
+        assertEquals(135f, v.anguloPorMedidasParaPruebas(10f, 18.48f)!!, 0.2f)
+        // Una esquina cerrada a 60° da justo el lado.
+        assertEquals(60f, v.anguloPorMedidasParaPruebas(10f, 10f)!!, 0.2f)
+        // Y lo que no puede ser, no se calcula: entre las marcas nunca hay más que los dos lados.
+        assertNull(v.anguloPorMedidasParaPruebas(10f, 21f))
     }
 
     @Test

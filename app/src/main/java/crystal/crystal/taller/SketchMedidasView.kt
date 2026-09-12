@@ -18,6 +18,8 @@ import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
@@ -411,6 +413,13 @@ class SketchMedidasView @JvmOverloads constructor(
         color = Color.rgb(30, 30, 30)
         style = Paint.Style.FILL
         textSize = 34f
+    }
+
+    /** Los dibujitos que acompañan a un rótulo, como el alféizar. */
+    private val iconoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(30, 30, 30)
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
     }
 
     private val fondoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1149,7 +1158,7 @@ class SketchMedidasView @JvmOverloads constructor(
         }
         nuevos.add(
             Element.TextLabel(
-                text = "Alfeizar  ${formatCm(alfeizarCm)}",
+                text = formatCm(alfeizarCm),
                 x = left,
                 y = bottom,
                 textSize = 44f,
@@ -1324,14 +1333,18 @@ class SketchMedidasView @JvmOverloads constructor(
                 kotlin.math.atan2((puntos[i + 1].y - puntos[i].y).toDouble(), (puntos[i + 1].x - puntos[i].x).toDouble())
             ).toFloat()
             val fuera = perpendicular(puntos[i], puntos[i + 1], ce(20f))
+            // Es la misma cota del ancho del tramo que hay al pie de la alzada: tocarla aquí lo
+            // cambia igual, y el tramo entero se mueve —arriba y abajo a la vez—. Los lados por
+            // separado, que es el descuadre, se apuntan en la alzada.
             drawCotaText(
                 canvas = canvas,
                 index = marcoIndex,
-                type = CotaType.COMPOSITE_SIDE,
+                type = CotaType.ESQUINA_TRAMO,
                 cx = medio.x + fuera.x,
                 cy = medio.y + fuera.y,
                 value = pxToCm(bordes[i + 1] - bordes[i]),
-                collectHits = false,
+                collectHits = collectHits,
+                sideIndex = i,
                 angleDegrees = if (grados > 90f || grados < -90f) grados + 180f else grados
             )
         }
@@ -1433,7 +1446,7 @@ class SketchMedidasView @JvmOverloads constructor(
         if (alfeizarCm != null) {
             nuevos.add(
                 Element.TextLabel(
-                    text = "Alfeizar  ${formatCm(alfeizarCm)}",
+                    text = formatCm(alfeizarCm),
                     x = left,
                     y = bottom,
                     textSize = 44f,
@@ -1541,8 +1554,12 @@ class SketchMedidasView @JvmOverloads constructor(
 
         etiquetaDelMarco(marcoIndex, ROL_ALFEIZAR)?.let { i ->
             val alfeizar = elementos[i] as Element.TextLabel
+            // Solo la medida: de qué es lo dice su dibujito, que va pegado a la izquierda. El
+            // rótulo largo y centrado se comía el medio del papel.
+            alfeizar.text = soloMedida(alfeizar.text)
             sketchTextPaint.textSize = tamanoTexto(alfeizar)
-            alfeizar.x = marco.rect.centerX() - sketchTextPaint.measureText(alfeizar.text) / 2f
+            // A un lado, no en medio: alineado con el canto izquierdo, dejando sitio al dibujito.
+            alfeizar.x = marco.rect.left + tamanoTexto(alfeizar) * 1.4f
             alfeizar.y = y + tamanoTexto(alfeizar) * 0.9f
         }
     }
@@ -2501,6 +2518,40 @@ class SketchMedidasView @JvmOverloads constructor(
     }
 
     /** La altura del antepecho: un dato del sitio, no del vano, pero va con la ventana. */
+    /**
+     * El dibujito del alféizar, a la izquierda de su medida: la pared, la repisa y la flecha hasta
+     * el piso, que es lo que mide.
+     *
+     * Antes el rótulo decía "Alfeizar 90" en grande y en medio del papel. Lo que hace falta saber
+     * es el número, y de qué es lo dice el dibujo.
+     */
+    private fun dibujarIconoAlfeizar(canvas: Canvas, etiqueta: Element.TextLabel) {
+        val alto = sketchTextPaint.textSize
+        val x = etiqueta.x - alto * 1.25f
+        val techo = etiqueta.y - alto * 0.78f
+        val piso = etiqueta.y + alto * 0.12f
+        val ancho = alto * 0.85f
+        val grosor = maxOf(alto * 0.07f, 2f)
+        iconoPaint.strokeWidth = grosor
+        // La pared, de arriba abajo, y la repisa saliendo de ella.
+        canvas.drawLine(x, techo, x, piso, iconoPaint)
+        canvas.drawLine(x, techo + alto * 0.30f, x + ancho, techo + alto * 0.30f, iconoPaint)
+        // Y la flecha de la repisa al piso: la altura que se apunta.
+        val xFlecha = x + ancho * 0.62f
+        canvas.drawLine(xFlecha, techo + alto * 0.34f, xFlecha, piso, iconoPaint)
+        canvas.drawLine(xFlecha, piso, xFlecha - grosor * 2f, piso - grosor * 3f, iconoPaint)
+        canvas.drawLine(xFlecha, piso, xFlecha + grosor * 2f, piso - grosor * 3f, iconoPaint)
+        // El piso, rayado corto, para que se lea como suelo y no como otra pieza.
+        canvas.drawLine(x - grosor, piso, x + ancho, piso, iconoPaint)
+    }
+
+    /** El número de un rótulo, sin el nombre: los apuntes viejos traen "Alfeizar  90". */
+    private fun soloMedida(texto: String): String {
+        val n = texto.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", ".")
+            .toFloatOrNull() ?: return texto
+        return formatCm(n)
+    }
+
     private fun editarAlfeizar(index: Int) {
         val etiqueta = elementos.getOrNull(index) as? Element.TextLabel ?: return
         val actual = etiqueta.text.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", ".")
@@ -2515,7 +2566,7 @@ class SketchMedidasView @JvmOverloads constructor(
             .setPositiveButton("Aceptar") { _, _ ->
                 val nuevo = input.text?.toString()?.replace(",", ".")?.toFloatOrNull()
                     ?: return@setPositiveButton
-                etiqueta.text = "Alfeizar  ${formatCm(abs(nuevo))}"
+                etiqueta.text = formatCm(abs(nuevo))
                 marcoDePieza(index)?.let { colocarPiezasDelMarco(it) }
                 registrarAccion()
                 invalidate()
@@ -2528,23 +2579,91 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun editarAnguloEsquina(index: Int) {
         val etiqueta = elementos.getOrNull(index) as? Element.TextLabel ?: return
         val actual = etiqueta.text.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", ".")
+
+        val dp = resources.displayMetrics.density
+        val cont = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * dp).toInt(), (12 * dp).toInt(), (20 * dp).toInt(), 0)
+        }
         val input = EditText(context).apply {
+            hint = "Grados"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
             setText(actual)
             setSelectAllOnFocus(true)
         }
+        cont.addView(input)
+        // En obra nadie lleva goniómetro: se marca lo mismo a cada lado de la esquina y se mide de
+        // marca a marca. Con los dos lados y esa distancia sale el ángulo, y sale bien.
+        cont.addView(TextView(context).apply {
+            text = "O por medida: marca lo mismo a cada lado de la esquina y mide entre las marcas."
+            textSize = 12f
+            setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
+        })
+        val etLado = EditText(context).apply {
+            hint = "A cada lado (cm)"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText("10")
+        }
+        val etEntre = EditText(context).apply {
+            hint = "Entre las marcas (cm)"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+        cont.addView(etLado)
+        cont.addView(etEntre)
+        val aviso = TextView(context).apply {
+            textSize = 12f
+            setPadding(0, (6 * dp).toInt(), 0, 0)
+        }
+        cont.addView(aviso)
+
+        // Lo que se escribe en las marcas manda: el ángulo se recalcula y se ve al momento.
+        val watcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val lado = etLado.text?.toString()?.replace(",", ".")?.toFloatOrNull() ?: 0f
+                val entre = etEntre.text?.toString()?.replace(",", ".")?.toFloatOrNull() ?: 0f
+                if (lado <= 0f || entre <= 0f) { aviso.text = ""; return }
+                val grados = anguloPorMedidas(lado, entre)
+                if (grados == null) {
+                    aviso.text = "Entre las marcas no puede pasar de ${formatCm(lado * 2)} cm."
+                } else {
+                    aviso.text = "Ángulo: ${formatCm(grados)}°"
+                    input.setText(formatCm(grados))
+                }
+            }
+        }
+        etLado.addTextChangedListener(watcher)
+        etEntre.addTextChangedListener(watcher)
+
         AlertDialog.Builder(context)
-            .setTitle("Ángulo de la esquina (grados)")
-            .setView(input)
+            .setTitle("Ángulo de la esquina")
+            .setView(cont)
             .setPositiveButton("Aceptar") { _, _ ->
                 val nuevo = input.text?.toString()?.replace(",", ".")?.toFloatOrNull()
                     ?: return@setPositiveButton
                 etiqueta.text = textoEsquina(abs(nuevo).coerceIn(1f, 359f))
+                marcoDePieza(index)?.let { colocarPiezasDelMarco(it) }
                 registrarAccion()
                 invalidate()
             }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    /**
+     * El ángulo de una esquina a partir de dos marcas: [ladoCm] a cada lado desde el rincón y
+     * [entreCm] de marca a marca.
+     *
+     * Es el triángulo isósceles que forman las dos marcas con la esquina, así que el ángulo sale
+     * del seno de su mitad. Nulo si esa medida no puede ser: entre las marcas nunca hay más que la
+     * suma de los dos lados.
+     */
+    private fun anguloPorMedidas(ladoCm: Float, entreCm: Float): Float? {
+        if (ladoCm <= 0f || entreCm <= 0f) return null
+        val seno = entreCm / (2f * ladoCm)
+        if (seno > 1f) return null
+        return (2.0 * kotlin.math.asin(seno.toDouble()) * 180.0 / Math.PI).toFloat()
     }
 
     /**
@@ -3033,6 +3152,27 @@ class SketchMedidasView @JvmOverloads constructor(
     fun seleccionarParaPruebas(vararg indices: Int) {
         selectedIndices.clear()
         indices.forEach { selectedIndices.add(it) }
+    }
+
+    /** El ángulo que sale de medir a los dos lados de la esquina. Nulo si esa medida no puede ser. */
+    @androidx.annotation.VisibleForTesting
+    fun anguloPorMedidasParaPruebas(ladoCm: Float, entreCm: Float): Float? =
+        anguloPorMedidas(ladoCm, entreCm)
+
+    /**
+     * Cuántas cotas de ancho de tramo quedan tocables tras dibujar, y cuántas de ellas están en la
+     * planta. La planta pone las suyas además de las del pie de la alzada.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun cotasDeTramoParaPruebas(): Pair<Int, Int> {
+        val bmp = Bitmap.createBitmap(
+            width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888
+        )
+        draw(Canvas(bmp))
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return 0 to 0
+        val pie = (elementos[marco] as Element.Shape).rect.bottom
+        val deTramo = cotaHits.filter { it.type == CotaType.ESQUINA_TRAMO }
+        return deTramo.size to deTramo.count { pantallaAMundoY(it.rect.centerY()) > pie + huecoPlantaPx / 2f }
     }
 
     /** El contorno de la figura más grande, en píxeles, tal como se guarda. */
@@ -4172,6 +4312,7 @@ class SketchMedidasView @JvmOverloads constructor(
             is Element.Freehand -> canvas.drawPath(element.path, paint)
             is Element.TextLabel -> {
                 sketchTextPaint.textSize = tamanoTexto(element)
+                if (element.rol == ROL_ALFEIZAR) dibujarIconoAlfeizar(canvas, element)
                 canvas.drawText(element.text, element.x, element.y, sketchTextPaint)
             }
             is Element.InfoBox -> drawInfoBox(canvas, element)
