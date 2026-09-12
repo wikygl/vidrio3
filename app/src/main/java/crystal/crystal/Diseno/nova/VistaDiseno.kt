@@ -3619,6 +3619,7 @@ class VistaDiseno @JvmOverloads constructor(
     }
     private var xDown = 0f
 
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_CANCEL -> {

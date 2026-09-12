@@ -882,6 +882,59 @@ class DisenoNovaPantallaTest {
         }
     }
 
+    /**
+     * De una franja se puede pasar a la otra tocándola.
+     *
+     * Es el caso de diseñar a mano: se limpia, se le da altura a la franja —con lo que aparece la
+     * de arriba— y se va tocando una y otra para repartirlas.
+     */
+    @Test
+    fun de_una_franja_se_pasa_a_la_otra() {
+        val vano = "{nova,apa,[200,160:Tl<200>(s<110>(f<200>);m<50>(f<200>)) V<0/0|200/0|100/160>]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(vano) }
+            esperar()
+            val bandas = enPantalla(esc) { it.bandasDeFranjaParaPruebas(0) }
+            assertEquals("el tramo no tiene dos franjas: $bandas", 2, bandas.size)
+            val (ancho, _) = enPantalla(esc) { it.tamanoLienzoParaPruebas() }
+            val x = ancho / 2f
+            fun centroDe(i: Int) = (bandas[i].first + bandas[i].second) / 2f
+
+            // Con el dedo de verdad, no despachando eventos a la vista: el fallo estaba en un
+            // listener del lienzo que se comía el toque antes de que llegara al dibujo.
+            val origen = enPantalla(esc) { it.posicionLienzoParaPruebas() }
+            fun tocar(yVista: Float) {
+                val inst = InstrumentationRegistry.getInstrumentation()
+                val t = android.os.SystemClock.uptimeMillis()
+                val px = origen.first + x
+                val py = origen.second + yVista
+                inst.sendPointerSync(
+                    android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, px, py, 0)
+                )
+                inst.sendPointerSync(
+                    android.view.MotionEvent.obtain(t, t + 60, android.view.MotionEvent.ACTION_UP, px, py, 0)
+                )
+                esperar(300)
+            }
+
+            // La de arriba es la última de la lista (van de abajo hacia arriba).
+            tocar(centroDe(1))
+            assertEquals("no se eligió la franja de arriba", 1, enPantalla(esc) { it.franjaActivaParaPruebas() })
+
+            // Y ahora la de abajo, con el mando abierto, que es lo que hace el vidriero.
+            tocar(centroDe(0))
+            assertEquals(
+                "la selección se quedó en la franja de arriba",
+                0, enPantalla(esc) { it.franjaActivaParaPruebas() }
+            )
+            assertEquals(
+                "el toque acabó eligiendo un módulo en vez de la franja",
+                -1, enPantalla(esc) { it.moduloActivoParaPruebas() }
+            )
+        }
+    }
+
     /** Deja los dibujos en PNG del celular para poder mirarlos desde fuera. */
     @Test
     fun retratos_de_vanos_con_forma() {

@@ -326,6 +326,24 @@ class ContornoEnTramosTest {
     }
 
     @Test
+    fun `la ventana mide lo que mide el vano`() {
+        // Un triángulo de 300 × 210: las medidas se leían un pelo hacia dentro del vértice para no
+        // toparse con el cruce de dos lados, y en un lado inclinado eso costaba lo que baja en ese
+        // pelo —210 llegaba como 209.2—. Ahora la recta se estira hasta el borde.
+        val triangulo = listOf(0f to 0f, 300f to 0f, 150f to 210f)
+        val d = ContornoEnTramos.disenoDesdeContorno(triangulo, altoHoja = 110f)!!
+        assertEquals("el alto de la ventana no es el del vano", 210f, d.alto, 0.05f)
+        assertEquals("el ancho de la ventana no es el del vano", 300f, d.ancho, 0.05f)
+        // Y las bandas llegan a la punta y al pico sin perder nada.
+        val bandas = ContornoEnTramos.bandas(triangulo)
+        assertEquals(2, bandas.size)
+        assertEquals(210f, bandas[0].altoDerCm, 0.05f)
+        assertEquals(0f, bandas[0].altoCm, 0.05f)
+        assertEquals(210f, bandas[1].altoCm, 0.05f)
+        assertEquals(0f, bandas[1].altoDerCm, 0.05f)
+    }
+
+    @Test
     fun `la silueta del vano viaja con el diseño y sobrevive al paquete`() {
         val d = ContornoEnTramos.disenoDesdeContorno(trianguloInvertido, altoHoja = 110f)!!
         assertEquals("el diseño no se llevó la silueta", trianguloInvertido, d.contornoVano)

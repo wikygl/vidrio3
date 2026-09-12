@@ -34,6 +34,8 @@ class DisenoNovaActivity : AppCompatActivity() {
     companion object {
         /** Marca la fila de módulos de cada tramo en el panel de cotas, para poder pulsarla. */
         private const val TAG_MODULOS = "cotas_modulos_"
+        /** Lo que mide el mando flotante, y que el lienzo le deja libre siempre. */
+        private const val RESERVA_MANDO_DP = 52f
         /** La silueta del vano dentro del paquete: `V<x/y|x/y|…>`. */
         private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
         private const val TAG_FLOTANTE = "flotante_modulos"
@@ -191,14 +193,14 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
         }
 
-        // Tocar el lienzo (fuera del panel) cierra los paneles de contenido abiertos.
-        binding.vistaDiseno.setOnTouchListener { v, event ->
-            if (event.action == android.view.MotionEvent.ACTION_DOWN && cerrarPanelesContenido()) {
-                v.performClick()
-                true
-            } else {
-                false
-            }
+        // Tocar el lienzo cierra los paneles de contenido abiertos, pero NO se queda con el toque:
+        // se lo comía entero, y como el mando queda abierto tras elegir una franja, el toque en la
+        // franja de al lado solo servía para cerrar el mando. Peor aún: el dedo al levantarse sí
+        // llegaba al lienzo, con la franja del toque ANTERIOR, así que elegía un módulo de esa. De
+        // ahí que la selección pareciera quedarse pegada y no se pudiera pasar a la otra franja.
+        binding.vistaDiseno.setOnTouchListener { _, event ->
+            if (event.action == android.view.MotionEvent.ACTION_DOWN) cerrarPanelesContenido()
+            false
         }
 
         // El botón de la izquierda abre el menú de opciones del diseño.
@@ -1189,6 +1191,13 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
         }
 
+        // Dos renglones más, siempre: los de la franja y el vidrio. La tarjeta crecía al elegir y
+        // el lienzo, que cuelga de ella, se encogía y MOVÍA EL DIBUJO debajo del dedo: se tocaba
+        // una franja y el toque caía en la otra, así que la selección parecía quedarse pegada.
+        val renglones = 1 + tramoInfo.size + 2
+        val faltan = renglones - (ssb.count { it == '\n' } + 1)
+        repeat(faltan.coerceAtLeast(0)) { ssb.append("\n") }
+
         binding.tvInfoSeleccion.text = ssb
     }
 
@@ -1957,7 +1966,13 @@ class DisenoNovaActivity : AppCompatActivity() {
             val m = (v.layoutParams as? ViewGroup.MarginLayoutParams)
             return v.height + (m?.topMargin ?: 0) + (m?.bottomMargin ?: 0)
         }
-        val alto = altoCon(binding.overlayControles) + altoCon(binding.contenedorFlotante) + hueco
+        // El sitio del mando se reserva SIEMPRE, esté puesto o no. Si solo se contaba cuando
+        // aparecía, el lienzo se encogía justo al elegir una franja y el dibujo se movía debajo
+        // del dedo: el siguiente toque caía en la franja de al lado y la selección parecía
+        // quedarse pegada. Mejor un dibujo un dedo más bajo que un dibujo que se mueve solo.
+        val reservaMando = (RESERVA_MANDO_DP * resources.displayMetrics.density).toInt()
+        val altoMando = maxOf(altoCon(binding.contenedorFlotante), reservaMando)
+        val alto = altoCon(binding.overlayControles) + altoMando + hueco
         val lp = binding.vistaDiseno.layoutParams as? ViewGroup.MarginLayoutParams ?: return
         if (lp.bottomMargin == alto) return
         lp.bottomMargin = alto
@@ -2318,6 +2333,18 @@ class DisenoNovaActivity : AppCompatActivity() {
     /** Diagnóstico del dibujo. */
     @androidx.annotation.VisibleForTesting
     fun diagnosticoDibujoParaPruebas() = binding.vistaDiseno.diagnosticoParaPruebas()
+
+    /** La franja elegida ahora mismo, o -1. */
+    @androidx.annotation.VisibleForTesting
+    fun franjaActivaParaPruebas(): Int = indiceFranjaActiva
+
+    /** Dónde empieza el lienzo en la pantalla, para poder tocarlo de verdad. */
+    @androidx.annotation.VisibleForTesting
+    fun posicionLienzoParaPruebas(): Pair<Float, Float> {
+        val sitio = IntArray(2)
+        binding.vistaDiseno.getLocationOnScreen(sitio)
+        return sitio[0].toFloat() to sitio[1].toFloat()
+    }
 
     /** El ancho en pantalla de cada tramo. */
     @androidx.annotation.VisibleForTesting

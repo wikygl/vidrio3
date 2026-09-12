@@ -105,12 +105,17 @@ object ContornoEnTramos {
             val x1 = xs[i + 1]
             val ancho = x1 - x0
             if (ancho <= TOLERANCIA) continue
-            // Un pelo hacia dentro: justo en el vértice se cruzan dos lados y la medida sale doble.
+            // Se mide un pelo hacia dentro —justo en el vértice se cruzan dos lados y la medida
+            // sale doble— y desde esos dos puntos se ESTIRA la recta hasta los bordes. Sin estirar,
+            // un lado inclinado perdía lo que baja en ese pelo: una ventana de 210 llegaba como
+            // 209.2, y ese medio centímetro no es un redondeo, es una medida equivocada.
             val dentro = (ancho * 0.02f).coerceAtMost(0.5f)
-            val izq = bordesEn(puntos, x0 + dentro) ?: continue
-            val der = bordesEn(puntos, x1 - dentro) ?: continue
-            val altoIzq = izq.second - izq.first
-            val altoDer = der.second - der.first
+            val a = bordesEn(puntos, x0 + dentro) ?: continue
+            val b = bordesEn(puntos, x1 - dentro) ?: continue
+            val izq = estirar(a, b, dentro, ancho, haciaAtras = true)
+            val der = estirar(a, b, dentro, ancho, haciaAtras = false)
+            val altoIzq = (izq.second - izq.first).coerceAtLeast(0f)
+            val altoDer = (der.second - der.first).coerceAtLeast(0f)
             if (altoIzq <= TOLERANCIA && altoDer <= TOLERANCIA) continue
             val banda = Banda(
                 anchoCm = ancho,
@@ -130,6 +135,30 @@ object ContornoEnTramos {
             }
         }
         return bandas
+    }
+
+    /**
+     * Estira la recta que pasa por los dos puntos medidos hasta el borde de la banda.
+     *
+     * [a] se midió a [dentro] del borde izquierdo y [b] a [dentro] del derecho, así que entre
+     * ellos hay `ancho - 2*dentro`. Con lados rectos —que es lo que sabe leer esto— la recta da el
+     * valor exacto del vértice; con lados verticales u horizontales no cambia nada.
+     */
+    private fun estirar(
+        a: Pair<Float, Float>,
+        b: Pair<Float, Float>,
+        dentro: Float,
+        ancho: Float,
+        haciaAtras: Boolean
+    ): Pair<Float, Float> {
+        val luz = ancho - 2f * dentro
+        if (luz <= TOLERANCIA || dentro <= 0f) return if (haciaAtras) a else b
+        val k = dentro / luz
+        return if (haciaAtras) {
+            (a.first - (b.first - a.first) * k) to (a.second - (b.second - a.second) * k)
+        } else {
+            (b.first + (b.first - a.first) * k) to (b.second + (b.second - a.second) * k)
+        }
     }
 
     /**
@@ -175,8 +204,10 @@ object ContornoEnTramos {
     ): DisenoNova? {
         val leidas = bandas(puntos)
         if (leidas.isEmpty()) return null
-        val alto = leidas.maxOf { maxOf(it.caidaCm + it.altoCm, it.caidaDerCm + it.altoDerCm) }
-        val ancho = leidas.sumOf { it.anchoCm.toDouble() }.toFloat()
+        // Las medidas de la ventana salen del VANO entero, no de sumar lo que mide cada banda: la
+        // ventana mide lo que mide el hueco, de punta a punta.
+        val alto = puntos.maxOf { it.second } - puntos.minOf { it.second }
+        val ancho = puntos.maxOf { it.first } - puntos.minOf { it.first }
         // Contra qué alto se mide si la hoja entra: el que pidió el vidriero o, con el campo vacío,
         // los cinco séptimos del alto con los que la calculadora trabaja cuando nadie lo llena.
         val hoja = if (altoHoja > 0f) min(altoHoja, alto) else alto * 5f / 7f
