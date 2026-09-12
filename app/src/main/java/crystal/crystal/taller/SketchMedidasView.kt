@@ -1526,9 +1526,17 @@ class SketchMedidasView @JvmOverloads constructor(
         val planta = plantaDeEsquina(marcoIndex)
         if (planta.paredes.size < 2) return emptyList()
         val angulos = angulosDeEsquina(marcoIndex)
-        return (0 until planta.paredes.size - 1).map { arista ->
+        val bordes = bordesDeTramos(marcoIndex)
+        // Cada arista está en un borde del desarrollo, y la pared que empieza ahí es su curva si la
+        // tiene. Sin esto, al meter la banda de la curva los rótulos se iban al vértice equivocado:
+        // los tramos dejaron de ir uno por arista.
+        val quiebresX = quiebresDelMarco(marcoIndex).map { (elementos[it] as Element.Shape).end.x }
+        return quiebresX.indices.map { arista ->
+            val borde = bordes
+                .indexOfFirst { abs(it - quiebresX[arista]) < 0.5f }
+                .coerceIn(1, planta.paredes.size - 1)
             val fuera = cmToPx(20f) * if ((angulos.getOrNull(arista) ?: 90f) < 0f) -1f else 1f
-            val curva = planta.curvas[arista]
+            val curva = planta.curvas[borde]
             if (curva != null) {
                 // En una esquina curva, junto a su panza: ahí es donde se lee la curva.
                 val medio = PointF(
@@ -1540,9 +1548,9 @@ class SketchMedidasView @JvmOverloads constructor(
                 PointF(medio.x + hacia.x, medio.y + hacia.y)
             } else {
                 // En punta: hacia el lado contrario al que dobla, que es por donde hay sitio.
-                val vertice = planta.paredes[arista].second
-                val a = perpendicular(planta.paredes[arista].first, vertice, fuera)
-                val b = perpendicular(vertice, planta.paredes[arista + 1].second, fuera)
+                val vertice = planta.paredes[borde - 1].second
+                val a = perpendicular(planta.paredes[borde - 1].first, vertice, fuera)
+                val b = perpendicular(vertice, planta.paredes[borde].second, fuera)
                 PointF(vertice.x + (a.x + b.x) / 2f, vertice.y + (a.y + b.y) / 2f)
             }
         }
