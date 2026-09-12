@@ -184,6 +184,28 @@ class PlantaEsquinaTest {
         assertEquals("la primera pared cambió", 150f, recorrido[1].first - recorrido[0].first, 1f)
     }
 
+    /**
+     * Reeditar la curva no acumula: las puntas se vuelven a juntar y la esquina se rehace de cero.
+     *
+     * Si cada edición se calculara encima de la anterior, el vano iría creciendo con cada cambio y
+     * las medidas se irían de sitio.
+     */
+    @Test
+    fun reeditar_la_curva_no_acumula() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+        assertEquals("el vano no sumó la curva", 427.1f, v.anchoDeLaVentanaParaPruebas(), 2f)
+
+        // La misma esquina, ahora con otra curva: el vano tiene que ser 270 + 100, no 427 + 100.
+        v.curvarEsquinaParaPruebas(0, 100f, 90f)
+        assertEquals("no quedaron las tres paredes", 3, v.tramosParaPruebas())
+        assertEquals("la edición se sumó a la anterior", 370f, v.anchoDeLaVentanaParaPruebas(), 2f)
+        val arco = v.curvaDeTramoParaPruebas(1)!!
+        assertEquals("el desarrollo no es el nuevo", 100f, arco[0], 1f)
+        assertEquals("la cuerda no es la nueva", 90f, arco[1], 1f)
+    }
+
     /** Y quitarla la devuelve a esquina en punta, con el vano como estaba. */
     @Test
     fun quitar_la_curva_devuelve_la_esquina_a_punta() {

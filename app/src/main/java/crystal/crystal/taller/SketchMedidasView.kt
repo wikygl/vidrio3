@@ -1550,24 +1550,15 @@ class SketchMedidasView @JvmOverloads constructor(
         if (planta.paredes.size < 2) return emptyList()
         val angulos = angulosDeEsquina(marcoIndex)
         return (0 until planta.paredes.size - 1).map { arista ->
-            val fuera = cmToPx(20f) * if ((angulos.getOrNull(arista) ?: 90f) < 0f) -1f else 1f
-            val curva = planta.curvas[arista]
-            if (curva != null) {
-                // En una esquina curva, junto a su panza: ahí es donde se lee la curva.
-                val medio = PointF(
-                    (curva.desde.x + curva.hasta.x) / 2f, (curva.desde.y + curva.hasta.y) / 2f
-                )
-                val hacia = perpendicular(
-                    curva.desde, curva.hasta, cmToPx(curva.arco.flecha) * curva.sentido + fuera
-                )
-                PointF(medio.x + hacia.x, medio.y + hacia.y)
-            } else {
-                // En punta: hacia el lado contrario al que dobla, que es por donde hay sitio.
-                val vertice = planta.paredes[arista].second
-                val a = perpendicular(planta.paredes[arista].first, vertice, fuera)
-                val b = perpendicular(vertice, planta.paredes[arista + 1].second, fuera)
-                PointF(vertice.x + (a.x + b.x) / 2f, vertice.y + (a.y + b.y) / 2f)
-            }
+            // La separación se mide en pantalla, como las cotas: en centímetros del dibujo, en una
+            // ventana de cuatro metros el ángulo acababa a un palmo de su esquina.
+            val fuera = ce(26f) * if ((angulos.getOrNull(arista) ?: 90f) < 0f) -1f else 1f
+            // Pegado a su esquina, hacia el lado contrario al que dobla, que es por donde hay
+            // sitio: el ángulo es la cota de esa esquina y se lee junto a ella.
+            val vertice = planta.paredes[arista].second
+            val a = perpendicular(planta.paredes[arista].first, vertice, fuera)
+            val b = perpendicular(vertice, planta.paredes[arista + 1].second, fuera)
+            PointF(vertice.x + (a.x + b.x) / 2f, vertice.y + (a.y + b.y) / 2f)
         }
     }
 
@@ -2805,21 +2796,20 @@ class SketchMedidasView @JvmOverloads constructor(
         if (ArcoEsquina.deDesarrolloYCuerda(desarrolloCm, cuerdaCm) == null) return
         val quiebres = quiebresDelMarco(marcoIndex)
         val quiebre = quiebres.getOrNull(arista) ?: return
-        val bordes = bordesDeTramos(marcoIndex)
-        val xa = (elementos[quiebre] as Element.Shape).end.x
-        val tramoCurvo = tramoDeX(bordes, xa + 0.5f)
-
-        // Si ese tramo ya es la curva, solo cambian sus medidas.
-        val yaCurvo = curvasDeTramo(marcoIndex).containsKey(tramoCurvo)
-        if (yaCurvo) {
-            rotulosDeCurva(marcoIndex).firstOrNull {
-                tramoDeX(bordes, (elementos[it] as Element.TextLabel).x) == tramoCurvo
-            }?.let { (elementos[it] as Element.TextLabel).text = "$MARCA_CURVA ${formatCm(cuerdaCm)}" }
-            aplicarAnchoTramoEnPlanta(marcoIndex, tramoCurvo, desarrolloCm)
-            sincronizarMarco(marcoIndex, reinterpolarAltos = false)
+        val xa0 = (elementos[quiebre] as Element.Shape).end.x
+        // Si ese tramo ya era curvo, la curva se deshace primero: las puntas vuelven a juntarse y
+        // la esquina se rehace de cero con las medidas nuevas. Así no se van encadenando cuentas
+        // sobre cuentas —un ángulo calculado sobre otro calculado— que es donde se pierde la medida.
+        val yaCurvo = curvasDeTramo(marcoIndex)[tramoDeX(bordesDeTramos(marcoIndex), xa0 + 0.5f)]
+        if (yaCurvo != null) {
+            descurvarEsquina(marcoIndex, tramoDeX(bordesDeTramos(marcoIndex), xa0 + 0.5f), 90f)
+            val marcoAhora = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+            curvarEsquina(marcoAhora, arista, desarrolloCm, cuerdaCm)
             return
         }
 
+        val bordes = bordesDeTramos(marcoIndex)
+        val xa = xa0
         val desarrollo = cmToPx(desarrolloCm)
         val alturaPuente = puentesDelMarco(marcoIndex).firstOrNull()
             ?.let { (elementos[it] as Element.Shape).start.y }
@@ -3665,6 +3655,30 @@ class SketchMedidasView @JvmOverloads constructor(
         val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
         curvarEsquina(marco, arista, desarrolloCm, cuerdaCm)
         invalidate()
+    }
+
+    /**
+     * Qué pieza del apunte se agarra tocando en ese punto de la vista, y a qué distancia queda el
+     * rótulo del ángulo de la arista [arista]. Para comprobar desde las pruebas que se puede tocar.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun agarraElAnguloParaPruebas(arista: Int): Boolean {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return false
+        val etiqueta = etiquetasEsquina(marco).getOrNull(arista) ?: return false
+        val et = elementos[etiqueta] as Element.TextLabel
+        val caja = boundsForText(et)
+        return piezaEn(caja.centerX(), caja.centerY()) == etiqueta
+    }
+
+    /** A qué distancia de su esquina queda el rótulo del ángulo, en centímetros del dibujo. */
+    @androidx.annotation.VisibleForTesting
+    fun distanciaDelAnguloParaPruebas(arista: Int): Float {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return -1f
+        val etiqueta = etiquetasEsquina(marco).getOrNull(arista) ?: return -1f
+        val et = elementos[etiqueta] as Element.TextLabel
+        val vertice = plantaDeEsquina(marco).paredes.getOrNull(arista)?.second ?: return -1f
+        val caja = boundsForText(et)
+        return pxToCm(distancia(PointF(caja.centerX(), caja.centerY()), vertice))
     }
 
     /** Quita la pared curva de ese tramo y deja su esquina doblando esos grados. */
