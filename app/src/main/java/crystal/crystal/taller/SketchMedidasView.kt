@@ -448,6 +448,7 @@ class SketchMedidasView @JvmOverloads constructor(
         cotaTextRects.clear()
         recogerSimbolos()
         prepararEscalaCotas()
+        recolocarBandasSiCambioElZoom()
         reubicarTitulos()
         canvas.save()
         canvas.translate(viewOffsetX, viewOffsetY)
@@ -1747,7 +1748,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 }
             } else {
                 val centros = quiebresDelMarco(marcoIndex).map { (elementos[it] as Element.Shape).end.x }
-                y = colocarFilaRotulos(angulos, centros, y) + ce(16f)
+                y = colocarFilaRotulos(angulos, centros, y) + ce(26f)
             }
         }
 
@@ -1755,7 +1756,7 @@ class SketchMedidasView @JvmOverloads constructor(
             .filterNot { (elementos[it] as Element.TextLabel).titulo }
         if (contadores.isNotEmpty() && bordes.size >= 2) {
             val centros = (0 until bordes.size - 1).map { (bordes[it] + bordes[it + 1]) / 2f }
-            y = colocarFilaRotulos(contadores, centros, y) + ce(16f)
+            y = colocarFilaRotulos(contadores, centros, y) + ce(26f)
         }
 
         etiquetaDelMarco(marcoIndex, ROL_ALFEIZAR)?.let { i ->
@@ -3600,6 +3601,59 @@ class SketchMedidasView @JvmOverloads constructor(
         invalidate()
     }
 
+    /** Pone ese zoom y redibuja, como el pellizco de dos dedos. */
+    @androidx.annotation.VisibleForTesting
+    fun zoomParaPruebas(escala: Float) {
+        viewScale = escala
+        dibujarEnBitmapParaPruebas()
+    }
+
+    /** Cuántos rótulos de la banda se pisan entre ellos ahora mismo. */
+    @androidx.annotation.VisibleForTesting
+    fun rotulosMontadosParaPruebas(): Int {
+        dibujarEnBitmapParaPruebas()
+        val cajas = elementos.filterIsInstance<Element.TextLabel>()
+            .filter { it.rol in setOf(ROL_ESQUINA, ROL_ALTOS, ROL_ALFEIZAR) && !it.titulo }
+            .map { boundsForText(it) }
+        // Solo lo que se lee mal: dos rótulos que se tocan por un pelo no molestan a nadie.
+        val roce = ce(6f)
+        var montados = 0
+        for (i in cajas.indices) for (j in i + 1 until cajas.size) {
+            val a = RectF(cajas[i]).apply { inset(roce, roce) }
+            if (RectF(a).intersect(cajas[j])) montados++
+        }
+        return montados
+    }
+
+    /** Qué rótulos de la banda hay y dónde, para diagnosticar los solapes. */
+    @androidx.annotation.VisibleForTesting
+    fun diagRotulosParaPruebas(): String {
+        dibujarEnBitmapParaPruebas()
+        return elementos.filterIsInstance<Element.TextLabel>()
+            .filter { it.rol != null }
+            .joinToString("\n") { et ->
+                val c = boundsForText(et)
+                "'${et.text}' rol=${et.rol} titulo=${et.titulo} " +
+                    "x=${c.left.toInt()}..${c.right.toInt()} y=${c.top.toInt()}..${c.bottom.toInt()}"
+            }
+    }
+
+    /** ¿El identificador cabe a lo ancho de la pantalla? */
+    @androidx.annotation.VisibleForTesting
+    fun identificadorCabeParaPruebas(): Boolean {
+        dibujarEnBitmapParaPruebas()
+        val titulo = elementos.filterIsInstance<Element.TextLabel>().firstOrNull { it.titulo }
+            ?: return true
+        sketchTextPaint.textSize = tamanoTexto(titulo)
+        return sketchTextPaint.measureText(titulo.text) <= width * escalaCota
+    }
+
+    /** Dibuja una vez en un bitmap aparte, para que se recoloquen las cotas y los rótulos. */
+    private fun dibujarEnBitmapParaPruebas() {
+        if (width <= 0 || height <= 0) return
+        draw(Canvas(Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)))
+    }
+
     /** El ancho de la ventana en el desarrollo: la suma de sus paredes, curvas incluidas. */
     @androidx.annotation.VisibleForTesting
     fun anchoDeLaVentanaParaPruebas(): Float {
@@ -5235,14 +5289,61 @@ class SketchMedidasView @JvmOverloads constructor(
      * ampliado o no, como las cotas: creciendo con el zoom taparían el diseño al alejarse y
      * quedarían minúsculos al acercarse. El resto de textos son parte del dibujo y van con él.
      */
+    /** El zoom con el que se colocó por última vez la banda de rótulos. */
+    private var zoomDeLasBandas = 0f
+
+    /**
+     * Lo más grande que puede ser la letra de un rótulo de la banda, en medidas del dibujo.
+     *
+     * Sale del ancho del apunte: así entran unos cuantos rótulos por fila aunque se aleje mucho.
+     */
+    private fun techoDeRotulo(): Float {
+        val ancho = boundsDelDibujo()?.width() ?: return Float.MAX_VALUE
+        return (ancho / 14f).coerceAtLeast(8f)
+    }
+
+    /**
+     * Recoloca la banda de rótulos de cada plantilla cuando cambia el zoom.
+     *
+     * Los rótulos de la banda —ángulos, contadores, alféizar— se miden en pantalla para que su
+     * letra se vea siempre igual, pero se colocan en el papel: al ampliar o reducir, su letra
+     * cambiaba de tamaño y los sitios no, así que se montaban unos encima de otros. Se vuelven a
+     * repartir con la escala nueva.
+     */
+    private fun recolocarBandasSiCambioElZoom() {
+        if (abs(viewScale - zoomDeLasBandas) < 0.0005f) return
+        zoomDeLasBandas = viewScale
+        elementos.indices.filter { esMarcoPlantilla(it) }.forEach { colocarBandaRotulos(it) }
+    }
+
+    /**
+     * El tamaño de letra más grande que deja ese rótulo dentro de lo que se ve, sin pasar de
+     * [tamanoPedido].
+     *
+     * Lo que se ve es el ancho de la pantalla llevado a las medidas del dibujo, con un margen a
+     * cada lado. Al exportar no hay zoom, así que sale el ancho del papel y el identificador cabe
+     * igual.
+     */
+    private fun tamanoQueQuepa(element: Element.TextLabel, tamanoPedido: Float): Float {
+        if (element.text.isBlank() || width <= 0) return tamanoPedido
+        val disponible = width * escalaCota * 0.94f
+        if (disponible <= 1f) return tamanoPedido
+        sketchTextPaint.textSize = tamanoPedido
+        val ancho = sketchTextPaint.measureText(element.text)
+        if (ancho <= disponible || ancho <= 0f) return tamanoPedido
+        return tamanoPedido * disponible / ancho
+    }
+
     private fun tamanoTexto(element: Element.TextLabel): Float = when {
-        // Los rótulos de plantilla se tocan (el contador, el alfeizar, el ángulo): por debajo de
-        // este tamaño no hay manera de acertarles con el dedo. El mínimo alcanza también a los
-        // apuntes que se guardaron cuando eran más chicos.
-        element.titulo -> ce(maxOf(element.textSize, 50f))
+        // El identificador se recorta a lo que hay de ancho: con la letra medida en pantalla, en un
+        // apunte reducido acababa más largo que el papel y se salía por los lados.
+        element.titulo -> tamanoQueQuepa(element, ce(maxOf(element.textSize, 50f)))
         // Van fuera del dibujo, en su banda: se miden en pantalla como las cotas, para que la banda
-        // no se descuadre al ampliar ni al reducir.
-        element.rol in setOf(ROL_ESQUINA, ROL_ALTOS, ROL_ALFEIZAR) -> ce(maxOf(element.textSize, 44f))
+        // no se descuadre al ampliar ni al reducir, pero con un techo en medidas del dibujo. Sin él,
+        // al alejar la letra crecía tanto respecto al apunte que ninguna fila cabía y todos los
+        // rótulos acababan unos sobre otros.
+        element.rol in setOf(ROL_ESQUINA, ROL_ALTOS, ROL_ALFEIZAR) ->
+            minOf(ce(maxOf(element.textSize, 44f)), techoDeRotulo())
         element.rol != null -> maxOf(element.textSize, 44f)
         else -> element.textSize
     }

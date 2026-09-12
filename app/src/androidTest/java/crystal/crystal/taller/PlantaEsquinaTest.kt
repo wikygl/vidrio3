@@ -153,6 +153,36 @@ class PlantaEsquinaTest {
      * pared a la de la otra. Lo que dobla sale de su desarrollo y su cuerda.
      */
     /**
+     * Los rótulos de la banda se vuelven a repartir al cambiar el zoom.
+     *
+     * Su letra se mide en pantalla para verse siempre igual, pero se colocan en el papel: al
+     * reducir, la letra crecía en medidas del dibujo y los sitios no, así que se montaban.
+     */
+    @Test
+    fun los_rotulos_no_se_montan_al_cambiar_el_zoom() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(120f, 100f, 90f), altoCm = 120f)
+        assertEquals("ya nacen montados: " + v.diagRotulosParaPruebas(), 0, v.rotulosMontadosParaPruebas())
+        // Alejar: la letra pasa a ocupar mucho más en el papel.
+        v.zoomParaPruebas(0.35f)
+        assertEquals("se montan al alejar", 0, v.rotulosMontadosParaPruebas())
+        v.zoomParaPruebas(2.5f)
+        assertEquals("se montan al acercar", 0, v.rotulosMontadosParaPruebas())
+    }
+
+    /** El identificador se recorta a lo que hay de ancho, en vez de salirse del papel. */
+    @Test
+    fun el_identificador_cabe_en_la_pantalla() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        assertTrue("no cabe de entrada", v.identificadorCabeParaPruebas())
+        v.zoomParaPruebas(0.3f)
+        assertTrue("no cabe al alejar", v.identificadorCabeParaPruebas())
+        v.zoomParaPruebas(3f)
+        assertTrue("no cabe al acercar", v.identificadorCabeParaPruebas())
+    }
+
+    /**
      * La curva ocupa su desarrollo en el desarrollo de la ventana: es aluminio que hay que cortar.
      *
      * Se mete entre las dos paredes como un trozo más y el vano crece con él, pero sin ser una
