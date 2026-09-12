@@ -741,4 +741,44 @@ class DisenoNovaPantallaTest {
             assertTrue("agregar franja deshizo el escalón: ${tras2.aPaquete()}", tras2.esEscalonada)
         }
     }
+
+    /**
+     * Limpiar deja la hoja en blanco, pero no borra la FORMA del vano.
+     *
+     * Es el botón con el que se empieza a diseñar a mano, justo lo que hace falta en un vano que
+     * el reparto automático no resuelve. Si limpiar devuelve un rectángulo, el vidriero pierde la
+     * forma que se midió en el momento en que va a dibujarla él.
+     */
+    @Test
+    fun limpiar_conserva_la_forma_del_vano() {
+        // Un triángulo invertido tal como llega de la medida: cuatro tramos, los de las puntas con
+        // su lado bajando a nada.
+        val triangulo = "{nova,apa,[200,159.2:Tl<68.9>(H<0.8,110>;s<110>(f<68.9>))" +
+            " P<2.5> Tl<31>(H<110,159.2>;s<110>(f<31>);m<49.1>(f<31>))" +
+            " P<2.5> Tl<31>(H<159.2,110>;s<110>(c<31>);m<49.1>(f<31>))" +
+            " P<2.5> Tl<68.9>(H<110,0.8>;s<110>(f<68.9>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(triangulo) }
+            esperar()
+            val alEntrar = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertTrue("no entró con forma", alEntrar.esIrregular)
+
+            enPantalla(esc) { it.limpiarParaPruebas() }
+            esperar()
+            val limpio = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertTrue("limpiar devolvió un rectángulo: ${limpio.aPaquete()}", limpio.esIrregular)
+            assertEquals("se perdieron tramos al limpiar", alEntrar.nTramos, limpio.nTramos)
+            // Cada tramo conserva su sitio: su ancho, su alto y sus dos lados.
+            alEntrar.tramos.forEachIndexed { i, antes ->
+                val ahora = limpio.tramos[i]
+                assertEquals("ancho del tramo $i", antes.ancho, ahora.ancho, 0.1f)
+                assertEquals("alto del tramo $i", antes.alto, ahora.alto, 0.1f)
+                assertEquals("lado derecho del tramo $i", antes.altoDerecho, ahora.altoDerecho, 0.1f)
+            }
+            // Y queda en blanco de verdad: un paño por tramo, sin mochetas ni corredizas.
+            assertEquals("no quedó un paño por tramo", limpio.nTramos, limpio.nModulos)
+            assertEquals("quedaron corredizas", 0, limpio.nCorredizas)
+        }
+    }
 }

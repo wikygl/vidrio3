@@ -2156,12 +2156,34 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     /**
-     * Diseño en blanco: un solo tramo con un paño, sin reparto ni mochetas. Deja la pantalla como
-     * una hoja en blanco para empezar de cero, venga el diseño de donde venga.
+     * Diseño en blanco: un paño por tramo, sin reparto ni mochetas. Deja la pantalla como una hoja
+     * en blanco para empezar de cero, venga el diseño de donde venga.
+     *
+     * La FORMA del vano no es diseño y no se borra: si la ventana es escalonada o tiene lados
+     * inclinados, la hoja en blanco conserva sus tramos con su ancho, su alto y su caída, cada uno
+     * con un fijo. Limpiar es para rediseñar a mano sobre el vano que se midió; devolviéndolo a un
+     * rectángulo, el vidriero perdía la forma justo cuando iba a dibujarla él.
      */
     private fun paqueteEnBlanco(): String {
         val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
-        return "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
+        val conForma = runCatching {
+            DisenoNova.desdePaquete(paqueteActualLectura())
+                ?.takeIf { it.esIrregular }
+                ?.let { d ->
+                    d.copy(
+                        acabado = tipoTxt,
+                        tramos = d.tramos.map { t ->
+                            // Alto 0 = "el que salga": la franja llena el tramo, como en `s(f)`.
+                            t.copy(
+                                franjas = listOf(
+                                    NovaFranja(esSistema = true, alto = 0f, modulos = listOf(NovaModulo('f')))
+                                )
+                            )
+                        }
+                    ).aPaquete()
+                }
+        }.getOrNull()
+        return conForma ?: "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
     }
 
     /** Borra el diseño actual y deja el lienzo en blanco. */
@@ -2197,6 +2219,10 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     @androidx.annotation.VisibleForTesting
     fun paqueteParaPruebas(): String = paqueteActualLectura()
+
+    /** Pulsa Limpiar, el botón con el que se empieza un diseño a mano. */
+    @androidx.annotation.VisibleForTesting
+    fun limpiarParaPruebas() = limpiarDiseno()
 
     @androidx.annotation.VisibleForTesting
     fun estadoParaPruebas(): String =
