@@ -34,6 +34,8 @@ class DisenoNovaActivity : AppCompatActivity() {
     companion object {
         /** Marca la fila de módulos de cada tramo en el panel de cotas, para poder pulsarla. */
         private const val TAG_MODULOS = "cotas_modulos_"
+        /** La silueta del vano dentro del paquete: `V<x/y|x/y|…>`. */
+        private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
         private const val TAG_FLOTANTE = "flotante_modulos"
         private const val FLOTANTE_MODULOS = 1
         private const val FLOTANTE_FRANJAS = 2
@@ -1474,6 +1476,9 @@ class DisenoNovaActivity : AppCompatActivity() {
         val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
         val nParantes = (bloques.size - 1).coerceAtLeast(0)
         val totalAncho = bloques.sumOf { it.ancho.toDouble() }.toFloat() + nParantes * anchoParanteCm
+        // La silueta del vano no es un tramo, así que al rearmar el paquete desde los bloques se
+        // quedaba fuera: editar el alto de una franja devolvía la ventana a un rectángulo.
+        val vano = etiquetaVanoActual()
         anchoCm = totalAncho
         val sb = StringBuilder()
         sb.append("{${clase},${tipoTxt},[${df1(totalAncho)},${df1(altoCm)}:")
@@ -1481,9 +1486,14 @@ class DisenoNovaActivity : AppCompatActivity() {
             sb.append("${bloque.letra}<${df1(bloque.ancho)}>(${bloque.contenido})")
             if (idx < bloques.lastIndex) sb.append("P<${df1(anchoParanteCm)}>")
         }
+        if (vano.isNotBlank()) sb.append(" $vano")
         sb.append("]}")
         return sb.toString()
     }
+
+    /** La etiqueta `V<…>` del diseño de ahora mismo, o vacío si el vano es un rectángulo. */
+    private fun etiquetaVanoActual(): String =
+        RE_VANO_PAQUETE.find(paqueteOriginal)?.value.orEmpty()
 
     private fun aplicarCambiosCotas(
         bloques: List<BloqueTramo>,
@@ -2277,6 +2287,19 @@ class DisenoNovaActivity : AppCompatActivity() {
         return pulsarEnFilaParaPruebas("$TAG_MODULOS$indiceTramo", simbolo)
     }
 
+
+    /**
+     * Escribe una medida en el panel de cotas —por su tag: `cotas_franja_0_1`, `cotas_alto_tramo_0`,
+     * `cotas_ancho`…— y pulsa Aplicar, que es lo que hace el vidriero.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun editarCotaParaPruebas(tag: String, valor: String): Boolean {
+        actualizarPanelCotas()
+        val casilla = binding.contenedorCotas.findViewWithTag<EditText>(tag) ?: return false
+        casilla.setText(valor)
+        val aplicar = binding.contenedorCotas.findViewWithTag<View>("cotas_aplicar") ?: return false
+        return aplicar.performClick()
+    }
 
     /** Las bandas de las franjas de un tramo, tal como las ve el toque. */
     @androidx.annotation.VisibleForTesting

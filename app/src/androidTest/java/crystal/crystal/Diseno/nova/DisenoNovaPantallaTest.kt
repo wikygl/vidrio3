@@ -807,6 +807,46 @@ class DisenoNovaPantallaTest {
         }
     }
 
+    /**
+     * Editar las medidas del panel no borra la forma del vano.
+     *
+     * El panel rearma el paquete desde los bloques de tramo, y la silueta no es un tramo: se
+     * quedaba fuera. Crear la franja iba por el modelo y salía bien; darle su altura, que va por
+     * el panel, devolvía la ventana a un rectángulo.
+     */
+    @Test
+    fun editar_las_medidas_no_borra_la_forma() {
+        val conVano = "{nova,apa,[200,160:Tl<200>(s(f)) V<0/0|200/0|100/160>]}"
+        val silueta = listOf(0f to 0f, 200f to 0f, 100f to 160f)
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(conVano) }
+            esperar()
+
+            // Una franja más, que es como se empieza a diseñar a mano.
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas_0", mas = true) }
+            esperar()
+            val conFranja = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("crear la franja ya perdió la forma", silueta, conFranja.contornoVano)
+
+            // Y ahora su altura, por el panel de cotas.
+            assertTrue(
+                "no se pudo editar la altura de la franja",
+                enPantalla(esc) { it.editarCotaParaPruebas("cotas_franja_0_0", "40") }
+            )
+            esperar()
+            val tras = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("editar la altura borró la forma: ${tras.aPaquete()}", silueta, tras.contornoVano)
+            assertTrue("el vano dejó de tener forma", tras.esIrregular)
+
+            // Y el alto de un tramo, que pasa por el mismo sitio.
+            enPantalla(esc) { it.editarCotaParaPruebas("cotas_alto_tramo_0", "150") }
+            esperar()
+            val tras2 = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            assertEquals("editar el alto del tramo borró la forma", silueta, tras2.contornoVano)
+        }
+    }
+
     /** Deja los dibujos en PNG del celular para poder mirarlos desde fuera. */
     @Test
     fun retratos_de_vanos_con_forma() {
