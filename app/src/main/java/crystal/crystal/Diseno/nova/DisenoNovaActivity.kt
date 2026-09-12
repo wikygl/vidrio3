@@ -812,7 +812,11 @@ class DisenoNovaActivity : AppCompatActivity() {
 
         val tramoAncho = bloque.ancho
         val modActual = mods[indiceModuloActivo]
-        val anchoActual = modActual.medida ?: (tramoAncho / mods.size.coerceAtLeast(1))
+        // El vidrio mide lo que le deja el vano a la altura de su franja, no lo que mide el tramo:
+        // en un triángulo, una franja de abajo tiene mucho menos hueco que la ventana entera.
+        val encogido = encogidoDeFranja(tramoIdx, indiceFranjaActiva)
+        val huecoFranja = tramoAncho * encogido
+        val anchoActual = (modActual.medida ?: (tramoAncho / mods.size.coerceAtLeast(1))) * encogido
 
         // Altura del vidrio (informativo): la de ESA franja, no la del primer tramo.
         val franjaAltura = franjasDelBloque(bloque).getOrNull(franjaIdxInBloque)?.second
@@ -831,7 +835,12 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
         cont.addView(etAncho)
         cont.addView(TextView(this).apply {
-            text = "Alto vidrio: ${df1(altoVidrio)} cm · Tramo: ${df1(tramoAncho)} cm"
+            // Con un vano con forma se dice el hueco de la franja, que es contra lo que se mide.
+            text = if (encogido < 0.999f) {
+                "Alto vidrio: ${df1(altoVidrio)} cm · Franja: ${df1(huecoFranja)} cm de ${df1(tramoAncho)}"
+            } else {
+                "Alto vidrio: ${df1(altoVidrio)} cm · Tramo: ${df1(tramoAncho)} cm"
+            }
             textSize = 11f
             setPadding(0, 8, 0, 0)
         })
@@ -841,15 +850,18 @@ class DisenoNovaActivity : AppCompatActivity() {
             .setTitle("Módulo ${nMod + 1}/${mods.size} · ${if (modActual.tipo == 'c') "Corrediza" else "Fijo"}")
             .setView(cont)
             .setPositiveButton("Aplicar") { _, _ ->
-                val nuevoAncho = etAncho.text.toString().aNumeroSeguro()
-                if (nuevoAncho <= 0f || nuevoAncho >= tramoAncho) {
+                val escrito = etAncho.text.toString().aNumeroSeguro()
+                if (escrito <= 0f || escrito >= huecoFranja) {
                     Toast.makeText(
                         this,
-                        "El ancho debe ser mayor que 0 y menor que el tramo (${df1(tramoAncho)} cm).",
+                        "El ancho debe ser mayor que 0 y menor que la franja (${df1(huecoFranja)} cm).",
                         Toast.LENGTH_LONG
                     ).show()
                     return@setPositiveButton
                 }
+                // Lo escrito es lo que mide el vidrio; en el paquete los módulos se anotan sobre el
+                // ancho del tramo, así que se devuelve a esa escala.
+                val nuevoAncho = escrito / encogido
                 // Módulo editado recibe nuevoAncho; el resto se reparte equitativamente
                 val nMods = mods.size
                 val anchoRestante = (tramoAncho - nuevoAncho).coerceAtLeast(0f)
@@ -1189,9 +1201,11 @@ class DisenoNovaActivity : AppCompatActivity() {
                         } else {
                             franjaAltura
                         }
+                        // El vidrio mide lo que le deja el vano a la altura de su franja.
+                        val anchoVidrio = anchoMod * encogidoDeFranja(tramoIdx, indiceFranjaActiva)
                         ssb.append("\n")
                         val modStart = ssb.length
-                        ssb.append("vidrio ${df1(anchoMod)} × ${df1(altoVidrio)}")
+                        ssb.append("vidrio ${df1(anchoVidrio)} × ${df1(altoVidrio)}")
                         ssb.setSpan(StyleSpan(Typeface.BOLD), modStart, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     }
                 }
@@ -1519,6 +1533,47 @@ class DisenoNovaActivity : AppCompatActivity() {
     /** La etiqueta `V<…>` del diseño de ahora mismo, o vacío si el vano es un rectángulo. */
     private fun etiquetaVanoActual(): String =
         RE_VANO_PAQUETE.find(paqueteOriginal)?.value.orEmpty()
+
+    /**
+     * Cuánto se encoge una franja respecto al ancho de su tramo, por la forma del vano.
+     *
+     * En un vano con forma los módulos no se reparten el ancho de la ventana, sino el hueco que
+     * hay a la altura de su franja: en un triángulo invertido de 250 × 210, la franja de abajo
+     * tiene 131 de hueco, así que dos módulos miden 65 y medio y no 125. Devuelve 1 cuando el vano
+     * es recto, que es cuando el ancho del tramo ya es el del hueco.
+     */
+    private fun encogidoDeFranja(tramoIdx: Int, franjaIdx: Int): Float = runCatching {
+        val vano = ContornoEnTramos.desdeEtiqueta(etiquetaVanoActual())
+        if (vano.size < 3) return@runCatching 1f
+        val d = DisenoNova.desdePaquete(paqueteActualLectura()) ?: return@runCatching 1f
+        val tramo = d.tramos.getOrNull(tramoIdx) ?: return@runCatching 1f
+        if (tramo.ancho <= 0.05f) return@runCatching 1f
+
+        // Dónde cae este tramo dentro del ancho de la ventana.
+        var xIni = 0f
+        for (i in 0 until tramoIdx) xIni += (d.tramos.getOrNull(i)?.ancho ?: 0f) + anchoParanteCm
+        val xFin = xIni + tramo.ancho
+
+        // Las franjas se apilan desde el alféizar del tramo hacia arriba.
+        val techo = minOf(tramo.caida, tramo.caidaDerecha)
+        val suelo = maxOf(
+            if (tramo.alto > 0f) tramo.caida + tramo.alto else d.alto,
+            if (tramo.altoDerecho > 0f) tramo.caidaDerecha + tramo.altoDerecho else d.alto
+        )
+        val libres = tramo.franjas.count { it.alto <= 0f }
+        val ocupado = tramo.franjas.sumOf { it.alto.toDouble() }.toFloat()
+        val auto = if (libres > 0) ((suelo - techo - ocupado) / libres).coerceAtLeast(0f) else 0f
+        var yAbajo = suelo
+        var yArriba = suelo
+        for (i in tramo.franjas.indices) {
+            val alto = tramo.franjas[i].alto.takeIf { it > 0f } ?: auto
+            yArriba = yAbajo - alto
+            if (i == franjaIdx) break
+            yAbajo = yArriba
+        }
+        val hueco = ContornoEnTramos.anchoDelVanoEnFranja(vano, yArriba, yAbajo, xIni, xFin)
+        if (hueco <= 0.05f) 1f else (hueco / tramo.ancho).coerceIn(0.05f, 1f)
+    }.getOrDefault(1f)
 
     private fun aplicarCambiosCotas(
         bloques: List<BloqueTramo>,
@@ -2295,6 +2350,10 @@ class DisenoNovaActivity : AppCompatActivity() {
         indiceTramoActivo = tramo
         indiceModuloActivo = modulo
     }
+
+    /** Cuánto encoge una franja por la forma del vano: 1 en una ventana recta. */
+    @androidx.annotation.VisibleForTesting
+    fun encogidoParaPruebas(tramo: Int, franja: Int): Float = encogidoDeFranja(tramo, franja)
 
     /**
      * Pulsa el + o el − de la fila marcada del panel de cotas: `cotas_tramos` o `cotas_franjas`.

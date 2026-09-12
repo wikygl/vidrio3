@@ -999,6 +999,42 @@ class DisenoNovaPantallaTest {
         }
     }
 
+    /**
+     * El vidrio de una franja mide lo que le deja el vano, no lo que mide la ventana.
+     *
+     * En el triángulo invertido de 250 × 210 con la franja de abajo de 110, ahí el hueco son 131,
+     * así que dos módulos miden 65 y medio. Salían de 125 —la mitad de la ventana—, una medida que
+     * no cabe en el vano y que se iría al taller tal cual.
+     */
+    @Test
+    fun el_vidrio_mide_el_hueco_de_su_franja() {
+        val triangulo = "{nova,apa,[250,210:Tl<250>(s<110>(f<125>f<125>);m<100>(f<250>))" +
+            " V<0/0|250/0|125/210>]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(triangulo) }
+            esperar()
+            // Franja de abajo: el hueco es 131 de los 250 del tramo.
+            val abajo = enPantalla(esc) { it.encogidoParaPruebas(0, 0) }
+            assertEquals("el módulo de abajo no mide el hueco", 65.5f, 125f * abajo, 2f)
+            // La de arriba llega al dintel, donde el vano mide lo que la ventana.
+            val arriba = enPantalla(esc) { it.encogidoParaPruebas(0, 1) }
+            assertEquals("la franja de arriba encogió sin motivo", 250f, 250f * arriba, 1f)
+        }
+    }
+
+    @Test
+    fun en_una_ventana_recta_el_vidrio_no_encoge() {
+        val recta = "{nova,apa,[300,200:Tl<300>(s<110>(f<150>c<150>);m<90>(f<300>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(recta) }
+            esperar()
+            assertEquals(1f, enPantalla(esc) { it.encogidoParaPruebas(0, 0) }, 0.001f)
+            assertEquals(1f, enPantalla(esc) { it.encogidoParaPruebas(0, 1) }, 0.001f)
+        }
+    }
+
     /** Deja los dibujos en PNG del celular para poder mirarlos desde fuera. */
     @Test
     fun retratos_de_vanos_con_forma() {

@@ -138,6 +138,58 @@ object ContornoEnTramos {
     }
 
     /**
+     * El ancho del vano en una franja: el del borde donde el hueco es más ancho, dentro del trozo
+     * [xIni]..[xFin] que ocupa su tramo.
+     *
+     * En un vano con forma, los módulos de una franja NO se reparten el ancho de la ventana: se
+     * reparten el hueco que hay a su altura. En un triángulo invertido de 250 × 210, la franja de
+     * abajo tiene 131 de hueco —no 250—, así que dos módulos miden 65 y medio, no 125.
+     */
+    fun anchoDelVanoEnFranja(
+        puntos: List<Pair<Float, Float>>,
+        yArriba: Float,
+        yAbajo: Float,
+        xIni: Float,
+        xFin: Float
+    ): Float {
+        if (puntos.size < 3 || xFin <= xIni) return (xFin - xIni).coerceAtLeast(0f)
+        // El vidrio de la franja llega hasta donde el hueco da de sí: su borde más ancho.
+        val arriba = anchoEnAltura(puntos, yArriba, xIni, xFin)
+        val abajo = anchoEnAltura(puntos, yAbajo, xIni, xFin)
+        return maxOf(arriba, abajo)
+    }
+
+    /** Lo que mide el hueco en esa horizontal, recortado al trozo del tramo. */
+    private fun anchoEnAltura(
+        puntos: List<Pair<Float, Float>>,
+        y: Float,
+        xIni: Float,
+        xFin: Float
+    ): Float {
+        var izq = Float.MAX_VALUE
+        var der = -Float.MAX_VALUE
+        var hubo = false
+        for (i in puntos.indices) {
+            val (ax, ay) = puntos[i]
+            val (bx, by) = puntos[(i + 1) % puntos.size]
+            if (y < min(ay, by) - TOLERANCIA || y > max(ay, by) + TOLERANCIA) continue
+            if (abs(by - ay) <= TOLERANCIA) {
+                // Lado horizontal justo a esa altura: cuenta entero.
+                izq = min(izq, min(ax, bx)); der = max(der, max(ax, bx)); hubo = true
+                continue
+            }
+            val t = ((y - ay) / (by - ay)).coerceIn(0f, 1f)
+            val x = ax + t * (bx - ax)
+            izq = min(izq, x); der = max(der, x)
+            hubo = true
+        }
+        if (!hubo) return 0f
+        val a = max(izq, xIni)
+        val b = min(der, xFin)
+        return (b - a).coerceAtLeast(0f)
+    }
+
+    /**
      * Estira la recta que pasa por los dos puntos medidos hasta el borde de la banda.
      *
      * [a] se midió a [dentro] del borde izquierdo y [b] a [dentro] del derecho, así que entre
