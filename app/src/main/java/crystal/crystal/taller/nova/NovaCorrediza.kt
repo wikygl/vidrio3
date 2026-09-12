@@ -42,6 +42,7 @@ import crystal.crystal.casilla.MapStorage
 import crystal.crystal.casilla.ProyectoManager
 import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityNovaCorredizaBinding
+import crystal.crystal.taller.CurvaEsquina
 import crystal.crystal.taller.EsquinaMedida
 import crystal.crystal.taller.ColaCalculadoras
 import crystal.crystal.taller.ModoMasivoHelper
@@ -131,7 +132,10 @@ class NovaCorrediza : AppCompatActivity() {
     // true mientras se cargan campos desde un diseño (evita que los TextWatchers que limpian
     // el estado desigual se disparen por los setText programáticos de la carga).
     private var cargandoDiseno = false
+    /** La ventana de esquina que llegó del apunte: sus lados y lo que hay en cada arista. */
+    private var esquinaDeLaMedida: EsquinaMedida? = null
     private var primeraMedidaNl: MedidaNl? = null
+
     private var primeraMedidaNu: MedidaNl? = null
     private var segundaMedidaNu: MedidaNl? = null
     private val ladosNs: MutableList<MedidaNl> = mutableListOf()
@@ -3467,7 +3471,8 @@ class NovaCorrediza : AppCompatActivity() {
                 val tramosBase = NovaUIHelper.generarTramosConsolidado(primeraC.ancho, primeraC.alto, altoHojaA, divisA, NovaCalculos.siNoMoch(primeraC.alto, primeraC.hoja), textoModelo, mochetaInferior, modeloRemate)
                 val tramosAleta = NovaUIHelper.generarTramosConsolidado(aletaC.ancho, aletaC.alto, altoHojaB, divisB, NovaCalculos.siNoMoch(aletaC.alto, aletaC.hoja), textoModelo, mochetaInferior, modeloRemate)
                 val cabecera = "${NovaCalculos.df1(primeraC.ancho)},${NovaCalculos.df1(primeraC.alto)}:"
-                return "{nova,${tipoPaquete()},[$cabecera$tramosBase A<90> $tramosAleta]}"
+                val esquina = esquinaEnElDiseno(0, primeraC.alto, primeraC.hoja)
+                return "{nova,${tipoPaquete()},[$cabecera$tramosBase $esquina $tramosAleta]}"
             }
         }
         if (texto == "nu") {
@@ -3496,7 +3501,9 @@ class NovaCorrediza : AppCompatActivity() {
                 val tramosCentro = NovaUIHelper.generarTramosConsolidado(centroC.ancho, centroC.alto, altoHojaCentro, divisCentro, NovaCalculos.siNoMoch(centroC.alto, centroC.hoja), textoModelo, mochetaInferior, modeloRemate)
                 val tramosDer = NovaUIHelper.generarTramosConsolidado(derC.ancho, derC.alto, altoHojaDer, divisDer, NovaCalculos.siNoMoch(derC.alto, derC.hoja), textoModelo, mochetaInferior, modeloRemate)
                 val cabecera = "${NovaCalculos.df1(centroC.ancho)},${NovaCalculos.df1(centroC.alto)}:"
-                return "{nova,${tipoPaquete()},[$cabecera$tramosIzq A<90> $tramosCentro A<90> $tramosDer]}"
+                val esq1 = esquinaEnElDiseno(0, izqC.alto, izqC.hoja)
+                val esq2 = esquinaEnElDiseno(1, centroC.alto, centroC.hoja)
+                return "{nova,${tipoPaquete()},[$cabecera$tramosIzq $esq1 $tramosCentro $esq2 $tramosDer]}"
             }
         }
         if (texto == "ns") {
@@ -3522,7 +3529,7 @@ class NovaCorrediza : AppCompatActivity() {
                     val divisLado = NovaCalculos.divisiones(lado.ancho, lado.divisManual, "nn")
                     val altoHojaLado = NovaCalculos.altoHoja(lado.alto, lado.hoja)
                     val tramosLado = NovaUIHelper.generarTramosConsolidado(lado.ancho, lado.alto, altoHojaLado, divisLado, NovaCalculos.siNoMoch(lado.alto, lado.hoja), textoModelo, mochetaInferior, modeloRemate)
-                    partes.add("A<90>")
+                    partes.add(esquinaEnElDiseno(i - 1, lados[i - 1].alto, lados[i - 1].hoja))
                     partes.add(tramosLado)
                 }
                 val cabecera = "${NovaCalculos.df1(base.ancho)},${NovaCalculos.df1(base.alto)}:"
@@ -3724,6 +3731,7 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     private fun limpiarEstadoNl() {
+        esquinaDeLaMedida = null
         materialesNlArchivables = null
         primeraMedidaNl = null
         primeraMedidaNu = null
@@ -3821,6 +3829,24 @@ class NovaCorrediza : AppCompatActivity() {
         return "$cabecera:$cuerpoNuevo"
     }
 
+    /**
+     * Mete un tag suelto (el arco, el círculo) dentro de la franja de sistema.
+     *
+     * Va sobre los TRAMOS pelados, sin cabecera: el paño de una pared curva es un tramo más del
+     * diseño y no tiene cabecera propia, así que el camino que buscaba los dos puntos devolvía el
+     * texto tal cual y la curva se dibujaba recta.
+     */
+    private fun conTagEnElSistema(tramos: String, tag: String): String {
+        if (tag.isBlank()) return tramos
+        val patronSistema = Regex("s(?:<[^>]*>)?\\([^)]*\\)", RegexOption.IGNORE_CASE)
+        val match = patronSistema.find(tramos) ?: return tramos
+        val segmento = match.value
+        val posCierre = segmento.lastIndexOf(')')
+        if (posCierre <= 0) return tramos
+        val segmentoNuevo = segmento.substring(0, posCierre) + tag + segmento.substring(posCierre)
+        return tramos.replaceRange(match.range, segmentoNuevo)
+    }
+
     private fun insertarTagSimpleEnPrimerSistema(
         disenoBase: String,
         tag: String
@@ -3830,13 +3856,8 @@ class NovaCorrediza : AppCompatActivity() {
         if (idx <= 0 || idx >= disenoBase.lastIndex) return disenoBase
         val cabecera = disenoBase.substring(0, idx)
         val cuerpo = disenoBase.substring(idx + 1)
-        val patronSistema = Regex("s(?:<[^>]*>)?\\([^)]*\\)", RegexOption.IGNORE_CASE)
-        val match = patronSistema.find(cuerpo) ?: return disenoBase
-        val segmento = match.value
-        val posCierre = segmento.lastIndexOf(')')
-        if (posCierre <= 0) return disenoBase
-        val segmentoNuevo = segmento.substring(0, posCierre) + tag + segmento.substring(posCierre)
-        val cuerpoNuevo = cuerpo.replaceRange(match.range, segmentoNuevo)
+        val cuerpoNuevo = conTagEnElSistema(cuerpo, tag)
+        if (cuerpoNuevo == cuerpo) return disenoBase
         return "$cabecera:$cuerpoNuevo"
     }
 
@@ -4268,6 +4289,7 @@ class NovaCorrediza : AppCompatActivity() {
             else -> R.drawable.vserie
         }
         seleccionarDesdePanel(dibujo, geo)
+        esquinaDeLaMedida = medida
         contadorLado = 1
         binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
         medida.lados.dropLast(1).forEach { agregarLado(it.ancho, it.alto, it.puente, 0) }
@@ -4281,7 +4303,44 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     /**
-     * Lo que el vidriero tiene que mirar antes de calcular: qué se armó y qué se dio por supuesto.
+     * Lo que va entre un lado y el siguiente en el diseño.
+     *
+     * Si la esquina dobla en punta es un pliegue, `A<grados>`. Si la resolvieron con una curva no
+     * hay pliegue: la pared no dobla CONTRA la curva, entra en ella. Lo que va es un paño más, el
+     * del desarrollo —que es el aluminio que se corta— con su tag de arco.
+     */
+    private fun esquinaEnElDiseno(arista: Int, altoRef: Float, puenteRef: Float): String {
+        val medida = esquinaDeLaMedida ?: return "A<90>"
+        medida.curvaDe(arista)?.let { return tramoDeCurva(it, altoRef, puenteRef) }
+        val grados = medida.gradosDe(arista) ?: return "A<90>"
+        return "A<${df1(kotlin.math.abs(grados))}>"
+    }
+
+    /**
+     * El paño de una pared curva, como un tramo más del diseño.
+     *
+     * Su ancho es el DESARROLLO: el aluminio va curvado, pero lo que se corta es lo que mide
+     * estirado. El tag `U<flecha>` dice cuánta panza hace, que es lo que el dibujo necesita.
+     * Si el apunte no trajo alto o puente para la curva se usan los de la pared de al lado, que
+     * es contra la que se encuentra.
+     */
+    private fun tramoDeCurva(curva: CurvaEsquina, altoRef: Float, puenteRef: Float): String {
+        val alto = if (curva.alto > 1f) curva.alto else altoRef
+        val puente = if (curva.puente > 0.5f) curva.puente else puenteRef
+        val flecha = crystal.crystal.taller.ArcoEsquina
+            .deDesarrolloYCuerda(curva.desarrollo, curva.cuerda)?.flecha ?: 0f
+        val divis = NovaCalculos.divisiones(curva.desarrollo, 0, "nn")
+        val tramos = NovaUIHelper.generarTramosConsolidado(
+            curva.desarrollo, alto, NovaCalculos.altoHoja(alto, puente), divis,
+            NovaCalculos.siNoMoch(alto, puente), textoModelo,
+            mochetaInferiorDoblePuente(), modeloRemate
+        )
+        return conTagEnElSistema(tramos, "U<${df1(flecha)}>")
+    }
+
+    /**
+     * Lo que el vidriero tiene que mirar antes de calcular
+: qué se armó y qué se dio por supuesto.
      *
      * El apunte sabe más que la calculadora —el descuadre de cada pared, el ángulo real, la esquina
      * curva—, así que en vez de callarse lo que se ha simplificado se dice, y el gráfico de la
@@ -4295,7 +4354,9 @@ class NovaCorrediza : AppCompatActivity() {
                 else -> "en serie de ${medida.lados.size} lados"
             }
         )
-        if (medida.hayCurva) partes.add("la pared curva no cuenta como lado: ese trozo va aparte")
+        if (medida.hayCurva) {
+            partes.add("la pared curva entra en el diseño con su desarrollo, pero sus materiales todavía no se cuentan")
+        }
         val torcidos = medida.anguloDistinto
         if (torcidos.isNotEmpty()) {
             partes.add(

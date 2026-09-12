@@ -433,8 +433,13 @@ class PlantaEsquinaTest {
         assertEquals("sigue siendo una L", "nl", medida.geometria)
         assertEquals(150f, medida.lados[0].ancho, 1f)
         assertEquals(120f, medida.lados[1].ancho, 1f)
-        assertEquals(listOf(EsquinaMedida.CURVA), medida.angulos)
         assertTrue("no avisa de la curva", medida.hayCurva)
+        // Y va con lo suyo, que es lo que la calculadora necesita para dibujarla y cortarla.
+        val curva = medida.curvaDe(0)!!
+        assertEquals("sin desarrollo no hay qué cortar", 157.1f, curva.desarrollo, 1f)
+        assertEquals("falta la cuerda", 141.4f, curva.cuerda, 1f)
+        assertEquals("la curva no trajo el alto de su paño", 120f, curva.alto, 1f)
+        assertEquals("la curva no trajo su puente", 90f, curva.puente, 1f)
 
         // Y con el primer lado a cero, la ventana empieza en la curva: queda una sola pared, que
         // ya no es una esquina que la calculadora sepa armar.

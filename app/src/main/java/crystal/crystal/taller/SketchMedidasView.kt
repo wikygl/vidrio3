@@ -4231,9 +4231,26 @@ class SketchMedidasView @JvmOverloads constructor(
             if (!esBanda && tramo < bordes.size - 2) {
                 val esquina = esquinas.getOrNull(arista)
                 arista++
+                val arco = esquina?.arco
                 angulos.add(
-                    if (esquina?.arco != null) EsquinaMedida.CURVA
-                    else formatCm(esquina?.grados ?: 90f)
+                    if (arco == null) formatCm(esquina?.grados ?: 90f)
+                    else {
+                        // La curva va con su paño: el alto y el puente los lleva su propia banda,
+                        // que es el tramo siguiente, y se miden como los de cualquier pared.
+                        val banda = tramo + 1
+                        val altoCurva = if (banda + 1 < arriba.size) {
+                            maxOf(pxToCm(pie - arriba[banda].y), pxToCm(pie - arriba[banda + 1].y))
+                        } else 0f
+                        val puenteCurva = if (banda + 1 < bordes.size) {
+                            puentes.firstOrNull {
+                                it.rect.centerX() > bordes[banda] - 0.5f &&
+                                    it.rect.centerX() < bordes[banda + 1] + 0.5f
+                            }?.let { pxToCm(pie - it.start.y) } ?: 0f
+                        } else 0f
+                        EsquinaMedida.textoDeCurva(
+                            CurvaEsquina(arco.desarrollo, arco.cuerda, altoCurva, puenteCurva)
+                        )
+                    }
                 )
             }
         }

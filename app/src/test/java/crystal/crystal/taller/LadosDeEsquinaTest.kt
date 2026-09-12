@@ -59,6 +59,42 @@ class LadosDeEsquinaTest {
         assertTrue("el -90 no es un ángulo raro", afuera.anguloDistinto.isEmpty())
     }
 
+    /** La curva viaja con lo suyo: lo que se corta, lo recto, y el paño que hace. */
+    @Test
+    fun la_curva_llega_con_su_desarrollo_y_su_cuerda() {
+        val curva = CurvaEsquina(desarrollo = 157.1f, cuerda = 141.4f, alto = 120f, puente = 90f)
+        val medida = EsquinaMedida(
+            List(2) { lado(150f, 120f) },
+            listOf(EsquinaMedida.textoDeCurva(curva))
+        )
+        val vuelta = EsquinaMedida.desdeTexto(EsquinaMedida.aTexto(medida))!!
+        assertEquals("sigue siendo una L", "nl", vuelta.geometria)
+        assertTrue(vuelta.hayCurva)
+        assertEquals(curva, vuelta.curvaDe(0))
+        assertNull("una curva no tiene grados", vuelta.gradosDe(0))
+
+        // Y una esquina en punta sigue dando sus grados y ninguna curva.
+        val punta = EsquinaMedida.desdeTexto("150,150,120,120,90;120,120,120,120,90@135")!!
+        assertEquals(135f, punta.gradosDe(0))
+        assertNull(punta.curvaDe(0))
+        assertTrue(!punta.hayCurva)
+    }
+
+    /** Mixta: una esquina en punta y la otra en curva, que es lo que sale en obra. */
+    @Test
+    fun una_c_puede_llevar_una_esquina_de_cada_clase() {
+        val curva = CurvaEsquina(100f, 90f, 120f, 90f)
+        val medida = EsquinaMedida(
+            List(3) { lado(120f, 120f) },
+            listOf("90", EsquinaMedida.textoDeCurva(curva))
+        )
+        val vuelta = EsquinaMedida.desdeTexto(EsquinaMedida.aTexto(medida))!!
+        assertEquals("nu", vuelta.geometria)
+        assertNull("la primera dobla en punta", vuelta.curvaDe(0))
+        assertEquals(90f, vuelta.gradosDe(0))
+        assertEquals(curva, vuelta.curvaDe(1))
+    }
+
     @Test
     fun sin_lados_no_hay_medida() {
         assertNull(EsquinaMedida.desdeTexto(""))

@@ -43,8 +43,59 @@ class VistaAceptaModeloTest {
         return r as T
     }
 
+    /**
+     * Y acepta una ventana de esquina con la pared curva metida entre dos rectas.
+     *
+     * La curva es un paño más —su ancho es el desarrollo, que es el aluminio que se corta— con el
+     * tag del arco dentro de su sistema y SIN pliegue a los lados: la pared no dobla contra la
+     * curva, entra en ella. Si el dibujo rechazara ese paquete, en pantalla saldría el diseño de
+     * emergencia y parecería que no pasa nada.
+     */
+    @Test
+    fun la_vista_acepta_la_esquina_curva() {
+        fun tramos(ancho: Float): String = crystal.crystal.taller.nova.NovaUIHelper
+            .generarTramosConsolidado(
+                ancho = ancho,
+                alto = 120f,
+                altoHoja = crystal.crystal.taller.nova.NovaCalculos.altoHoja(120f, 90f),
+                divisiones = crystal.crystal.taller.nova.NovaCalculos.divisiones(ancho, 0, "nn"),
+                siNoMoch = crystal.crystal.taller.nova.NovaCalculos.siNoMoch(120f, 90f),
+                texto = "nn"
+            )
+        // El tag del arco, dentro de la franja de sistema, igual que lo pone la calculadora.
+        val sistema = Regex("s(?:<[^>]*>)?\\([^)]*\\)", RegexOption.IGNORE_CASE)
+        fun conArco(t: String): String {
+            val m = sistema.find(t) ?: return t
+            val cierre = m.value.lastIndexOf(')')
+            return t.replaceRange(
+                m.range,
+                m.value.substring(0, cierre) + "U<29.3>" + m.value.substring(cierre)
+            )
+        }
+        val curva = conArco(tramos(157.1f))
+        val casos = linkedMapOf(
+            "en L con la esquina curva" to
+                "{nova,ina,[150,120:${tramos(150f)} $curva ${tramos(120f)}]}",
+            "en C con una esquina de cada clase" to
+                "{nova,ina,[120,120:${tramos(120f)} A<90> ${tramos(150f)} $curva ${tramos(120f)}]}"
+        )
+        escenario().use { esc ->
+            esperar()
+            val problemas = mutableListOf<String>()
+            for ((nombre, paquete) in casos) {
+                val error = en(esc) { it.vistaRechazaParaPruebas(paquete) }
+                if (error != null) problemas.add("$nombre -> $error\n    $paquete")
+            }
+            assertNull(
+                "la vista rechaza la esquina curva:\n" + problemas.joinToString("\n"),
+                problemas.takeIf { it.isNotEmpty() }?.joinToString("\n")
+            )
+        }
+    }
+
     @Test
     fun la_vista_acepta_lo_que_escribe_el_modelo() {
+
         val casos = linkedMapOf(
             "recién creado inaparente" to DisenoNova.nuevo("ina", 150f, 120f, 120f),
             "recién creado aparente" to DisenoNova.nuevo("apa", 240f, 200f, 200f),

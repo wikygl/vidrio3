@@ -25,6 +25,20 @@ data class LadoEsquina(
 }
 
 /**
+ * La curva con la que se resuelve una esquina, con lo que hace falta para dibujarla y cortarla.
+ *
+ * El [desarrollo] es el aluminio estirado —lo que se corta— y la [cuerda] lo recto de punta a
+ * punta; de las dos sale la flecha y cuánto dobla. [alto] y [puente] son los de su propio paño,
+ * que en el apunte se miden como los de cualquier pared.
+ */
+data class CurvaEsquina(
+    val desarrollo: Float,
+    val cuerda: Float,
+    val alto: Float,
+    val puente: Float
+)
+
+/**
  * La ventana de esquina del apunte: sus paredes en el orden en que se recorren y lo que hay en
  * cada arista entre una y la siguiente.
  *
@@ -36,12 +50,23 @@ data class EsquinaMedida(
     /** Una entrada por arista: los grados, o [CURVA] si esa esquina se resolvió con un arco. */
     val angulos: List<String>
 ) {
-    val hayCurva: Boolean get() = angulos.any { it == CURVA }
+    val hayCurva: Boolean get() = angulos.any { it.startsWith(CURVA) }
 
-    /** Las aristas que no son de 90°, redondeadas, para poder avisar de ellas. */
+    /** Las aristas que no son de 90°, para poder avisar de ellas. Una curva no es un ángulo. */
     val anguloDistinto: List<Float>
         get() = angulos.mapNotNull { it.toFloatOrNull() }
             .filter { kotlin.math.abs(kotlin.math.abs(it) - 90f) > 0.5f }
+
+    /** La curva de esa arista, si se resolvió con uno; null si doblan en punta. */
+    fun curvaDe(arista: Int): CurvaEsquina? {
+        val t = angulos.getOrNull(arista)?.takeIf { it.startsWith(CURVA) } ?: return null
+        val n = t.removePrefix(CURVA).split("|").map { it.trim().toFloatOrNull() ?: return null }
+        if (n.size < 4 || n[0] <= 0f || n[1] <= 0f) return null
+        return CurvaEsquina(n[0], n[1], n[2], n[3])
+    }
+
+    /** Los grados de esa arista, si dobla en punta. */
+    fun gradosDe(arista: Int): Float? = angulos.getOrNull(arista)?.toFloatOrNull()
 
     /** La geometría de Nova que le toca; null si con un solo lado no hay esquina que armar. */
     val geometria: String?
@@ -55,6 +80,11 @@ data class EsquinaMedida(
     companion object {
         /** Marca de arista resuelta con una curva, en lugar de los grados. */
         const val CURVA = "c"
+
+        /** El texto de una arista curva: `c<desarrollo>|<cuerda>|<alto>|<puente>`. */
+        fun textoDeCurva(c: CurvaEsquina): String =
+            CURVA + listOf(c.desarrollo, c.cuerda, c.alto, c.puente).joinToString("|") { num(it) }
+
 
         /**
          * El texto con el que la medida viaja a la calculadora.
