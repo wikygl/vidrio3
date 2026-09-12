@@ -4335,7 +4335,7 @@ class NovaCorrediza : AppCompatActivity() {
             NovaCalculos.siNoMoch(alto, puente), textoModelo,
             mochetaInferiorDoblePuente(), modeloRemate
         )
-        return conTagEnElSistema(tramos, "U<${df1(flecha)}>")
+        return conTagEnElSistema(tramos, "Q<${df1(flecha)}>")
     }
 
     /**

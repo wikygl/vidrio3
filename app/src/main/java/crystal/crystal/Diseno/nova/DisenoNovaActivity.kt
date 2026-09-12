@@ -2335,7 +2335,11 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     /** El dibujo tal cual se está viendo, para poder mirarlo desde fuera del celular. */
     @androidx.annotation.VisibleForTesting
+    /** La panza de cada tramo del dibujo, en cm: 0 los rectos. */
+    fun flechasDeTramoParaPruebas(): List<Float> = binding.vistaDiseno.flechasDeTramoParaPruebas()
+
     fun dibujoParaPruebas(): android.graphics.Bitmap =
+
         binding.vistaDiseno.exportarSoloDisenoBitmap(paddingPx = 8)
 
     @androidx.annotation.VisibleForTesting

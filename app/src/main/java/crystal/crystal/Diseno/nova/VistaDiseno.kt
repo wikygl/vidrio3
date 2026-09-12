@@ -40,7 +40,14 @@ data class SegmentoNs(
     val caidaCm: Float = 0f,
     /** Las mismas dos medidas del lado derecho; null = iguales que las del izquierdo. */
     val altoDerCm: Float? = null,
-    val caidaDerCm: Float? = null
+    val caidaDerCm: Float? = null,
+    /**
+     * La panza de este tramo en cm; 0 = pared recta.
+     *
+     * Es la pared curva de una esquina: un paño más entre paños rectos, al revés que el arco de
+     * `U<>`, que curva la ventana entera.
+     */
+    val flechaCm: Float = 0f
 ) {
     val altoDerecho: Float get() = altoDerCm ?: altoCm
     val caidaDerecha: Float get() = caidaDerCm ?: caidaCm
@@ -840,15 +847,22 @@ class VistaDiseno @JvmOverloads constructor(
         val segs = mutableListOf<SegmentoNs>()
         var primerFranjas: List<FranjaNova> = emptyList()
         for (bloque in bloques) {
-            val franjas = parsearFranjasDesdeModeloCompleto(bloque.contenido)
+            // `Q<29.3>` dentro del tramo: su panza, la de una pared curva de esquina. Se saca
+            // antes de leer las franjas, que si no el parser se encuentra un tag que no es suyo.
+            val flecha = RE_CURVA_TRAMO.find(bloque.contenido)
+                ?.groupValues?.get(1)?.replace(",", ".")?.toFloatOrNull() ?: 0f
+            val contenido = if (flecha > 0f) RE_CURVA_TRAMO.replace(bloque.contenido, "")
+            else bloque.contenido
+            val franjas = parsearFranjasDesdeModeloCompleto(contenido)
             // `H<106.2>` dentro del tramo: su alto propio, el de la ventana escalonada.
-            val altoTramo = RE_ALTO_TRAMO.find(bloque.contenido)?.groupValues?.get(1)
-            val caidaTramo = RE_CAIDA_TRAMO.find(bloque.contenido)?.groupValues?.get(1)
+            val altoTramo = RE_ALTO_TRAMO.find(contenido)?.groupValues?.get(1)
+            val caidaTramo = RE_CAIDA_TRAMO.find(contenido)?.groupValues?.get(1)
             segs.add(
                 SegmentoNs(
                     bloque.tipo, bloque.ancho, franjas,
                     altoCm = medidaIzq(altoTramo), caidaCm = medidaIzq(caidaTramo),
-                    altoDerCm = medidaDer(altoTramo), caidaDerCm = medidaDer(caidaTramo)
+                    altoDerCm = medidaDer(altoTramo), caidaDerCm = medidaDer(caidaTramo),
+                    flechaCm = flecha
                 )
             )
             if (primerFranjas.isEmpty()) primerFranjas = franjas
@@ -1605,16 +1619,37 @@ class VistaDiseno @JvmOverloads constructor(
                     // Con los dos lados distintos el tramo es un cuadrilátero: se recorta el dibujo
                     // con su silueta y las franjas de dentro salen cortadas por la inclinación, que
                     // es lo que hace el vidrio al seguir la forma.
-                    val recorte = if (segmento.esInclinado) android.graphics.Path().apply {
-                        moveTo(xIni, yArribaTramo)
-                        lineTo(xFin, yArribaDe(segmento, derecha = true))
-                        lineTo(xFin, yAbajoDe(segmento, derecha = true))
-                        lineTo(xIni, yAbajoTramo)
-                        close()
-                    } else null
+                    // Y una pared curva se dibuja curva: su silueta se comba y el dibujo de dentro
+                    // se estira para llenarla. Los parantes siguen verticales —que es como se ven
+                    // en un desarrollo— y lo que se arquea son los rieles, que es lo que se mira.
+                    val flechaPx = if (segmento.flechaCm > 0f) {
+                        (segmento.flechaCm * escalaLocal)
+                            .coerceIn(1f, (yAbajoTramo - yArribaTramo).coerceAtLeast(4f) * 0.12f)
+                    } else 0f
+                    val recorte = when {
+                        flechaPx > 0f ->
+                            siluetaCombada(xIni, xFin, yArribaTramo, yAbajoTramo, flechaPx)
+                        segmento.esInclinado -> android.graphics.Path().apply {
+                            moveTo(xIni, yArribaTramo)
+                            lineTo(xFin, yArribaDe(segmento, derecha = true))
+                            lineTo(xFin, yAbajoDe(segmento, derecha = true))
+                            lineTo(xIni, yAbajoTramo)
+                            close()
+                        }
+                        else -> null
+                    }
                     if (recorte != null) {
                         canvas.save()
                         canvas.clipPath(recorte)
+                        if (flechaPx > 0f) {
+                            // Lo justo para que el dibujo llegue a lo alto de la panza; lo que
+                            // sobra por los cantos lo corta el recorte.
+                            val altoTramoPx = (yAbajoTramo - yArribaTramo).coerceAtLeast(1f)
+                            canvas.translate(0f, -flechaPx)
+                            canvas.scale(
+                                1f, (altoTramoPx + flechaPx) / altoTramoPx, xIni, yArribaTramo
+                            )
+                        }
                     }
                     canvas.drawRect(RectF(xIni, yArribaTramo, xFin, yAbajoTramo), pMarco)
                     if (modo == ModoEnsamble.APA) {
@@ -1718,6 +1753,43 @@ class VistaDiseno @JvmOverloads constructor(
                 }
             }
             xCursor = xFin
+        }
+    }
+
+    /**
+     * La silueta de una pared curva vista de frente, para recortar su paño.
+     *
+     * Los dos rieles se comban hacia arriba y los cantos se quedan en su sitio: es la pared que
+     * se va de la vertical. El de abajo comba menos que el de arriba, que es como se ve una
+     * curva mirada desde la altura de los ojos —el mismo criterio que el curvo de toda la
+     * ventana—.
+     */
+    private fun siluetaCombada(
+        x0: Float,
+        x1: Float,
+        yTop: Float,
+        yBottom: Float,
+        flechaPx: Float
+    ): android.graphics.Path {
+        val pasos = 24
+        val centro = (x0 + x1) * 0.5f
+        val medio = ((x1 - x0) * 0.5f).coerceAtLeast(1f)
+        fun comba(x: Float, factor: Float): Float {
+            val u = ((x - centro) / medio).coerceIn(-1f, 1f)
+            return (1f - u * u).coerceAtLeast(0f) * flechaPx * factor
+        }
+        return android.graphics.Path().apply {
+            moveTo(x0, yTop)
+            for (i in 1..pasos) {
+                val x = x0 + (x1 - x0) * i / pasos
+                lineTo(x, yTop - comba(x, 1f))
+            }
+            lineTo(x1, yBottom)
+            for (i in pasos - 1 downTo 0) {
+                val x = x0 + (x1 - x0) * i / pasos
+                lineTo(x, yBottom - comba(x, 0.72f))
+            }
+            close()
         }
     }
 
@@ -3599,7 +3671,11 @@ class VistaDiseno @JvmOverloads constructor(
 
     /** Cuántos segmentos multi-tramo ve el dibujo, y el modelo que le llegó. */
     @androidx.annotation.VisibleForTesting
-    fun diagnosticoParaPruebas(): String = "segmentos=${segmentosNs.size} franjas=${franjasAbajoArriba.size} modo=$modo"
+    /** La panza de cada tramo, en cm: 0 los rectos. */
+    fun flechasDeTramoParaPruebas(): List<Float> = segmentosNs.map { it.flechaCm }
+
+    fun diagnosticoParaPruebas(): String
+ = "segmentos=${segmentosNs.size} franjas=${franjasAbajoArriba.size} modo=$modo"
 
     /** El ancho en pantalla de cada tramo, para las pruebas. */
     @androidx.annotation.VisibleForTesting
@@ -3737,6 +3813,13 @@ class VistaDiseno @JvmOverloads constructor(
         private val RE_ALTO_TRAMO = Regex("""[hH]\s*<\s*([\d.,-]+)\s*>""")
         /** Lo que baja el dintel de ese tramo: `D<20>`. */
         private val RE_CAIDA_TRAMO = Regex("""[dD]\s*<\s*([\d.,-]+)\s*>""")
+        /**
+         * La panza de un tramo curvo: `Q<29.3>`, la flecha en centímetros.
+         *
+         * Es SOLO de ese tramo, al revés que `U<>`, que curva la ventana entera: una pared curva
+         * de una esquina es un paño más entre paños rectos.
+         */
+        private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*([\d.,]+)\s*>""")
         /** El contorno del vano: `V<x/y|x/y|…>`, en centímetros. */
         private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
     }

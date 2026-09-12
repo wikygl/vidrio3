@@ -5,6 +5,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -69,7 +70,7 @@ class VistaAceptaModeloTest {
             val cierre = m.value.lastIndexOf(')')
             return t.replaceRange(
                 m.range,
-                m.value.substring(0, cierre) + "U<29.3>" + m.value.substring(cierre)
+                m.value.substring(0, cierre) + "Q<29.3>" + m.value.substring(cierre)
             )
         }
         val curva = conArco(tramos(157.1f))
@@ -90,6 +91,23 @@ class VistaAceptaModeloTest {
                 "la vista rechaza la esquina curva:\n" + problemas.joinToString("\n"),
                 problemas.takeIf { it.isNotEmpty() }?.joinToString("\n")
             )
+
+            // Y la panza queda donde tiene que estar: solo en el paño de la curva. Aceptar el
+            // paquete no basta, que un tag que no se entiende se ignora sin quejarse y la pared
+            // saldría recta.
+            en(esc) { it.cargarParaPruebas(casos.values.first()) }
+            esperar(300)
+            val flechas = en(esc) { it.flechasDeTramoParaPruebas() }
+            assertEquals("no son tres paños: $flechas", 3, flechas.size)
+            assertEquals("el primer paño se curvó", 0f, flechas[0], 0.01f)
+            assertEquals("el paño de la curva salió recto", 29.3f, flechas[1], 0.1f)
+            assertEquals("el último paño se curvó", 0f, flechas[2], 0.01f)
+
+            // Y un retrato, para poder mirarlo.
+            val bmp = en(esc) { it.dibujoParaPruebas() }
+            val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+            java.io.File(ctx.getExternalFilesDir(null), "nova_esquina_curva.png")
+                .outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
 
