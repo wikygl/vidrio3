@@ -1471,11 +1471,17 @@ class SketchMedidasView @JvmOverloads constructor(
         }
         // Y el ancho de cada pared, sobre su lado.
         planta.paredes.forEachIndexed { i, (desde, hasta) ->
-            val medio = PointF((desde.x + hasta.x) / 2f, (desde.y + hasta.y) / 2f)
+            // Una pared de cero es un punto, y aun asÃ­ lleva su cota: es por donde se le vuelve a
+            // dar medida (en la alzada no se acota, que ahÃ­ no hay nada que medir). Se pone donde
+            // estarÃ­a la pared si midiera, siguiendo a su vecina, que encima del punto el 0 no se
+            // leÃ­a ni se podÃ­a tocar.
+            val (a, b) = if (distancia(desde, hasta) >= 1f) desde to hasta
+            else sitioDeParedDeCero(planta.paredes, i)
+            val medio = PointF((a.x + b.x) / 2f, (a.y + b.y) / 2f)
             val grados = Math.toDegrees(
-                kotlin.math.atan2((hasta.y - desde.y).toDouble(), (hasta.x - desde.x).toDouble())
+                kotlin.math.atan2((b.y - a.y).toDouble(), (b.x - a.x).toDouble())
             ).toFloat()
-            val fuera = perpendicular(desde, hasta, ce(20f) * sentidoDeTramo(angulos, i))
+            val fuera = perpendicular(a, b, ce(20f) * sentidoDeTramo(angulos, i))
             // El ancho del tramo, tocable: aquí el tramo es una pared entera, así que al cambiarlo
             // se mueven sus DOS lados a la vez y se ve en la alzada. Los lados por separado —el
             // descuadre— se apuntan allí, cada uno con su cota.
@@ -1599,6 +1605,30 @@ class SketchMedidasView @JvmOverloads constructor(
         val dy = b.y - a.y
         val n = kotlin.math.hypot(dx, dy).coerceAtLeast(0.001f)
         return PointF(dy / n * largo, -dx / n * largo)
+    }
+
+    /**
+     * DÃ³nde poner la cota de una pared que mide cero: siguiendo a la vecina que sÃ­ mide, del lado
+     * por el que la pared crecerÃ­a. Devuelve el tramito de apoyo, en su sentido.
+     */
+    private fun sitioDeParedDeCero(
+        paredes: List<Pair<PointF, PointF>>,
+        i: Int
+    ): Pair<PointF, PointF> {
+        val punto = paredes[i].first
+        val siguiente = (i + 1 until paredes.size)
+            .firstOrNull { distancia(paredes[it].first, paredes[it].second) >= 1f }
+        val anterior = (i - 1 downTo 0)
+            .firstOrNull { distancia(paredes[it].first, paredes[it].second) >= 1f }
+        val vecina = paredes.getOrNull(siguiente ?: anterior ?: -1) ?: return punto to punto
+        val dx = vecina.second.x - vecina.first.x
+        val dy = vecina.second.y - vecina.first.y
+        val n = kotlin.math.hypot(dx, dy).coerceAtLeast(0.001f)
+        val largo = ce(30f)
+        val fuera = PointF(punto.x - dx / n * largo, punto.y - dy / n * largo)
+        // Delante de la vecina de despuÃ©s, detrÃ¡s de la de antes: siempre por fuera de la ventana.
+        return if (siguiente != null) fuera to PointF(punto.x, punto.y)
+        else PointF(punto.x, punto.y) to PointF(punto.x + dx / n * largo, punto.y + dy / n * largo)
     }
 
     private fun bordesDeTramos(marcoIndex: Int): List<Float> {
@@ -1732,7 +1762,9 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun colocarBandaRotulos(marcoIndex: Int) {
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
         val bordes = bordesDeTramos(marcoIndex)
-        var y = marco.bottomLeft.y + ce(108f)
+        // Por debajo del total del ancho, que va un renglón más abajo que los anchos de los
+        // tramos: con tres trozos el número del total caía justo sobre el contador del medio.
+        var y = marco.bottomLeft.y + ce(140f)
 
         val angulos = etiquetasEsquina(marcoIndex)
         if (angulos.isNotEmpty()) {
@@ -2861,12 +2893,21 @@ class SketchMedidasView @JvmOverloads constructor(
         actualizarBoundsRectangulo(marco)
 
         if (quieroPx <= 0f) {
-            // Se cierra: se va la banda y el puente que la cruzaba.
+            // Se cierra: se va la banda, el puente que la cruzaba, su contador y las cotas de alto
+            // que hubiera dentro. Igual que cuando se quita un tramo: el trozo entero desaparece.
             val puente = puentesDelMarco(marcoIndex).firstOrNull {
                 val p = elementos[it] as Element.Shape
                 minOf(p.start.x, p.end.x) >= xa - 0.5f && maxOf(p.start.x, p.end.x) <= bordeDerecho + 0.5f
             }
-            listOfNotNull(banda, puente).distinct().sortedDescending().forEach {
+            val contador = contadoresAltos(marcoIndex).firstOrNull {
+                val t = elementos[it] as Element.TextLabel
+                t.x >= xa - 0.5f && t.x <= bordeDerecho + 0.5f
+            }
+            val dentro = altosLibres(marcoIndex).filter {
+                val a = elementos[it] as Element.Shape
+                a.start.x >= xa - 0.5f && a.start.x <= bordeDerecho + 0.5f
+            }
+            (listOfNotNull(banda, puente, contador) + dentro).distinct().sortedDescending().forEach {
                 if (it in elementos.indices) elementos.removeAt(it)
             }
         } else if (banda != null) {
@@ -2885,6 +2926,18 @@ class SketchMedidasView @JvmOverloads constructor(
                 ?: (marco.rect.bottom - marco.rect.height() * 0.75f)
             elementos.add(
                 crearShape(Tool.LINE, PointF(xa, alturaPuente), PointF(xb, alturaPuente), PUERTA_PUENTE)
+            )
+            // Y su contador de cotas de alto: la banda es un tramo mÃ¡s, y los contadores van uno
+            // por tramo y en su orden. Sin Ã©l, el de la pared de al lado se quedaba mandando en el
+            // tramo equivocado.
+            elementos.add(
+                Element.TextLabel(
+                    text = textoAltos(0),
+                    x = xa + quieroPx / 2f,
+                    y = marco.rect.bottom,
+                    textSize = 44f,
+                    rol = ROL_ALTOS
+                )
             )
         }
         val ahora = elementos.indexOfFirst { it === marco }
@@ -3736,6 +3789,17 @@ class SketchMedidasView @JvmOverloads constructor(
             it.type == CotaType.ESQUINA_TRAMO || it.type == CotaType.ESQUINA_TRAMO_PLANTA
         }
         return deTramo.size to deTramo.count { pantallaAMundoY(it.rect.centerY()) > pie + huecoPlantaPx / 2f }
+    }
+
+    /** Las cotas de ancho que salen en la alzada: al pie y sobre la línea de arriba. */
+    @androidx.annotation.VisibleForTesting
+    fun cotasDeAnchoEnAlzadoParaPruebas(): Pair<Int, Int> {
+        val bmp = Bitmap.createBitmap(
+            width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888
+        )
+        draw(Canvas(bmp))
+        return cotaHits.count { it.type == CotaType.ESQUINA_TRAMO } to
+            cotaHits.count { it.type == CotaType.ESQUINA_TRAMO_ARRIBA }
     }
 
     /** El contorno de la figura más grande, en píxeles, tal como se guarda. */
@@ -5857,6 +5921,10 @@ class SketchMedidasView @JvmOverloads constructor(
                 val arriba = if (shape.cotaHint == ESQUINA_MARCO) puntosArriba(index) else emptyList()
                 if (arriba.size > 2) {
                     for (tramo in 0 until arriba.size - 1) {
+                        // Un lado de cero no lleva cota: no hay pared que medir, la ventana
+                        // empieza o acaba en su curva. En la planta sí se le deja la suya, que
+                        // es por donde se le vuelve a dar medida.
+                        if (arriba[tramo + 1].x - arriba[tramo].x < cmToPx(0.5f)) continue
                         drawCotaLado(
                             canvas, index, CotaType.ESQUINA_TRAMO_ARRIBA,
                             arriba[tramo], arriba[tramo + 1], centro,
@@ -5875,6 +5943,8 @@ class SketchMedidasView @JvmOverloads constructor(
                 if (shape.cotaHint == ESQUINA_MARCO) {
                     val bordes = bordesDeTramos(index)
                     for (tramo in 0 until bordes.size - 1) {
+                        // Igual al pie: el lado de cero no se acota aquí.
+                        if (bordes[tramo + 1] - bordes[tramo] < cmToPx(0.5f)) continue
                         drawCotaLado(
                             canvas, index, CotaType.ESQUINA_TRAMO,
                             PointF(bordes[tramo], shape.rect.bottom),
@@ -7281,11 +7351,25 @@ class SketchMedidasView @JvmOverloads constructor(
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
         val bordes = bordesDeTramos(marcoIndex)
         if (tramo + 1 >= bordes.size) return
-        val delta = cmToPx(valueCm.coerceAtLeast(1f)) - (bordes[tramo + 1] - bordes[tramo])
+        // Un lado puede medir CERO: es la ventana que empieza o acaba en su curva, sin pared recta
+        // por ese lado. Lo que no puede es medir menos que nada.
+        val delta = cmToPx(valueCm.coerceAtLeast(0f)) - (bordes[tramo + 1] - bordes[tramo])
         if (abs(delta) < 0.01f) return
         // Solo se mueve la línea de ABAJO: el lado de arriba es otra medida y se escribe aparte.
-        quiebresDelMarco(marcoIndex).forEachIndexed { orden, i ->
-            if (orden >= tramo) (elementos[i] as Element.Shape).end.x += delta
+        val borde = bordes[tramo + 1]
+        quiebresDelMarco(marcoIndex).forEach { i ->
+            val q = elementos[i] as Element.Shape
+            if (q.end.x >= borde - 0.5f) q.end.x += delta
+        }
+        // Y con ellas las bandas de pared curva, que también cortan el desarrollo: sin esto, al
+        // cambiar un lado la banda se quedaba clavada y la curva perdía su trozo. Solo su lado de
+        // abajo, como las aristas: el de arriba es otra medida y se mueve con la suya.
+        bandasDeCurva(marcoIndex).forEach { i ->
+            val b = elementos[i] as Element.Shape
+            if (b.end.x >= borde - 0.5f) {
+                b.end.x += delta
+                b.rect.set(minOf(b.start.x, b.end.x), b.rect.top, maxOf(b.start.x, b.end.x), b.rect.bottom)
+            }
         }
         marco.bottomRight.x += delta
         actualizarBoundsRectangulo(marco)
@@ -7308,7 +7392,11 @@ class SketchMedidasView @JvmOverloads constructor(
         val delta = cmToPx(valueCm.coerceAtLeast(1f)) - (bordes[tramo + 1] - bordes[tramo])
         if (abs(delta) < 0.01f) return
         aplicarAnchoTramo(marcoIndex, tramo, valueCm)
-        anchoArriba?.let { aplicarAnchoArribaTramo(marcoIndex, tramo, it + delta) }
+        // Un lado a cero es cero por los dos sitios: no hay descuadre que guardar en una pared que
+        // no existe, y si no quedaba un centímetro de nada por arriba.
+        anchoArriba?.let {
+            aplicarAnchoArribaTramo(marcoIndex, tramo, if (valueCm <= 0.5f) 0f else it + delta)
+        }
     }
 
     /**
@@ -7322,8 +7410,19 @@ class SketchMedidasView @JvmOverloads constructor(
         if (tramo + 1 >= arriba.size) return
         val delta = anchoPx - (arriba[tramo + 1].x - arriba[tramo].x)
         if (abs(delta) < 0.01f) return
-        quiebresDelMarco(marcoIndex).forEachIndexed { orden, i ->
-            if (orden >= tramo) (elementos[i] as Element.Shape).start.x += delta
+        val borde = arriba[tramo + 1].x
+        quiebresDelMarco(marcoIndex).forEach { i ->
+            val q = elementos[i] as Element.Shape
+            if (q.start.x >= borde - 0.5f) q.start.x += delta
+        }
+        // Las bandas de pared curva cortan el cabezal igual que una arista: su lado de arriba se
+        // mueve con él, y el de abajo con la cota de abajo.
+        bandasDeCurva(marcoIndex).forEach { i ->
+            val b = elementos[i] as Element.Shape
+            if (b.start.x >= borde - 0.5f) {
+                b.start.x += delta
+                b.rect.set(minOf(b.start.x, b.end.x), b.rect.top, maxOf(b.start.x, b.end.x), b.rect.bottom)
+            }
         }
         marco.topRight.x += delta
         actualizarBoundsRectangulo(marco)

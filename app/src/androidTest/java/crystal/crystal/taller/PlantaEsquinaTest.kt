@@ -282,4 +282,69 @@ class PlantaEsquinaTest {
         f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
     }
+
+    /**
+     * La ventana que empieza en la curva: un lado de cero, la curva, y el otro lado con medida.
+     *
+     * Es el vano que arranca redondeado y se engancha a una pared recta. El lado de cero deja de
+     * existir en la alzada —no se acota lo que no mide nada— pero sigue estando en la planta, que
+     * es por donde se le vuelve a dar medida si hacía falta.
+     */
+    @Test
+    fun la_ventana_puede_empezar_en_la_curva() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        // Un cuarto de círculo de radio 100: 157.1 de desarrollo y 141.4 de cuerda.
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+        v.anchoDeTramoEnPlantaParaPruebas(0, 0f)
+
+        val anchos = v.anchosDeParedParaPruebas()
+        assertEquals("siguen siendo tres trozos: el de cero, la curva y la pared", 3, anchos.size)
+        assertEquals("el primer lado no se fue a cero: $anchos", 0f, anchos[0], 0.5f)
+        assertEquals("la curva perdió su desarrollo: $anchos", 157.1f, anchos[1], 2f)
+        assertEquals("la pared recta cambió: $anchos", 120f, anchos[2], 1f)
+        assertEquals(
+            "el vano no mide la curva más la pared",
+            anchos.sum(), v.anchoDeLaVentanaParaPruebas(), 2f
+        )
+
+        // Y a cero por los dos lados: sin descuadre fantasma de un centímetro.
+        val lados = v.ladosDeTramoParaPruebas(0)!!
+        assertEquals("el pie del lado de cero mide algo", 0f, lados.first, 0.5f)
+        assertEquals("el alto del lado de cero mide algo", 0f, lados.second, 0.5f)
+
+        // En la alzada solo se acotan los dos trozos que miden: la curva y la pared.
+        val (alPie, arriba) = v.cotasDeAnchoEnAlzadoParaPruebas()
+        assertEquals("al pie se acotó el lado de cero", 2, alPie)
+        assertEquals("arriba se acotó el lado de cero", 2, arriba)
+
+        // En la planta el recorrido arranca en la curva: la primera pared es un punto, así que sus
+        // dos puntas son la misma, y de ahí sale el arco hacia la pared recta.
+        val recorrido = v.recorridoPlantaParaPruebas()
+        assertEquals("la planta perdió un punto", 4, recorrido.size)
+        assertEquals("la pared de cero ocupa sitio", recorrido[0].first, recorrido[1].first, 1f)
+        assertEquals("la pared de cero ocupa sitio", recorrido[0].second, recorrido[1].second, 1f)
+        val cuerda = kotlin.math.hypot(
+            recorrido[2].first - recorrido[1].first, recorrido[2].second - recorrido[1].second
+        )
+        assertEquals("la curva no sale de la esquina", 141.4f, cuerda, 2f)
+        val recta = kotlin.math.hypot(
+            recorrido[3].first - recorrido[2].first, recorrido[3].second - recorrido[2].second
+        )
+        assertEquals("la pared recta no se engancha a la curva", 120f, recta, 1f)
+    }
+
+    /** Y su retrato, para poder mirarla. */
+    @Test
+    fun retrato_de_la_ventana_que_empieza_en_curva() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+        v.anchoDeTramoEnPlantaParaPruebas(0, 0f)
+        val bmp = v.exportBitmap()
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val f = java.io.File(ctx.getExternalFilesDir(null), "planta_empieza_en_curva.png")
+        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
+    }
 }
