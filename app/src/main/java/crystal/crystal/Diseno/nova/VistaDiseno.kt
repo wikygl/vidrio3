@@ -1782,12 +1782,15 @@ class VistaDiseno @JvmOverloads constructor(
      * ventana—.
      */
     /**
-     * Cuánto queda del alto en la punta del paño que gira, donde la pared ya se va de canto.
+     * Cuánto mide de alto la punta por donde gira el paño, comparada con lo que mide de frente.
      *
-     * Es el escorzo con el que arranca una aleta, para que la curva le entregue el paño sin un
-     * salto entre las dos.
+     * Gira del mismo lado que su aleta, y eso lo decide [direccion] igual que en
+     * `proyectarPerspectiva`: "adentro" —lo normal— la pared se acerca al que mira y CRECE;
+     * "afuera" se aleja y mengua. Yendo al revés que la aleta, la esquina se leía como si cada
+     * mitad de la ventana se mirara desde un lado distinto.
      */
-    private val escorzoEnLaPunta = 0.86f
+    private val altoEnLaPunta: Float
+        get() = if (direccion == "afuera") 0.84f else 1.16f
 
     /**
      * Qué parte de una pared curva se ve de frente: un cuarto de vuelta se ve 2/π de lo que mide.
@@ -1811,12 +1814,12 @@ class VistaDiseno @JvmOverloads constructor(
     }
 
 
-    /** Lo que encoge el paño en cada punto, de 1 donde está de frente a [escorzoEnLaPunta]. */
-    private fun encogidoDelGiro(t: Float): Float {
+    /** Lo que crece o mengua el paño en cada punto, de 1 de frente a [altoEnLaPunta] en la punta. */
+    private fun altoAlGirar(t: Float): Float {
         // Cuarto de círculo: al principio apenas gira y al final se va de golpe, que es como se
         // escorza una esquina redondeada.
         val giro = 1f - kotlin.math.cos(t.coerceIn(0f, 1f) * (Math.PI.toFloat() / 2f))
-        return 1f - (1f - escorzoEnLaPunta) * giro
+        return 1f + (altoEnLaPunta - 1f) * giro
     }
 
     /**
@@ -1848,7 +1851,7 @@ class VistaDiseno @JvmOverloads constructor(
             src.set(sx0, 0, sx1, capa.height)
             val t = (u0 + u1) * 0.5f
             val giro = if (haciaLaDerecha) t else 1f - t
-            val k = encogidoDelGiro(giro)
+            val k = altoAlGirar(giro)
             dst.set(
                 x0 + (x1 - x0) * anchoVistoHasta(u0, haciaLaDerecha),
                 centro - medio * k,
@@ -1876,7 +1879,7 @@ class VistaDiseno @JvmOverloads constructor(
         // dibuja sobre el mismo reparto con el que se pega.
         fun px(u: Float): Float = x0 + (x1 - x0) * anchoVistoHasta(u, haciaLaDerecha)
         fun medioAlto(u: Float): Float =
-            (alto * 0.5f) * encogidoDelGiro(if (haciaLaDerecha) u else 1f - u)
+            (alto * 0.5f) * altoAlGirar(if (haciaLaDerecha) u else 1f - u)
         return android.graphics.Path().apply {
             moveTo(px(0f), centro - medioAlto(0f))
             for (i in 1..pasos) {
