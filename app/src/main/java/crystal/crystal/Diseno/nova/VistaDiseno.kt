@@ -868,15 +868,22 @@ class VistaDiseno @JvmOverloads constructor(
             if (primerFranjas.isEmpty()) primerFranjas = franjas
         }
 
-        // Patrón simétrico "nu" (en C/U): el parser asigna [PLANO, ALETA, ALETA] porque A<90>
-        // marca al segmento SIGUIENTE. Para nu, el correcto es [ALETA(izq), PLANO, ALETA(der)].
-        if (segs.size == 3 &&
-            segs[0].tipo == TipoSegmentoNs.PLANO &&
-            segs[1].tipo == TipoSegmentoNs.ALETA &&
-            segs[2].tipo == TipoSegmentoNs.ALETA) {
-            segs[0] = segs[0].copy(tipo = TipoSegmentoNs.ALETA)
-            segs[1] = segs[1].copy(tipo = TipoSegmentoNs.PLANO)
-            modoCUSimétrico = true
+        // De frente va el paño MÁS ANCHO, y el resto en perspectiva: es el que más se ve y el que
+        // le da la escala al dibujo. Yendo de frente el primero, una ventana que empieza por su
+        // lado corto —o por su curva— salía casi entera escorzada y no se entendía.
+        //
+        // Los paños que quedan ANTES del de frente doblan hacia la izquierda; de eso se encarga
+        // `modoCUSimétrico`, que es lo que ya hacía la ventana en C, donde el de frente es el del
+        // medio. Con más de tres paños se deja el zigzag de la serie, que es otra lectura.
+        val dobla = segs.any { it.tipo == TipoSegmentoNs.ALETA }
+        if (dobla && segs.size in 2..3) {
+            val frontal = segs.indices.maxByOrNull { segs[it].anchoCm } ?: 0
+            for (i in segs.indices) {
+                segs[i] = segs[i].copy(
+                    tipo = if (i == frontal) TipoSegmentoNs.PLANO else TipoSegmentoNs.ALETA
+                )
+            }
+            modoCUSimétrico = frontal > 0
         }
         // Patrón "ns" (en serie): paquete con A<90> inicial → todos bloques como ALETA.
         // Reclasificar alternando: par=ALETA (perspectiva), impar=PLANO (frontal).
@@ -3782,7 +3789,12 @@ class VistaDiseno @JvmOverloads constructor(
 
     /** Cuántos segmentos multi-tramo ve el dibujo, y el modelo que le llegó. */
     @androidx.annotation.VisibleForTesting
+    /** Cuál de los paños se dibuja de frente y cuáles en perspectiva. */
+    fun tramosFrontalesParaPruebas(): List<Boolean> =
+        segmentosNs.map { it.tipo == TipoSegmentoNs.PLANO }
+
     /** La panza de cada tramo, en cm: 0 los rectos. */
+
     fun flechasDeTramoParaPruebas(): List<Float> = segmentosNs.map { it.flechaCm }
 
     fun diagnosticoParaPruebas(): String

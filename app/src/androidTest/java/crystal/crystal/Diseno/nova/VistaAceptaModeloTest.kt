@@ -285,4 +285,34 @@ class VistaAceptaModeloTest {
             )
         }
     }
+
+    /**
+     * De frente se dibuja el paño MÁS ANCHO, no el primero.
+     *
+     * La ventana que empieza en su curva tiene delante un paño corto: dibujándolo de frente, todo
+     * lo demás —la pared larga— quedaba escorzado y el dibujo no se entendía.
+     */
+    @Test
+    fun de_frente_va_el_pano_mas_ancho() {
+        val empiezaEnCurva = "{nova,ina,[80,166:Tl<80>(H<166>;Q<10.8>;s(f))" +
+            " A<90> Tl<220>(H<166>;s(fcc))]}"
+        val empiezaPorElLargo = "{nova,ina,[220,166:Tl<220>(H<166>;s(fcc))" +
+            " A<90> Tl<80>(H<166>;s(f))]}"
+        escenario().use { esc ->
+            esperar()
+            en(esc) { it.cargarParaPruebas(empiezaEnCurva) }
+            esperar(300)
+            val a = en(esc) { it.tramosFrontalesParaPruebas() }
+            assertEquals("no son dos paños: $a", 2, a.size)
+            assertTrue("el paño corto se puso de frente: $a", !a[0])
+            assertTrue("la pared larga no quedó de frente: $a", a[1])
+
+            // Y al revés, con el largo delante, de frente sigue yendo el largo.
+            en(esc) { it.cargarParaPruebas(empiezaPorElLargo) }
+            esperar(300)
+            val b = en(esc) { it.tramosFrontalesParaPruebas() }
+            assertTrue("la pared larga dejó de ir de frente: $b", b[0])
+            assertTrue("el paño corto se puso de frente: $b", !b[1])
+        }
+    }
 }

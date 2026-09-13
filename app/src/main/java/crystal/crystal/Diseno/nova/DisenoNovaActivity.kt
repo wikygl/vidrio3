@@ -2652,7 +2652,13 @@ class DisenoNovaActivity : AppCompatActivity() {
     fun rearmarPaqueteParaPruebas(): String =
         reconstruirPaqueteConBloques(parsearBloquesTramo())
 
+    /** Cuál de los paños se dibuja de frente y cuáles en perspectiva. */
+    @androidx.annotation.VisibleForTesting
+    fun tramosFrontalesParaPruebas(): List<Boolean> =
+        binding.vistaDiseno.tramosFrontalesParaPruebas()
+
     /** La panza de cada tramo del dibujo, en cm: 0 los rectos. */
+
     @androidx.annotation.VisibleForTesting
     fun flechasDeTramoParaPruebas(): List<Float> = binding.vistaDiseno.flechasDeTramoParaPruebas()
 
