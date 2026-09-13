@@ -1721,11 +1721,21 @@ class VistaDiseno @JvmOverloads constructor(
                         val kEst = zPxEst / (zPxEst + focalEst)
                         xIni + (1.35f * anchoNominalPx * kEst).coerceAtLeast(1f)
                     } else xIni
+                    // Detrás de una pared curva, la aleta arranca DONDE LA CURVA DEJÓ EL PAÑO. La
+                    // curva entrega su canto ya girado, más alto que el frente; recogiéndolo a la
+                    // altura del frente quedaba un escalón y la pared parecía metida detrás de la
+                    // curva en vez de seguirla.
+                    val vieneDeCurva = (segmentosNs.getOrNull(idx - 1)?.flechaCm ?: 0f) > 0f
+                    val centroAleta = (yTopPlanoActual + yBottomPlanoActual) * 0.5f
+                    val medioAleta = (yBottomPlanoActual - yTopPlanoActual) * 0.5f *
+                        (if (vieneDeCurva) altoEnLaPunta else 1f)
+                    val yTopAleta = centroAleta - medioAleta
+                    val yBottomAleta = centroAleta + medioAleta
                     val perspectiva = calcularAletaPerspectiva(
                         lado = ladoAleta,
                         xUnion = xUnionAleta,
-                        yTop = yTopPlanoActual,
-                        yBottom = yBottomPlanoActual,
+                        yTop = yTopAleta,
+                        yBottom = yBottomAleta,
                         anchoAletaPx = anchoNominalPx
                     )
                     if (modo == ModoEnsamble.APA) {
@@ -1734,8 +1744,8 @@ class VistaDiseno @JvmOverloads constructor(
                             franjas = segmento.franjas,
                             lado = ladoAleta,
                             xUnion = xUnionAleta,
-                            yTop = yTopPlanoActual,
-                            yBottom = yBottomPlanoActual,
+                            yTop = yTopAleta,
+                            yBottom = yBottomAleta,
                             anchoAletaPx = anchoNominalPx,
                             escalaPxPorCm = escalaLocal
                         )
@@ -1745,8 +1755,8 @@ class VistaDiseno @JvmOverloads constructor(
                             franjas = segmento.franjas,
                             lado = ladoAleta,
                             xUnion = xUnionAleta,
-                            yTop = yTopPlanoActual,
-                            yBottom = yBottomPlanoActual,
+                            yTop = yTopAleta,
+                            yBottom = yBottomAleta,
                             anchoAletaPx = anchoNominalPx,
                             escalaPxPorCm = escalaLocal
                         )
@@ -1758,7 +1768,7 @@ class VistaDiseno @JvmOverloads constructor(
                     } else {
                         val xExterior = (perspectiva.bordeExteriorTop.x + perspectiva.bordeExteriorBottom.x) * 0.5f
                         xFin = max(xIni + 1f, xExterior)
-                        val alturaAntes = (yBottomPlanoActual - yTopPlanoActual).coerceAtLeast(1f)
+                        val alturaAntes = (yBottomAleta - yTopAleta).coerceAtLeast(1f)
                         val nuevoTop = perspectiva.bordeExteriorTop.y
                         val nuevoBottom = perspectiva.bordeExteriorBottom.y
                         val alturaDespues = (nuevoBottom - nuevoTop).coerceAtLeast(1f)
