@@ -549,4 +549,29 @@ class PlantaEsquinaTest {
         assertEquals(150f, medida.lados[1].ancho, 1f)
         assertEquals(100f, medida.lados[2].ancho, 1f)
     }
+
+    /**
+     * Los tramos no tienen tope: una ventana en serie lleva los lados que lleve la obra.
+     *
+     * Había un máximo de cinco escrito a mano, sin motivo ni mensaje que lo explicara.
+     */
+    @Test
+    fun se_pueden_poner_los_tramos_que_haga_falta() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 160f)
+        repeat(6) { v.cambiarTramosParaPruebas(1) }
+
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("se quedó en el tope de antes", 8, medida.lados.size)
+        assertEquals("falta el ángulo de alguna esquina", 7, medida.angulos.size)
+        assertTrue("alguna esquina salió curva sola", !medida.hayCurva)
+        assertEquals("con tantos lados ya es una serie", "ns", medida.geometria)
+
+        // Y se pueden quitar, hasta los dos que hacen falta para doblar. Al llegar al mínimo sale
+        // el aviso por Toast, que pide el hilo de la interfaz.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            repeat(10) { v.cambiarTramosParaPruebas(-1) }
+        }
+        assertEquals("se quedó sin esquina", 2, v.esquinaPrincipalEnCm()!!.lados.size)
+    }
 }

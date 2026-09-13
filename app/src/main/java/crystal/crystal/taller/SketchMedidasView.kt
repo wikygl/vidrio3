@@ -3141,13 +3141,11 @@ class SketchMedidasView @JvmOverloads constructor(
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
         val quiebres = quiebresDelMarco(marcoIndex)
         val tramos = quiebres.size + 1
-        val destino = (tramos + delta).coerceIn(2, 5)
+        // Sin tope por arriba: una ventana en serie lleva los lados que lleve la obra. Abajo sí,
+        // dos: con una sola pared no hay esquina que doblar.
+        val destino = (tramos + delta).coerceAtLeast(2)
         if (destino == tramos) {
-            Toast.makeText(
-                context,
-                if (delta > 0) "No caben más tramos" else "Una esquina lleva al menos dos tramos",
-                Toast.LENGTH_SHORT
-            ).show()
+            Toast.makeText(context, "Una esquina lleva al menos dos tramos", Toast.LENGTH_SHORT).show()
             return
         }
         val bordes = bordesDeTramos(marcoIndex)
