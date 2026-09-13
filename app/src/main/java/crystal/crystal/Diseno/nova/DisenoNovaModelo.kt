@@ -206,6 +206,98 @@ data class DisenoNova(
         val nuevas = if (puntos.size < 3) otras else otras + ContornoEnTramos.aEtiqueta(puntos)
         return copy(etiquetas = nuevas)
     }
+    /**
+     * ¿Es una ventana de esquina? Entonces dobla en algún sitio.
+     *
+     * Con esquina, sus tramos NO se reparten un vano: cada lado se mide contra su pared.
+     */
+    val doblaEnEsquina: Boolean get() = tramos.any { it.pliegue != null }
+
+    /**
+     * Los lados de la ventana, cada uno como un diseño suelto y de frente.
+     *
+     * Un lado va de un pliegue al siguiente, y puede llevar más de un tramo: el vidriero puede
+     * haber partido una pared con un parante. Sale sin pliegues y sin panzas, con su propio ancho
+     * de cabecera, para poder editarlo como una ventana normal. De eso se trata: dentro del
+     * editor no hay esquina que perder.
+     *
+     * Una ventana plana devuelve un solo lado, ella misma.
+     */
+    fun separarEnLados(): List<DisenoNova> {
+        val grupos = mutableListOf<MutableList<NovaTramo>>()
+        tramos.forEachIndexed { i, tramo ->
+            if (abreLado(i)) grupos.add(mutableListOf())
+            grupos.last().add(tramo)
+        }
+        if (grupos.isEmpty()) return listOf(this)
+        return grupos.map { grupo ->
+            val anchoLado = grupo.sumOf { it.ancho.toDouble() }.toFloat()
+            copy(
+                ancho = if (anchoLado > 0f) anchoLado else ancho,
+                // El lado se edita de frente: ni pliegue delante ni panza dentro. Las dos vuelven
+                // al unirlo, que es cuando la ventana vuelve a ser una esquina.
+                tramos = grupo.map { it.copy(pliegue = null, flecha = 0f) },
+                etiquetas = emptyList()
+            )
+        }
+    }
+
+    /**
+     * Vuelve a armar la ventana con los lados ya editados, cada uno con su pliegue y su panza.
+     *
+     * [esquinaDeLado] dice qué hay al principio de cada lado: el pliegue con el que dobla y, si
+     * ese lado es la pared curva, su panza. El primer lado no suele llevar pliegue, y una ventana
+     * que arranca doblando sí.
+     *
+     * El ancho de la ventana es el del PRIMER lado, no la suma: cada lado se mide contra su
+     * pared, que es como se apunta en obra y como lo escribe la calculadora.
+     */
+    fun conLados(lados: List<DisenoNova>, esquinaDeLado: List<Pair<String?, Float>>): DisenoNova {
+        if (lados.isEmpty()) return this
+        val tramosNuevos = mutableListOf<NovaTramo>()
+        lados.forEachIndexed { i, lado ->
+            val (pliegue, flecha) = esquinaDeLado.getOrNull(i) ?: (null to 0f)
+            lado.tramos.forEachIndexed { j, tramo ->
+                // El pliegue y la panza son del LADO, así que van en su primer tramo: si el
+                // vidriero lo partió en dos con un parante, el segundo trozo ya no dobla.
+                tramosNuevos.add(
+                    if (j == 0) tramo.copy(pliegue = pliegue, flecha = flecha)
+                    else tramo.copy(pliegue = null, flecha = 0f)
+                )
+            }
+        }
+        if (tramosNuevos.isEmpty()) return this
+        return copy(ancho = lados.first().ancho, tramos = tramosNuevos)
+    }
+
+    /**
+     * Lo que hay al principio de cada lado: su pliegue y su panza.
+     *
+     * Se guarda aparte de los lados porque el editor los devuelve cambiados —franjas, módulos,
+     * anchos— y la esquina la pone otra vez quien la separó, no el editor.
+     */
+    fun esquinaDeCadaLado(): List<Pair<String?, Float>> {
+        val out = mutableListOf<Pair<String?, Float>>()
+        tramos.forEachIndexed { i, tramo ->
+            if (abreLado(i)) out.add(tramo.pliegue to tramo.flecha)
+        }
+        return out
+    }
+
+    /**
+     * ¿Empieza aquí una pared nueva?
+     *
+     * Cuando dobla, cuando es la pared curva —que es una pared entera, no un trozo de la de al
+     * lado— y en el tramo que viene justo detrás de una curva, que ya es la pared siguiente. Un
+     * parante dentro de una pared NO abre lado: parte el tramo, no la ventana.
+     */
+    private fun abreLado(indice: Int): Boolean {
+        if (indice == 0) return true
+        val tramo = tramos.getOrNull(indice) ?: return false
+        return tramo.pliegue != null || tramo.flecha > 0f ||
+            (tramos.getOrNull(indice - 1)?.flecha ?: 0f) > 0f
+    }
+
 
     /**
      * Cambia el alto de UN tramo —el escalón— y estira o encoge sus franjas en la misma

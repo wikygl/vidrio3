@@ -99,6 +99,97 @@ class EsquinaEditableTest {
         assertEquals("la ventana dejó de doblar", "A<90>", vuelta.tramos[2].pliegue)
     }
 
+    /**
+     * Editar lado por lado: cada uno sale de frente, se edita como una ventana normal y al
+     * juntarlos vuelve a ser la esquina.
+     *
+     * Es la manera de que el editor no tenga que acordarse de la esquina en cada uno de los
+     * caminos por los que reescribe el paquete: mientras se edita, no hay esquina que perder.
+     */
+    @Test
+    fun la_ventana_se_separa_en_lados_y_se_vuelve_a_juntar() {
+        val d = DisenoNova.desdePaquete(enLConCurva)!!
+        assertTrue(d.doblaEnEsquina)
+
+        val lados = d.separarEnLados()
+        assertEquals("no salieron los tres lados", 3, lados.size)
+        assertEquals("el primer lado no mide lo suyo", 150f, lados[0].ancho, 0.5f)
+        assertEquals("la curva no mide su desarrollo", 157.1f, lados[1].ancho, 0.5f)
+        assertEquals("el último lado no mide lo suyo", 120f, lados[2].ancho, 0.5f)
+        // Cada lado sale de frente: ni pliegue ni panza, para que el editor lo trate como a
+        // cualquier ventana.
+        lados.forEach { lado ->
+            assertTrue("un lado salió doblado", !lado.doblaEnEsquina)
+            assertEquals("un lado salió curvo", 0f, lado.tramos[0].flecha, 0.01f)
+        }
+
+        // Y al juntarlos vuelve la esquina, con el ancho del primer lado como el de la ventana.
+        val esquina = d.esquinaDeCadaLado()
+        val vuelta = d.conLados(lados, esquina)
+        assertEquals(3, vuelta.tramos.size)
+        assertEquals("la curva perdió su panza al juntar", 29.3f, vuelta.tramos[1].flecha, 0.01f)
+        assertEquals("la ventana dejó de doblar", "A<90>", vuelta.tramos[2].pliegue)
+        assertEquals("el ancho no es el del primer lado", 150f, vuelta.ancho, 0.5f)
+        assertEquals("el paquete no volvió a ser el mismo", d.aPaquete(), vuelta.aPaquete())
+    }
+
+    /** Y editando un lado, lo editado vuelve y la esquina sigue en su sitio. */
+    @Test
+    fun lo_editado_en_un_lado_vuelve_con_la_esquina_puesta() {
+        val d = DisenoNova.desdePaquete(enLConCurva)!!
+        val lados = d.separarEnLados().toMutableList()
+        // El vidriero deja la curva en un fijo de piso a techo, con el lado de frente.
+        lados[1] = lados[1].copy(
+            tramos = listOf(
+                lados[1].tramos[0].copy(
+                    franjas = listOf(
+                        NovaFranja(esSistema = true, alto = 0f, modulos = listOf(NovaModulo('f')))
+                    )
+                )
+            )
+        )
+        val vuelta = d.conLados(lados, d.esquinaDeCadaLado())
+        assertEquals("no quedó un solo módulo", 1, vuelta.tramos[1].nModulosSistema)
+        assertEquals("y tiene que ser fijo", 1, vuelta.tramos[1].sistema?.nFijos)
+        assertEquals("se quedó sin mocheta", 1, vuelta.tramos[1].franjas.size)
+        assertEquals("la curva perdió su panza", 29.3f, vuelta.tramos[1].flecha, 0.01f)
+        assertEquals("la ventana se enderezó", "A<90>", vuelta.tramos[2].pliegue)
+
+        // Y el paquete que sale se vuelve a leer entero.
+        val leida = DisenoNova.desdePaquete(vuelta.aPaquete())!!
+        assertEquals(3, leida.tramos.size)
+        assertEquals(29.3f, leida.tramos[1].flecha, 0.01f)
+        assertEquals("A<90>", leida.tramos[2].pliegue)
+    }
+
+    /** Un lado partido en dos con un parante sigue siendo UN lado. */
+    @Test
+    fun partir_un_lado_no_lo_convierte_en_dos_lados() {
+        val d = DisenoNova.desdePaquete(enL)!!
+        val partida = d.conTramoPartido(0, 0)
+        assertEquals("no se partió el tramo", 3, partida.tramos.size)
+        // Tres tramos, pero dos lados: el pliegue sigue siendo uno.
+        val lados = partida.separarEnLados()
+        assertEquals("el parante se contó como esquina", 2, lados.size)
+        assertEquals("el lado partido perdió un trozo", 2, lados[0].tramos.size)
+        assertEquals(1, lados[1].tramos.size)
+
+        val vuelta = partida.conLados(lados, partida.esquinaDeCadaLado())
+        assertEquals(3, vuelta.tramos.size)
+        assertEquals("el pliegue cambió de sitio", null, vuelta.tramos[1].pliegue)
+        assertEquals("la ventana se enderezó", "A<90>", vuelta.tramos[2].pliegue)
+    }
+
+    /** Una ventana plana es un solo lado: separarla y juntarla la deja igual. */
+    @Test
+    fun una_ventana_plana_es_un_solo_lado() {
+        val d = DisenoNova.nuevo("ina", 150f, 120f, 120f)
+        assertTrue(!d.doblaEnEsquina)
+        val lados = d.separarEnLados()
+        assertEquals(1, lados.size)
+        assertEquals(d.aPaquete(), d.conLados(lados, d.esquinaDeCadaLado()).aPaquete())
+    }
+
     @Test
     fun un_diseno_normal_sigue_saliendo_igual() {
         // Sin pliegues ni panzas, el paquete se escribe como toda la vida: tramos separados por
