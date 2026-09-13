@@ -2411,6 +2411,18 @@ class DisenoNovaActivity : AppCompatActivity() {
         cargarDesdePaquete(ladosEsquina[indice].aPaquete())
         actualizarVista()
         actualizarChipLado()
+        refrescarPanelCotasSiEstaAbierto()
+    }
+
+    /**
+     * El panel de medidas se rehace al cambiar de lado o al armar la ventana.
+     *
+     * Se arma una vez al abrirlo, con los tramos que hubiera entonces; sin rehacerlo se quedaba
+     * con las medidas del lado anterior, que es la manera más rápida de escribir un ancho en la
+     * pared equivocada.
+     */
+    private fun refrescarPanelCotasSiEstaAbierto() {
+        if (binding.panelCotasPlanos.visibility == View.VISIBLE) actualizarPanelCotas()
     }
 
     /** La ventana entera otra vez, con los lados como quedaron y la esquina en su sitio. */
@@ -2449,6 +2461,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         cerrarFlotanteModulos()
         actualizarVista()
         actualizarChipLado()
+        refrescarPanelCotasSiEstaAbierto()
     }
 
     private fun instalarChipLado() {
@@ -2592,6 +2605,30 @@ class DisenoNovaActivity : AppCompatActivity() {
     /** Cuántos lados tiene abierta la ventana de esquina; 0 si se edita entera. */
     @androidx.annotation.VisibleForTesting
     fun ladosParaPruebas(): Int = ladosEsquina.size
+
+    /** Abre el panel de medidas, como el botón de las cotas. */
+    @androidx.annotation.VisibleForTesting
+    fun abrirPanelCotasParaPruebas() {
+        if (binding.panelCotasPlanos.visibility != View.VISIBLE) togglePanelCotasPlanos()
+    }
+
+    /** Lo que dicen las casillas de ancho del panel de medidas, en orden. */
+    @androidx.annotation.VisibleForTesting
+    fun anchosDelPanelParaPruebas(): List<String> {
+        val out = mutableListOf<String>()
+        fun mirar(v: View) {
+            if (v is android.widget.EditText && v.tag?.toString()?.startsWith("cotas_ancho_") == true) {
+                out.add(v.text?.toString().orEmpty())
+            }
+            if (v is android.view.ViewGroup) for (i in 0 until v.childCount) mirar(v.getChildAt(i))
+        }
+        mirar(binding.contenedorCotas)
+        return out
+    }
+
+    /** Lo que dice la tarjeta de información de arriba. */
+    @androidx.annotation.VisibleForTesting
+    fun infoParaPruebas(): String = binding.tvInfoSeleccion.text.toString()
 
     /** Toca el botón que arma la ventana entera, o vuelve al lado. */
     @androidx.annotation.VisibleForTesting

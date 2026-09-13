@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.CountDownLatch
@@ -85,6 +86,29 @@ class VistaAceptaModeloTest {
             val curva = DisenoNova.desdePaquete(en(esc) { it.paqueteParaPruebas() })!!
             assertEquals("la pared curva no mide su desarrollo", 157.1f, curva.ancho, 0.5f)
             assertEquals("la curva se abrió curvada", 0f, curva.tramos[0].flecha, 0.01f)
+            // La tarjeta de arriba tiene que hablar del lado que se está editando, no del anterior.
+            val info = en(esc) { it.infoParaPruebas() }
+            assertTrue("la tarjeta se quedó en el lado anterior: $info", info.contains("157.1"))
+            assertTrue("la tarjeta sigue con el lado anterior: $info", !info.contains("150"))
+            // Y el panel de medidas, si está abierto, habla del lado de ahora: escribir un ancho
+            // en las casillas del lado anterior es la manera más rápida de equivocar una pared.
+            en(esc) { it.abrirPanelCotasParaPruebas() }
+            esperar(300)
+            val anchosLado2 = en(esc) { it.anchosDelPanelParaPruebas() }
+            assertEquals("el panel no trae un solo tramo: $anchosLado2", 1, anchosLado2.size)
+            assertTrue(
+                "el panel se quedó en el lado anterior: $anchosLado2",
+                anchosLado2[0].contains("157")
+            )
+            en(esc) { it.irAlLadoParaPruebas(2) }
+            esperar(300)
+            val anchosLado3 = en(esc) { it.anchosDelPanelParaPruebas() }
+            assertTrue(
+                "el panel no siguió al lado nuevo: $anchosLado3",
+                anchosLado3.isNotEmpty() && anchosLado3[0].contains("120")
+            )
+            en(esc) { it.irAlLadoParaPruebas(1) }
+            esperar(300)
             en(esc) { it.cargarParaPruebas("{nova,ina,[157.1,120:Tl<157.1>(H<120>;s(f))]}") }
             esperar(300)
 
