@@ -1628,8 +1628,9 @@ class DisenoNovaActivity : AppCompatActivity() {
     ) {
         if (bloques.isEmpty()) return
         // El ancho y el alto de la ventana entera mandan sobre lo demás: se fijan antes de repartir,
-        // y los tramos que el vidriero no tocó absorben la diferencia.
-        if (nuevoAncho > 0f) anchoCm = nuevoAncho
+        // y los tramos que el vidriero no tocó absorben la diferencia. En una ventana de esquina no:
+        // ahí el ancho de la ventana es la suma de sus lados, un resultado, y se cambia lado a lado.
+        if (nuevoAncho > 0f && bloques.none { it.pliegue != null }) anchoCm = nuevoAncho
         if (nuevoAlto > 0f) altoCm = nuevoAlto
         val n = bloques.size
         val nParantes = (n - 1).coerceAtLeast(0)
@@ -1726,10 +1727,24 @@ class DisenoNovaActivity : AppCompatActivity() {
         // El panel ocupa todo el ancho, y ese sitio se usa para que quepan MÁS datos, no para
         // estirar las casillas: todo va en dos columnas, incluidos los tramos, que de dos en dos
         // ocupan la mitad de alto y tapan menos el dibujo.
-        val (vistaAncho, etAnchoVentana) = campoConEtiqueta("Ancho ventana:", df1(anchoCm), dp4)
+        // En una ventana de esquina el ancho de la ventana es la SUMA de sus lados, curvas
+        // incluidas —cada uno se mide contra su pared—, no el de la cabecera del paquete, que es
+        // el del primer lado. Y como es una suma, no se escribe: se cambia lado a lado.
+        val deEsquina = bloques.any { it.pliegue != null }
+        val anchoMostrado = if (deEsquina) {
+            bloques.sumOf { it.ancho.toDouble() }.toFloat()
+        } else {
+            anchoCm
+        }
+        val (vistaAncho, etAnchoVentana) =
+            campoConEtiqueta("Ancho ventana:", df1(anchoMostrado), dp4)
         val (vistaAlto, etAlto) = campoConEtiqueta("Alto ventana:", df1(altoCm), dp4)
         etAnchoVentana.tag = "cotas_ancho"
         etAlto.tag = "cotas_alto"
+        if (deEsquina) {
+            etAnchoVentana.isEnabled = false
+            etAnchoVentana.isFocusable = false
+        }
         binding.contenedorCotas.addView(enDosColumnas(vistaAncho, vistaAlto, dp4))
 
         // Agregar y quitar tramos. Las franjas ya no van aquí: cada tramo lleva las suyas, que es
@@ -2612,7 +2627,20 @@ class DisenoNovaActivity : AppCompatActivity() {
         if (binding.panelCotasPlanos.visibility != View.VISIBLE) togglePanelCotasPlanos()
     }
 
+    /** Lo que dice la casilla del ancho de la ventana, en el panel de medidas. */
+    @androidx.annotation.VisibleForTesting
+    fun anchoDeVentanaDelPanelParaPruebas(): String {
+        var out = ""
+        fun mirar(v: View) {
+            if (v is EditText && v.tag == "cotas_ancho") out = v.text?.toString().orEmpty()
+            if (v is android.view.ViewGroup) for (i in 0 until v.childCount) mirar(v.getChildAt(i))
+        }
+        mirar(binding.contenedorCotas)
+        return out
+    }
+
     /** Lo que dicen las casillas de ancho del panel de medidas, en orden. */
+
     @androidx.annotation.VisibleForTesting
     fun anchosDelPanelParaPruebas(): List<String> {
         val out = mutableListOf<String>()

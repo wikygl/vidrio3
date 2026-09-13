@@ -369,4 +369,38 @@ class VistaAceptaModeloTest {
                 .outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
+
+    /**
+     * En el panel de medidas, el ancho de una ventana de esquina es la SUMA de sus lados, curvas
+     * incluidas.
+     *
+     * Salía el de la cabecera del paquete, que es el del PRIMER lado: en una C de 100+60+200+60+100
+     * ponía 100 donde tienen que ir 520.
+     */
+    @Test
+    fun el_ancho_de_una_esquina_es_la_suma_de_sus_lados() {
+        val enC = "{nova,ina,[100,160:Tl<100>(H<160>;s(fc))" +
+            " Tl<60>(H<160>;Q<8>;s(f)) A<90> Tl<200>(H<160>;s(fcc))" +
+            " Tl<60>(H<160>;Q<8>;s(f)) A<90> Tl<100>(H<160>;s(fc))]}"
+        escenario().use { esc ->
+            esperar()
+            en(esc) { it.cargarParaPruebas(enC) }
+            esperar(300)
+            en(esc) { it.abrirPanelCotasParaPruebas() }
+            esperar(300)
+            val ancho = en(esc) { it.anchoDeVentanaDelPanelParaPruebas() }
+            assertEquals("el ancho no es la suma de los lados", "520", ancho)
+        }
+
+        // Y una ventana plana sigue diciendo el suyo, que ahí sí es el de la ventana. En pantalla
+        // aparte: el panel se arma al abrirlo, así que cargar otro diseño encima no lo rehace.
+        escenario().use { esc ->
+            esperar()
+            en(esc) { it.cargarParaPruebas("{nova,ina,[240,160:Tl<240>(H<160>;s(fc))]}") }
+            esperar(300)
+            en(esc) { it.abrirPanelCotasParaPruebas() }
+            esperar(300)
+            assertEquals("240", en(esc) { it.anchoDeVentanaDelPanelParaPruebas() })
+        }
+    }
 }
