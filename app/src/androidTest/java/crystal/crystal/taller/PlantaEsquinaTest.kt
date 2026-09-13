@@ -520,4 +520,33 @@ class PlantaEsquinaTest {
         assertNull("la esquina nueva salió curva", medida.curvaDe(1))
         assertEquals("la esquina nueva no salió en escuadra", 90f, medida.gradosDe(1)!!, 0.5f)
     }
+
+    /**
+     * En una ventana en C, curvar la SEGUNDA esquina no toca la primera.
+     *
+     * Los rótulos de ángulo se ordenaban por dónde están dibujados, y desde que se leen en la
+     * planta la segunda esquina de una C cae a la izquierda de la primera: quedaban cruzados, y
+     * el desarrollo y la cuerda que se escribían en una curva se le aplicaban a la otra.
+     */
+    @Test
+    fun curvar_la_segunda_esquina_no_toca_la_primera() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(100f, 150f, 100f), altoCm = 120f)
+        v.curvarEsquinaParaPruebas(1, 80f, 76f)
+
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no son tres paredes: ${medida.lados.map { it.ancho }}", 3, medida.lados.size)
+        assertEquals("no hay dos esquinas", 2, medida.angulos.size)
+        assertNull("la curva se fue a la primera esquina", medida.curvaDe(0))
+        assertEquals("la primera esquina dejó de ser la escuadra", 90f, medida.gradosDe(0)!!, 0.5f)
+        val curva = medida.curvaDe(1)
+        assertNotNull("la segunda esquina no quedó curva", curva)
+        assertEquals("el desarrollo no es el escrito", 80f, curva!!.desarrollo, 0.5f)
+        assertEquals("la cuerda no es la escrita", 76f, curva.cuerda, 0.5f)
+
+        // Y las paredes siguen midiendo lo suyo: la curva se metió entre la segunda y la tercera.
+        assertEquals(100f, medida.lados[0].ancho, 1f)
+        assertEquals(150f, medida.lados[1].ancho, 1f)
+        assertEquals(100f, medida.lados[2].ancho, 1f)
+    }
 }

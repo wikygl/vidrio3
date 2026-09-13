@@ -2287,15 +2287,22 @@ class SketchMedidasView @JvmOverloads constructor(
     }
 
     /** Los ángulos escritos de un marco de esquina, en el orden de sus aristas. */
+    /**
+     * Los rótulos de ángulo del marco, EN EL ORDEN DE SUS ARISTAS: el primero es el de la primera
+     * esquina de la alzada, de izquierda a derecha.
+     *
+     * Van por el orden en que se crearon, que es ese, y NO por dónde están dibujados. Desde que
+     * los ángulos se leen en la planta, su sitio lo pone el recorrido doblado: en una ventana en C
+     * la segunda esquina cae a la izquierda de la primera, así que ordenándolos por su x quedaban
+     * cruzados —lo que se escribía en una curva se le aplicaba a la otra—.
+     */
     private fun etiquetasEsquina(marcoIndex: Int): List<Int> {
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
         val zona = zonaDelMarco(marco)
-        return elementos.indices
-            .filter { i ->
-                val t = elementos.getOrNull(i) as? Element.TextLabel
-                t != null && t.rol == ROL_ESQUINA && zona.contains(t.x, t.y)
-            }
-            .sortedBy { (elementos[it] as Element.TextLabel).x }
+        return elementos.indices.filter { i ->
+            val t = elementos.getOrNull(i) as? Element.TextLabel
+            t != null && t.rol == ROL_ESQUINA && zona.contains(t.x, t.y)
+        }
     }
 
     private fun rotuloMarco(hint: String?, anchoCm: Float, altoCm: Float): String {
