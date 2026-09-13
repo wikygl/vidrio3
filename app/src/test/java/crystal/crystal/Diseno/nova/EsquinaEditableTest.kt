@@ -190,6 +190,31 @@ class EsquinaEditableTest {
         assertEquals(d.aPaquete(), d.conLados(lados, d.esquinaDeCadaLado()).aPaquete())
     }
 
+
+    /**
+     * Lo que Nova mira al volver del editor para NO tocar las medidas de los lados.
+     *
+     * El ancho de la cabecera de una esquina es el del primer lado, no el de la ventana: si Nova
+     * lo escribe en el campo del ancho, el lado 2 sale con la medida del lado 1. Y los anchos de
+     * dentro del diseño son los útiles, ya descontados; en los campos va lo que se midió.
+     */
+    @Test
+    fun una_esquina_se_reconoce_por_su_pliegue() {
+        val deEsquina = DisenoNova.desdePaquete(
+            "{nova,ina,[147.5,160:Tl<147.5>(H<160>;s(fc)) Tl<90>(H<160>;Q<20>;s(f))" +
+                " A<90> Tl<114>(H<160>;s(fc))]}"
+        )!!
+        assertTrue("no reconoce la ventana de esquina", deEsquina.doblaEnEsquina)
+
+        val plana = DisenoNova.desdePaquete("{nova,ina,[240,160:Tl<240>(H<160>;s(fc))]}")!!
+        assertTrue("una ventana plana no dobla", !plana.doblaEnEsquina)
+
+        // Y una ventana de varios tramos sin pliegues tampoco: un parante no es una esquina.
+        val tresTramos = DisenoNova.desdePaquete(
+            "{nova,ina,[240,160:Tl<80>(s(f)) P<2.5> Tl<80>(s(f)) P<2.5> Tl<80>(s(f))]}"
+        )!!
+        assertTrue("un parante se tomó por una esquina", !tresTramos.doblaEnEsquina)
+    }
     @Test
     fun un_diseno_normal_sigue_saliendo_igual() {
         // Sin pliegues ni panzas, el paquete se escribe como toda la vida: tramos separados por

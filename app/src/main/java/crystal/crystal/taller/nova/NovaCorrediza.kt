@@ -3216,8 +3216,12 @@ class NovaCorrediza : AppCompatActivity() {
             val ancho = dims.getOrNull(0)?.replace(",", ".")?.toFloatOrNull() ?: return
             val alto = dims.getOrNull(1)?.replace(",", ".")?.toFloatOrNull() ?: return
 
-            binding.etAncho.setText(df1(ancho))
-            binding.etAlto.setText(df1(alto))
+            // En una ventana de esquina las medidas de los lados ya están puestas y no se tocan:
+            // ver esDisenoDeEsquina.
+            if (!esDisenoDeEsquina(paqueteSeguro)) {
+                binding.etAncho.setText(df1(ancho))
+                binding.etAlto.setText(df1(alto))
+            }
 
             // Buscar franja sistema para extraer altoHoja y divisiones
             val cuerpoRaw = dentro.substring(idxColon + 1)
@@ -4280,7 +4284,25 @@ class NovaCorrediza : AppCompatActivity() {
      *
      * Devuelve true si la medida traía una esquina y quedó puesta.
      */
+    /**
+     * ¿El diseño que vuelve del editor es una ventana de esquina?
+     *
+     * Si lo es, sus medidas de lado NO se tocan. Dos razones: el ancho de la cabecera de una
+     * ventana de esquina es el del PRIMER lado, no el de la ventana —escribirlo en el campo del
+     * ancho ponía la medida de un lado en el otro, y el lado 2 salía con los 147.5 del lado 1—; y
+     * los anchos que el diseño lleva dentro son los ÚTILES, ya descontados el parante y el
+     * esquinero, mientras que en los campos va lo que se midió. Los descuentos se hacen al
+     * calcular, no en lo que el vidriero tiene escrito.
+     *
+     * Lo que el editor sí trae de vuelta —los módulos, las franjas, los altos— entra por el
+     * camino de siempre, que es el que arma el diseño desigual.
+     */
+    private fun esDisenoDeEsquina(paquete: String): Boolean =
+        runCatching { crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(paquete) }
+            .getOrNull()?.doblaEnEsquina == true
+
     private fun cargarEsquinaDeMedida(texto: String): Boolean {
+
         val medida = EsquinaMedida.desdeTexto(texto) ?: return false
         val geo = medida.geometria ?: return false
         val dibujo = when (geo) {
