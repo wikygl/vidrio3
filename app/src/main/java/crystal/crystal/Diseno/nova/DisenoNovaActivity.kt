@@ -1543,7 +1543,16 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun reconstruirPaqueteConBloques(bloques: List<BloqueTramo>): String {
         val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
         val nParantes = (bloques.size - 1).coerceAtLeast(0)
-        val totalAncho = bloques.sumOf { it.ancho.toDouble() }.toFloat() + nParantes * anchoParanteCm
+        // En una ventana de esquina el ancho de la cabecera NO es la suma de los tramos: cada uno
+        // se mide contra SU pared y el ancho que se apunta es el del primer lado, que es lo que
+        // escribe la calculadora. Sumándolos, la ventana pasaba de medir 150 a medir 427 y el
+        // dibujo se reescalaba entero al aplicar.
+        val compuesta = bloques.any { it.pliegue != null }
+        val totalAncho = if (compuesta) {
+            bloques.firstOrNull()?.ancho ?: anchoCm
+        } else {
+            bloques.sumOf { it.ancho.toDouble() }.toFloat() + nParantes * anchoParanteCm
+        }
         // La silueta del vano no es un tramo, así que al rearmar el paquete desde los bloques se
         // quedaba fuera: editar el alto de una franja devolvía la ventana a un rectángulo.
         val vano = etiquetaVanoActual()
@@ -1635,8 +1644,13 @@ class DisenoNovaActivity : AppCompatActivity() {
         val remainingForAbsorb = (totalUtil - sumChanged - sumLockedNoChanged).coerceAtLeast(0f)
         val totalAbsorb = absorbIdx.sumOf { bloques[it].ancho.toDouble() }.toFloat()
 
+        // En una ventana de esquina los tramos NO se reparten un vano: cada uno se mide contra su
+        // pared y la ventana mide lo que sumen. Repartiéndolos, escribir la medida de un lado
+        // encogía los demás para que cupieran en un ancho que no era de nadie.
+        val compuesta = bloques.any { it.pliegue != null }
         val anchosFinal = (0 until n).map { i ->
             when {
+                compuesta -> nuevosAnchos.getOrElse(i) { bloques[i].ancho }.coerceAtLeast(5f)
                 i in lockedNoChangedIdx -> bloques[i].ancho
                 i in changedIdx -> nuevosAnchos.getOrElse(i) { bloques[i].ancho }.coerceAtLeast(5f)
                 totalAbsorb > 0f -> (bloques[i].ancho / totalAbsorb * remainingForAbsorb).coerceAtLeast(5f)

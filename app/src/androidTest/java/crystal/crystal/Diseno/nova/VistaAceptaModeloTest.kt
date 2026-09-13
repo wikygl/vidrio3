@@ -96,6 +96,13 @@ class VistaAceptaModeloTest {
                 "la curva se enderezó al aplicar: $rearmado",
                 29.3f, tras.tramos[1].flecha, 0.1f
             )
+            // Y sin cambiar de tamaño: en una ventana de esquina cada tramo se mide contra SU
+            // pared, así que el ancho de la ventana es el del primer lado, no la suma de todos.
+            // Sumándolos, la ventana pasaba de 150 a 432 y el dibujo se reescalaba al aplicar.
+            assertEquals("la ventana cambió de ancho al aplicar: $rearmado", 150f, tras.ancho, 0.5f)
+            assertEquals("el primer lado cambió: $rearmado", 150f, tras.tramos[0].ancho, 0.5f)
+            assertEquals("la curva cambió: $rearmado", 157.1f, tras.tramos[1].ancho, 0.5f)
+            assertEquals("el último lado cambió: $rearmado", 120f, tras.tramos[2].ancho, 0.5f)
         }
     }
 
