@@ -913,7 +913,11 @@ class VistaDiseno @JvmOverloads constructor(
         val h = altoCm.coerceAtLeast(1f)
         return if (segmentosNs.isNotEmpty()) {
             segmentosNs.sumOf { seg ->
-                if (seg.tipo == TipoSegmentoNs.PLANO) {
+                if (seg.flechaCm > 0f) {
+                    // La pared curva no ocupa lo que mide: gira, y de un cuarto de vuelta se ve
+                    // 2/π de su desarrollo. Contándola entera, el dibujo se salía por la derecha.
+                    (seg.anchoCm * ANCHO_VISTO_DE_LA_CURVA).toDouble()
+                } else if (seg.tipo == TipoSegmentoNs.PLANO) {
                     seg.anchoCm.toDouble()
                 } else {
                     val w = seg.anchoCm
@@ -1616,7 +1620,13 @@ class VistaDiseno @JvmOverloads constructor(
                     )
                 }
             }
-            when (segmento.tipo) {
+            // Una pared curva se dibuja curva vaya donde vaya: aunque le toque ir en perspectiva,
+            // no es un pliegue —no dobla de golpe, gira— y por el camino de la aleta salía plana.
+            // Su giro ya la pone en perspectiva ella sola.
+            val tipoDeDibujo =
+                if (segmento.flechaCm > 0f) TipoSegmentoNs.PLANO else segmento.tipo
+            when (tipoDeDibujo) {
+
                 TipoSegmentoNs.PLANO -> {
                     val esPrimerPlano = segmentosPlanoInfo.isEmpty()
                     // Una pared que gira en escuadra NO ocupa de frente lo que mide: se va
@@ -1626,7 +1636,13 @@ class VistaDiseno @JvmOverloads constructor(
                     // pared puesta en perspectiva, y el dibujo no se entendía.
                     val curvo = segmento.flechaCm > 0f &&
                         anchoNominalPx > 2f && yAbajoTramo - yArribaTramo > 2f
-                    val haciaLaDerecha = idx < segmentosNs.lastIndex
+                    // Hacia dónde gira: siempre alejándose del paño que va de frente, que es el
+                    // que manda en el dibujo. La curva que está ANTES del frontal viene de canto y
+                    // se abre hacia él; la que está después se va de canto.
+                    val frontal = segmentosNs.indexOfFirst { it.tipo == TipoSegmentoNs.PLANO }
+                    val haciaLaDerecha =
+                        if (frontal >= 0 && idx != frontal) idx > frontal
+                        else idx < segmentosNs.lastIndex
                     // Lo que mide el paño estirado, que es como se dibuja antes de girarlo.
                     val xFinPano = xIni + anchoNominalPx
                     if (curvo) xFin = xIni + anchoNominalPx * ANCHO_VISTO_DE_LA_CURVA

@@ -315,4 +315,25 @@ class VistaAceptaModeloTest {
             assertTrue("el paño corto se puso de frente: $b", !b[1])
         }
     }
+
+    /**
+     * Y un retrato de la ventana que empieza en la curva, con la pared larga de frente.
+     *
+     * La curva queda en perspectiva, pero tiene que seguir viéndose curva: no es un pliegue.
+     */
+    @Test
+    fun retrato_de_la_ventana_que_empieza_en_curva() {
+        val empiezaEnCurva = "{nova,ina,[80,166:Tl<80>(H<166>;Q<10.8>;s(f))" +
+            " A<90> Tl<210>(H<166>;s(fcc))]}"
+        escenario().use { esc ->
+            esperar()
+            en(esc) { it.cargarParaPruebas(empiezaEnCurva) }
+            esperar(300)
+            val bmp = en(esc) { it.dibujoParaPruebas() }
+            val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+            java.io.File(ctx.getExternalFilesDir(null), "nova_empieza_en_curva.png")
+                .outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            assertEquals(2, en(esc) { it.tramosFrontalesParaPruebas() }.size)
+        }
+    }
 }
