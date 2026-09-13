@@ -1612,10 +1612,21 @@ class VistaDiseno @JvmOverloads constructor(
             when (segmento.tipo) {
                 TipoSegmentoNs.PLANO -> {
                     val esPrimerPlano = segmentosPlanoInfo.isEmpty()
+                    // Una pared que gira en escuadra NO ocupa de frente lo que mide: se va
+                    // acortando hasta quedarse de canto. Su desarrollo es lo que se corta; lo que
+                    // se dibuja es su sombra, que de un cuarto de vuelta sale 2/π de lo medido.
+                    // Dibujándola a lo ancho entero, 90 cm de curva ocupaban más que 114 cm de
+                    // pared puesta en perspectiva, y el dibujo no se entendía.
+                    val curvo = segmento.flechaCm > 0f &&
+                        anchoNominalPx > 2f && yAbajoTramo - yArribaTramo > 2f
+                    val haciaLaDerecha = idx < segmentosNs.lastIndex
+                    // Lo que mide el paño estirado, que es como se dibuja antes de girarlo.
+                    val xFinPano = xIni + anchoNominalPx
+                    if (curvo) xFin = xIni + anchoNominalPx * ANCHO_VISTO_DE_LA_CURVA
                     rangosTramoX.add(Pair(xIni, xFin))
                     val segIdx = segmentosPlanoInfo.size
                     segmentosPlanoInfo.add(Triple(xIni, xFin, segmento.franjas))
-                    val anchoVentPx = xFin - xIni
+                    val anchoVentPx = xFinPano - xIni
                     // Con los dos lados distintos el tramo es un cuadrilátero: se recorta el dibujo
                     // con su silueta y las franjas de dentro salen cortadas por la inclinación, que
                     // es lo que hace el vidrio al seguir la forma.
@@ -1628,10 +1639,8 @@ class VistaDiseno @JvmOverloads constructor(
                     // la pared se va de canto. Así el riel, el travesaño de la mocheta, los
                     // parantes y el vidrio giran todos juntos; recortando la silueta, las líneas
                     // de dentro se quedaban rectas y el paño salía partido.
-                    val curvo = segmento.flechaCm > 0f && xFin - xIni > 2f && yAbajoTramo - yArribaTramo > 2f
-                    val haciaLaDerecha = idx < segmentosNs.lastIndex
                     val capa = if (curvo) android.graphics.Bitmap.createBitmap(
-                        (xFin - xIni).toInt().coerceAtLeast(1),
+                        anchoNominalPx.toInt().coerceAtLeast(1),
                         (yAbajoTramo - yArribaTramo).toInt().coerceAtLeast(1),
                         android.graphics.Bitmap.Config.ARGB_8888
                     ) else null
@@ -1653,13 +1662,13 @@ class VistaDiseno @JvmOverloads constructor(
                         canvas.save()
                         canvas.clipPath(recorte)
                     }
-                    lienzo.drawRect(RectF(xIni, yArribaTramo, xFin, yAbajoTramo), pMarco)
+                    lienzo.drawRect(RectF(xIni, yArribaTramo, xFinPano, yAbajoTramo), pMarco)
                     if (modo == ModoEnsamble.APA) {
                         dibujarAPASoloFranja(
                             canvas = lienzo,
                             franjas = segmento.franjas,
                             xIni = xIni,
-                            xFin = xFin,
+                            xFin = xFinPano,
                             yBotTotal = yAbajoTramo,
                             anchoVentPx = anchoVentPx,
                             escalaPxPorCm = escalaLocal,
@@ -1673,7 +1682,7 @@ class VistaDiseno @JvmOverloads constructor(
                             franjas = segmento.franjas,
                             xIni = xIni,
                             yTopTotal = yArribaTramo,
-                            xFin = xFin,
+                            xFin = xFinPano,
                             yBotTotal = yAbajoTramo,
                             anchoVentPx = anchoVentPx,
                             escalaPxPorCm = escalaLocal,
@@ -1780,6 +1789,28 @@ class VistaDiseno @JvmOverloads constructor(
      */
     private val escorzoEnLaPunta = 0.86f
 
+    /**
+     * Qué parte de una pared curva se ve de frente: un cuarto de vuelta se ve 2/π de lo que mide.
+     *
+     * El desarrollo es lo que se corta; esto es lo que ocupa en el papel. Sale de sumar el coseno
+     * del giro a lo largo del arco: al principio la pared está de cara y se ve entera, al final
+     * está de canto y no se ve nada.
+     */
+    private val ANCHO_VISTO_DE_LA_CURVA = (2.0 / Math.PI).toFloat()
+
+    /**
+     * Cuánto se ha visto del paño hasta [u], de 0 a 1, repartido como se ve y no a partes iguales.
+     *
+     * Es la integral del coseno del giro: `sen(u·π/2)`. Los trozos de cerca, todavía de cara, se
+     * llevan casi todo el sitio; los de la punta, ya de canto, se aprietan.
+     */
+    private fun anchoVistoHasta(u: Float, haciaLaDerecha: Boolean): Float {
+        val t = u.coerceIn(0f, 1f)
+        val visto = kotlin.math.sin(t * (Math.PI.toFloat() / 2f))
+        return if (haciaLaDerecha) visto else 1f - kotlin.math.sin((1f - t) * (Math.PI.toFloat() / 2f))
+    }
+
+
     /** Lo que encoge el paño en cada punto, de 1 donde está de frente a [escorzoEnLaPunta]. */
     private fun encogidoDelGiro(t: Float): Float {
         // Cuarto de círculo: al principio apenas gira y al final se va de golpe, que es como se
@@ -1816,10 +1847,13 @@ class VistaDiseno @JvmOverloads constructor(
             if (sx0 >= capa.width) break
             src.set(sx0, 0, sx1, capa.height)
             val t = (u0 + u1) * 0.5f
-            val k = encogidoDelGiro(if (haciaLaDerecha) t else 1f - t)
+            val giro = if (haciaLaDerecha) t else 1f - t
+            val k = encogidoDelGiro(giro)
             dst.set(
-                x0 + (x1 - x0) * u0, centro - medio * k,
-                x0 + (x1 - x0) * u1, centro + medio * k
+                x0 + (x1 - x0) * anchoVistoHasta(u0, haciaLaDerecha),
+                centro - medio * k,
+                x0 + (x1 - x0) * anchoVistoHasta(u1, haciaLaDerecha),
+                centro + medio * k
             )
             canvas.drawBitmap(capa, src, dst, null)
         }
@@ -1838,19 +1872,20 @@ class VistaDiseno @JvmOverloads constructor(
         val pasos = 24
         val alto = (yBottom - yTop).coerceAtLeast(1f)
         val centro = (yTop + yBottom) * 0.5f
-        fun medioAlto(x: Float): Float {
-            val u = ((x - x0) / (x1 - x0).coerceAtLeast(1f)).coerceIn(0f, 1f)
-            return (alto * 0.5f) * encogidoDelGiro(if (haciaLaDerecha) u else 1f - u)
-        }
+        // `u` recorre el paño estirado; lo que se ve de él no va parejo, así que la silueta se
+        // dibuja sobre el mismo reparto con el que se pega.
+        fun px(u: Float): Float = x0 + (x1 - x0) * anchoVistoHasta(u, haciaLaDerecha)
+        fun medioAlto(u: Float): Float =
+            (alto * 0.5f) * encogidoDelGiro(if (haciaLaDerecha) u else 1f - u)
         return android.graphics.Path().apply {
-            moveTo(x0, centro - medioAlto(x0))
+            moveTo(px(0f), centro - medioAlto(0f))
             for (i in 1..pasos) {
-                val x = x0 + (x1 - x0) * i / pasos
-                lineTo(x, centro - medioAlto(x))
+                val u = i / pasos.toFloat()
+                lineTo(px(u), centro - medioAlto(u))
             }
             for (i in pasos downTo 0) {
-                val x = x0 + (x1 - x0) * i / pasos
-                lineTo(x, centro + medioAlto(x))
+                val u = i / pasos.toFloat()
+                lineTo(px(u), centro + medioAlto(u))
             }
             close()
         }
