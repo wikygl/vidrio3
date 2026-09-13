@@ -1623,15 +1623,23 @@ class VistaDiseno @JvmOverloads constructor(
                     // silueta se estrecha hacia la punta donde la pared ya se va de canto, con los
                     // rieles curvados, y de ahí sale la pared siguiente en perspectiva. No es la
                     // panza de `U<>`, que es la ventana curva entera, con sus dos cantos de frente.
-                    val flechaPx = if (segmento.flechaCm > 0f) {
-                        (segmento.flechaCm * escalaLocal)
-                            .coerceIn(1f, (yAbajoTramo - yArribaTramo).coerceAtLeast(4f) * 0.12f)
-                    } else 0f
+                    // El paño que gira no se recorta: se DOBLA entero. Se dibuja aparte, como si
+                    // fuera de frente, y se pega tira a tira encogiendo hacia la punta por donde
+                    // la pared se va de canto. Así el riel, el travesaño de la mocheta, los
+                    // parantes y el vidrio giran todos juntos; recortando la silueta, las líneas
+                    // de dentro se quedaban rectas y el paño salía partido.
+                    val curvo = segmento.flechaCm > 0f && xFin - xIni > 2f && yAbajoTramo - yArribaTramo > 2f
+                    val haciaLaDerecha = idx < segmentosNs.lastIndex
+                    val capa = if (curvo) android.graphics.Bitmap.createBitmap(
+                        (xFin - xIni).toInt().coerceAtLeast(1),
+                        (yAbajoTramo - yArribaTramo).toInt().coerceAtLeast(1),
+                        android.graphics.Bitmap.Config.ARGB_8888
+                    ) else null
+                    val lienzo = if (capa != null) {
+                        Canvas(capa).also { it.translate(-xIni, -yArribaTramo) }
+                    } else canvas
                     val recorte = when {
-                        flechaPx > 0f -> siluetaDeEsquinaCurva(
-                            xIni, xFin, yArribaTramo, yAbajoTramo,
-                            haciaLaDerecha = idx < segmentosNs.lastIndex
-                        )
+                        curvo -> null
                         segmento.esInclinado -> android.graphics.Path().apply {
                             moveTo(xIni, yArribaTramo)
                             lineTo(xFin, yArribaDe(segmento, derecha = true))
@@ -1645,10 +1653,10 @@ class VistaDiseno @JvmOverloads constructor(
                         canvas.save()
                         canvas.clipPath(recorte)
                     }
-                    canvas.drawRect(RectF(xIni, yArribaTramo, xFin, yAbajoTramo), pMarco)
+                    lienzo.drawRect(RectF(xIni, yArribaTramo, xFin, yAbajoTramo), pMarco)
                     if (modo == ModoEnsamble.APA) {
                         dibujarAPASoloFranja(
-                            canvas = canvas,
+                            canvas = lienzo,
                             franjas = segmento.franjas,
                             xIni = xIni,
                             xFin = xFin,
@@ -1661,7 +1669,7 @@ class VistaDiseno @JvmOverloads constructor(
                         )
                     } else {
                         dibujarINASoloFranja(
-                            canvas = canvas,
+                            canvas = lienzo,
                             franjas = segmento.franjas,
                             xIni = xIni,
                             yTopTotal = yArribaTramo,
@@ -1679,6 +1687,12 @@ class VistaDiseno @JvmOverloads constructor(
                         // El contorno del cuadrilátero se dibuja fuera del recorte para que se vea
                         // entero, incluida la línea inclinada.
                         canvas.drawPath(recorte, pMarco)
+                    }
+                    if (capa != null) {
+                        pegarPanoQueGira(
+                            canvas, capa, xIni, xFin, yArribaTramo, yAbajoTramo, haciaLaDerecha
+                        )
+                        capa.recycle()
                     }
                     ultimaVentanaX0 = xIni
                     ultimaVentanaX1 = xFin
@@ -1758,7 +1772,63 @@ class VistaDiseno @JvmOverloads constructor(
      * curva mirada desde la altura de los ojos —el mismo criterio que el curvo de toda la
      * ventana—.
      */
+    /**
+     * Cuánto queda del alto en la punta del paño que gira, donde la pared ya se va de canto.
+     *
+     * Es el escorzo con el que arranca una aleta, para que la curva le entregue el paño sin un
+     * salto entre las dos.
+     */
+    private val escorzoEnLaPunta = 0.86f
+
+    /** Lo que encoge el paño en cada punto, de 1 donde está de frente a [escorzoEnLaPunta]. */
+    private fun encogidoDelGiro(t: Float): Float {
+        // Cuarto de círculo: al principio apenas gira y al final se va de golpe, que es como se
+        // escorza una esquina redondeada.
+        val giro = 1f - kotlin.math.cos(t.coerceIn(0f, 1f) * (Math.PI.toFloat() / 2f))
+        return 1f - (1f - escorzoEnLaPunta) * giro
+    }
+
+    /**
+     * Pega el paño de una pared curva doblado: tira a tira, cada una encogida lo que le toca.
+     *
+     * Se dibuja de frente en su propia capa y se pega girando, así que todo lo que lleva dentro
+     * —rieles, travesaños, parantes y vidrio— gira con él.
+     */
+    private fun pegarPanoQueGira(
+        canvas: Canvas,
+        capa: android.graphics.Bitmap,
+        x0: Float,
+        x1: Float,
+        yTop: Float,
+        yBottom: Float,
+        haciaLaDerecha: Boolean
+    ) {
+        val tiras = 120
+        val centro = (yTop + yBottom) * 0.5f
+        val medio = (yBottom - yTop) * 0.5f
+        val src = android.graphics.Rect()
+        val dst = RectF()
+        for (i in 0 until tiras) {
+            val u0 = i / tiras.toFloat()
+            val u1 = (i + 1) / tiras.toFloat()
+            val sx0 = (capa.width * u0).toInt()
+            val sx1 = (capa.width * u1).toInt().coerceAtLeast(sx0 + 1).coerceAtMost(capa.width)
+            if (sx0 >= capa.width) break
+            src.set(sx0, 0, sx1, capa.height)
+            val t = (u0 + u1) * 0.5f
+            val k = encogidoDelGiro(if (haciaLaDerecha) t else 1f - t)
+            dst.set(
+                x0 + (x1 - x0) * u0, centro - medio * k,
+                x0 + (x1 - x0) * u1, centro + medio * k
+            )
+            canvas.drawBitmap(capa, src, dst, null)
+        }
+        // Y el contorno encima, para que los rieles curvados se lean limpios.
+        canvas.drawPath(siluetaDeEsquinaCurva(x0, x1, yTop, yBottom, haciaLaDerecha), pMarco)
+    }
+
     private fun siluetaDeEsquinaCurva(
+
         x0: Float,
         x1: Float,
         yTop: Float,
@@ -1768,17 +1838,9 @@ class VistaDiseno @JvmOverloads constructor(
         val pasos = 24
         val alto = (yBottom - yTop).coerceAtLeast(1f)
         val centro = (yTop + yBottom) * 0.5f
-        // Cuánto queda del alto en la punta donde la pared ya está de canto. El mismo escorzo con
-        // el que se dibuja una aleta, para que la curva entregue el paño a la pared siguiente sin
-        // un salto.
-        val enLaPunta = 0.72f
         fun medioAlto(x: Float): Float {
             val u = ((x - x0) / (x1 - x0).coerceAtLeast(1f)).coerceIn(0f, 1f)
-            val t = if (haciaLaDerecha) u else 1f - u
-            // Cuarto de círculo: al principio apenas gira y al final se va de golpe, que es como
-            // se escorza una esquina redondeada.
-            val giro = 1f - kotlin.math.cos(t * (Math.PI.toFloat() / 2f))
-            return (alto * 0.5f) * (1f - (1f - enLaPunta) * giro)
+            return (alto * 0.5f) * encogidoDelGiro(if (haciaLaDerecha) u else 1f - u)
         }
         return android.graphics.Path().apply {
             moveTo(x0, centro - medioAlto(x0))
