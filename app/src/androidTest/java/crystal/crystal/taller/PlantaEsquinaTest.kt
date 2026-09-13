@@ -498,4 +498,26 @@ class PlantaEsquinaTest {
         assertEquals(220f, vuelta.lados[1].ancho, 0.1f)
         assertTrue("la pared recta volvió curvada", !vuelta.lados[1].esCurva)
     }
+
+    /**
+     * Un tramo nuevo nace en ángulo, aunque la esquina de al lado sea curva.
+     *
+     * La esquina nueva heredaba la etiqueta de la última, así que detrás de una curva salía otra
+     * curva sin que nadie la pidiera. El vidriero la curva después si le toca.
+     */
+    @Test
+    fun el_tramo_nuevo_nace_en_angulo_aunque_venga_de_una_curva() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 120f)
+        v.curvarEsquinaParaPruebas(0, 157.1f, 141.4f)
+        assertTrue("la esquina no quedó curva", v.esquinaPrincipalEnCm()!!.hayCurva)
+
+        v.cambiarTramosParaPruebas(1)
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no entró la pared nueva", 3, medida.lados.size)
+        assertEquals("no hay dos esquinas", 2, medida.angulos.size)
+        assertTrue("la primera esquina dejó de ser curva", medida.curvaDe(0) != null)
+        assertNull("la esquina nueva salió curva", medida.curvaDe(1))
+        assertEquals("la esquina nueva no salió en escuadra", 90f, medida.gradosDe(1)!!, 0.5f)
+    }
 }

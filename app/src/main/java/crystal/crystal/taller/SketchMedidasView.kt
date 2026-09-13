@@ -3151,8 +3151,13 @@ class SketchMedidasView @JvmOverloads constructor(
             val arriba = marco.topRight.x
             elementos.add(crearShape(Tool.LINE, PointF(arriba, marco.topRight.y), PointF(abajo, marco.bottomRight.y), ESQUINA_QUIEBRE))
             elementos.add(crearShape(Tool.LINE, PointF(abajo, marco.bottomRight.y), PointF(abajo, marco.topRight.y), VENTANA_ALTO_ESQUINA))
-            val anguloPrevio = etiquetasEsquina(marcoIndex).lastOrNull()
-                ?.let { (elementos[it] as Element.TextLabel).text }
+            // Una esquina nueva nace SIEMPRE en punta: hereda los grados de la última que doble
+            // así, y si no hay ninguna empieza por la escuadra. Heredando la etiqueta tal cual, al
+            // añadir un tramo detrás de una esquina curva el tramo nuevo salía redondeado sin que
+            // nadie lo hubiera pedido; el vidriero lo curva después si quiere.
+            val anguloPrevio = etiquetasEsquina(marcoIndex)
+                .map { (elementos[it] as Element.TextLabel).text }
+                .lastOrNull { !it.contains(MARCA_CURVA) }
                 ?: textoEsquina(90f)
             elementos.add(
                 Element.TextLabel(
@@ -3645,6 +3650,14 @@ class SketchMedidasView @JvmOverloads constructor(
         val arriba = puntosArriba(marco)
         if (tramo + 1 >= bordes.size || tramo + 1 >= arriba.size) return null
         return pxToCm(bordes[tramo + 1] - bordes[tramo]) to pxToCm(arriba[tramo + 1].x - arriba[tramo].x)
+    }
+
+    /** Añade o quita un tramo, como el contador "N° de tramos" de la pantalla. */
+    @androidx.annotation.VisibleForTesting
+    fun cambiarTramosParaPruebas(delta: Int) {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+        val etiqueta = etiquetaDelMarco(marco, ROL_TRAMOS) ?: return
+        cambiarTramos(etiqueta, delta)
     }
 
     /** Pone una esquina curva en esa arista, con su desarrollo y su cuerda. */
