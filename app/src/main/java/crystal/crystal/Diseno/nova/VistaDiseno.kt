@@ -47,7 +47,14 @@ data class SegmentoNs(
      * Es la pared curva de una esquina: un paño más entre paños rectos, al revés que el arco de
      * `U<>`, que curva la ventana entera.
      */
-    val flechaCm: Float = 0f
+    val flechaCm: Float = 0f,
+    /**
+     * Los grados del pliegue que trae este paño: `A<90>` es la escuadra, 180 es seguir recto.
+     *
+     * Se dibujaban todos igual, con 90 escrito a mano, así que una ventana con esquinas de 54° y
+     * de 135° salía toda con el mismo quiebre y los ángulos no se distinguían.
+     */
+    val anguloGrados: Float = 90f
 ) {
     val altoDerecho: Float get() = altoDerCm ?: altoCm
     val caidaDerecha: Float get() = caidaDerCm ?: caidaCm
@@ -762,14 +769,25 @@ class VistaDiseno @JvmOverloads constructor(
         val elementos = splitTopLevelElementos(cuerpo)
 
         // Extraer todos los bloques T<> con su tipo de segmento y contenido
-        data class BloqueT(val tipo: TipoSegmentoNs, val ancho: Float, val contenido: String)
+        data class BloqueT(
+            val tipo: TipoSegmentoNs,
+            val ancho: Float,
+            val contenido: String,
+            val angulo: Float = 90f
+        )
         val bloques = mutableListOf<BloqueT>()
         var tipoSig = TipoSegmentoNs.PLANO
+        var anguloSig = 90f
 
         for (elem in elementos) {
             val low = elem.lowercase()
             when {
-                low.startsWith("a<") -> tipoSig = TipoSegmentoNs.ALETA
+                low.startsWith("a<") -> {
+                    tipoSig = TipoSegmentoNs.ALETA
+                    val grados = low.substringAfter("<").substringBefore(">")
+                        .replace(",", ".").toFloatOrNull()
+                    anguloSig = if (grados != null) kotlin.math.abs(grados) else 90f
+                }
                 low.startsWith("p<") -> tipoSig = TipoSegmentoNs.PLANO
                 low.startsWith("t")  -> {
                     val anchoStr = low.substringAfter("<").substringBefore(">")
@@ -786,8 +804,9 @@ class VistaDiseno @JvmOverloads constructor(
                         }
                         elem.substring(openParen + 1, closeParen)
                     } else ""
-                    bloques.add(BloqueT(tipoSig, anchoTramo.coerceAtLeast(1f), contenido))
+                    bloques.add(BloqueT(tipoSig, anchoTramo.coerceAtLeast(1f), contenido, anguloSig))
                     tipoSig = TipoSegmentoNs.PLANO
+                    anguloSig = 90f
                 }
             }
         }
@@ -862,7 +881,8 @@ class VistaDiseno @JvmOverloads constructor(
                     bloque.tipo, bloque.ancho, franjas,
                     altoCm = medidaIzq(altoTramo), caidaCm = medidaIzq(caidaTramo),
                     altoDerCm = medidaDer(altoTramo), caidaDerCm = medidaDer(caidaTramo),
-                    flechaCm = flecha
+                    flechaCm = flecha,
+                    anguloGrados = bloque.angulo
                 )
             )
             if (primerFranjas.isEmpty()) primerFranjas = franjas
@@ -931,7 +951,11 @@ class VistaDiseno @JvmOverloads constructor(
                     seg.anchoCm.toDouble()
                 } else {
                     val w = seg.anchoCm
-                    val z = (w * 0.95f).coerceAtMost(h * 0.5f)  // mismo cap que calcularAletaPerspectiva
+                    // Con el MISMO factor que la perspectiva: cuanto más dobla la esquina, menos
+                    // se ve de esa pared. Sin él, el sitio reservado no era el que ocupaba.
+                    val giro = (180f - kotlin.math.abs(seg.anguloGrados)).coerceIn(0f, 170f)
+                    val factor = (giro / 90f).coerceIn(0.06f, 1.6f)
+                    val z = (w * 0.95f).coerceAtMost(h * 0.5f) * factor
                     val focal = h * 2.2f
                     (1.35f * z * w / (z + focal)).toDouble()
                 }
@@ -1751,23 +1775,6 @@ class VistaDiseno @JvmOverloads constructor(
                     val ladoAleta = if (esAletaIzq) LadoAleta.IZQ else LadoAleta.DER
                     // Para IZQ: xUnion = xIni + ancho visual efectivo (igual que el borde exterior DER).
                     // Así el trapecio ocupa [xIni, xUnion] sin espacio vacío a la izquierda.
-                    val xUnionAleta = if (esAletaIzq) {
-                        val alturaActual = (yBottomPlanoActual - yTopPlanoActual).coerceAtLeast(1f)
-                        // Mismo cap que calcularAletaPerspectiva para que xUnion coincida
-                        // exactamente con el exterior del trapecio → sin espacio vacío a la izquierda
-                        val zPxEst = (anchoNominalPx * 0.95f).coerceAtMost(alturaActual * 0.5f)
-                        val focalEst = (alturaActual * 2.2f).coerceIn(320f, 2200f)
-                        val kEst = zPxEst / (zPxEst + focalEst)
-                        xIni + (1.35f * anchoNominalPx * kEst).coerceAtLeast(1f)
-                    } else xIni
-                    // Detrás de una pared curva, la aleta arranca DONDE LA CURVA DEJÓ EL PAÑO. La
-                    // curva entrega su canto ya girado, más alto que el frente; recogiéndolo a la
-                    // altura del frente quedaba un escalón y la pared parecía metida detrás de la
-                    // curva en vez de seguirla.
-                    // La curva entrega (y recoge) su canto ya girado, más alto que el frente. La
-                    // pared que se pega a ella tiene que arrancar a esa altura, venga la curva
-                    // detrás o delante: si no, en la unión quedaba un escalón del 16% y esa pared
-                    // con su curva parecían otra ventana pegada a un lado.
                     val siguiente = segmentosNs.getOrNull(idx + 1)?.flechaCm ?: 0f
                     val anterior = segmentosNs.getOrNull(idx - 1)?.flechaCm ?: 0f
                     val vieneDeCurva = anterior > 0f || (esAletaIzq && siguiente > 0f)
@@ -1776,12 +1783,36 @@ class VistaDiseno @JvmOverloads constructor(
                         (if (vieneDeCurva) altoEnLaPunta else 1f)
                     val yTopAleta = centroAleta - medioAleta
                     val yBottomAleta = centroAleta + medioAleta
+                    val xUnionAleta = if (esAletaIzq) {
+                        // Con la MISMA altura con la que se dibuja la aleta: midiéndolo con la de
+                        // la ventana, la aleta pegada a una curva —que arranca más alta— acababa
+                        // en otro sitio del que decía su trapecio y quedaba un corte a la vista.
+                        val alturaActual = (yBottomAleta - yTopAleta).coerceAtLeast(1f)
+                        // Mismo cap que calcularAletaPerspectiva para que xUnion coincida
+                        // exactamente con el exterior del trapecio → sin espacio vacío a la izquierda
+                        val giroEst = (180f - kotlin.math.abs(segmento.anguloGrados))
+                            .coerceIn(0f, 170f)
+                        val factorEst = (giroEst / 90f).coerceIn(0.06f, 1.6f)
+                        val zPxEst = (anchoNominalPx * 0.95f)
+                            .coerceAtMost(alturaActual * 0.5f) * factorEst
+                        val focalEst = (alturaActual * 2.2f).coerceIn(320f, 2200f)
+                        val kEst = zPxEst / (zPxEst + focalEst)
+                        xIni + (1.35f * anchoNominalPx * kEst).coerceAtLeast(1f)
+                    } else xIni
+                    // Detrás de una pared curva, la aleta arranca DONDE LA CURVA DEJÓ EL PAÑO. La
+                    // curva entrega su canto ya girado, más alto que el frente; recogiéndolo a la
+                    // altura del frente quedaba un escalón y la pared parecía metida detrás de la
+                    // curva en vez de seguirla.
+                    // La curva entrega (y recoge) su canto ya girado, más alto que el frente: la
+                    // pared que se pega a ella arranca a esa altura, venga la curva detrás o
+                    // delante. Se calcula arriba, junto al xUnion, que lo necesita.
                     val perspectiva = calcularAletaPerspectiva(
                         lado = ladoAleta,
                         xUnion = xUnionAleta,
                         yTop = yTopAleta,
                         yBottom = yBottomAleta,
-                        anchoAletaPx = anchoNominalPx
+                        anchoAletaPx = anchoNominalPx,
+                        anguloGrados = segmento.anguloGrados
                     )
                     if (modo == ModoEnsamble.APA) {
                         dibujarAletaPerspectivaAPA(
@@ -1792,7 +1823,8 @@ class VistaDiseno @JvmOverloads constructor(
                             yTop = yTopAleta,
                             yBottom = yBottomAleta,
                             anchoAletaPx = anchoNominalPx,
-                            escalaPxPorCm = escalaLocal
+                            escalaPxPorCm = escalaLocal,
+                            anguloGrados = segmento.anguloGrados
                         )
                     } else {
                         dibujarAletaPerspectivaINA(
@@ -1803,7 +1835,8 @@ class VistaDiseno @JvmOverloads constructor(
                             yTop = yTopAleta,
                             yBottom = yBottomAleta,
                             anchoAletaPx = anchoNominalPx,
-                            escalaPxPorCm = escalaLocal
+                            escalaPxPorCm = escalaLocal,
+                            anguloGrados = segmento.anguloGrados
                         )
                     }
                     if (esAletaIzq) {
@@ -2414,7 +2447,8 @@ class VistaDiseno @JvmOverloads constructor(
         yTop: Float,
         yBottom: Float,
         anchoAletaPx: Float,
-        escalaPxPorCm: Float
+        escalaPxPorCm: Float,
+        anguloGrados: Float = 90f
     ) {
         if (franjas.isEmpty()) return
         val perspectiva = calcularAletaPerspectiva(
@@ -2422,7 +2456,8 @@ class VistaDiseno @JvmOverloads constructor(
             xUnion = xUnion,
             yTop = yTop,
             yBottom = yBottom,
-            anchoAletaPx = anchoAletaPx
+            anchoAletaPx = anchoAletaPx,
+            anguloGrados = anguloGrados
         )
         dibujarQuad(
             canvas = canvas,
@@ -2521,7 +2556,8 @@ class VistaDiseno @JvmOverloads constructor(
         yTop: Float,
         yBottom: Float,
         anchoAletaPx: Float,
-        escalaPxPorCm: Float
+        escalaPxPorCm: Float,
+        anguloGrados: Float = 90f
     ) {
         if (franjas.isEmpty()) return
         val idxS = franjas.indexOfFirst { it.tipo == TipoFranja.SISTEMA }
@@ -2535,7 +2571,8 @@ class VistaDiseno @JvmOverloads constructor(
             xUnion = xUnion,
             yTop = yTop,
             yBottom = yBottom,
-            anchoAletaPx = anchoAletaPx
+            anchoAletaPx = anchoAletaPx,
+            anguloGrados = anguloGrados
         )
 
         dibujarQuad(
@@ -2618,14 +2655,22 @@ class VistaDiseno @JvmOverloads constructor(
         xUnion: Float,
         yTop: Float,
         yBottom: Float,
-        anchoAletaPx: Float
+        anchoAletaPx: Float,
+        anguloGrados: Float = 90f
     ): AletaPerspectiva {
-        val anguloFijo = 90f
-        val factorProfundidad = (anguloFijo / 90f).coerceAtLeast(0.2f)
+        // Cuánto se va de cara la pared: lo que gira en la esquina es lo que le FALTA al ángulo
+        // para seguir recto. 180° no dobla nada y se ve de frente; 90° se pone de canto; por
+        // debajo de 90 se dobla hacia atrás y se ve todavía menos. Antes iba 90 escrito a mano,
+        // así que una ventana con esquinas de 54° y de 135° salía toda con el mismo quiebre.
+        val giro = (180f - kotlin.math.abs(anguloGrados)).coerceIn(0f, 170f)
+        val factorProfundidad: Float = (giro / 90f).coerceIn(0.06f, 1.6f)
         val alturaPanel = (yBottom - yTop).coerceAtLeast(1f)
         // Cap: garantiza que la aleta siempre aparezca claramente en perspectiva
         // sin importar que tan ancha sea. k_max ≈ 0.185 → fracción visual ≤ 25%.
-        val zPx = (anchoAletaPx * factorProfundidad * 0.95f).coerceAtMost(alturaPanel * 0.5f)
+        // El tope es del alto del paño —para que el ala siempre se vea, mida lo que mida la
+        // pared—, y el giro se aplica DESPUÉS: aplicándolo antes, el tope se comía la diferencia y
+        // una esquina de 90° y otra de 54° salían exactamente iguales.
+        val zPx = (anchoAletaPx * 0.95f).coerceAtMost(alturaPanel * 0.5f) * factorProfundidad
         val xVp = if (lado == LadoAleta.IZQ) {
             xUnion - (anchoAletaPx * 1.35f)
         } else {
@@ -3827,7 +3872,11 @@ class VistaDiseno @JvmOverloads constructor(
 
     /** Cuántos segmentos multi-tramo ve el dibujo, y el modelo que le llegó. */
     @androidx.annotation.VisibleForTesting
+    /** Lo que el dibujo ocupa de ancho, en cm: con las aletas contadas por lo que se ven. */
+    fun anchoDibujadoParaPruebas(): Float = anchoEfectivoCm()
+
     /** Cuál de los paños se dibuja de frente y cuáles en perspectiva. */
+
     fun tramosFrontalesParaPruebas(): List<Boolean> =
         segmentosNs.map { it.tipo == TipoSegmentoNs.PLANO }
 

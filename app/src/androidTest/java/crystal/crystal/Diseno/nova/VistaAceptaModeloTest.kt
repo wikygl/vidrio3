@@ -403,4 +403,39 @@ class VistaAceptaModeloTest {
             assertEquals("240", en(esc) { it.anchoDeVentanaDelPanelParaPruebas() })
         }
     }
+
+    /**
+     * Los ángulos se ven: cada esquina dobla lo suyo.
+     *
+     * Se dibujaban todos igual, con 90 escrito a mano en la perspectiva, así que una ventana con
+     * esquinas de 54° y de 135° salía toda con el mismo quiebre y parecía casi plana.
+     *
+     * El ala de una pared doblada no es su proyección —una esquina de 90° proyectaría cero y no se
+     * vería—: es un ala en perspectiva, y en este dibujo cuanto MÁS dobla la esquina más hundida
+     * va y más ala se ve. Así que 54° enseña más que 90°, y 90° más que 135°.
+     */
+    @Test
+    fun cada_angulo_dobla_lo_suyo() {
+        fun conAngulo(grados: String) = "{nova,ina,[200,160:Tl<200>(H<160>;s(fcc))" +
+            " A<$grados> Tl<120>(H<160>;s(fc))]}"
+        escenario().use { esc ->
+            esperar()
+            val anchos = mutableMapOf<String, Float>()
+            for (grados in listOf("135", "90", "54")) {
+                en(esc) { it.cargarParaPruebas(conAngulo(grados)) }
+                esperar(300)
+                // La pared de frente mide siempre 200, así que lo que le sobra al ancho del
+                // dibujo es lo que se ve de la aleta.
+                anchos[grados] = en(esc) { it.anchoDibujadoParaPruebas() } - 200f
+            }
+            assertTrue(
+                "la esquina de 135° no enseña menos ala que la de 90°: $anchos",
+                anchos["135"]!! < anchos["90"]!! * 0.8f
+            )
+            assertTrue(
+                "la esquina de 54° no enseña más ala que la de 90°: $anchos",
+                anchos["54"]!! > anchos["90"]!! * 1.2f
+            )
+        }
+    }
 }
