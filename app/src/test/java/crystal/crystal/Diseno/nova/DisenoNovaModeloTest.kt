@@ -71,12 +71,16 @@ class DisenoNovaModeloTest {
     }
 
     @Test
-    fun `las etiquetas sueltas se conservan`() {
+    fun `el pliegue se queda con la pared que dobla`() {
         val conGiro = "{nova,apa,[300,200:Tl<148.7>(s<150>(f<74.3>c<74.3>)) A<90> Tl<148.7>(s<150>(f<74.3>c<74.3>))]}"
         val d = DisenoNova.desdePaquete(conGiro)
         assertNotNull(d); d!!
         assertEquals(2, d.nTramos)
-        assertEquals(listOf("A<90>"), d.etiquetas)
+        // El pliegue NO es una etiqueta del conjunto: es un sitio, dice entre qué dos paredes
+        // dobla la ventana. Guardado en la lista suelta se reescribía al final del paquete, o
+        // sea en ninguna parte, y la ventana en L salía rectangular en cuanto se editaba.
+        assertEquals(emptyList<String>(), d.etiquetas)
+        assertEquals("A<90>", d.tramos[1].pliegue)
     }
 
     @Test

@@ -66,7 +66,17 @@ data class NovaTramo(
     val alto: Float = 0f,
     val caida: Float = 0f,
     val altoDer: Float? = null,
-    val caidaDer: Float? = null
+    val caidaDer: Float? = null,
+    /**
+     * El pliegue que hay DELANTE de este tramo: `A<90>` cuando la ventana dobla aquí.
+     *
+     * Va en el tramo y no en la lista suelta de etiquetas porque un pliegue es un SITIO: dice
+     * entre qué dos paredes dobla. Guardándolo aparte, al reescribir el diseño todos los `A<>`
+     * acababan juntos al final del paquete y la ventana en L volvía a salir rectangular.
+     */
+    val pliegue: String? = null,
+    /** Su panza, si es la pared curva de una esquina: `Q<29.3>`. 0 = pared recta. */
+    val flecha: Float = 0f
 ) {
     val sistema: NovaFranja? get() = franjas.firstOrNull { it.esSistema }
     val mochetas: List<NovaFranja> get() = franjas.filter { !it.esSistema }
@@ -263,7 +273,11 @@ data class DisenoNova(
                 alto = tramo.alto,
                 caida = tramo.caida,
                 altoDer = tramo.altoDer,
-                caidaDer = tramo.caidaDer
+                caidaDer = tramo.caidaDer,
+                // Repartir anchos no endereza la ventana ni estira la curva: el pliegue y la
+                // panza son de la pared, no del reparto.
+                pliegue = tramo.pliegue,
+                flecha = tramo.flecha
             )
         })
     }
@@ -301,10 +315,18 @@ data class DisenoNova(
         val t = if (nSistema > 0) corte / nSistema.toFloat() else 0.5f
         val altoMedio = tramo.alto + (tramo.altoDerecho - tramo.alto) * t
         val caidaMedia = tramo.caida + (tramo.caidaDerecha - tramo.caida) * t
-        nuevos[indice] = NovaTramo(tramo.ancho, izq, tramo.alto, tramo.caida, altoMedio, caidaMedia)
+        // Partir una pared deja dos: el pliegue queda delante de la primera —es donde dobla la
+        // ventana— y si era curva las dos mitades siguen siéndolo.
+        nuevos[indice] = NovaTramo(
+            tramo.ancho, izq, tramo.alto, tramo.caida, altoMedio, caidaMedia,
+            pliegue = tramo.pliegue, flecha = tramo.flecha
+        )
         nuevos.add(
             indice + 1,
-            NovaTramo(tramo.ancho, der, altoMedio, caidaMedia, tramo.altoDer, tramo.caidaDer)
+            NovaTramo(
+                tramo.ancho, der, altoMedio, caidaMedia, tramo.altoDer, tramo.caidaDer,
+                pliegue = null, flecha = tramo.flecha
+            )
         )
         return copy(tramos = nuevos).conAnchosRepartidos()
     }
@@ -340,7 +362,12 @@ data class DisenoNova(
         nuevos[indice] = NovaTramo(
             a.ancho + b.ancho, franjas, altoUnido, caidaUnida,
             // El cuadrilátero unido va del lado izquierdo del primero al derecho del segundo.
-            altoDer = b.altoDer, caidaDer = b.caidaDer
+            altoDer = b.altoDer, caidaDer = b.caidaDer,
+            // El pliegue de delante sigue siendo el del primero; el de en medio se va con el
+            // parante, que es justo lo que se está quitando. Y si alguna era curva, lo sigue
+            // siendo la pared unida.
+            pliegue = a.pliegue,
+            flecha = if (a.flecha > 0f) a.flecha else b.flecha
         )
         nuevos.removeAt(indice + 1)
         return copy(tramos = nuevos).conAnchosRepartidos()
@@ -580,34 +607,48 @@ data class DisenoNova(
     }
 
     fun aPaquete(): String {
-        val cuerpo = tramos.joinToString(" $SEPARADOR_TRAMO ") { tramo ->
-            val franjas = tramo.franjas.joinToString(";") { fr ->
-                val cabeza = if (fr.esSistema) "s" else "m"
-                val mods = fr.modulos.joinToString("") { m ->
-                    if (m.ancho != null) "${m.tipo}<${df(m.ancho)}>" else m.tipo.toString()
-                }
-                // Una franja sin altura se escribe sin `<alto>`, como venía.
-                if (fr.alto > 0f) "$cabeza<${df(fr.alto)}>($mods)" else "$cabeza($mods)"
+        val cuerpo = tramos.mapIndexed { indice, tramo ->
+            // Lo que va DELANTE del tramo: su pliegue si dobla ahí, y si no el separador de
+            // siempre. El primero solo lleva algo si la ventana arranca doblando.
+            val delante = when {
+                tramo.pliegue != null -> "${tramo.pliegue} "
+                indice == 0 -> ""
+                else -> "$SEPARADOR_TRAMO "
             }
-            // El alto propio del tramo va como tag `H<…>` dentro, delante de las franjas: los
-            // parsers viejos parten por `;` y solo miran los tokens que empiezan por s o m, así
-            // que lo ignoran sin romperse. Con los dos lados distintos van las dos medidas
-            // separadas por coma: `H<160,106.2>` es izquierda y derecha.
-            val cabezaAlto = when {
-                tramo.alto <= 0f && tramo.altoDerecho <= 0f -> ""
-                tramo.esInclinado -> "H<${df(tramo.alto)},${df(tramo.altoDerecho)}>;"
-                else -> "H<${df(tramo.alto)}>;"
-            }
-            // Y lo que baja su dintel, si baja: el escalón de arriba.
-            val cabezaCaida = when {
-                tramo.caida <= 0f && tramo.caidaDerecha <= 0f -> ""
-                tramo.esInclinado -> "D<${df(tramo.caida)},${df(tramo.caidaDerecha)}>;"
-                else -> "D<${df(tramo.caida)}>;"
-            }
-            "Tl<${df(tramo.ancho)}>($cabezaAlto$cabezaCaida$franjas)"
-        }
+            delante + unTramo(tramo)
+        }.joinToString(" ")
         val tags = if (etiquetas.isEmpty()) "" else " " + etiquetas.joinToString(" ")
         return "{nova,$acabado,[${df(ancho)},${df(alto)}:$cuerpo$tags]}"
+    }
+
+    /** Un tramo escrito: su ancho y, dentro, sus tags y sus franjas. */
+    private fun unTramo(tramo: NovaTramo): String {
+        val franjas = tramo.franjas.joinToString(";") { fr ->
+            val cabeza = if (fr.esSistema) "s" else "m"
+            val mods = fr.modulos.joinToString("") { m ->
+                if (m.ancho != null) "${m.tipo}<${df(m.ancho)}>" else m.tipo.toString()
+            }
+            // Una franja sin altura se escribe sin `<alto>`, como venía.
+            if (fr.alto > 0f) "$cabeza<${df(fr.alto)}>($mods)" else "$cabeza($mods)"
+        }
+        // El alto propio del tramo va como tag `H<…>` dentro, delante de las franjas: los
+        // parsers viejos parten por `;` y solo miran los tokens que empiezan por s o m, así
+        // que lo ignoran sin romperse. Con los dos lados distintos van las dos medidas
+        // separadas por coma: `H<160,106.2>` es izquierda y derecha.
+        val cabezaAlto = when {
+            tramo.alto <= 0f && tramo.altoDerecho <= 0f -> ""
+            tramo.esInclinado -> "H<${df(tramo.alto)},${df(tramo.altoDerecho)}>;"
+            else -> "H<${df(tramo.alto)}>;"
+        }
+        // Y lo que baja su dintel, si baja: el escalón de arriba.
+        val cabezaCaida = when {
+            tramo.caida <= 0f && tramo.caidaDerecha <= 0f -> ""
+            tramo.esInclinado -> "D<${df(tramo.caida)},${df(tramo.caidaDerecha)}>;"
+            else -> "D<${df(tramo.caida)}>;"
+        }
+        // Y su panza, si es la pared curva de una esquina.
+        val cabezaCurva = if (tramo.flecha > 0f) "Q<${df(tramo.flecha)}>;" else ""
+        return "Tl<${df(tramo.ancho)}>($cabezaAlto$cabezaCaida$cabezaCurva$franjas)"
     }
 
     companion object {
@@ -629,7 +670,14 @@ data class DisenoNova(
         private val RE_FRANJA = Regex("""^([smSM])\s*(?:<\s*([\d.,-]+)\s*>)?\s*\(""")
         private val RE_MODULO = Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>)?""")
         private val RE_TRAMO = Regex("""^t[a-z]?\s*<\s*([\d.,-]+)\s*>""", RegexOption.IGNORE_CASE)
-        private val RE_ETIQUETA = Regex("""^[AUO]<[^>]*>$""", RegexOption.IGNORE_CASE)
+        private val RE_ETIQUETA = Regex("""^[UO]<[^>]*>$""", RegexOption.IGNORE_CASE)
+        /** El pliegue que va delante de un tramo: `A<90>`. */
+        private val RE_PLIEGUE = Regex("""^[aA]<[^>]*>$""")
+        /** Lo que arranca un trozo nuevo: la cabeza de un tramo o un tag suelto. */
+        private val RE_ARRANQUE = Regex("""^(?:t[a-z]?<|[auo]<)""", RegexOption.IGNORE_CASE)
+        /** La panza de un tramo curvo: `Q<29.3>`, esté como tag de cabecera o pegada al sistema. */
+        private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*([\d.,]+)\s*>""")
+
 
         /**
          * El contorno del vano, `V<…>`, esté donde esté del cuerpo.
@@ -728,6 +776,7 @@ data class DisenoNova(
 
             val tramos = mutableListOf<NovaTramo>()
             val etiquetas = mutableListOf<String>()
+            var pliegue: String? = null
             // El contorno del vano se saca antes de partir: no es un tramo ni una franja, y puede
             // venir pegado al último tramo si alguien quitó los espacios por el camino.
             var cuerpo = dentro.substring(idx + 1)
@@ -738,6 +787,10 @@ data class DisenoNova(
             for (trozo in partirPorTramos(cuerpo)) {
                 val t = trozo.trim()
                 if (t.isEmpty()) continue
+                // El pliegue no es una etiqueta suelta: es un SITIO, dice entre qué dos paredes
+                // dobla la ventana. Se guarda para el tramo que viene detrás; las demás etiquetas
+                // (el arco de toda la ventana, el círculo, el vano) sí valen para el conjunto.
+                if (RE_PLIEGUE.matches(t)) { pliegue = t; continue }
                 if (RE_ETIQUETA.matches(t)) { etiquetas.add(t); continue }
                 val cab = RE_TRAMO.find(t)
                 val anchoTramo = cab?.groupValues?.get(1)?.let { num(it) } ?: ancho
@@ -751,17 +804,27 @@ data class DisenoNova(
                 val caidas = tokens.firstNotNullOfOrNull { tk ->
                     RE_CAIDA_TRAMO.find(tk.trim())?.groupValues?.get(1)?.let { dosMedidas(it) }
                 }
+                // `Q<29.3>` es la panza de ESTE tramo: la pared curva de una esquina. Se busca en
+                // todo el interior porque la calculadora la escribe pegada a la franja de sistema
+                // y el modelo la guarda como tag de cabecera; vale de las dos maneras.
+                val flecha = RE_CURVA_TRAMO.find(interior)
+                    ?.groupValues?.get(1)?.let { num(it) } ?: 0f
                 val franjas = tokens.mapNotNull { franjaDesdeTexto(it) }
-                if (franjas.isNotEmpty()) tramos.add(
-                    NovaTramo(
-                        ancho = anchoTramo,
-                        franjas = franjas,
-                        alto = alturas?.first ?: 0f,
-                        caida = caidas?.first ?: 0f,
-                        altoDer = alturas?.second,
-                        caidaDer = caidas?.second
+                if (franjas.isNotEmpty()) {
+                    tramos.add(
+                        NovaTramo(
+                            ancho = anchoTramo,
+                            franjas = franjas,
+                            alto = alturas?.first ?: 0f,
+                            caida = caidas?.first ?: 0f,
+                            altoDer = alturas?.second,
+                            caidaDer = caidas?.second,
+                            pliegue = pliegue,
+                            flecha = flecha
+                        )
                     )
-                )
+                    pliegue = null
+                }
             }
             if (tramos.isEmpty()) return null
             return DisenoNova(acabado, ancho, alto, tramos, etiquetas)
@@ -783,7 +846,12 @@ data class DisenoNova(
             return NovaFranja(esSistema, alto, modulos)
         }
 
+        /** ¿Empieza aquí otro trozo? Un tramo (`Tl<`) o un tag suelto (`A<`, `U<`, `O<`). */
+        private fun arrancaOtroTrozo(cuerpo: String, i: Int): Boolean =
+            RE_ARRANQUE.containsMatchIn(cuerpo.substring(i, minOf(cuerpo.length, i + 4)))
+
         /** Corta el cuerpo por los separadores de tramo, respetando los paréntesis anidados. */
+
         private fun partirPorTramos(cuerpo: String): List<String> {
             val out = mutableListOf<String>()
             val sb = StringBuilder()
@@ -798,6 +866,13 @@ data class DisenoNova(
                         out.add(sb.toString()); sb.clear(); i += SEPARADOR_TRAMO.length - 1
                     }
                     prof == 0 && c == ' ' -> { out.add(sb.toString()); sb.clear() }
+                    // Y sin espacios también: el paquete pasa por manos que los quitan —la
+                    // pantalla de diseño lo hace al reescribir las medidas—, y entonces todo
+                    // llegaba pegado y se leía como un solo tramo. Un tramo o un tag sueltos
+                    // arrancan trozo por sí mismos, haya espacio delante o no.
+                    prof == 0 && sb.isNotBlank() && arrancaOtroTrozo(cuerpo, i) -> {
+                        out.add(sb.toString()); sb.clear(); sb.append(c)
+                    }
                     else -> sb.append(c)
                 }
                 i++

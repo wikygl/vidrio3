@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,8 +53,39 @@ class VistaAceptaModeloTest {
      * curva, entra en ella. Si el dibujo rechazara ese paquete, en pantalla saldría el diseño de
      * emergencia y parecería que no pasa nada.
      */
+    /**
+     * La pantalla puede editar una ventana de esquina sin enderezarla.
+     *
+     * Se carga, se lee lo que la pantalla tiene, y la esquina sigue ahí: el pliegue entre sus dos
+     * paredes y la panza de la curva. Antes el editor devolvía los tramos en fila, con los
+     * pliegues amontonados al final, y al aplicar el diseño la ventana salía rectangular.
+     */
+    @Test
+    fun la_pantalla_edita_la_esquina_sin_enderezarla() {
+        val conCurva = "{nova,ina,[150,120:Tl<150>(H<120>;m<30>(f);s(fc))" +
+            " Tl<157.1>(H<120>;Q<29.3>;m<30>(f);s(fc))" +
+            " A<90> Tl<120>(H<120>;m<30>(f);s(fc))]}"
+        escenario().use { esc ->
+            esperar()
+            en(esc) { it.cargarParaPruebas(conCurva) }
+            esperar(300)
+
+            val flechas = en(esc) { it.flechasDeTramoParaPruebas() }
+            assertEquals("no son tres paños: $flechas", 3, flechas.size)
+            assertEquals("la curva salió recta en la pantalla", 29.3f, flechas[1], 0.1f)
+
+            val devuelto = en(esc) { it.paqueteParaPruebas() }
+            val modelo = DisenoNova.desdePaquete(devuelto)
+            assertNotNull("la pantalla devolvió algo que no se lee: $devuelto", modelo)
+            assertEquals("se perdió una pared: $devuelto", 3, modelo!!.tramos.size)
+            assertEquals("la curva perdió su panza: $devuelto", 29.3f, modelo.tramos[1].flecha, 0.1f)
+            assertEquals("la ventana se enderezó: $devuelto", "A<90>", modelo.tramos[2].pliegue)
+        }
+    }
+
     @Test
     fun la_vista_acepta_la_esquina_curva() {
+
         fun tramos(ancho: Float): String = crystal.crystal.taller.nova.NovaUIHelper
             .generarTramosConsolidado(
                 ancho = ancho,
