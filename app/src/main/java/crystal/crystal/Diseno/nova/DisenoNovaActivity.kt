@@ -142,7 +142,8 @@ class DisenoNovaActivity : AppCompatActivity() {
 
         binding.vistaDiseno.setEncuentroVacio(encuentroVacio)
         binding.vistaDiseno.setDireccion(direccion)
-        cargarDesdePaquete(paqueteIntent)
+        // Una ventana de esquina se abre por lados, de frente; una plana, entera como siempre.
+        if (!abrirPorLadosSiDobla(paqueteIntent)) cargarDesdePaquete(paqueteIntent)
 
         // Toque directo en el lienzo para seleccionar franja (sin diálogos)
         binding.vistaDiseno.alClicFranja = { idx ->
@@ -2334,11 +2335,147 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarVista()
     }
 
+    // ==================== LA VENTANA DE ESQUINA SE EDITA LADO A LADO ====================
+    // Una ventana en L (o en C, o con una pared curva) no se edita entera: se parte en sus lados
+    // y se edita cada uno de FRENTE, como una ventana normal. Mientras se edita no hay esquina
+    // que perder, y eso quita de en medio el problema de fondo: la pantalla reescribe el paquete
+    // por varios caminos —el modelo, el panel de cotas, el refresco de dimensiones, el render de
+    // emergencia— y cada uno tenía que acordarse de la esquina por su cuenta.
+
+    /** Los lados de la ventana de esquina, de frente; vacío si la ventana es plana. */
+    private var ladosEsquina: MutableList<DisenoNova> = mutableListOf()
+
+    /** Lo que hay al principio de cada lado: su pliegue y, si es la pared curva, su panza. */
+    private var esquinaDeLados: List<Pair<String?, Float>> = emptyList()
+
+    /** El lado que se está editando. */
+    private var ladoActivo = 0
+
+    /** El chip que dice qué lado se edita y deja pasar al siguiente. */
+    private var chipLado: TextView? = null
+
+    private val editandoPorLados: Boolean get() = ladosEsquina.size > 1
+
+    /**
+     * Si el diseño que llega dobla en alguna esquina, se parte en lados y se abre el primero.
+     *
+     * Devuelve true si se abrió por lados; false si es una ventana plana, que se edita entera
+     * como siempre.
+     */
+    private fun abrirPorLadosSiDobla(paquete: String): Boolean {
+        val d = runCatching { DisenoNova.desdePaquete(paquete) }.getOrNull() ?: return false
+        if (!d.doblaEnEsquina) return false
+        ladosEsquina = d.separarEnLados().toMutableList()
+        esquinaDeLados = d.esquinaDeCadaLado()
+        if (ladosEsquina.size < 2) {
+            ladosEsquina = mutableListOf()
+            return false
+        }
+        ladoActivo = 0
+        cargarDesdePaquete(ladosEsquina[0].aPaquete())
+        instalarChipLado()
+        return true
+    }
+
+    /** Guarda en su sitio el lado que se acaba de editar. */
+    private fun guardarLadoActual() {
+        if (!editandoPorLados) return
+        val d = runCatching { DisenoNova.desdePaquete(paqueteActualLectura()) }.getOrNull() ?: return
+        if (ladoActivo in ladosEsquina.indices) ladosEsquina[ladoActivo] = d
+    }
+
+    /** Pasa al lado [indice], guardando antes el que estaba abierto. */
+    private fun irAlLado(indice: Int) {
+        if (!editandoPorLados || indice !in ladosEsquina.indices) return
+        guardarLadoActual()
+        ladoActivo = indice
+        indiceFranjaActiva = -1
+        indiceTramoActivo = -1
+        indiceModuloActivo = -1
+        cerrarFlotanteModulos()
+        cargarDesdePaquete(ladosEsquina[indice].aPaquete())
+        actualizarVista()
+        actualizarChipLado()
+    }
+
+    /** La ventana entera otra vez, con los lados como quedaron y la esquina en su sitio. */
+    private fun paqueteDeLaEsquina(): String? {
+        if (!editandoPorLados) return null
+        guardarLadoActual()
+        val base = runCatching { DisenoNova.desdePaquete(paqueteOriginal) }.getOrNull()
+            ?: ladosEsquina.firstOrNull() ?: return null
+        return runCatching { base.conLados(ladosEsquina, esquinaDeLados).aPaquete() }.getOrNull()
+    }
+
+    private fun instalarChipLado() {
+        if (chipLado != null) return
+        val dp = resources.displayMetrics.density
+        val chip = TextView(this).apply {
+            setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+            setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+            textSize = 14f
+            setOnClickListener { irAlLado((ladoActivo + 1) % ladosEsquina.size) }
+            setOnLongClickListener { dialogoElegirLado(); true }
+        }
+        // Anclado por constraints y no por x/y: el lienzo se recoloca solo cuando se abre el
+        // panel de cotas, y con la posición a mano el chip se iba con él.
+        val padre = binding.root
+        val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            topMargin = (12 * dp).toInt()
+            marginStart = (12 * dp).toInt()
+        }
+        padre.addView(chip, lp)
+        chip.elevation = 8 * dp
+        chipLado = chip
+        actualizarChipLado()
+    }
+
+    private fun actualizarChipLado() {
+        val chip = chipLado ?: return
+        if (!editandoPorLados) {
+            chip.visibility = View.GONE
+            return
+        }
+        chip.visibility = View.VISIBLE
+        val curvo = (esquinaDeLados.getOrNull(ladoActivo)?.second ?: 0f) > 0f
+        val que = if (curvo) "pared curva" else "lado ${ladoActivo + 1}"
+        chip.text = "◱ $que de ${ladosEsquina.size}  ·  toca para el siguiente"
+    }
+
+    /** La lista de lados, para saltar a cualquiera sin ir pasando uno a uno. */
+    private fun dialogoElegirLado() {
+        if (!editandoPorLados) return
+        val items = ladosEsquina.mapIndexed { i, lado ->
+            val curvo = (esquinaDeLados.getOrNull(i)?.second ?: 0f) > 0f
+            val que = if (curvo) "Pared curva" else "Lado ${i + 1}"
+            "$que   ${df1(lado.ancho)} cm"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Qué lado se edita")
+            .setSingleChoiceItems(items, ladoActivo) { d, cual ->
+                irAlLado(cual)
+                d.dismiss()
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
     /**
      * Envía el diseño actual a NovaCorrediza. Lo usa SOLO el botón de la calculadora; el botón
      * Atrás del sistema NO lo llama, así que Atrás vuelve sin aplicar cambios al diseño.
      */
     private fun prepararResultadoDiseno() {
+        // Si se estaba editando por lados, lo que sale es la ventana entera otra vez: los lados
+        // como quedaron y la esquina en su sitio.
+        paqueteDeLaEsquina()?.let { entera ->
+            setResult(RESULT_OK, Intent().apply { putExtra(RESULT_PAQUETE, entera) })
+            return
+        }
         val paqueteSalida = if (paqueteOriginal.isNotBlank()) {
             paqueteConDimensionesActualizadas(paqueteOriginal)
         } else {
@@ -2379,6 +2516,18 @@ class DisenoNovaActivity : AppCompatActivity() {
     fun vistaRechazaParaPruebas(paquete: String): String? =
         runCatching { binding.vistaDiseno.actualizarDesdePaquete(paquete, 0f, 0f, mochetaLateralCm) }
             .exceptionOrNull()?.let { "${it::class.simpleName}: ${it.message}" }
+
+    /** Cuántos lados tiene abierta la ventana de esquina; 0 si se edita entera. */
+    @androidx.annotation.VisibleForTesting
+    fun ladosParaPruebas(): Int = ladosEsquina.size
+
+    /** Pasa al lado [indice], como el chip de la pantalla. */
+    @androidx.annotation.VisibleForTesting
+    fun irAlLadoParaPruebas(indice: Int) = irAlLado(indice)
+
+    /** La ventana entera con los lados como quedaron: lo que sale al enviar a la calculadora. */
+    @androidx.annotation.VisibleForTesting
+    fun paqueteDeLaEsquinaParaPruebas(): String? = paqueteDeLaEsquina()
 
     /**
      * El paquete rearmado desde sus tramos, que es lo que hace "Aplicar" del panel de cotas.

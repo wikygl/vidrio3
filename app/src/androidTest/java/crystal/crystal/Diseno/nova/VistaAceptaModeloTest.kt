@@ -54,6 +54,54 @@ class VistaAceptaModeloTest {
      * emergencia y parecería que no pasa nada.
      */
     /**
+     * Una ventana de esquina se abre por lados, se edita cada uno de frente y al enviarla vuelve
+     * entera, con su esquina.
+     *
+     * Es la estrategia buena: mientras se edita no hay esquina que perder, así que da igual por
+     * cuál de sus caminos reescriba la pantalla el paquete.
+     */
+    @Test
+    fun la_esquina_se_edita_lado_a_lado_y_vuelve_entera() {
+        val conCurva = "{nova,ina,[150,120:Tl<150>(H<120>;m<30>(f);s(fc))" +
+            " Tl<157.1>(H<120>;Q<29.3>;m<30>(f);s(fc))" +
+            " A<90> Tl<120>(H<120>;m<30>(f);s(fc))]}"
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val intent = Intent(ctx, DisenoNovaActivity::class.java)
+            .putExtra(DisenoNovaActivity.EXTRA_PAQUETE, conCurva)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        ActivityScenario.launch<DisenoNovaActivity>(intent).use { esc ->
+            esperar()
+            assertEquals("no se abrió por lados", 3, en(esc) { it.ladosParaPruebas() })
+
+            // Cada lado se ve de frente: un solo tramo, sin pliegue ni panza.
+            val lado1 = DisenoNova.desdePaquete(en(esc) { it.paqueteParaPruebas() })!!
+            assertEquals("el primer lado no está solo", 1, lado1.tramos.size)
+            assertEquals("el primer lado no mide lo suyo", 150f, lado1.ancho, 0.5f)
+            assertNull("un lado suelto no dobla", lado1.tramos[0].pliegue)
+
+            // Se pasa a la pared curva y se deja en un fijo de piso a techo, de frente.
+            en(esc) { it.irAlLadoParaPruebas(1) }
+            esperar(300)
+            val curva = DisenoNova.desdePaquete(en(esc) { it.paqueteParaPruebas() })!!
+            assertEquals("la pared curva no mide su desarrollo", 157.1f, curva.ancho, 0.5f)
+            assertEquals("la curva se abrió curvada", 0f, curva.tramos[0].flecha, 0.01f)
+            en(esc) { it.cargarParaPruebas("{nova,ina,[157.1,120:Tl<157.1>(H<120>;s(f))]}") }
+            esperar(300)
+
+            // Y al enviarla, la ventana vuelve entera: los tres lados, la esquina y la panza.
+            val entera = en(esc) { it.paqueteDeLaEsquinaParaPruebas() }
+            assertNotNull("no devolvió la ventana entera", entera)
+            val d = DisenoNova.desdePaquete(entera!!)
+            assertNotNull("lo que devolvió no se lee: $entera", d)
+            assertEquals("se perdió un lado: $entera", 3, d!!.tramos.size)
+            assertEquals("la curva perdió su panza: $entera", 29.3f, d.tramos[1].flecha, 0.1f)
+            assertEquals("la ventana se enderezó: $entera", "A<90>", d.tramos[2].pliegue)
+            assertEquals("no se guardó lo editado: $entera", 1, d.tramos[1].nModulosSistema)
+            assertEquals("el ancho no es el del primer lado: $entera", 150f, d.ancho, 0.5f)
+        }
+    }
+
+    /**
      * La pantalla puede editar una ventana de esquina sin enderezarla.
      *
      * Se carga, se lee lo que la pantalla tiene, y la esquina sigue ahí: el pliegue entre sus dos
