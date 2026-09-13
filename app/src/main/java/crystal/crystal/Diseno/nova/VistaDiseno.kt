@@ -1764,7 +1764,13 @@ class VistaDiseno @JvmOverloads constructor(
                     // curva entrega su canto ya girado, más alto que el frente; recogiéndolo a la
                     // altura del frente quedaba un escalón y la pared parecía metida detrás de la
                     // curva en vez de seguirla.
-                    val vieneDeCurva = (segmentosNs.getOrNull(idx - 1)?.flechaCm ?: 0f) > 0f
+                    // La curva entrega (y recoge) su canto ya girado, más alto que el frente. La
+                    // pared que se pega a ella tiene que arrancar a esa altura, venga la curva
+                    // detrás o delante: si no, en la unión quedaba un escalón del 16% y esa pared
+                    // con su curva parecían otra ventana pegada a un lado.
+                    val siguiente = segmentosNs.getOrNull(idx + 1)?.flechaCm ?: 0f
+                    val anterior = segmentosNs.getOrNull(idx - 1)?.flechaCm ?: 0f
+                    val vieneDeCurva = anterior > 0f || (esAletaIzq && siguiente > 0f)
                     val centroAleta = (yTopPlanoActual + yBottomPlanoActual) * 0.5f
                     val medioAleta = (yBottomPlanoActual - yTopPlanoActual) * 0.5f *
                         (if (vieneDeCurva) altoEnLaPunta else 1f)
