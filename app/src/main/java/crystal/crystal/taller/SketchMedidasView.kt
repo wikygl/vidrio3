@@ -4208,11 +4208,40 @@ class SketchMedidasView @JvmOverloads constructor(
         val lados = mutableListOf<LadoEsquina>()
         val angulos = mutableListOf<String>()
         var arista = 0
+        // Una pared de cero no es un lado, pero deja su sitio libre: la curva que viene detrás lo
+        // ocupa y pasa a ser una pared más. Es la ventana que empieza en la curva.
+        var sitioLibre = false
         for (tramo in 0 until bordes.size - 1) {
             val izq = bordes[tramo]
             val der = bordes[tramo + 1]
             val esBanda = bandas.any { abs(it - der) < 0.5f }
-            if (!esBanda && der - izq >= cmToPx(0.5f)) {
+            val mide = der - izq >= cmToPx(0.5f)
+            if (!esBanda && !mide) sitioLibre = true
+            if (esBanda && sitioLibre) {
+                // La curva ocupa el sitio de la pared que no existe: su ancho es el desarrollo y
+                // se lleva su panza. Y la arista que la traía deja de ser una curva y pasa a ser
+                // el giro que hace, porque ya no es la esquina entre dos paredes: es una pared.
+                val arco = esquinas.getOrNull(arista - 1)?.arco
+                val puenteCurva = puentes.firstOrNull {
+                    it.rect.centerX() > izq - 0.5f && it.rect.centerX() < der + 0.5f
+                }
+                lados.add(
+                    LadoEsquina(
+                        anchoAbajo = pxToCm(der - izq),
+                        anchoArriba = pxToCm(arriba[tramo + 1].x - arriba[tramo].x),
+                        altoIzq = pxToCm(pie - arriba[tramo].y),
+                        altoDer = pxToCm(pie - arriba[tramo + 1].y),
+                        puente = puenteCurva?.let { pxToCm(pie - it.start.y) } ?: 0f,
+                        flecha = arco?.flecha ?: 0f
+                    )
+                )
+                if (arco != null && angulos.isNotEmpty()) {
+                    angulos[angulos.lastIndex] = formatCm(arco.anguloGrados)
+                }
+                sitioLibre = false
+            }
+            if (!esBanda && mide) {
+                sitioLibre = false
                 // El puente de ESTE tramo: cada pared lleva el suyo y puede estar a otra altura.
                 val puente = puentes.firstOrNull {
                     it.rect.centerX() > izq - 0.5f && it.rect.centerX() < der + 0.5f

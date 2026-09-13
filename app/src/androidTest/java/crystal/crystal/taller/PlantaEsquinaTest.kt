@@ -441,10 +441,12 @@ class PlantaEsquinaTest {
         assertEquals("la curva no trajo el alto de su paño", 120f, curva.alto, 1f)
         assertEquals("la curva no trajo su puente", 90f, curva.puente, 1f)
 
-        // Y con el primer lado a cero, la ventana empieza en la curva: queda una sola pared, que
-        // ya no es una esquina que la calculadora sepa armar.
+        // Y con el primer lado a cero la ventana empieza en la curva: la pared que no existe deja
+        // su sitio y lo ocupa la curva, que pasa a ser una pared más. Sigue siendo una esquina.
         v.anchoDeTramoEnPlantaParaPruebas(0, 0f)
-        assertNull("una pared suelta no es una ventana de esquina", v.esquinaPrincipalEnCm())
+        val empezandoEnCurva = v.esquinaPrincipalEnCm()!!
+        assertEquals("la curva no ocupó el sitio de la pared", 2, empezandoEnCurva.lados.size)
+        assertTrue("la primera pared no es la curva", empezandoEnCurva.lados[0].esCurva)
     }
 
     /** El descuadre viaja entero, y manda la medida mayor: la ventana tiene que tapar el hueco. */
@@ -459,5 +461,41 @@ class PlantaEsquinaTest {
         assertEquals("el cabezal no se apuntó", 152f, lado.anchoArriba, 1f)
         assertEquals("no manda el mayor", 152f, lado.ancho, 1f)
         assertTrue("no avisa del descuadre", lado.descuadrado)
+    }
+
+    /**
+     * La ventana que empieza en la curva: el primer lado mide cero, así que la curva ocupa su
+     * sitio y pasa a ser una pared más.
+     *
+     * Sin esto quedaba una sola pared —la curva no cuenta como lado— y la medida no llegaba a la
+     * calculadora como ventana de esquina: se dibujaba plana.
+     */
+    @Test
+    fun la_curva_ocupa_el_sitio_de_la_pared_que_no_existe() {
+        val v = vista()
+        v.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 220f), altoCm = 166f)
+        v.curvarEsquinaParaPruebas(0, 80f, 76f)
+        v.anchoDeTramoEnPlantaParaPruebas(0, 0f)
+
+        val medida = v.esquinaPrincipalEnCm()
+        assertNotNull("la ventana de esquina no llegó a salir", medida)
+        assertEquals("no son dos paredes: ${medida!!.lados.map { it.ancho }}", 2, medida.lados.size)
+        assertTrue("la primera pared no es la curva", medida.lados[0].esCurva)
+        assertEquals("la curva no mide su desarrollo", 80f, medida.lados[0].ancho, 1f)
+        assertEquals("la pared recta cambió", 220f, medida.lados[1].ancho, 1f)
+        assertTrue("la pared recta salió curvada", !medida.lados[1].esCurva)
+        assertEquals("sigue siendo una L", "nl", medida.geometria)
+
+        // La arista ya no es una curva: la curva es una pared, y ahí lo que hay es su giro.
+        assertTrue("la arista sigue marcada como curva", !medida.hayCurva)
+        assertEquals("no quedó el giro de la curva", 1, medida.angulos.size)
+
+        // Y el texto la lleva y la trae: las medidas se redondean a un decimal, como todas.
+        val vuelta = EsquinaMedida.desdeTexto(EsquinaMedida.aTexto(medida))!!
+        assertEquals(2, vuelta.lados.size)
+        assertEquals(80f, vuelta.lados[0].ancho, 0.1f)
+        assertEquals("la panza no viajó", medida.lados[0].flecha, vuelta.lados[0].flecha, 0.1f)
+        assertEquals(220f, vuelta.lados[1].ancho, 0.1f)
+        assertTrue("la pared recta volvió curvada", !vuelta.lados[1].esCurva)
     }
 }

@@ -13,8 +13,18 @@ data class LadoEsquina(
     val anchoArriba: Float,
     val altoIzq: Float,
     val altoDer: Float,
-    val puente: Float
+    val puente: Float,
+    /**
+     * Su panza, si este "lado" es en realidad la pared curva: 0 en una pared recta.
+     *
+     * Una curva no suele ser un lado —es la esquina, y va entre dos paredes—, pero cuando la
+     * pared a la que sustituye mide cero la curva ocupa su sitio: la ventana empieza (o acaba) en
+     * ella y entonces sí es una pared más, con su desarrollo por ancho.
+     */
+    val flecha: Float = 0f
 ) {
+    val esCurva: Boolean get() = flecha > 0f
+
     val ancho: Float get() = maxOf(anchoAbajo, anchoArriba)
     val alto: Float get() = maxOf(altoIzq, altoDer)
 
@@ -95,8 +105,11 @@ data class EsquinaMedida(
         fun aTexto(medida: EsquinaMedida): String {
             if (medida.lados.isEmpty()) return ""
             val lados = medida.lados.joinToString(";") { l ->
-                listOf(l.anchoAbajo, l.anchoArriba, l.altoIzq, l.altoDer, l.puente)
-                    .joinToString(",") { num(it) }
+                // La panza va al final y solo si la hay: así el texto de una ventana de paredes
+                // rectas sigue siendo el mismo de siempre.
+                val numeros = listOf(l.anchoAbajo, l.anchoArriba, l.altoIzq, l.altoDer, l.puente) +
+                    (if (l.esCurva) listOf(l.flecha) else emptyList())
+                numeros.joinToString(",") { num(it) }
             }
             return lados + "@" + medida.angulos.joinToString(",")
         }
@@ -107,7 +120,7 @@ data class EsquinaMedida(
             val lados = t.substringBefore("@").split(";").mapNotNull { trozo ->
                 val n = trozo.split(",").map { it.trim().toFloatOrNull() ?: return@mapNotNull null }
                 if (n.size < 5) null
-                else LadoEsquina(n[0], n[1], n[2], n[3], n[4])
+                else LadoEsquina(n[0], n[1], n[2], n[3], n[4], n.getOrNull(5) ?: 0f)
             }
             if (lados.isEmpty()) return null
             val angulos = t.substringAfter("@", "").split(",")

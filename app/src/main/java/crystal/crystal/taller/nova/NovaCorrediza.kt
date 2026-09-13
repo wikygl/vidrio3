@@ -3476,7 +3476,9 @@ class NovaCorrediza : AppCompatActivity() {
                 val tramosAleta = NovaUIHelper.generarTramosConsolidado(aletaC.ancho, aletaC.alto, altoHojaB, divisB, NovaCalculos.siNoMoch(aletaC.alto, aletaC.hoja), textoModelo, mochetaInferior, modeloRemate)
                 val cabecera = "${NovaCalculos.df1(primeraC.ancho)},${NovaCalculos.df1(primeraC.alto)}:"
                 val esquina = esquinaEnElDiseno(0, primeraC.alto, primeraC.hoja)
-                return "{nova,${tipoPaquete()},[$cabecera$tramosBase $esquina $tramosAleta]}"
+                val base = conPanzaDelLado(0, tramosBase)
+                val aleta = conPanzaDelLado(1, tramosAleta)
+                return "{nova,${tipoPaquete()},[$cabecera$base $esquina $aleta]}"
             }
         }
         if (texto == "nu") {
@@ -3506,8 +3508,11 @@ class NovaCorrediza : AppCompatActivity() {
                 val tramosDer = NovaUIHelper.generarTramosConsolidado(derC.ancho, derC.alto, altoHojaDer, divisDer, NovaCalculos.siNoMoch(derC.alto, derC.hoja), textoModelo, mochetaInferior, modeloRemate)
                 val cabecera = "${NovaCalculos.df1(centroC.ancho)},${NovaCalculos.df1(centroC.alto)}:"
                 val esq1 = esquinaEnElDiseno(0, izqC.alto, izqC.hoja)
+                val izqP = conPanzaDelLado(0, tramosIzq)
+                val centroP = conPanzaDelLado(1, tramosCentro)
+                val derP = conPanzaDelLado(2, tramosDer)
                 val esq2 = esquinaEnElDiseno(1, centroC.alto, centroC.hoja)
-                return "{nova,${tipoPaquete()},[$cabecera$tramosIzq $esq1 $tramosCentro $esq2 $tramosDer]}"
+                return "{nova,${tipoPaquete()},[$cabecera$izqP $esq1 $centroP $esq2 $derP]}"
             }
         }
         if (texto == "ns") {
@@ -3527,14 +3532,14 @@ class NovaCorrediza : AppCompatActivity() {
                 val divisBase = NovaCalculos.divisiones(base.ancho, base.divisManual, "nn")
                 val altoHojaBase = NovaCalculos.altoHoja(base.alto, base.hoja)
                 val tramosBase = NovaUIHelper.generarTramosConsolidado(base.ancho, base.alto, altoHojaBase, divisBase, NovaCalculos.siNoMoch(base.alto, base.hoja), textoModelo, mochetaInferior, modeloRemate)
-                val partes = mutableListOf(tramosBase)
+                val partes = mutableListOf(conPanzaDelLado(0, tramosBase))
                 for (i in 1 until lados.size) {
                     val lado = lados[i]
                     val divisLado = NovaCalculos.divisiones(lado.ancho, lado.divisManual, "nn")
                     val altoHojaLado = NovaCalculos.altoHoja(lado.alto, lado.hoja)
                     val tramosLado = NovaUIHelper.generarTramosConsolidado(lado.ancho, lado.alto, altoHojaLado, divisLado, NovaCalculos.siNoMoch(lado.alto, lado.hoja), textoModelo, mochetaInferior, modeloRemate)
                     partes.add(esquinaEnElDiseno(i - 1, lados[i - 1].alto, lados[i - 1].hoja))
-                    partes.add(tramosLado)
+                    partes.add(conPanzaDelLado(i, tramosLado))
                 }
                 val cabecera = "${NovaCalculos.df1(base.ancho)},${NovaCalculos.df1(base.alto)}:"
                 return "{nova,${tipoPaquete()},[${cabecera}A<90> ${partes.joinToString(" ")}]}"
@@ -4354,7 +4359,20 @@ class NovaCorrediza : AppCompatActivity() {
      * Si el apunte no trajo alto o puente para la curva se usan los de la pared de al lado, que
      * es contra la que se encuentra.
      */
+    /**
+     * Le pone su panza al tramo de un lado que ES la pared curva.
+     *
+     * Pasa cuando la pared a la que sustituye mide cero: la ventana empieza (o acaba) en la
+     * curva, y entonces la curva no es la esquina entre dos paredes sino una pared más. Sin esto
+     * salía dibujada recta.
+     */
+    private fun conPanzaDelLado(indice: Int, tramos: String): String {
+        val flecha = esquinaDeLaMedida?.lados?.getOrNull(indice)?.flecha ?: 0f
+        return if (flecha > 0f) conTagEnElSistema(tramos, "Q<${df1(flecha)}>") else tramos
+    }
+
     private fun tramoDeCurva(curva: CurvaEsquina, altoRef: Float, puenteRef: Float): String {
+
         val alto = if (curva.alto > 1f) curva.alto else altoRef
         val puente = if (curva.puente > 0.5f) curva.puente else puenteRef
         val flecha = crystal.crystal.taller.ArcoEsquina
