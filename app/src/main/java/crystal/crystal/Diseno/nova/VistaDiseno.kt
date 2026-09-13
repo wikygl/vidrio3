@@ -1619,16 +1619,19 @@ class VistaDiseno @JvmOverloads constructor(
                     // Con los dos lados distintos el tramo es un cuadrilátero: se recorta el dibujo
                     // con su silueta y las franjas de dentro salen cortadas por la inclinación, que
                     // es lo que hace el vidrio al seguir la forma.
-                    // Y una pared curva se dibuja curva: su silueta se comba y el dibujo de dentro
-                    // se estira para llenarla. Los parantes siguen verticales —que es como se ven
-                    // en un desarrollo— y lo que se arquea son los rieles, que es lo que se mira.
+                    // Y una pared curva de esquina se dibuja como lo que es: el paño que gira. Su
+                    // silueta se estrecha hacia la punta donde la pared ya se va de canto, con los
+                    // rieles curvados, y de ahí sale la pared siguiente en perspectiva. No es la
+                    // panza de `U<>`, que es la ventana curva entera, con sus dos cantos de frente.
                     val flechaPx = if (segmento.flechaCm > 0f) {
                         (segmento.flechaCm * escalaLocal)
                             .coerceIn(1f, (yAbajoTramo - yArribaTramo).coerceAtLeast(4f) * 0.12f)
                     } else 0f
                     val recorte = when {
-                        flechaPx > 0f ->
-                            siluetaCombada(xIni, xFin, yArribaTramo, yAbajoTramo, flechaPx)
+                        flechaPx > 0f -> siluetaDeEsquinaCurva(
+                            xIni, xFin, yArribaTramo, yAbajoTramo,
+                            haciaLaDerecha = idx < segmentosNs.lastIndex
+                        )
                         segmento.esInclinado -> android.graphics.Path().apply {
                             moveTo(xIni, yArribaTramo)
                             lineTo(xFin, yArribaDe(segmento, derecha = true))
@@ -1641,15 +1644,6 @@ class VistaDiseno @JvmOverloads constructor(
                     if (recorte != null) {
                         canvas.save()
                         canvas.clipPath(recorte)
-                        if (flechaPx > 0f) {
-                            // Lo justo para que el dibujo llegue a lo alto de la panza; lo que
-                            // sobra por los cantos lo corta el recorte.
-                            val altoTramoPx = (yAbajoTramo - yArribaTramo).coerceAtLeast(1f)
-                            canvas.translate(0f, -flechaPx)
-                            canvas.scale(
-                                1f, (altoTramoPx + flechaPx) / altoTramoPx, xIni, yArribaTramo
-                            )
-                        }
                     }
                     canvas.drawRect(RectF(xIni, yArribaTramo, xFin, yAbajoTramo), pMarco)
                     if (modo == ModoEnsamble.APA) {
@@ -1764,30 +1758,37 @@ class VistaDiseno @JvmOverloads constructor(
      * curva mirada desde la altura de los ojos —el mismo criterio que el curvo de toda la
      * ventana—.
      */
-    private fun siluetaCombada(
+    private fun siluetaDeEsquinaCurva(
         x0: Float,
         x1: Float,
         yTop: Float,
         yBottom: Float,
-        flechaPx: Float
+        haciaLaDerecha: Boolean
     ): android.graphics.Path {
         val pasos = 24
-        val centro = (x0 + x1) * 0.5f
-        val medio = ((x1 - x0) * 0.5f).coerceAtLeast(1f)
-        fun comba(x: Float, factor: Float): Float {
-            val u = ((x - centro) / medio).coerceIn(-1f, 1f)
-            return (1f - u * u).coerceAtLeast(0f) * flechaPx * factor
+        val alto = (yBottom - yTop).coerceAtLeast(1f)
+        val centro = (yTop + yBottom) * 0.5f
+        // Cuánto queda del alto en la punta donde la pared ya está de canto. El mismo escorzo con
+        // el que se dibuja una aleta, para que la curva entregue el paño a la pared siguiente sin
+        // un salto.
+        val enLaPunta = 0.72f
+        fun medioAlto(x: Float): Float {
+            val u = ((x - x0) / (x1 - x0).coerceAtLeast(1f)).coerceIn(0f, 1f)
+            val t = if (haciaLaDerecha) u else 1f - u
+            // Cuarto de círculo: al principio apenas gira y al final se va de golpe, que es como
+            // se escorza una esquina redondeada.
+            val giro = 1f - kotlin.math.cos(t * (Math.PI.toFloat() / 2f))
+            return (alto * 0.5f) * (1f - (1f - enLaPunta) * giro)
         }
         return android.graphics.Path().apply {
-            moveTo(x0, yTop)
+            moveTo(x0, centro - medioAlto(x0))
             for (i in 1..pasos) {
                 val x = x0 + (x1 - x0) * i / pasos
-                lineTo(x, yTop - comba(x, 1f))
+                lineTo(x, centro - medioAlto(x))
             }
-            lineTo(x1, yBottom)
-            for (i in pasos - 1 downTo 0) {
+            for (i in pasos downTo 0) {
                 val x = x0 + (x1 - x0) * i / pasos
-                lineTo(x, yBottom - comba(x, 0.72f))
+                lineTo(x, centro + medioAlto(x))
             }
             close()
         }

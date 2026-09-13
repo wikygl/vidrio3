@@ -4311,7 +4311,15 @@ class NovaCorrediza : AppCompatActivity() {
      */
     private fun esquinaEnElDiseno(arista: Int, altoRef: Float, puenteRef: Float): String {
         val medida = esquinaDeLaMedida ?: return "A<90>"
-        medida.curvaDe(arista)?.let { return tramoDeCurva(it, altoRef, puenteRef) }
+        // La curva es un paño más Y un pliegue: la pared entra en ella de frente y sale girada,
+        // así que detrás de su paño va el `A<>` que pone en perspectiva a la pared siguiente. Sin
+        // él la L salía como tres paños en fila, de frente, y no se leía la esquina.
+        medida.curvaDe(arista)?.let {
+            // Lo que gira lo dice el propio arco: es el ángulo entre sus dos puntas.
+            val grados = crystal.crystal.taller.ArcoEsquina
+                .deDesarrolloYCuerda(it.desarrollo, it.cuerda)?.anguloGrados ?: 90f
+            return tramoDeCurva(it, altoRef, puenteRef) + " A<${df1(grados)}>"
+        }
         val grados = medida.gradosDe(arista) ?: return "A<90>"
         return "A<${df1(kotlin.math.abs(grados))}>"
     }

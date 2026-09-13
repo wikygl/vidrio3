@@ -76,9 +76,9 @@ class VistaAceptaModeloTest {
         val curva = conArco(tramos(157.1f))
         val casos = linkedMapOf(
             "en L con la esquina curva" to
-                "{nova,ina,[150,120:${tramos(150f)} $curva ${tramos(120f)}]}",
+                "{nova,ina,[150,120:${tramos(150f)} $curva A<90> ${tramos(120f)}]}",
             "en C con una esquina de cada clase" to
-                "{nova,ina,[120,120:${tramos(120f)} A<90> ${tramos(150f)} $curva ${tramos(120f)}]}"
+                "{nova,ina,[120,120:${tramos(120f)} A<90> ${tramos(150f)} $curva A<90> ${tramos(120f)}]}"
         )
         escenario().use { esc ->
             esperar()
