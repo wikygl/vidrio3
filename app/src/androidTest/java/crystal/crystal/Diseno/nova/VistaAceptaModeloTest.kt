@@ -88,6 +88,26 @@ class VistaAceptaModeloTest {
             en(esc) { it.cargarParaPruebas("{nova,ina,[157.1,120:Tl<157.1>(H<120>;s(f))]}") }
             esperar(300)
 
+            // El botón de armar: la ventana entera, sin salir del editor, para poder mirarla.
+            en(esc) { it.alternarVistaEnteraParaPruebas() }
+            esperar(300)
+            val armada = DisenoNova.desdePaquete(en(esc) { it.paqueteParaPruebas() })
+            assertNotNull("no armó la ventana", armada)
+            assertEquals("no salieron los tres lados armados", 3, armada!!.tramos.size)
+            assertEquals("la esquina no está en la armada", "A<90>", armada.tramos[2].pliegue)
+            assertEquals("la panza no está en la armada", 29.3f, armada.tramos[1].flecha, 0.1f)
+
+            // Y vuelve al lado que se estaba editando, con lo editado en su sitio.
+            en(esc) { it.alternarVistaEnteraParaPruebas() }
+            esperar(300)
+            val deVuelta = DisenoNova.desdePaquete(en(esc) { it.paqueteParaPruebas() })!!
+            assertEquals("no volvió a un lado suelto", 1, deVuelta.tramos.size)
+            assertEquals("volvió a otro lado", 157.1f, deVuelta.ancho, 0.5f)
+            assertEquals(
+                "se perdió lo editado al mirar la ventana",
+                1, deVuelta.tramos[0].nModulosSistema
+            )
+
             // Y al enviarla, la ventana vuelve entera: los tres lados, la esquina y la panza.
             val entera = en(esc) { it.paqueteDeLaEsquinaParaPruebas() }
             assertNotNull("no devolvió la ventana entera", entera)

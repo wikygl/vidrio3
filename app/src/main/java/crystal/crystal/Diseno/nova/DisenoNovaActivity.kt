@@ -2354,6 +2354,18 @@ class DisenoNovaActivity : AppCompatActivity() {
     /** El chip que dice qué lado se edita y deja pasar al siguiente. */
     private var chipLado: TextView? = null
 
+    /** El chip que arma la ventana entera para verla, y devuelve al lado. */
+    private var chipEntera: TextView? = null
+
+    /**
+     * true mientras se está MIRANDO la ventana entera, ya armada.
+     *
+     * Es una vista, no una edición: lo que se toque aquí se pierde al volver al lado, porque el
+     * lado es el que manda. Por eso al entrar se suelta la selección y se cierra el flotante, y
+     * lo que hay guardado en los lados se queda como estaba.
+     */
+    private var mirandoEntera = false
+
     private val editandoPorLados: Boolean get() = ladosEsquina.size > 1
 
     /**
@@ -2379,7 +2391,9 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     /** Guarda en su sitio el lado que se acaba de editar. */
     private fun guardarLadoActual() {
-        if (!editandoPorLados) return
+        // Mirando la ventana entera, lo que hay delante NO es un lado: guardarlo metería los tres
+        // lados dentro de uno.
+        if (!editandoPorLados || mirandoEntera) return
         val d = runCatching { DisenoNova.desdePaquete(paqueteActualLectura()) }.getOrNull() ?: return
         if (ladoActivo in ladosEsquina.indices) ladosEsquina[ladoActivo] = d
     }
@@ -2388,6 +2402,7 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun irAlLado(indice: Int) {
         if (!editandoPorLados || indice !in ladosEsquina.indices) return
         guardarLadoActual()
+        mirandoEntera = false
         ladoActivo = indice
         indiceFranjaActiva = -1
         indiceTramoActivo = -1
@@ -2407,6 +2422,35 @@ class DisenoNovaActivity : AppCompatActivity() {
         return runCatching { base.conLados(ladosEsquina, esquinaDeLados).aPaquete() }.getOrNull()
     }
 
+    /**
+     * Arma la ventana entera para verla sin salir del editor, y devuelve al lado que se editaba.
+     *
+     * Es lo que hace falta para comprobar cómo quedó la esquina antes de mandarla a la
+     * calculadora: los lados se editan de frente, pero la ventana solo se entiende junta.
+     */
+    private fun alternarVistaEntera() {
+        if (!editandoPorLados) return
+        if (mirandoEntera) {
+            mirandoEntera = false
+            cargarDesdePaquete(ladosEsquina[ladoActivo].aPaquete())
+        } else {
+            val entera = paqueteDeLaEsquina() ?: return
+            mirandoEntera = true
+            cargarDesdePaquete(entera)
+            Toast.makeText(
+                this,
+                "La ventana entera, para mirarla. Para editar, vuelve a un lado.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+        indiceFranjaActiva = -1
+        indiceTramoActivo = -1
+        indiceModuloActivo = -1
+        cerrarFlotanteModulos()
+        actualizarVista()
+        actualizarChipLado()
+    }
+
     private fun instalarChipLado() {
         if (chipLado != null) return
         val dp = resources.displayMetrics.density
@@ -2416,6 +2460,9 @@ class DisenoNovaActivity : AppCompatActivity() {
             textSize = 14f
             setOnClickListener { irAlLado((ladoActivo + 1) % ladosEsquina.size) }
             setOnLongClickListener { dialogoElegirLado(); true }
+            // Con id propio para que el chip de armar se pueda colgar debajo; sin él los dos se
+            // anclan al borde de arriba y salen montados.
+            id = View.generateViewId()
         }
         // Anclado por constraints y no por x/y: el lienzo se recoloca solo cuando se abre el
         // panel de cotas, y con la posición a mano el chip se iba con él.
@@ -2432,6 +2479,27 @@ class DisenoNovaActivity : AppCompatActivity() {
         padre.addView(chip, lp)
         chip.elevation = 8 * dp
         chipLado = chip
+
+        // Y al lado, el que arma la ventana entera para verla antes de mandarla.
+        val armar = TextView(this).apply {
+            setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+            setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+            textSize = 14f
+            setOnClickListener { alternarVistaEntera() }
+        }
+        val lpArmar = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topToBottom = chip.id
+            startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            topMargin = (8 * dp).toInt()
+            marginStart = (12 * dp).toInt()
+        }
+        padre.addView(armar, lpArmar)
+        armar.elevation = 8 * dp
+        chipEntera = armar
+
         actualizarChipLado()
     }
 
@@ -2441,10 +2509,14 @@ class DisenoNovaActivity : AppCompatActivity() {
             chip.visibility = View.GONE
             return
         }
-        chip.visibility = View.VISIBLE
+        chip.visibility = if (mirandoEntera) View.GONE else View.VISIBLE
         val curvo = (esquinaDeLados.getOrNull(ladoActivo)?.second ?: 0f) > 0f
         val que = if (curvo) "pared curva" else "lado ${ladoActivo + 1}"
         chip.text = "◱ $que de ${ladosEsquina.size}  ·  toca para el siguiente"
+        chipEntera?.apply {
+            visibility = View.VISIBLE
+            text = if (mirandoEntera) "◱ volver a editar el lado" else "◲ ver la ventana armada"
+        }
     }
 
     /** La lista de lados, para saltar a cualquiera sin ir pasando uno a uno. */
@@ -2520,6 +2592,10 @@ class DisenoNovaActivity : AppCompatActivity() {
     /** Cuántos lados tiene abierta la ventana de esquina; 0 si se edita entera. */
     @androidx.annotation.VisibleForTesting
     fun ladosParaPruebas(): Int = ladosEsquina.size
+
+    /** Toca el botón que arma la ventana entera, o vuelve al lado. */
+    @androidx.annotation.VisibleForTesting
+    fun alternarVistaEnteraParaPruebas() = alternarVistaEntera()
 
     /** Pasa al lado [indice], como el chip de la pantalla. */
     @androidx.annotation.VisibleForTesting
