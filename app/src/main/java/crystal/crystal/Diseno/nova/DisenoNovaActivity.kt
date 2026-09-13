@@ -1471,7 +1471,20 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     // ==================== PANEL COTAS / TRAMOS ====================
 
-    private data class BloqueTramo(val letra: String, val ancho: Float, val contenido: String)
+    /**
+     * Un tramo tal como está escrito en el paquete, para rearmarlo tras editar las cotas.
+     *
+     * [pliegue] es el `A<90>` que va DELANTE de él, cuando la ventana dobla ahí. Sin guardarlo,
+     * al rearmar salían todos los tramos separados por parantes y la ventana en L se veía plana:
+     * el mismo caso que la silueta del vano, que tampoco es un tramo y se quedaba fuera.
+     */
+    private data class BloqueTramo(
+        val letra: String,
+        val ancho: Float,
+        val contenido: String,
+        val pliegue: String? = null
+    )
+
 
     private fun parsearBloquesTramo(): List<BloqueTramo> {
         val paquete = paqueteActualLectura()
@@ -1481,8 +1494,19 @@ class DisenoNovaActivity : AppCompatActivity() {
         if (idxColon < 0 || idxClose <= idxColon) return emptyList()
         val cuerpo = t.substring(idxColon + 1, idxClose)
         val result = mutableListOf<BloqueTramo>()
+        var pliegue: String? = null
         var i = 0
         while (i < cuerpo.length) {
+            // El pliegue de la esquina: se guarda para el tramo que viene detrás, que es a quien
+            // pertenece. `A<90>` dice dónde dobla la ventana, no es un tramo ni un adorno.
+            if (cuerpo[i].lowercaseChar() == 'a' && i + 1 < cuerpo.length && cuerpo[i + 1] == '<') {
+                val cierre = cuerpo.indexOf('>', i + 2)
+                if (cierre > 0) {
+                    pliegue = cuerpo.substring(i, cierre + 1)
+                    i = cierre + 1
+                    continue
+                }
+            }
             if (cuerpo[i].lowercaseChar() == 't') {
                 i++
                 val letra = if (i < cuerpo.length && cuerpo[i].lowercaseChar() in 'a'..'z' && cuerpo[i] != '<') {
@@ -1502,7 +1526,12 @@ class DisenoNovaActivity : AppCompatActivity() {
                         ')' -> { depth--; if (depth == 0) { closeParen = j; break } }
                     }
                 }
-                result.add(BloqueTramo("T$letra", ancho, cuerpo.substring(openParen + 1, closeParen)))
+                result.add(
+                    BloqueTramo(
+                        "T$letra", ancho, cuerpo.substring(openParen + 1, closeParen), pliegue
+                    )
+                )
+                pliegue = null
                 i = closeParen + 1
             } else {
                 i++
@@ -1522,8 +1551,12 @@ class DisenoNovaActivity : AppCompatActivity() {
         val sb = StringBuilder()
         sb.append("{${clase},${tipoTxt},[${df1(totalAncho)},${df1(altoCm)}:")
         bloques.forEachIndexed { idx, bloque ->
+            // Delante del tramo va su pliegue si la ventana dobla ahí, y si no el parante de
+            // siempre. Escribiendo siempre el parante, la esquina desaparecía y el lado que iba
+            // en perspectiva se ponía de frente.
+            val delante = bloque.pliegue ?: if (idx > 0) "P<${df1(anchoParanteCm)}>" else ""
+            sb.append(delante)
             sb.append("${bloque.letra}<${df1(bloque.ancho)}>(${bloque.contenido})")
-            if (idx < bloques.lastIndex) sb.append("P<${df1(anchoParanteCm)}>")
         }
         if (vano.isNotBlank()) sb.append(" $vano")
         sb.append("]}")
@@ -2333,13 +2366,23 @@ class DisenoNovaActivity : AppCompatActivity() {
         runCatching { binding.vistaDiseno.actualizarDesdePaquete(paquete, 0f, 0f, mochetaLateralCm) }
             .exceptionOrNull()?.let { "${it::class.simpleName}: ${it.message}" }
 
-    /** El dibujo tal cual se está viendo, para poder mirarlo desde fuera del celular. */
+    /**
+     * El paquete rearmado desde sus tramos, que es lo que hace "Aplicar" del panel de cotas.
+     *
+     * Es el camino por el que la ventana en L se enderezaba: se parte en tramos, se tocan sus
+     * medidas y se vuelve a escribir.
+     */
     @androidx.annotation.VisibleForTesting
+    fun rearmarPaqueteParaPruebas(): String =
+        reconstruirPaqueteConBloques(parsearBloquesTramo())
+
     /** La panza de cada tramo del dibujo, en cm: 0 los rectos. */
+    @androidx.annotation.VisibleForTesting
     fun flechasDeTramoParaPruebas(): List<Float> = binding.vistaDiseno.flechasDeTramoParaPruebas()
 
+    /** El dibujo tal cual se está viendo, para poder mirarlo desde fuera del celular. */
+    @androidx.annotation.VisibleForTesting
     fun dibujoParaPruebas(): android.graphics.Bitmap =
-
         binding.vistaDiseno.exportarSoloDisenoBitmap(paddingPx = 8)
 
     @androidx.annotation.VisibleForTesting

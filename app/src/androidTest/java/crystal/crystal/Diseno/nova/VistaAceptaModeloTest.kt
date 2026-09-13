@@ -80,6 +80,22 @@ class VistaAceptaModeloTest {
             assertEquals("se perdió una pared: $devuelto", 3, modelo!!.tramos.size)
             assertEquals("la curva perdió su panza: $devuelto", 29.3f, modelo.tramos[1].flecha, 0.1f)
             assertEquals("la ventana se enderezó: $devuelto", "A<90>", modelo.tramos[2].pliegue)
+
+            // Y por el camino de "Aplicar" del panel de cotas, que parte el paquete en tramos y
+            // lo vuelve a escribir: ahí se perdía la esquina y el lado en perspectiva se ponía
+            // de frente.
+            val rearmado = en(esc) { it.rearmarPaqueteParaPruebas() }
+            val tras = DisenoNova.desdePaquete(rearmado)
+            assertNotNull("el rearmado no se lee: $rearmado", tras)
+            assertEquals("se perdió una pared al aplicar: $rearmado", 3, tras!!.tramos.size)
+            assertEquals(
+                "la esquina desapareció al aplicar: $rearmado",
+                "A<90>", tras.tramos[2].pliegue
+            )
+            assertEquals(
+                "la curva se enderezó al aplicar: $rearmado",
+                29.3f, tras.tramos[1].flecha, 0.1f
+            )
         }
     }
 
