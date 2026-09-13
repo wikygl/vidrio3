@@ -875,9 +875,19 @@ class VistaDiseno @JvmOverloads constructor(
         // Los paños que quedan ANTES del de frente doblan hacia la izquierda; de eso se encarga
         // `modoCUSimétrico`, que es lo que ya hacía la ventana en C, donde el de frente es el del
         // medio. Con más de tres paños se deja el zigzag de la serie, que es otra lectura.
+        // La serie ("ns") se reconoce porque su paquete arranca con un pliegue, así que su primer
+        // paño ya viene de aleta: esa lleva su propio zigzag y se deja como está. Lo demás —la L,
+        // la C, la ventana de esquina— se lee alrededor de su paño de frente.
         val dobla = segs.any { it.tipo == TipoSegmentoNs.ALETA }
-        if (dobla && segs.size in 2..3) {
-            val frontal = segs.indices.maxByOrNull { segs[it].anchoCm } ?: 0
+        val esSerie = segs.firstOrNull()?.tipo == TipoSegmentoNs.ALETA
+        if (dobla && !esSerie) {
+            // Y de frente va el más ancho de lo que SE VE: una pared curva ocupa 2/π de su
+            // desarrollo, así que no se lleva el sitio de frente solo por ser larga. Las curvas
+            // son la esquina, no la cara de la ventana.
+            val frontal = segs.indices.maxByOrNull {
+                if (segs[it].flechaCm > 0f) segs[it].anchoCm * ANCHO_VISTO_DE_LA_CURVA
+                else segs[it].anchoCm
+            } ?: 0
             for (i in segs.indices) {
                 segs[i] = segs[i].copy(
                     tipo = if (i == frontal) TipoSegmentoNs.PLANO else TipoSegmentoNs.ALETA
@@ -1731,7 +1741,13 @@ class VistaDiseno @JvmOverloads constructor(
                 }
                 TipoSegmentoNs.ALETA -> {
                     // Aleta izquierda (IZQ) solo en el patrón C/U simétrico ("nu") para el primer segmento
-                    val esAletaIzq = modoCUSimétrico && idx == 0
+                    // Todo lo que queda ANTES del paño de frente dobla hacia la izquierda, no
+                    // solo el primero: en una C con las esquinas curvas, delante del centro hay
+                    // una pared y su curva, y con el segundo doblando a la derecha la ventana se
+                    // abría al revés y no parecía una C.
+                    val indiceFrontal = segmentosNs.indexOfFirst { it.tipo == TipoSegmentoNs.PLANO }
+                    val esAletaIzq = indiceFrontal > 0 && idx < indiceFrontal
+
                     val ladoAleta = if (esAletaIzq) LadoAleta.IZQ else LadoAleta.DER
                     // Para IZQ: xUnion = xIni + ancho visual efectivo (igual que el borde exterior DER).
                     // Así el trapecio ocupa [xIni, xUnion] sin espacio vacío a la izquierda.

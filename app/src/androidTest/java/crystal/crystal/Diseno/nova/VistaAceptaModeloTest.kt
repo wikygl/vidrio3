@@ -336,4 +336,37 @@ class VistaAceptaModeloTest {
             assertEquals(2, en(esc) { it.tramosFrontalesParaPruebas() }.size)
         }
     }
+
+    /**
+     * Una C con las dos esquinas curvas tiene que leerse como una C.
+     *
+     * De frente el paño central, las dos paredes de los lados alejándose —la de delante doblando
+     * hacia la izquierda— y las curvas girando en cada esquina.
+     */
+    @Test
+    fun la_c_con_esquinas_curvas_se_lee_como_una_c() {
+        val enC = "{nova,ina,[100,160:Tl<100>(H<160>;s(fc))" +
+            " Tl<60>(H<160>;Q<8>;s(f)) A<90> Tl<200>(H<160>;s(fcc))" +
+            " Tl<60>(H<160>;Q<8>;s(f)) A<90> Tl<100>(H<160>;s(fc))]}"
+        escenario().use { esc ->
+            esperar()
+            en(esc) { it.cargarParaPruebas(enC) }
+            esperar(300)
+            val frontales = en(esc) { it.tramosFrontalesParaPruebas() }
+            assertEquals("no son cinco paños: $frontales", 5, frontales.size)
+            assertEquals(
+                "de frente tiene que ir el paño central: $frontales",
+                2, frontales.indexOfFirst { it }
+            )
+            assertEquals("hay más de un paño de frente: $frontales", 1, frontales.count { it })
+
+            val flechas = en(esc) { it.flechasDeTramoParaPruebas() }
+            assertEquals("las esquinas perdieron su curva: $flechas", 2, flechas.count { it > 0f })
+
+            val bmp = en(esc) { it.dibujoParaPruebas() }
+            val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+            java.io.File(ctx.getExternalFilesDir(null), "nova_c_curva.png")
+                .outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
+    }
 }
