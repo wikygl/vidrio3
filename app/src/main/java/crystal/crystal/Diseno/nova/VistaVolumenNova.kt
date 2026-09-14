@@ -61,9 +61,32 @@ class VistaVolumenNova @JvmOverloads constructor(
     fun mostrar(paquete: String?): Boolean {
         val d = runCatching { DisenoNova.desdePaquete(paquete.orEmpty()) }.getOrNull()
         diseno = d
-        volumen = d?.let { VolumenDelDiseno.de(PlantaDelDiseno.de(it)) }
+        val planta = d?.let { PlantaDelDiseno.de(it) }
+        volumen = planta?.let { VolumenDelDiseno.de(it) }
+        planta?.let { giroGrados = giroQueLaPresentaBien(it) }
         invalidate()
         return volumen?.caras?.isNotEmpty() == true
+    }
+
+    /**
+     * Desde dónde mirarla al abrirla, para que se presente de cara y no de canto.
+     *
+     * Una ventana curva que gira mucho, mirada desde un sitio fijo, sale casi de perfil y parece
+     * una astilla. Se gira la vista lo que haga falta para que la línea que va de una punta a otra
+     * de la ventana quede siempre igual de atravesada, y de ahí ya la mueve el dedo.
+     */
+    private fun giroQueLaPresentaBien(planta: PlantaDelDiseno): Float {
+        val recorrido = planta.recorrido()
+        if (recorrido.size < 2) return VolumenDelDiseno.GIRO_POR_DEFECTO
+        val a = recorrido.first()
+        val b = recorrido.last()
+        val dx = (b.x - a.x).toDouble()
+        val dy = (b.y - a.y).toDouble()
+        if (kotlin.math.hypot(dx, dy) < 1.0) return VolumenDelDiseno.GIRO_POR_DEFECTO
+        // La línea de punta a punta se lleva a -45° en la planta: ahí es donde el isométrico la
+        // estira al máximo en el papel, y la ventana se presenta lo más ancha que puede.
+        val rumbo = Math.toDegrees(kotlin.math.atan2(dy, dx)).toFloat()
+        return -45f - rumbo
     }
 
     // Girar la ventana arrastrando: es lo que salva al isométrico de su pega, que desde un solo
@@ -164,10 +187,15 @@ class VistaVolumenNova @JvmOverloads constructor(
             }
         }
 
-        // La pared entera, rellena. Mirando de frente o de canto se pinta distinto para que se lea
-        // cuál es cuál sin tener que contar esquinas.
-        val daLaCara = VolumenDelDiseno.profundidad(cara.abajoIzq, giroGrados) <
-            VolumenDelDiseno.profundidad(cara.arribaDer, giroGrados) + 0.001
+        // La pared entera, rellena. La que nos enseña su cara va clara y la que nos da la espalda
+        // más apagada, para leer de un vistazo cuál es cuál sin contar esquinas.
+        //
+        // Se mira por dónde cae su canto derecho respecto del izquierdo YA EN EL PAPEL: si va hacia
+        // la derecha, la pared nos mira. Comparando lo lejos que cae cada canto, los trozos de una
+        // curva cambiaban de tono a media pared y la curva salía a dos colores.
+        val izq = enLaCara(0f, 0f)
+        val der = enLaCara(1f, 0f)
+        val daLaCara = der.x >= izq.x
         canvas.drawPath(cuadro(0f, 0f, 1f, 1f), if (daLaCara) pVidrio else pVidrioFondo)
 
         // Las franjas, de abajo arriba, y dentro de cada una sus módulos.

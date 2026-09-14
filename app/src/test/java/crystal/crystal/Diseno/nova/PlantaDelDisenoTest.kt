@@ -147,4 +147,56 @@ class PlantaDelDisenoTest {
         assertTrue("la C no se cierra: la tercera pared sigue de largo", recorrido[3].x < recorrido[2].x)
         assertEquals("la C no se hunde lo que mide su pared del medio", 200f, recorrido[2].y, 0.5f)
     }
+
+    /**
+     * La ventana curva de la calculadora: UNA panza para toda la ventana, no una por tramo.
+     *
+     * El curvo de Nova escribe el tag `U<flecha>` para el conjunto y parte la ventana en tramos
+     * que son trozos del mismo arco. Sin entenderlo, sus tramos salían rectos y la ventana se veía
+     * plana en tres dimensiones aunque el cálculo estuviera bien.
+     */
+    @Test
+    fun la_ventana_curva_entera_curva_todos_sus_tramos() {
+        val d = DisenoNova(
+            acabado = "ina",
+            ancho = 180f,
+            alto = 160f,
+            tramos = listOf(tramo(60f), tramo(60f), tramo(60f)),
+            etiquetas = listOf("U<20>")
+        )
+        val planta = PlantaDelDiseno.de(d)
+        assertEquals(3, planta.paredes.size)
+        assertTrue("los tramos salieron rectos", planta.paredes.all { it.esCurva })
+        assertEquals("el desarrollo cambió", 180f, planta.desarrolloCm, 0.1f)
+
+        // Los tres son trozos del MISMO arco: giran lo mismo y ocupan la misma cuerda.
+        val giros = planta.paredes.map { it.giroGrados }
+        assertEquals("los trozos no giran lo mismo", giros[0], giros[1], 0.5f)
+        assertEquals("los trozos no giran lo mismo", giros[1], giros[2], 0.5f)
+        assertTrue("no giran nada: $giros", giros[0] > 5f)
+
+        // Y la ventana entera gira lo que le toca a su arco: 180 de desarrollo con 20 de panza.
+        val giroEntero = giros.sum()
+        val arcoEntero = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(180f, 20f)!!
+        assertEquals("la ventana no gira lo que dice su arco", arcoEntero.anguloGrados, giroEntero, 1f)
+    }
+
+    /** Y si los tramos traen la suya, manda la suya: ahí cada arco es distinto. */
+    @Test
+    fun la_panza_de_cada_tramo_manda_sobre_la_del_conjunto() {
+        val d = DisenoNova(
+            acabado = "ina",
+            ancho = 180f,
+            alto = 160f,
+            tramos = listOf(tramo(90f, flecha = 8f), tramo(90f, flecha = 20f)),
+            etiquetas = listOf("U<50>")
+        )
+        val planta = PlantaDelDiseno.de(d)
+        assertEquals(8f, planta.paredes[0].flechaCm, 0.01f)
+        assertEquals(20f, planta.paredes[1].flechaCm, 0.01f)
+        assertTrue(
+            "los dos arcos giran lo mismo, pero tienen panzas distintas",
+            planta.paredes[1].giroGrados > planta.paredes[0].giroGrados + 5f
+        )
+    }
 }

@@ -86,4 +86,15 @@ class VistaVolumenNovaTest {
             giro = 60f
         )
     }
+
+    /** La ventana curva tal como la escribe la calculadora: una panza para toda la ventana. */
+    @Test
+    fun retrato_de_la_ventana_curva_de_la_calculadora() {
+        retrato(
+            "vol_curva_entera.png",
+            "{nova,ina,[180,160:Tl<60>(H<160>;m<40>(f);s<120>(f))" +
+                " P<2.5> Tl<60>(H<160>;m<40>(f);s<120>(f))" +
+                " P<2.5> Tl<60>(H<160>;m<40>(f);s<120>(f)) U<20>]}"
+        )
+    }
 }

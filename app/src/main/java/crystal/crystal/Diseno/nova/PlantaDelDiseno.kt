@@ -75,6 +75,7 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
             var y = 0f
             var rumbo = 0.0                       // radianes; 0 = hacia la derecha
             var veniaDeCurva = false
+            val radioEntero = radioDeLaVentanaCurva(diseno)
 
             diseno.tramos.forEachIndexed { i, tramo ->
                 val grados = tramo.pliegue?.let { gradosDePliegue(it) }
@@ -86,11 +87,17 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
                 val desde = PuntoPlanta(x, y)
                 val giroDeLaPared: Float
 
-                if (tramo.flecha > 0f) {
+                // La panza de este tramo: la suya, o la que le toca si la ventana entera es una
+                // curva sola —la calculadora curva escribe UNA panza para toda la ventana, no una
+                // por tramo, y sin esto sus tramos salían rectos y el volumen se veía plano—.
+                val flecha = if (tramo.flecha > 0f) tramo.flecha
+                else radioEntero?.let { r -> panzaDeUnTrozo(tramo.ancho, r) } ?: 0f
+
+                if (flecha > 0f) {
                     // La curva: de su desarrollo y su panza sale cuánto gira y cuánta cuerda tiene.
                     // La cuerda sale a mitad de camino del giro —esa es la dirección de punta a
                     // punta de un arco—, y al final el rumbo queda girado el arco entero.
-                    val arco = ArcoEsquina.deDesarrolloYFlecha(tramo.ancho, tramo.flecha)
+                    val arco = ArcoEsquina.deDesarrolloYFlecha(tramo.ancho, flecha)
                     val angulo = arco?.anguloGrados ?: 0f
                     val cuerda = arco?.cuerda ?: tramo.ancho
                     val mitad = Math.toRadians((angulo / 2f).toDouble())
@@ -113,12 +120,38 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
                         hasta = PuntoPlanta(x, y),
                         anchoCm = tramo.ancho,
                         altoCm = alto,
-                        flechaCm = tramo.flecha,
+                        flechaCm = flecha,
                         giroGrados = giroDeLaPared
                     )
                 )
             }
             return PlantaDelDiseno(paredes)
+        }
+
+        /**
+         * El radio de una ventana que es UNA curva entera, o null si no lo es.
+         *
+         * La calculadora curva escribe una sola panza para toda la ventana —el tag `U<…>`— en vez
+         * de una por tramo. Sus tramos son trozos de ese mismo arco, así que del desarrollo entero
+         * y de esa panza sale el radio, y de ahí lo que curva cada trozo.
+         */
+        private fun radioDeLaVentanaCurva(diseno: DisenoNova): Float? {
+            if (diseno.tramos.any { it.flecha > 0f }) return null
+            val flecha = diseno.etiquetas
+                .firstOrNull { it.trim().startsWith("U<", ignoreCase = true) }
+                ?.substringAfter("<")?.substringBefore(">")
+                ?.trim()?.replace(",", ".")?.toFloatOrNull()
+                ?: return null
+            if (flecha <= 0.05f) return null
+            val desarrollo = diseno.tramos.sumOf { it.ancho.toDouble() }.toFloat()
+            return ArcoEsquina.deDesarrolloYFlecha(desarrollo, flecha)?.radio
+        }
+
+        /** Lo que curva un trozo de arco de [radio] que mide [desarrollo] estirado. */
+        private fun panzaDeUnTrozo(desarrollo: Float, radio: Float): Float {
+            if (radio <= 0.01f || desarrollo <= 0.01f) return 0f
+            val angulo = desarrollo / radio
+            return (radio * (1.0 - cos(angulo / 2.0))).toFloat()
         }
 
         /** Los grados de un pliegue `A<90>`; el menos delante es que dobla hacia afuera. */
