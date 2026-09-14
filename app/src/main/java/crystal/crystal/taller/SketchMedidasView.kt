@@ -1353,6 +1353,14 @@ class SketchMedidasView @JvmOverloads constructor(
             setText(actual?.let { formatCm(it.desarrollo) } ?: "")
             setSelectAllOnFocus(true)
         }
+        // La flecha y la cuerda son la misma cosa dicha de dos maneras, y en la pared se mide la
+        // que se puede: la flecha con una regla contra la cuerda, o la cuerda de punta a punta si
+        // se llega. Se escribe cualquiera de las dos y la otra sale sola.
+        val etFlecha = EditText(context).apply {
+            hint = "Flecha (la panza)"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(actual?.let { formatCm(it.flecha) } ?: "")
+        }
         val etCuerda = EditText(context).apply {
             hint = "Cuerda (de punta a punta)"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
@@ -1362,26 +1370,58 @@ class SketchMedidasView @JvmOverloads constructor(
             textSize = 13f
             setPadding(0, (8 * dp).toInt(), 0, 0)
         }
-        fun repasar() {
-            val d = etDesarrollo.text?.toString()?.replace(",", ".")?.toFloatOrNull()
-            val c = etCuerda.text?.toString()?.replace(",", ".")?.toFloatOrNull()
-            val arco = if (d != null && c != null) ArcoEsquina.deDesarrolloYCuerda(d, c) else null
-            aviso.text = when {
-                arco != null ->
-                    "Flecha ${formatCm(arco.flecha)} · dobla ${formatCm(arco.anguloGrados)}°"
-                d == null || c == null -> "Escribe el desarrollo y la cuerda."
-                else -> "La cuerda tiene que ser más corta que el desarrollo."
+        fun leer(et: EditText) = et.text?.toString()?.replace(",", ".")?.toFloatOrNull()
+        // Cuál de las dos mandó la última vez que se escribió: la que tocó el vidriero es la que
+        // vale, y la otra es la que se recalcula.
+        var mandaLaFlecha = false
+        var recalculando = false
+
+        /** El arco con lo que hay escrito ahora, o null si todavía no da uno. */
+        fun arcoDeAhora(): ArcoEsquina? {
+            val d = leer(etDesarrollo) ?: return null
+            val f = leer(etFlecha)
+            val c = leer(etCuerda)
+            return when {
+                mandaLaFlecha && f != null -> ArcoEsquina.deDesarrolloYFlecha(d, f)
+                c != null -> ArcoEsquina.deDesarrolloYCuerda(d, c)
+                f != null -> ArcoEsquina.deDesarrolloYFlecha(d, f)
+                else -> null
             }
         }
-        val vigilante = object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = repasar()
-            override fun afterTextChanged(s: android.text.Editable?) {}
+        fun repasar() {
+            if (recalculando) return
+            val arco = arcoDeAhora()
+            if (arco != null) {
+                recalculando = true
+                // Se rellena la otra, la que no se está escribiendo, para que las tres se vean.
+                if (mandaLaFlecha) etCuerda.setText(formatCm(arco.cuerda))
+                else etFlecha.setText(formatCm(arco.flecha))
+                recalculando = false
+            }
+            aviso.text = when {
+                arco != null -> "Radio ${formatCm(arco.radio)} · dobla ${formatCm(arco.anguloGrados)}°"
+                leer(etDesarrollo) == null -> "Escribe el desarrollo, y la flecha o la cuerda."
+                leer(etFlecha) == null && leer(etCuerda) == null ->
+                    "Falta la flecha o la cuerda: con una basta."
+                else -> "La flecha y la cuerda tienen que caber en el desarrollo."
+            }
         }
-        etDesarrollo.addTextChangedListener(vigilante)
-        etCuerda.addTextChangedListener(vigilante)
+        fun vigilar(et: EditText, laFlecha: Boolean?) {
+            et.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {
+                    if (!recalculando && laFlecha != null) mandaLaFlecha = laFlecha
+                    repasar()
+                }
+                override fun afterTextChanged(s: android.text.Editable?) {}
+            })
+        }
+        vigilar(etDesarrollo, null)
+        vigilar(etFlecha, true)
+        vigilar(etCuerda, false)
         repasar()
         cont.addView(etDesarrollo)
+        cont.addView(etFlecha)
         cont.addView(etCuerda)
         cont.addView(aviso)
 
@@ -1389,16 +1429,18 @@ class SketchMedidasView @JvmOverloads constructor(
             .setTitle("Curva del tramo")
             .setView(cont)
             .setPositiveButton("Aceptar") { _, _ ->
-                val d = etDesarrollo.text?.toString()?.replace(",", ".")?.toFloatOrNull()
-                val c = etCuerda.text?.toString()?.replace(",", ".")?.toFloatOrNull()
-                if (d == null || c == null || ArcoEsquina.deDesarrolloYCuerda(d, c) == null) {
+                val d = leer(etDesarrollo)
+                val arco = arcoDeAhora()
+                if (d == null || arco == null) {
                     Toast.makeText(
                         context,
-                        "La curva necesita su desarrollo y su cuerda, y la cuerda más corta.",
+                        "La curva necesita su desarrollo y su flecha o su cuerda, " +
+                            "y las dos más cortas que el desarrollo.",
                         Toast.LENGTH_LONG
                     ).show()
                     return@setPositiveButton
                 }
+                val c = arco.cuerda
                 etiqueta.text = textoCurva(d, c)
                 // El tramo mide su desarrollo: es lo que se corta y lo que se ve en la alzada.
                 marcoDePieza(index)?.let { marco ->
@@ -3511,7 +3553,8 @@ class SketchMedidasView @JvmOverloads constructor(
         // Sin tope por arriba: una ventana en serie lleva los lados que lleve la obra. Abajo, dos
         // en la de esquina —con una sola pared no hay esquina que doblar— y UNO en la curva: un
         // arco solo ya es una ventana, y partirlo es cosa de la obra, no una obligación.
-        val minimo = if (esMarcoCurvo(marcoIndex)) 1 else 2
+        val curvo = esMarcoCurvo(marcoIndex)
+        val minimo = if (curvo) 1 else 2
         val destino = (tramos + delta).coerceAtLeast(minimo)
         if (destino == tramos) {
             Toast.makeText(
@@ -3530,23 +3573,43 @@ class SketchMedidasView @JvmOverloads constructor(
             val arriba = marco.topRight.x
             elementos.add(crearShape(Tool.LINE, PointF(arriba, marco.topRight.y), PointF(abajo, marco.bottomRight.y), ESQUINA_QUIEBRE))
             elementos.add(crearShape(Tool.LINE, PointF(abajo, marco.bottomRight.y), PointF(abajo, marco.topRight.y), VENTANA_ALTO_ESQUINA))
-            // Una esquina nueva nace SIEMPRE en punta: hereda los grados de la última que doble
-            // así, y si no hay ninguna empieza por la escuadra. Heredando la etiqueta tal cual, al
-            // añadir un tramo detrás de una esquina curva el tramo nuevo salía redondeado sin que
-            // nadie lo hubiera pedido; el vidriero lo curva después si quiere.
-            val anguloPrevio = etiquetasEsquina(marcoIndex)
-                .map { (elementos[it] as Element.TextLabel).text }
-                .lastOrNull { !it.contains(MARCA_CURVA) }
-                ?: textoEsquina(90f)
-            elementos.add(
-                Element.TextLabel(
-                    text = anguloPrevio,
-                    x = arriba,
-                    y = marco.topRight.y,
-                    textSize = 44f,
-                    rol = ROL_ESQUINA
+            // En una ventana curva no hay ángulo entre tramo y tramo: dos arcos se encuentran sin
+            // doblar en punta. Lo que estrena el tramo nuevo es SU arco, que arranca siguiendo el
+            // radio del último —la curva no se corta ahí— y se edita después con lo medido en la
+            // pared. Así el trozo entre este punto de alto y el anterior tiene su propia curva, y
+            // la ventana entera deja de ser el arco de un solo círculo.
+            if (curvo) {
+                val radio = curvasDeTramo(marcoIndex).values.lastOrNull()?.arco?.radio
+                val desarrollo = pxToCm(ultimo)
+                val arco = radio?.let { ArcoEsquina.deDesarrolloYRadio(desarrollo, it) }
+                elementos.add(
+                    Element.TextLabel(
+                        text = textoCurva(desarrollo, arco?.cuerda ?: desarrollo),
+                        x = abajo + ultimo / 2f,
+                        y = marco.bottomRight.y,
+                        textSize = 44f,
+                        rol = ROL_CURVA
+                    )
                 )
-            )
+            } else {
+                // Una esquina nueva nace SIEMPRE en punta: hereda los grados de la última que doble
+                // así, y si no hay ninguna empieza por la escuadra. Heredando la etiqueta tal cual,
+                // al añadir un tramo detrás de una esquina curva el tramo nuevo salía redondeado
+                // sin que nadie lo hubiera pedido; el vidriero lo curva después si quiere.
+                val anguloPrevio = etiquetasEsquina(marcoIndex)
+                    .map { (elementos[it] as Element.TextLabel).text }
+                    .lastOrNull { !it.contains(MARCA_CURVA) }
+                    ?: textoEsquina(90f)
+                elementos.add(
+                    Element.TextLabel(
+                        text = anguloPrevio,
+                        x = arriba,
+                        y = marco.topRight.y,
+                        textSize = 44f,
+                        rol = ROL_ESQUINA
+                    )
+                )
+            }
             elementos.add(
                 Element.TextLabel(
                     text = textoAltos(0),
@@ -3567,13 +3630,15 @@ class SketchMedidasView @JvmOverloads constructor(
             marco.bottomRight.x += ultimo
         } else {
             val ultimoAncho = bordes[bordes.size - 1] - bordes[bordes.size - 2]
-            // Se va el último tramo con todo lo suyo: su arista, su ángulo, su alto de esquina, su
-            // contador y las cotas de alto que tuviera dentro.
+            // Se va el último tramo con todo lo suyo: su arista, su ángulo o su arco, su alto de
+            // esquina, su contador y las cotas de alto que tuviera dentro. Sin llevarse el arco, el
+            // rótulo se quedaba suelto y la ventana seguía contando una curva que ya no existe.
             val sobran = (
                 listOfNotNull(
                     quiebres.lastOrNull(),
                     altosDelMarco(marcoIndex, VENTANA_ALTO_ESQUINA).lastOrNull(),
                     etiquetasEsquina(marcoIndex).lastOrNull(),
+                    etiquetasCurva(marcoIndex).takeIf { curvo && it.size > 1 }?.lastOrNull(),
                     contadoresAltos(marcoIndex).lastOrNull(),
                     puentesDelMarco(marcoIndex).takeIf { it.size > 1 }?.lastOrNull()
                 ) + altosLibresPorTramo(marcoIndex).lastOrNull().orEmpty()

@@ -58,6 +58,26 @@ data class ArcoEsquina(
             return ArcoEsquina(desarrollo, 2f * radio * sin(angulo / 2f), flecha, radio, grados(angulo))
         }
 
+        /**
+         * Desarrollo y radio: el trozo que le toca a una curva que ya se sabe cómo va.
+         *
+         * Es para partir una curva en trozos, o para estrenar un trozo nuevo detrás de otro: el
+         * radio manda y de él sale la panza que le toca a ese pedazo. No es una medida de obra
+         * —nadie mide el radio de una pared—, es la manera de seguir la misma curva.
+         */
+        fun deDesarrolloYRadio(desarrollo: Float, radio: Float): ArcoEsquina? {
+            if (desarrollo <= MINIMO || radio <= MINIMO) return null
+            val angulo = desarrollo / radio
+            if (angulo <= MINIMO || angulo >= 2f * Math.PI.toFloat()) return null
+            return ArcoEsquina(
+                desarrollo = desarrollo,
+                cuerda = 2f * radio * sin(angulo / 2f),
+                flecha = radio * (1f - cos(angulo / 2f)),
+                radio = radio,
+                anguloGrados = grados(angulo)
+            )
+        }
+
         /** Desarrollo y cuerda: lo estirado y lo recto. */
         fun deDesarrolloYCuerda(desarrollo: Float, cuerda: Float): ArcoEsquina? {
             if (desarrollo <= MINIMO || cuerda <= MINIMO) return null

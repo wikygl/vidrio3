@@ -686,4 +686,53 @@ class PlantaEsquinaTest {
         }
         assertEquals("la esquina se quedó sin doblar", 2, esquina.esquinaPrincipalEnCm()!!.lados.size)
     }
+
+    /**
+     * Partir la curva en más trozos le da SU arco a cada uno.
+     *
+     * Cada trozo va de un punto de medida de alto al siguiente —el primero, desde el canto de la
+     * ventana hasta el primer punto de dentro—, y lleva su desarrollo y su flecha. Eso es lo que
+     * permite apuntar una curva de obra que no es el arco de un círculo: cada pedazo va a lo suyo.
+     *
+     * El trozo nuevo nace siguiendo el radio del anterior —la curva no se corta ahí—, y se corrige
+     * después con lo medido en la pared.
+     */
+    @Test
+    fun partir_la_curva_le_da_su_arco_a_cada_trozo() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        assertEquals("no empezó con un solo arco", 1, v.esquinaPrincipalEnCm()!!.lados.size)
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { v.cambiarTramosParaPruebas(1) }
+
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no partió en dos trozos", 2, medida.lados.size)
+        assertTrue("el trozo de siempre se quedó sin curva", medida.lados[0].esCurva)
+        assertTrue("el trozo nuevo salió recto", medida.lados[1].esCurva)
+
+        // Entre dos arcos no hay punta: se encuentran sin doblar.
+        assertEquals("los dos arcos doblan en punta", 180f, medida.gradosDe(0)!!, 0.5f)
+
+        // Y el trozo nuevo sigue la curva del de al lado: mide lo mismo que él, así que le toca
+        // la misma panza. Si naciera recto o con una panza cualquiera, esto no cuadraría.
+        assertEquals("el trozo nuevo no mide como el anterior", medida.lados[0].ancho, medida.lados[1].ancho, 1f)
+        assertEquals("el trozo nuevo no siguió la curva", medida.lados[0].flecha, medida.lados[1].flecha, 1f)
+        assertTrue("el trozo nuevo salió sin panza", medida.lados[1].flecha > 1f)
+    }
+
+    /** Y quitar un trozo se lleva su arco: no se queda un rótulo suelto contando una curva que no está. */
+    @Test
+    fun quitar_un_trozo_se_lleva_su_arco() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(90f, 90f), altoCm = 160f, flechaCm = 12f)
+        assertEquals(2, v.esquinaPrincipalEnCm()!!.lados.size)
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { v.cambiarTramosParaPruebas(-1) }
+
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no se quedó con un solo trozo", 1, medida.lados.size)
+        assertTrue("el trozo que queda perdió su curva", medida.lados[0].esCurva)
+        assertEquals("el trozo que queda cambió de panza", 12f, medida.lados[0].flecha, 0.5f)
+        assertEquals("el trozo que queda cambió de desarrollo", 90f, medida.lados[0].ancho, 1f)
+    }
 }

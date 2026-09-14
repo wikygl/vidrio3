@@ -3,6 +3,7 @@ package crystal.crystal.taller
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -70,5 +71,35 @@ class ArcoEsquinaTest {
         assertNull(ArcoEsquina.deDesarrolloYFlecha(150f, 150f))
         // Y una medida en negativo no es una medida.
         assertNull(ArcoEsquina.deCuerdaYFlecha(-10f, 5f))
+    }
+
+    /**
+     * El trozo de una curva que ya se sabe cómo va: del radio sale la panza que le toca.
+     *
+     * Es lo que hace falta para partir un arco en pedazos, o para estrenar un pedazo detrás de
+     * otro sin que la curva se corte ahí.
+     */
+    @Test
+    fun del_radio_sale_el_trozo_que_le_toca() {
+        val entero = ArcoEsquina.deCuerdaYFlecha(200f, 30f)!!
+        val trozo = ArcoEsquina.deDesarrolloYRadio(entero.desarrollo / 2f, entero.radio)!!
+
+        assertEquals("el trozo no sigue el mismo radio", entero.radio, trozo.radio, 0.01f)
+        assertEquals("no dobla la mitad que el entero", entero.anguloGrados / 2f, trozo.anguloGrados, 0.01f)
+        // Media curva panza MENOS de la mitad: la flecha no se reparte a partes iguales.
+        assertTrue("la panza del trozo salió igual o mayor que la entera", trozo.flecha < entero.flecha / 2f)
+
+        // Y con su desarrollo y esa panza sale el mismo arco: las tres medidas cuadran.
+        val rehecho = ArcoEsquina.deDesarrolloYFlecha(trozo.desarrollo, trozo.flecha)!!
+        assertEquals(trozo.cuerda, rehecho.cuerda, 0.2f)
+        assertEquals(trozo.radio, rehecho.radio, 0.5f)
+    }
+
+    /** Sin radio, o con uno que daría más de una vuelta, no hay trozo que sacar. */
+    @Test
+    fun un_radio_que_no_vale_no_da_trozo() {
+        assertNull(ArcoEsquina.deDesarrolloYRadio(100f, 0f))
+        assertNull(ArcoEsquina.deDesarrolloYRadio(0f, 100f))
+        assertNull(ArcoEsquina.deDesarrolloYRadio(1000f, 10f))
     }
 }
