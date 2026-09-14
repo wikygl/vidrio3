@@ -94,4 +94,37 @@ class CotaAEscuadraEnElApunteTest {
             kotlin.math.abs((contorno[nodo].second - ahora[nodo].second) - 25f) < 2f
         )
     }
+
+    /**
+     * Apuntar con el dedo no mueve el lienzo: mientras se elige la esquina, el toque es para eso.
+     *
+     * Sin esto el dibujo se iba con el dedo al arrastrar para afinar la puntería, y no había manera
+     * de acertar la esquina.
+     */
+    @Test
+    fun apuntar_a_la_esquina_no_mueve_el_dibujo() {
+        val v = vista()
+        v.insertarRecurrenteF1()
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { v.activarCotaAEscuadra() }
+
+        val antes = v.contornoDelCompositeParaPruebas()
+        val caja = v.cajaDelCompositeParaPruebas()
+        val nodo = esquinaDelCorte(antes)
+        val x = caja.first + v.cmAPixelesParaPruebas(antes[nodo].first) + 10f
+        val y = caja.second + v.cmAPixelesParaPruebas(antes[nodo].second) + 10f
+
+        // Bajar el dedo y arrastrarlo un poco: el lienzo tiene que quedarse quieto.
+        val comido = v.toqueParaPruebas(android.view.MotionEvent.ACTION_DOWN, x, y) &&
+            v.toqueParaPruebas(android.view.MotionEvent.ACTION_MOVE, x + 40f, y + 40f)
+        assertTrue("el toque no se consumió: el lienzo se movería", comido)
+        assertEquals("el dibujo se movió al apuntar", antes, v.contornoDelCompositeParaPruebas())
+
+        // Se vuelve sobre la esquina sin soltar —afinar la puntería— y al levantar queda puesta.
+        v.toqueParaPruebas(android.view.MotionEvent.ACTION_MOVE, x, y)
+        assertEquals("el dibujo se movió al apuntar", antes, v.contornoDelCompositeParaPruebas())
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.toqueParaPruebas(android.view.MotionEvent.ACTION_UP, x, y)
+        }
+        assertNotNull("no puso la cota al levantar el dedo", v.medidaAEscuadraParaPruebas())
+    }
 }

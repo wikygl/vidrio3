@@ -477,6 +477,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.forEachIndexed { index, element -> drawElement(canvas, index, element, true) }
         dibujarPlantasDeEsquina(canvas, true)
         dibujarCotasAEscuadra(canvas, true)
+        dibujarImanEscuadra(canvas)
         drawSelection(canvas)
         drawNodos(canvas)
         if (dibujando) {
@@ -517,6 +518,32 @@ class SketchMedidasView @JvmOverloads constructor(
             removeCallbacks(piezaLongPressRunnable); piezaPendiente = null
             manejarViewportGesture(event)
             return true
+        }
+        // Esperando esquina para una cota a escuadra: el dedo apunta y el lienzo NO se mueve. Se
+        // come los tres eventos —bajar, arrastrar y levantar— porque si no, al arrastrar para
+        // afinar la puntería el dibujo se iba con el dedo y no había manera de acertar la esquina.
+        // La cota se pone al LEVANTAR, así se puede corregir sin soltar.
+        if (eligiendoEscuadra) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    apuntandoEscuadra = screenToWorld(event.x, event.y)
+                    invalidate()
+                    return true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val p = screenToWorld(event.x, event.y)
+                    apuntandoEscuadra = null
+                    ponerCotaAEscuadra(p)
+                    invalidate()
+                    return true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    apuntandoEscuadra = null
+                    invalidate()
+                    return true
+                }
+            }
         }
         // Cota: tap = editar; mantener presionado = bloquear/desbloquear el lado.
         when (event.actionMasked) {
@@ -4412,6 +4439,16 @@ class SketchMedidasView @JvmOverloads constructor(
     /** Centímetros a píxeles del apunte, para poder tocar donde toca. */
     @androidx.annotation.VisibleForTesting
     fun cmAPixelesParaPruebas(cm: Float): Float = cmToPx(cm)
+
+    /** Manda un toque al lienzo, como el dedo. Devuelve true si la vista se lo quedó. */
+    @androidx.annotation.VisibleForTesting
+    fun toqueParaPruebas(accion: Int, x: Float, y: Float): Boolean {
+        val ahora = android.os.SystemClock.uptimeMillis()
+        val e = MotionEvent.obtain(ahora, ahora, accion, x, y, 0)
+        val comido = onTouchEvent(e)
+        e.recycle()
+        return comido
+    }
     /** Pone una cota a escuadra tocando cerca de esa esquina del contorno, como haría el dedo. */
     @androidx.annotation.VisibleForTesting
     fun cotaAEscuadraParaPruebas(x: Float, y: Float): Boolean {
@@ -7006,8 +7043,30 @@ class SketchMedidasView @JvmOverloads constructor(
     /** true mientras se espera que el dedo elija la esquina desde la que medir. */
     private var eligiendoEscuadra = false
 
-    /** Deja el apunte esperando que se toque una esquina para poner ahí su cota a escuadra. */
+    /** Dónde está el dedo mientras apunta, para enseñar qué esquina va a coger el imán. */
+    private var apuntandoEscuadra: PointF? = null
+
+    private val imanRelleno = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#5500AFEF"); style = Paint.Style.FILL
+    }
+    private val imanBorde = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#00AFEF"); style = Paint.Style.STROKE; strokeWidth = 4f
+    }
+
+    /**
+     * Deja el apunte esperando que se toque una esquina para poner ahí su cota a escuadra.
+     *
+     * Tocando el botón otra vez se sale sin poner nada: si no, la única manera de salirse era
+     * poner una cota y luego borrarla.
+     */
     fun activarCotaAEscuadra() {
+        if (eligiendoEscuadra) {
+            eligiendoEscuadra = false
+            apuntandoEscuadra = null
+            invalidate()
+            Toast.makeText(context, "Cota a escuadra: cancelada", Toast.LENGTH_SHORT).show()
+            return
+        }
         if (compositePrincipal() == null) {
             Toast.makeText(context, "Primero pon una forma con un corte", Toast.LENGTH_SHORT).show()
             return
@@ -7033,9 +7092,15 @@ class SketchMedidasView @JvmOverloads constructor(
      * solo para enseñar la medida y para leer la que se escriba.
      */
     private fun ponerCotaAEscuadra(punto: PointF): Boolean {
-        eligiendoEscuadra = false
-        val composite = compositePrincipal() ?: return false
-        val contorno = contornoDelComposite(composite) ?: return false
+        val composite = compositePrincipal()
+        val contorno = composite?.let { contornoDelComposite(it) }
+        if (composite == null || contorno == null) {
+            eligiendoEscuadra = false
+            Toast.makeText(context, "Aquí no hay una forma que medir", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        // Si el dedo no acertó se sigue esperando: se vuelve a intentar sin tocar otra vez el
+        // botón, y se sale con el botón, que para eso cancela.
         val nodo = CotaAEscuadra.nodoMasCerca(contorno, punto.x to punto.y, cmToPx(30f))
         if (nodo == null) {
             Toast.makeText(context, "Toca más cerca de una esquina", Toast.LENGTH_SHORT).show()
@@ -7050,6 +7115,7 @@ class SketchMedidasView @JvmOverloads constructor(
             ).show()
             return true
         }
+        eligiendoEscuadra = false
         elementos.add(
             crearShape(
                 Tool.LINE,
@@ -7088,7 +7154,23 @@ class SketchMedidasView @JvmOverloads constructor(
         return composite to medida
     }
 
+    /** Mientras se apunta, se marca la esquina que cogería el imán si se levantara el dedo ahí. */
+    private fun dibujarImanEscuadra(canvas: Canvas) {
+        val donde = apuntandoEscuadra ?: return
+        val composite = compositePrincipal() ?: return
+        val contorno = contornoDelComposite(composite) ?: return
+        val nodo = CotaAEscuadra.nodoMasCerca(contorno, donde.x to donde.y, cmToPx(30f)) ?: return
+        val p = contorno[nodo]
+        val r = ce(16f)
+        canvas.drawCircle(p.first, p.second, r, imanRelleno)
+        canvas.drawCircle(p.first, p.second, r, imanBorde)
+        CotaAEscuadra.desdeNodo(contorno, nodo)?.let { medida ->
+            canvas.drawLine(p.first, p.second, medida.pie.first, medida.pie.second, imanBorde)
+        }
+    }
+
     private fun dibujarCotasAEscuadra(canvas: Canvas, collectHits: Boolean) {
+
         cotasAEscuadra().forEach { i ->
             val (_, medida) = medidaDeLaCotaAEscuadra(i) ?: return@forEach
             val linea = elementos[i] as Element.Shape
