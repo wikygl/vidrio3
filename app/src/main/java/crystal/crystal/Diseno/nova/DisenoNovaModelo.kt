@@ -32,11 +32,20 @@ data class NovaModulo(val tipo: Char, val ancho: Float? = null) {
     val esFijo: Boolean get() = tipo != 'c'
 }
 
-/** Una franja horizontal del tramo: la del sistema o una de mocheta. */
+/**
+ * Una franja horizontal del tramo: la del sistema o una de mocheta.
+ *
+ * [parantes] son los parantes que caen DENTRO de la franja, apuntados por el módulo que dejan a su
+ * izquierda: `[2]` es un parante entre el tercer módulo y el cuarto. Es el `;P;` del formato, el
+ * que escriben las geometrías compuestas (en L, en C, curva) porque ahí el separador de tramos
+ * `P<2.5>` se mezclaría con los `A<90>` que parten los lados. No van en la lista de módulos: un
+ * parante no es un paño, y metiéndolo ahí se contaría como fijo en todos los conteos.
+ */
 data class NovaFranja(
     val esSistema: Boolean,
     val alto: Float,
-    val modulos: List<NovaModulo>
+    val modulos: List<NovaModulo>,
+    val parantes: List<Int> = emptyList()
 ) {
     val nFijos: Int get() = modulos.count { it.esFijo }
     val nCorredizas: Int get() = modulos.count { !it.esFijo }
@@ -717,9 +726,11 @@ data class DisenoNova(
     private fun unTramo(tramo: NovaTramo): String {
         val franjas = tramo.franjas.joinToString(";") { fr ->
             val cabeza = if (fr.esSistema) "s" else "m"
-            val mods = fr.modulos.joinToString("") { m ->
-                if (m.ancho != null) "${m.tipo}<${df(m.ancho)}>" else m.tipo.toString()
-            }
+            // Los módulos, y detrás del que toque el `;P;` del parante que va dentro de la franja.
+            val mods = fr.modulos.mapIndexed { i, m ->
+                val escrito = if (m.ancho != null) "${m.tipo}<${df(m.ancho)}>" else m.tipo.toString()
+                if (i in fr.parantes) "$escrito;P;" else escrito
+            }.joinToString("")
             // Una franja sin altura se escribe sin `<alto>`, como venía.
             if (fr.alto > 0f) "$cabeza<${df(fr.alto)}>($mods)" else "$cabeza($mods)"
         }
@@ -761,6 +772,10 @@ data class DisenoNova(
         // ediciones no hacían nada.
         private val RE_FRANJA = Regex("""^([smSM])\s*(?:<\s*([\d.,-]+)\s*>)?\s*\(""")
         private val RE_MODULO = Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>)?""")
+
+        /** Módulos y los parantes de dentro de la franja, en el orden en que vienen escritos. */
+        private val RE_MODULO_O_PARANTE =
+            Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>)?|;\s*[pP]\s*;""")
         private val RE_TRAMO = Regex("""^t[a-z]?\s*<\s*([\d.,-]+)\s*>""", RegexOption.IGNORE_CASE)
         private val RE_ETIQUETA = Regex("""^[UO]<[^>]*>$""", RegexOption.IGNORE_CASE)
         /** El pliegue que va delante de un tramo: `A<90>`. */
@@ -929,13 +944,22 @@ data class DisenoNova(
             // Sin `<alto>` la franja vale 0 y se escribe igual: es lo que hace el diseño viejo.
             val alto = cab.groupValues[2].takeIf { it.isNotBlank() }?.let { num(it) } ?: 0f
             val interior = interiorDeParentesis(t) ?: return null
-            val modulos = RE_MODULO.findAll(interior).map { mm ->
-                val tipo = mm.groupValues[1].lowercase().first()
+            // Se recorren módulos y parantes A LA VEZ, en el orden en que están escritos: el `;P;`
+            // dice ENTRE QUÉ dos módulos cae, y leyendo solo los módulos esa posición se perdía.
+            // Con ella perdida, el 3D dibujaba la ventana sin el parante, ni una raya.
+            val modulos = mutableListOf<NovaModulo>()
+            val parantes = mutableListOf<Int>()
+            RE_MODULO_O_PARANTE.findAll(interior).forEach { mm ->
+                val tipo = mm.groupValues[1]
+                if (tipo.isBlank()) {
+                    if (modulos.isNotEmpty()) parantes.add(modulos.size - 1)
+                    return@forEach
+                }
                 val ancho = mm.groupValues[2].takeIf { it.isNotBlank() }?.let { num(it) }
-                NovaModulo(tipo, ancho)
-            }.toList()
+                modulos.add(NovaModulo(tipo.lowercase().first(), ancho))
+            }
             if (modulos.isEmpty()) return null
-            return NovaFranja(esSistema, alto, modulos)
+            return NovaFranja(esSistema, alto, modulos, parantes)
         }
 
         /** ¿Empieza aquí otro trozo? Un tramo (`Tl<`) o un tag suelto (`A<`, `U<`, `O<`). */

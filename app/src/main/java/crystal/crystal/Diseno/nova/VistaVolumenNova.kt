@@ -53,6 +53,9 @@ class VistaVolumenNova @JvmOverloads constructor(
         color = Color.parseColor("#55000000"); style = Paint.Style.STROKE; strokeWidth = 2f
         pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 8f), 0f)
     }
+    /** Lo que mide de ancho un parante, que es lo que se come del tramo. */
+    private val PARANTE = 2.5f
+
     private val pAviso = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#88000000"); textSize = 34f
     }
@@ -162,6 +165,38 @@ class VistaVolumenNova @JvmOverloads constructor(
     }
 
     /**
+     * Dónde cae cada corte de la franja a lo largo del tramo, de 0 a 1, y si ese corte es parante.
+     *
+     * Se reparte por los ANCHOS que trae cada módulo, no a partes iguales: un tramo con hojas
+     * desiguales —o partido por un parante, que se come sus 2.5— salía con las divisiones a ojo y
+     * ninguna caía donde de verdad está. Si algún módulo viene sin ancho no hay con qué repartir y
+     * se vuelve a las partes iguales, que es lo que había.
+     */
+    private fun cortesDeLaFranja(franja: NovaFranja): List<Pair<Float, Boolean>> {
+        val n = franja.modulos.size
+        if (n == 0) return emptyList()
+        val anchos = franja.modulos.map { it.ancho ?: 0f }
+        val porAncho = anchos.all { it > 0f }
+        val total = if (porAncho) anchos.sum() + PARANTE * franja.parantes.size else n.toFloat()
+        if (total <= 0f) return emptyList()
+        val cortes = mutableListOf<Pair<Float, Boolean>>()
+        var acumulado = 0f
+        for (i in 0 until n) {
+            acumulado += if (porAncho) anchos[i] else 1f
+            val hayParante = i in franja.parantes
+            when {
+                // El parante tiene su grueso: la raya va por su mitad.
+                hayParante && porAncho -> {
+                    cortes.add((acumulado + PARANTE / 2f) / total to true)
+                    acumulado += PARANTE
+                }
+                i < n - 1 -> cortes.add(acumulado / total to hayParante)
+            }
+        }
+        return cortes
+    }
+
+    /**
      * Una cara con lo que lleva dentro: sus franjas de abajo arriba y los módulos de cada una.
      *
      * Los módulos se reparten sobre el trozo de tramo que ocupa esta cara ([CaraDelVolumen.desdeU]
@@ -223,15 +258,22 @@ class VistaVolumenNova @JvmOverloads constructor(
                     val b = enLaCara(1f, v0)
                     canvas.drawLine(a.x, a.y, b.x, b.y, pDivision)
                 }
-                // Y los módulos de esta franja que caen en el trozo de pared de esta cara.
-                val n = franja.modulos.size
-                for (k in 1 until n) {
-                    val uTramo = k / n.toFloat()
-                    if (uTramo <= cara.desdeU + 0.0001f || uTramo >= cara.hastaU - 0.0001f) continue
+                // Y los cortes de esta franja que caen en el trozo de pared de esta cara: entre
+                // módulo y módulo una raya fina, y donde hay parante la raya gorda del marco.
+                //
+                // El corte que cae JUSTO en el borde entre dos facetas del arco cuenta para las
+                // dos, y por eso el borde va incluido: descartándolo, el parante de una ventana
+                // curva —que cae al medio, y el medio es borde de faceta— no lo dibujaba ninguna
+                // de las dos y la ventana salía sin él, ni una raya. Dibujarlo dos veces no se
+                // nota: es el mismo canto de la misma pared.
+                cortesDeLaFranja(franja).forEach { (uTramo, esParante) ->
+                    if (uTramo < cara.desdeU - 0.0001f || uTramo > cara.hastaU + 0.0001f) {
+                        return@forEach
+                    }
                     val u = (uTramo - cara.desdeU) / (cara.hastaU - cara.desdeU).coerceAtLeast(0.0001f)
                     val a = enLaCara(u, v0)
                     val b = enLaCara(u, v1)
-                    canvas.drawLine(a.x, a.y, b.x, b.y, pDivision)
+                    canvas.drawLine(a.x, a.y, b.x, b.y, if (esParante) pMarco else pDivision)
                 }
             }
             v0 = v1

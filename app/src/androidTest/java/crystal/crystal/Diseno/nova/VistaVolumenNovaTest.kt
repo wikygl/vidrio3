@@ -113,4 +113,47 @@ class VistaVolumenNovaTest {
         v.mostrar(paquete)
         assertTrue("la ventana curva se armó plana", v.carasCurvasParaPruebas() > 0)
     }
+
+    /**
+     * Una ventana plana partida por un parante: 364.6 en dos tramos de tres hojas cada uno.
+     *
+     * Es la que se veía vacía en el celular —ni el parante ni una raya—, así que aquí se retrata
+     * para mirarla.
+     */
+    @Test
+    fun retrato_de_la_plana_con_parante() {
+        retrato(
+            "vol_parante.png",
+            "{nova,ina,[364.6,160:Tl<181.05>(H<160>;m<40>(f);s<120>(fcc))" +
+                " P<2.5> Tl<181.05>(H<160>;m<40>(f);s<120>(fcc))]}"
+        )
+    }
+
+    /**
+     * La curva de 364.6 en seis divisiones con su parante al centro, como la escribe Nova.
+     *
+     * OJO al formato: en las geometrías compuestas —en L, en C, curva— el parante NO va entre
+     * tramos sino DENTRO de la franja, como `;P;`, porque el `P<2.5>` de siempre se mezclaría con
+     * los `A<90>` que parten los lados. Escrito así, el 3D salía sin parante: ni una raya.
+     */
+    @Test
+    fun retrato_de_la_curva_con_parante_dentro() {
+        val paquete = "{nova,ina,[364.6,160:Tl<364.6>(H<160>;m<40>(f<181.05>f<181.05>);" +
+            "s<120>(f<60.35>c<60.35>f<60.35>;P;f<60.35>c<60.35>f<60.35>U<25>))]}"
+
+        // Primero, que el modelo NO se coma el parante al leer.
+        val d = DisenoNova.desdePaquete(paquete)!!
+        val sistema = d.tramos[0].franjas.first { it.esSistema }
+        assertEquals("se comió el parante de dentro de la franja", listOf(2), sistema.parantes)
+        assertEquals("perdió o inventó módulos", 6, sistema.modulos.size)
+
+        // Y que de ida y vuelta siga estando donde estaba.
+        val otra = DisenoNova.desdePaquete(d.aPaquete())!!
+        assertEquals(
+            "el parante no sobrevivió a escribir y volver a leer",
+            listOf(2), otra.tramos[0].franjas.first { it.esSistema }.parantes
+        )
+
+        retrato("vol_curva_parante.png", paquete)
+    }
 }
