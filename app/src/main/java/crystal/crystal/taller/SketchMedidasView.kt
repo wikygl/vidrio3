@@ -1454,6 +1454,22 @@ class SketchMedidasView @JvmOverloads constructor(
             .setNegativeButton("Cancelar", null)
             .show()
     }
+    /**
+     * El rótulo del arco al que pertenece esa cota de ancho, si la cota es de un trozo curvo.
+     *
+     * Null cuando no lo es: un tramo recto de una ventana de esquina se sigue tocando como lo que
+     * es, un ancho.
+     */
+    private fun etiquetaDeCurvaDeLaCota(hit: CotaHit): Int? {
+        if (hit.type != CotaType.ESQUINA_TRAMO && hit.type != CotaType.ESQUINA_TRAMO_PLANTA) {
+            return null
+        }
+        val tramo = hit.sideIndex ?: return null
+        val etiqueta = etiquetasCurva(hit.elementIndex).getOrNull(tramo) ?: return null
+        val texto = (elementos.getOrNull(etiqueta) as? Element.TextLabel)?.text ?: return null
+        return if (esquinaDesdeTexto(texto).arco != null) etiqueta else null
+    }
+
     /** El rótulo de la curva de un tramo: su desarrollo y su cuerda. */
     private fun textoCurva(desarrolloCm: Float, cuerdaCm: Float): String =
         "$MARCA_CURVA ${formatCm(desarrolloCm)}|${formatCm(cuerdaCm)}"
@@ -7665,6 +7681,11 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun editarCota(hit: CotaHit) {
         val element = elementos.getOrNull(hit.elementIndex) ?: return
+        // El ancho de un trozo de curva ES el desarrollo de su arco, así que tocarlo abre la curva
+        // entera —desarrollo, flecha y cuerda—, que es donde hay que escribir. El rótulo del arco
+        // vive en la banda de abajo, lejos de la ventana, y ahí nadie lo encontraba: se tocaba el
+        // número que está debajo del trozo, como es natural, y salía un ancho pelado.
+        etiquetaDeCurvaDeLaCota(hit)?.let { editarCurvaDeTramo(it); return }
         val actual = when (hit.type) {
             CotaType.WIDTH -> when (element) {
                 // En el triángulo la cota es la BASE, no el ancho de la caja: girado, no son lo
@@ -8390,6 +8411,23 @@ class SketchMedidasView @JvmOverloads constructor(
         if (abs(delta) < 0.01f) return
         aplicarAnchoTramo(marcoIndex, tramo, valueCm)
         anchoArriba?.let { aplicarAnchoArribaTramo(marcoIndex, tramo, it + delta) }
+        arcoSigueAlAncho(marcoIndex, tramo, valueCm)
+    }
+
+    /**
+     * Si el tramo es curvo, su arco se estira o se encoge con él, sin cambiar de curvatura.
+     *
+     * El ancho de un trozo de curva es su desarrollo. Cambiándolo sin tocar el arco, el rótulo se
+     * quedaba con la cuerda de antes y la curva decía una cosa y medía otra. La curvatura —el
+     * radio— es lo que se midió en la pared, así que es lo que se respeta.
+     */
+    private fun arcoSigueAlAncho(marcoIndex: Int, tramo: Int, desarrolloCm: Float) {
+        val etiqueta = etiquetasCurva(marcoIndex).getOrNull(tramo) ?: return
+        val rotulo = elementos.getOrNull(etiqueta) as? Element.TextLabel ?: return
+        val arco = esquinaDesdeTexto(rotulo.text).arco ?: return
+        if (abs(arco.desarrollo - desarrolloCm) < 0.05f) return
+        val nuevo = ArcoEsquina.deDesarrolloYRadio(desarrolloCm, arco.radio) ?: return
+        rotulo.text = textoCurva(desarrolloCm, nuevo.cuerda)
     }
 
     /**

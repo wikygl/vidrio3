@@ -821,4 +821,60 @@ class PlantaEsquinaTest {
         assertEquals("le cambió el desarrollo al primero", antes.lados[0].ancho, medida.lados[0].ancho, 0.5f)
         assertEquals("le borró la panza medida al segundo", antes.lados[1].flecha, medida.lados[1].flecha, 0.5f)
     }
+
+    /** Retrato de la curva partida, para mirar si se ven los rótulos de cada trozo. */
+    @Test
+    fun retrato_de_la_curva_partida() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+            v.cambiarTramosParaPruebas(1)
+        }
+        val bmp = v.exportBitmap()
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val f = java.io.File(ctx.getExternalFilesDir(null), "curva_partida.png")
+        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
+    }
+
+    /** Retrato de la curva recién puesta, tal como la deja el botón de plantillas. */
+    @Test
+    fun retrato_de_la_curva_recien_puesta() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva()
+        val bmp = v.exportBitmap()
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val f = java.io.File(ctx.getExternalFilesDir(null), "curva_nueva.png")
+        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
+    }
+
+    /**
+     * Cambiar el ancho de un trozo curvo le cambia el desarrollo, y su arco lo sigue.
+     *
+     * El ancho de un trozo de curva ES su desarrollo. Antes el rótulo se quedaba con la cuerda de
+     * antes, así que la curva decía una cosa y medía otra. Lo que se respeta es la curvatura, que
+     * es lo que se midió contra la pared.
+     */
+    @Test
+    fun el_arco_sigue_al_ancho_del_trozo() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+        }
+        val radio = crystal.crystal.taller.ArcoEsquina.deDesarrolloYCuerda(180f, 160f)!!.radio
+
+        // Se escribe el ancho del tramo, como al tocar el número de debajo.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.anchoDeTramoEnPlantaParaPruebas(0, 120f)
+        }
+
+        val lado = v.esquinaPrincipalEnCm()!!.lados[0]
+        assertEquals("el trozo no tomó el desarrollo", 120f, lado.ancho, 0.5f)
+        assertTrue("el trozo se quedó sin curva", lado.esCurva)
+        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(lado.ancho, lado.flecha)!!
+        assertEquals("la curva cambió de curvatura al cambiar el ancho", radio, arco.radio, radio * 0.05f)
+    }
 }
