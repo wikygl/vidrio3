@@ -720,7 +720,10 @@ class PlantaEsquinaTest {
         assertTrue("el trozo nuevo salió sin panza", medida.lados[1].flecha > 1f)
     }
 
-    /** Y quitar un trozo se lleva su arco: no se queda un rótulo suelto contando una curva que no está. */
+    /**
+     * Quitar un punto de alto se lleva su arco: no se queda un rótulo suelto contando una curva
+     * que ya no está. Y lo que había se junta en uno, sin perder desarrollo por el camino.
+     */
     @Test
     fun quitar_un_trozo_se_lleva_su_arco() {
         val v = vista()
@@ -732,7 +735,90 @@ class PlantaEsquinaTest {
         val medida = v.esquinaPrincipalEnCm()!!
         assertEquals("no se quedó con un solo trozo", 1, medida.lados.size)
         assertTrue("el trozo que queda perdió su curva", medida.lados[0].esCurva)
-        assertEquals("el trozo que queda cambió de panza", 12f, medida.lados[0].flecha, 0.5f)
-        assertEquals("el trozo que queda cambió de desarrollo", 90f, medida.lados[0].ancho, 1f)
+        // Los dos trozos de 90 se juntan en uno de 180: la pared mide lo que mide, y quitarle un
+        // punto de alto no le quita pared.
+        assertEquals("la ventana encogió al juntar los trozos", 180f, medida.lados[0].ancho, 1f)
+        assertTrue("el arco entero panza menos que sus mitades", medida.lados[0].flecha > 12f)
+    }
+
+    /**
+     * El flujo de la ventana curva: primero el arco entero, y los trozos salen de él.
+     *
+     * Se apunta la curva general —180 de desarrollo, 160 de cuerda— y se le pone un punto de alto
+     * dentro. Ese punto, si es el único, cae al medio: los dos trozos miden 90 y su cuerda es la
+     * que les toca por el círculo, unos 87.4. No es la mitad de 160: una cuerda no se parte en dos.
+     *
+     * Y la ventana sigue midiendo 180. Su desarrollo es una medida de la pared, no cambia porque
+     * se le ponga un punto de alto.
+     */
+    @Test
+    fun el_arco_general_se_reparte_entre_sus_trozos() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+        }
+        val entera = v.esquinaPrincipalEnCm()!!
+        assertEquals("el arco general no quedó en 180", 180f, entera.lados[0].ancho, 0.5f)
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { v.cambiarTramosParaPruebas(1) }
+
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no partió en dos trozos", 2, medida.lados.size)
+        assertEquals("el primer trozo no mide la mitad", 90f, medida.lados[0].ancho, 0.5f)
+        assertEquals("el segundo trozo no mide la mitad", 90f, medida.lados[1].ancho, 0.5f)
+        assertEquals(
+            "la ventana creció al partirla",
+            180f, medida.lados.sumOf { it.ancho.toDouble() }.toFloat(), 1f
+        )
+
+        // Y la cuerda de cada trozo es la del círculo, no la mitad de la de la ventana.
+        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(
+            medida.lados[0].ancho, medida.lados[0].flecha
+        )!!
+        assertEquals("la cuerda del trozo no es la del círculo", 87.4f, arco.cuerda, 1f)
+    }
+
+    /** Y al juntarlos otra vez vuelve a ser el arco entero: 180 con su cuerda de 160. */
+    @Test
+    fun juntar_los_trozos_devuelve_el_arco_entero() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+            v.cambiarTramosParaPruebas(1)
+            v.cambiarTramosParaPruebas(-1)
+        }
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no volvió a ser un solo arco", 1, medida.lados.size)
+        assertEquals("perdió desarrollo por el camino", 180f, medida.lados[0].ancho, 1f)
+        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(
+            medida.lados[0].ancho, medida.lados[0].flecha
+        )!!
+        assertEquals("no volvió la cuerda de la ventana", 160f, arco.cuerda, 1.5f)
+    }
+
+    /**
+     * Pero si el vidriero ya midió los trozos por separado, partir NO los reparte.
+     *
+     * Con radios distintos la ventana ya no es el arco de un círculo, y repartirla a partes
+     * iguales le borraría lo medido en la pared. El trozo nuevo se añade y ya.
+     */
+    @Test
+    fun una_curva_medida_a_mano_no_se_reparte_sola() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(90f, 90f), altoCm = 160f, flechaCm = 12f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            // El segundo trozo panza mucho más que el primero: ya no son del mismo círculo.
+            v.curvaDeTramoParaPruebas(1, desarrolloCm = 90f, cuerdaCm = 70f)
+        }
+        val antes = v.esquinaPrincipalEnCm()!!
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { v.cambiarTramosParaPruebas(1) }
+
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no añadió el trozo", 3, medida.lados.size)
+        assertEquals("le cambió el desarrollo al primero", antes.lados[0].ancho, medida.lados[0].ancho, 0.5f)
+        assertEquals("le borró la panza medida al segundo", antes.lados[1].flecha, medida.lados[1].flecha, 0.5f)
     }
 }
