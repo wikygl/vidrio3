@@ -2137,6 +2137,16 @@ class SketchMedidasView @JvmOverloads constructor(
      * al tramo que se toca, no a la ventana entera.
      */
     private fun colocarContadoresAltos(marcoIndex: Int) {
+        // En una curva el contador es UNO y cuenta los puntos de dentro por donde se parte el arco:
+        // con dos trozos hay una altura medida dentro, con tres hay dos. No hay cotas sueltas que
+        // contar, así que un contador por trozo no diría nada.
+        if (esMarcoCurvo(marcoIndex)) {
+            val dentro = (quiebresDelMarco(marcoIndex).size).coerceAtLeast(0)
+            contadoresAltos(marcoIndex).forEach {
+                (elementos[it] as Element.TextLabel).text = textoAltos(dentro)
+            }
+            return
+        }
         val grupos = altosLibresPorTramo(marcoIndex)
         contadoresAltos(marcoIndex).forEachIndexed { tramo, i ->
             (elementos[i] as Element.TextLabel).text = textoAltos(grupos.getOrNull(tramo).orEmpty().size)
@@ -2610,7 +2620,13 @@ class SketchMedidasView @JvmOverloads constructor(
         // por qué ir a la misma altura que el de la otra.
         val bordes = bordesDeTramos(marcoIndex)
         val piso = marco.bottomLeft.y
-        puentesDelMarco(marcoIndex).forEach { i ->
+        // Cuando hay un puente por tramo, cada uno va al SUYO por orden, de izquierda a derecha. Se
+        // repartían buscando en qué tramo cae su punto medio, y al encoger los tramos —partir una
+        // curva de 180 en tres de 60— dos puentes caían dentro del mismo tramo y otro se quedaba
+        // sin ninguno: sus cotas se apilaban en un sitio y faltaban en otro.
+        val puentes = puentesDelMarco(marcoIndex)
+        val unoPorTramo = puentes.size == bordes.size - 1
+        puentes.forEachIndexed { orden, i ->
             val puente = elementos[i] as Element.Shape
             val altoPx = (piso - marco.rect.top).coerceAtLeast(cmToPx(2f))
             val desdePiso = (piso - puente.start.y).coerceIn(cmToPx(1f), altoPx - cmToPx(1f))
@@ -2621,7 +2637,8 @@ class SketchMedidasView @JvmOverloads constructor(
                 puente.start.y = y
                 puente.end.y = y
             } else {
-                val tramo = tramoDeX(bordes, (puente.start.x + puente.end.x) / 2f)
+                val tramo = if (unoPorTramo) orden
+                else tramoDeX(bordes, (puente.start.x + puente.end.x) / 2f)
                 val izq = bordes.getOrNull(tramo) ?: marco.bottomLeft.x
                 val der = bordes.getOrNull(tramo + 1) ?: marco.bottomRight.x
                 puente.start.set(izq, y)
@@ -3546,34 +3563,13 @@ class SketchMedidasView @JvmOverloads constructor(
      * arista, su ángulo y su cota de alto; el vano crece con él, porque cada tramo es una pared.
      */
     /**
-     * Un trozo más en una ventana curva: hay que preguntar DÓNDE va.
+     * Un tramo más es otra PARED, pegada al final: la ventana crece.
      *
-     * Las dos cosas son de verdad: partir el arco que ya se midió —una ventana de 180 con un punto
-     * de alto al medio son dos trozos de 90— o pegarle otra pared a continuación, y la ventana
-     * crece. Antes se hacía siempre lo segundo sin preguntar, y el que quería partir su medida se
-     * encontraba con la ventana del doble de grande.
+     * Partir lo que ya se midió es otra cosa y se hace con el contador de alturas de dentro: en una
+     * ventana curva, cada altura que se mide dentro es un punto por donde se parte el arco.
      */
-    private fun cambiarTramos(etiquetaIndex: Int, delta: Int) {
-        val marcoIndex = marcoDePieza(etiquetaIndex) ?: return
-        if (delta > 0 && esMarcoCurvo(marcoIndex)) {
-            AlertDialog.Builder(context)
-                .setTitle("Un trozo más")
-                .setMessage(
-                    "¿El trozo nuevo va DENTRO de lo que ya mide la ventana, que se reparte entre " +
-                        "los trozos, o se AÑADE pegado al último y la ventana crece?"
-                )
-                .setPositiveButton("Dentro") { _, _ ->
-                    aplicarCambioDeTramos(etiquetaIndex, delta, repartir = true)
-                }
-                .setNegativeButton("Añadir") { _, _ ->
-                    aplicarCambioDeTramos(etiquetaIndex, delta, repartir = false)
-                }
-                .setNeutralButton("Cancelar", null)
-                .show()
-            return
-        }
+    private fun cambiarTramos(etiquetaIndex: Int, delta: Int) =
         aplicarCambioDeTramos(etiquetaIndex, delta, repartir = false)
-    }
 
     /**
      * Pone o quita un tramo. Con [repartir], lo que mide la ventana se reparte entre los trozos que
@@ -3652,15 +3648,20 @@ class SketchMedidasView @JvmOverloads constructor(
                     )
                 )
             }
-            elementos.add(
-                Element.TextLabel(
-                    text = textoAltos(0),
-                    x = abajo + ultimo / 2f,
-                    y = marco.bottomRight.y,
-                    textSize = 44f,
-                    rol = ROL_ALTOS
+            // El contador de alturas: uno por tramo en la ventana de esquina, porque las cotas de
+            // alto se ponen tramo a tramo. En la curva es UNO para toda la ventana —cuenta los
+            // puntos por donde se parte el arco—, así que el tramo nuevo no estrena ninguno.
+            if (!curvo) {
+                elementos.add(
+                    Element.TextLabel(
+                        text = textoAltos(0),
+                        x = abajo + ultimo / 2f,
+                        y = marco.bottomRight.y,
+                        textSize = 44f,
+                        rol = ROL_ALTOS
+                    )
                 )
-            )
+            }
             // El tramo nuevo estrena su puente, a la altura del último que hubiera.
             val yPuente = puentesDelMarco(marcoIndex).lastOrNull()
                 ?.let { (elementos[it] as Element.Shape).start.y }
@@ -3681,7 +3682,9 @@ class SketchMedidasView @JvmOverloads constructor(
                     altosDelMarco(marcoIndex, VENTANA_ALTO_ESQUINA).lastOrNull(),
                     etiquetasEsquina(marcoIndex).lastOrNull(),
                     etiquetasCurva(marcoIndex).takeIf { curvo && it.size > 1 }?.lastOrNull(),
-                    contadoresAltos(marcoIndex).lastOrNull(),
+                    // En la curva el contador es uno para toda la ventana y se queda: llevándoselo
+                    // con el último trozo, la ventana se quedaba sin manera de volver a partirse.
+                    contadoresAltos(marcoIndex).takeIf { !curvo }?.lastOrNull(),
                     puentesDelMarco(marcoIndex).takeIf { it.size > 1 }?.lastOrNull()
                 ) + altosLibresPorTramo(marcoIndex).lastOrNull().orEmpty()
                 ).distinct().sortedDescending()
@@ -3736,6 +3739,15 @@ class SketchMedidasView @JvmOverloads constructor(
      */
     private fun cambiarAltos(etiquetaIndex: Int, delta: Int) {
         val marcoIndex = marcoDePieza(etiquetaIndex) ?: return
+        // En una VENTANA CURVA una cota de alto de dentro no es una cota suelta: es el punto por
+        // donde se parte el arco. Se apunta la curva entera y después se dice cuántas alturas se
+        // miden dentro; el arco se reparte en tantos trozos iguales, cada uno con su desarrollo y
+        // su cuerda sacados del mismo círculo. De ahí en adelante se corrige el trozo que no cuadre
+        // con la pared, y la ventana deja de ser el arco de un círculo: se deforma con lo escrito.
+        if (esMarcoCurvo(marcoIndex)) {
+            aplicarCambioDeTramos(etiquetaIndex, delta, repartir = true)
+            return
+        }
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
         val bordes = bordesDeTramos(marcoIndex)
         // Se toca el contador del tramo, así que la cota se añade o se quita EN ESE tramo.
@@ -3780,6 +3792,9 @@ class SketchMedidasView @JvmOverloads constructor(
      */
     private fun ajustarAltosAutomaticos(marcoIndex: Int): Boolean {
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return false
+        // En una ventana curva las cotas de alto de dentro no son cotas sueltas: son los puntos por
+        // donde se parte el arco, y las pone el vidriero contando. Nadie parte una curva sola.
+        if (esMarcoCurvo(marcoIndex)) return false
         var cambio = false
         var seguir = true
         while (seguir) {
@@ -4174,6 +4189,14 @@ class SketchMedidasView @JvmOverloads constructor(
         val etiqueta = etiquetaDelMarco(marco, ROL_TRAMOS) ?: return
         // Se responde la pregunta sin diálogo: en una curva, el trozo nuevo va dentro o pegado.
         aplicarCambioDeTramos(etiqueta, delta, repartir = dentro)
+    }
+
+    /** Toca el contador de alturas de dentro, como el dedo en su − o su +. */
+    @androidx.annotation.VisibleForTesting
+    fun cambiarAltosParaPruebas(delta: Int) {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+        val contador = contadoresAltos(marco).firstOrNull() ?: return
+        cambiarAltos(contador, delta)
     }
 
     /** Escribe el ancho de la ventana entera, como al tocar su cota de arriba. */

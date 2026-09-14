@@ -806,4 +806,114 @@ class PlantaEsquinaTest {
         assertEquals("le cambió la medida al trozo de siempre", 180f, medida.lados[0].ancho, 1f)
         assertEquals("el trozo nuevo no mide como el anterior", 180f, medida.lados[1].ancho, 1f)
     }
+
+    /**
+     * El flujo de la curva: la medida general, después cuántas alturas se miden dentro.
+     *
+     * En una ventana curva una cota de alto de dentro no es una cota suelta: es el punto por donde
+     * se parte el arco. Se apunta 180 de desarrollo con 160 de cuerda, se pide UNA altura dentro y
+     * salen dos trozos de 90 con cuerda 87.4 —la del círculo, que no es la mitad de 160—, cada uno
+     * con su desarrollo para corregirlo contra la pared.
+     */
+    @Test
+    fun las_alturas_de_dentro_parten_el_arco() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+            v.cambiarAltosParaPruebas(1)
+        }
+
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("una altura dentro no dejó dos trozos", 2, medida.lados.size)
+        assertEquals("los trozos no son iguales", medida.lados[0].ancho, medida.lados[1].ancho, 0.5f)
+        assertEquals("el trozo no mide la mitad", 90f, medida.lados[0].ancho, 0.5f)
+        assertEquals(
+            "la ventana creció al partirla",
+            180f, medida.lados.sumOf { it.ancho.toDouble() }.toFloat(), 1f
+        )
+        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(
+            medida.lados[0].ancho, medida.lados[0].flecha
+        )!!
+        assertEquals("la cuerda del trozo no sale del círculo", 87.4f, arco.cuerda, 1f)
+
+        // Y con dos alturas dentro, tres trozos de 60.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { v.cambiarAltosParaPruebas(1) }
+        val tres = v.esquinaPrincipalEnCm()!!
+        assertEquals("dos alturas dentro no dejaron tres trozos", 3, tres.lados.size)
+        assertEquals("los trozos no son iguales", 60f, tres.lados[1].ancho, 0.5f)
+        assertEquals(
+            "la ventana cambió de medida",
+            180f, tres.lados.sumOf { it.ancho.toDouble() }.toFloat(), 1f
+        )
+    }
+
+    /**
+     * Y corregir un trozo deforma el arco: se abandona el círculo.
+     *
+     * El trozo que se mide contra la pared manda. Los otros se quedan como estaban, así que la
+     * ventana ya no es el arco de un círculo sino la curva que dicen los datos escritos.
+     */
+    @Test
+    fun corregir_un_trozo_deforma_el_arco() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+            v.cambiarAltosParaPruebas(1)
+            // El segundo trozo, medido en la pared, panza mucho más.
+            v.curvaDeTramoParaPruebas(1, desarrolloCm = 90f, cuerdaCm = 75f)
+        }
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals(2, medida.lados.size)
+        assertTrue("el primer trozo perdió su curva", medida.lados[0].esCurva)
+        assertTrue("el segundo trozo perdió su curva", medida.lados[1].esCurva)
+        assertTrue(
+            "los dos trozos siguen siendo del mismo círculo: no se deformó",
+            medida.lados[1].flecha > medida.lados[0].flecha + 1f
+        )
+
+        // Y otra altura dentro ya NO reparte: la ventana no es un círculo y repartirla borraría
+        // lo que se midió.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { v.cambiarAltosParaPruebas(1) }
+        val tras = v.esquinaPrincipalEnCm()!!
+        assertEquals("no añadió el trozo", 3, tras.lados.size)
+        assertEquals("le borró la panza medida", medida.lados[1].flecha, tras.lados[1].flecha, 0.5f)
+    }
+
+    /** Quitar una altura de dentro junta los trozos, y la ventana sigue midiendo lo mismo. */
+    @Test
+    fun quitar_una_altura_junta_los_trozos() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+            v.cambiarAltosParaPruebas(1)
+            v.cambiarAltosParaPruebas(-1)
+        }
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no volvió a ser un solo arco", 1, medida.lados.size)
+        assertEquals("perdió desarrollo por el camino", 180f, medida.lados[0].ancho, 1f)
+        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(
+            medida.lados[0].ancho, medida.lados[0].flecha
+        )!!
+        assertEquals("no volvió la cuerda de la ventana", 160f, arco.cuerda, 1.5f)
+    }
+
+    /** Retrato de la curva partida por dos alturas de dentro, para mirarla. */
+    @Test
+    fun retrato_de_la_curva_por_alturas() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+            v.cambiarAltosParaPruebas(1)
+            v.cambiarAltosParaPruebas(1)
+        }
+        val bmp = v.exportBitmap()
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val f = java.io.File(ctx.getExternalFilesDir(null), "curva_alturas.png")
+        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        assertTrue("no se guardó", f.exists() && f.length() > 0)
+    }
 }
