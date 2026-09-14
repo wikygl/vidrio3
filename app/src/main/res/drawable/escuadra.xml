@@ -1,0 +1,36 @@
+<!--
+  La cota a escuadra: una forma con un corte arriba a la derecha y la medida que baja, a escuadra,
+  desde la esquina del corte hasta el lado de enfrente.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="27dp"
+    android:height="24dp"
+    android:viewportWidth="48"
+    android:viewportHeight="44">
+  <!-- La forma, con su corte -->
+  <path
+      android:pathData="M3,3 L30,3 L30,15 L45,15 L45,41 L3,41 Z"
+      android:fillColor="#00000000"
+      android:strokeColor="#373435"
+      android:strokeWidth="2.6"
+      android:strokeLineJoin="round"/>
+  <!-- La cota: de la esquina del corte al lado de abajo -->
+  <path
+      android:pathData="M30,15 L30,41"
+      android:fillColor="#00000000"
+      android:strokeColor="#373435"
+      android:strokeWidth="2"/>
+  <!-- Las puntas de flecha -->
+  <path
+      android:pathData="M26.5,19 L30,15 L33.5,19 Z"
+      android:fillColor="#373435"/>
+  <path
+      android:pathData="M26.5,37 L30,41 L33.5,37 Z"
+      android:fillColor="#373435"/>
+  <!-- La marca de escuadra en el pie -->
+  <path
+      android:pathData="M24,41 L24,35 L30,35"
+      android:fillColor="#00000000"
+      android:strokeColor="#373435"
+      android:strokeWidth="1.6"/>
+</vector>

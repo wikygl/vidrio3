@@ -101,6 +101,15 @@ class SketchMedidasView @JvmOverloads constructor(
         /** Lo que lleva delante el rótulo de una arista cuando la esquina es curva. */
         const val MARCA_CURVA = "⌒"
 
+        /**
+         * La cota tomada A ESCUADRA: de la esquina de un corte al lado de enfrente.
+         *
+         * Se guarda como una línea suelta que va de la esquina al pie de la escuadra. Al dibujarla
+         * se vuelve a buscar su esquina en el contorno de ahora, así que sigue a la forma cuando
+         * esta cambia en vez de quedarse clavada donde se puso.
+         */
+        const val COTA_ESCUADRA = "COTA_ESCUADRA"
+
         // ===== Ventana de esquina =====
         /**
          * Ventana que dobla. El marco es el DESARROLLO: los tramos estirados uno al lado del otro,
@@ -189,7 +198,10 @@ class SketchMedidasView @JvmOverloads constructor(
          */
         ESQUINA_TRAMO_PLANTA,
         /** Lado de arriba de un tramo: con los altos desiguales va inclinado y mide más que el ancho. */
-        ESQUINA_TRAMO_ARRIBA
+        ESQUINA_TRAMO_ARRIBA,
+
+        /** De la esquina de un corte al lado de enfrente, a escuadra. Empuja esa arista. */
+        A_ESCUADRA
     }
 
     private sealed class Element {
@@ -464,6 +476,7 @@ class SketchMedidasView @JvmOverloads constructor(
         drawBackground(canvas)
         elementos.forEachIndexed { index, element -> drawElement(canvas, index, element, true) }
         dibujarPlantasDeEsquina(canvas, true)
+        dibujarCotasAEscuadra(canvas, true)
         drawSelection(canvas)
         drawNodos(canvas)
         if (dibujando) {
@@ -4386,6 +4399,50 @@ class SketchMedidasView @JvmOverloads constructor(
 
     fun hasDrawing(): Boolean = elementos.isNotEmpty()
 
+
+
+    /** La esquina de arriba a la izquierda de la figura recortada, en píxeles del apunte. */
+    @androidx.annotation.VisibleForTesting
+    fun cajaDelCompositeParaPruebas(): Pair<Float, Float> {
+        val c = compositePrincipal() ?: return 0f to 0f
+        val caja = boundsForElement(c)
+        return caja.left to caja.top
+    }
+
+    /** Centímetros a píxeles del apunte, para poder tocar donde toca. */
+    @androidx.annotation.VisibleForTesting
+    fun cmAPixelesParaPruebas(cm: Float): Float = cmToPx(cm)
+    /** Pone una cota a escuadra tocando cerca de esa esquina del contorno, como haría el dedo. */
+    @androidx.annotation.VisibleForTesting
+    fun cotaAEscuadraParaPruebas(x: Float, y: Float): Boolean {
+        activarCotaAEscuadra()
+        return ponerCotaAEscuadra(PointF(x, y))
+    }
+
+    /** Lo que mide la primera cota a escuadra del apunte, en cm; null si no hay ninguna. */
+    @androidx.annotation.VisibleForTesting
+    fun medidaAEscuadraParaPruebas(): Float? {
+        val i = cotasAEscuadra().firstOrNull() ?: return null
+        val (_, medida) = medidaDeLaCotaAEscuadra(i) ?: return null
+        return pxToCm(medida.distanciaCm)
+    }
+
+    /** Escribe otra medida en la primera cota a escuadra, como al editarla en la pantalla. */
+    @androidx.annotation.VisibleForTesting
+    fun escribirEscuadraParaPruebas(valueCm: Float) {
+        val i = cotasAEscuadra().firstOrNull() ?: return
+        aplicarCotaAEscuadra(i, valueCm)
+    }
+
+    /** El contorno de la figura recortada, en cm, con el origen en su esquina de arriba. */
+    @androidx.annotation.VisibleForTesting
+    fun contornoDelCompositeParaPruebas(): List<Pair<Float, Float>> {
+        val c = compositePrincipal() ?: return emptyList()
+        val caja = boundsForElement(c)
+        return contornoDelComposite(c)?.map {
+            pxToCm(it.first - caja.left) to pxToCm(it.second - caja.top)
+        } ?: emptyList()
+    }
     fun insertarRecurrenteF1() {
         val ancho = 160f
         val alto = 110f
@@ -5165,6 +5222,7 @@ class SketchMedidasView @JvmOverloads constructor(
         cotaTextRects.clear()
         elementos.forEachIndexed { index, element -> drawElement(canvas, index, element, false) }
         dibujarPlantasDeEsquina(canvas, false)
+        dibujarCotasAEscuadra(canvas, false)
         cotaTextRects.clear()
         canvas.restore()
         escalaCota = escalaPrevia
@@ -5368,6 +5426,10 @@ class SketchMedidasView @JvmOverloads constructor(
     }
 
     private fun drawElement(canvas: Canvas, index: Int, element: Element, collectHits: Boolean) {
+        // La línea de una cota a escuadra no es un trazo del apunte: la dibuja su propia rutina,
+        // con su número y su flecha. Pintándola aquí salía además como una raya suelta con su
+        // cota de largo, que mide lo mismo pero no es lo mismo.
+        if ((element as? Element.Shape)?.cotaHint == COTA_ESCUADRA) return
         when (element) {
             is Element.Freehand -> canvas.drawPath(element.path, paint)
             is Element.TextLabel -> {
@@ -6934,6 +6996,135 @@ class SketchMedidasView @JvmOverloads constructor(
      * fuera de la figura, y el número se ladea con ella cuando el lado está inclinado (en los lados
      * rectos se deja derecho, que es como se lee mejor).
      */
+
+    // ==================== COTA A ESCUADRA ====================
+    // De la esquina de un corte al lado de enfrente, con la cinta perpendicular. Es la medida que
+    // hace falta cuando la forma tiene un corte y lo que importa no es el largo de un lado sino a
+    // qué altura queda ese corte contra la pared de enfrente. Y al escribirla, empuja esa arista.
+    // La cuenta vive en [CotaAEscuadra], aparte y probada en frío; aquí solo se toca y se dibuja.
+
+    /** true mientras se espera que el dedo elija la esquina desde la que medir. */
+    private var eligiendoEscuadra = false
+
+    /** Deja el apunte esperando que se toque una esquina para poner ahí su cota a escuadra. */
+    fun activarCotaAEscuadra() {
+        if (compositePrincipal() == null) {
+            Toast.makeText(context, "Primero pon una forma con un corte", Toast.LENGTH_SHORT).show()
+            return
+        }
+        eligiendoEscuadra = true
+        Toast.makeText(context, "Toca la esquina del corte", Toast.LENGTH_SHORT).show()
+    }
+
+    /** La figura recortada más grande del apunte, que es de la que se miden estas cotas. */
+    private fun compositePrincipal(): Element.Composite? =
+        elementos.filterIsInstance<Element.Composite>().maxByOrNull {
+            boundsForElement(it).let { b -> b.width() * b.height() }
+        }
+
+    /** El contorno de esa figura, en píxeles del apunte. */
+    private fun contornoDelComposite(c: Element.Composite): List<Pair<Float, Float>>? =
+        c.contours.firstOrNull()?.takeIf { it.size >= 3 }?.map { it.x to it.y }
+
+    /**
+     * Pone la cota en la esquina más cercana al dedo.
+     *
+     * Se trabaja en píxeles del apunte, que es como se guarda el contorno; a centímetros se pasa
+     * solo para enseñar la medida y para leer la que se escriba.
+     */
+    private fun ponerCotaAEscuadra(punto: PointF): Boolean {
+        eligiendoEscuadra = false
+        val composite = compositePrincipal() ?: return false
+        val contorno = contornoDelComposite(composite) ?: return false
+        val nodo = CotaAEscuadra.nodoMasCerca(contorno, punto.x to punto.y, cmToPx(30f))
+        if (nodo == null) {
+            Toast.makeText(context, "Toca más cerca de una esquina", Toast.LENGTH_SHORT).show()
+            return true
+        }
+        val medida = CotaAEscuadra.desdeNodo(contorno, nodo)
+        if (medida == null) {
+            Toast.makeText(
+                context,
+                "Desde esa esquina no hay lado de enfrente que medir a escuadra",
+                Toast.LENGTH_LONG
+            ).show()
+            return true
+        }
+        elementos.add(
+            crearShape(
+                Tool.LINE,
+                PointF(contorno[nodo].first, contorno[nodo].second),
+                PointF(medida.pie.first, medida.pie.second),
+                COTA_ESCUADRA
+            )
+        )
+        registrarAccion()
+        invalidate()
+        return true
+    }
+
+    /** Las cotas a escuadra que hay puestas en el apunte. */
+    private fun cotasAEscuadra(): List<Int> =
+        elementos.indices.filter {
+            (elementos.getOrNull(it) as? Element.Shape)?.cotaHint == COTA_ESCUADRA
+        }
+
+    /**
+     * La medida que tiene esa cota AHORA.
+     *
+     * Se vuelve a buscar su esquina en el contorno de hoy en vez de fiarse de dónde se puso: así la
+     * cota sigue a la forma cuando esta cambia, en lugar de quedarse clavada midiendo el aire.
+     */
+    private fun medidaDeLaCotaAEscuadra(index: Int): Pair<Element.Composite, MedidaAEscuadra>? {
+        val linea = elementos.getOrNull(index) as? Element.Shape ?: return null
+        val composite = compositePrincipal() ?: return null
+        val contorno = contornoDelComposite(composite) ?: return null
+        val nodo = CotaAEscuadra.nodoMasCerca(contorno, linea.start.x to linea.start.y, cmToPx(60f))
+            ?: return null
+        val medida = CotaAEscuadra.desdeNodo(contorno, nodo) ?: return null
+        // La línea se recoloca sola: es lo que la hace seguir a la forma.
+        linea.start.set(contorno[nodo].first, contorno[nodo].second)
+        linea.end.set(medida.pie.first, medida.pie.second)
+        return composite to medida
+    }
+
+    private fun dibujarCotasAEscuadra(canvas: Canvas, collectHits: Boolean) {
+        cotasAEscuadra().forEach { i ->
+            val (_, medida) = medidaDeLaCotaAEscuadra(i) ?: return@forEach
+            val linea = elementos[i] as Element.Shape
+            // El centro se pone del otro lado de la cota para que su número salga por fuera, que
+            // es donde se lee sin taparse con la figura.
+            val centro = PointF(
+                linea.start.x + (linea.start.x - linea.end.x),
+                linea.start.y + (linea.start.y - linea.end.y)
+            )
+            drawCotaLado(
+                canvas, i, CotaType.A_ESCUADRA,
+                PointF(linea.start.x, linea.start.y),
+                PointF(linea.end.x, linea.end.y),
+                centro, pxToCm(medida.distanciaCm), collectHits
+            )
+        }
+    }
+
+    /** Escribe otra medida: empuja la arista del corte y rehace la figura. */
+    private fun aplicarCotaAEscuadra(index: Int, valueCm: Float) {
+        if (valueCm <= 0f) return
+        val (composite, medida) = medidaDeLaCotaAEscuadra(index) ?: return
+        val contorno = contornoDelComposite(composite) ?: return
+        val movido = CotaAEscuadra.conDistancia(contorno, medida, cmToPx(valueCm))
+        val puntos = composite.contours.firstOrNull() ?: return
+        if (movido.size != puntos.size) return
+        puntos.forEachIndexed { k, p -> p.set(movido[k].first, movido[k].second) }
+        rebuildCompositePath(composite)
+        refreshCompositeSides(composite)
+        val caja = boundsForElement(composite)
+        composite.widthCm = pxToCm(caja.width())
+        composite.heightCm = pxToCm(caja.height())
+        medidaDeLaCotaAEscuadra(index)
+        registrarAccion()
+        invalidate()
+    }
     private fun drawCotaLado(
         canvas: Canvas,
         index: Int,
@@ -7225,6 +7416,10 @@ class SketchMedidasView @JvmOverloads constructor(
                 val tramo = hit.sideIndex ?: return
                 if (tramo + 1 >= arriba.size) return
                 pxToCm(distancia(arriba[tramo], arriba[tramo + 1]))
+            }
+            CotaType.A_ESCUADRA -> {
+                val (_, medida) = medidaDeLaCotaAEscuadra(hit.elementIndex) ?: return
+                pxToCm(medida.distanciaCm)
             }
             CotaType.PUERTA_HOJA_IZQ, CotaType.PUERTA_HOJA_DER -> {
                 val division = element as? Element.Shape ?: return
@@ -7722,6 +7917,9 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.ESQUINA_TRAMO_ARRIBA -> {
                 aplicarArribaTramo(elementIndex ?: return, sideIndex ?: return, abs(valueCm))
             }
+            CotaType.A_ESCUADRA -> {
+                aplicarCotaAEscuadra(elementIndex ?: return, abs(valueCm))
+            }
             CotaType.COMPOSITE_SIDE,
             CotaType.F5_DESARROLLO,
             CotaType.F5_FLECHA,
@@ -8108,7 +8306,10 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.PUERTA_HOJA_DER,
             CotaType.ESQUINA_TRAMO,
             CotaType.ESQUINA_TRAMO_PLANTA,
-            CotaType.ESQUINA_TRAMO_ARRIBA -> Unit
+            CotaType.ESQUINA_TRAMO_ARRIBA,
+            // La cota a escuadra no es del composite: es una línea suelta que lo mide, y se aplica
+            // por su propio camino.
+            CotaType.A_ESCUADRA -> Unit
         }
     }
 

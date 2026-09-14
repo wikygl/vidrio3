@@ -248,6 +248,10 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnEngraInterior.setOnClickListener { insertarInteriorExterior("interior") }
         binding.btnEngraExterior.setOnClickListener { insertarInteriorExterior("exterior") }
         binding.btnFuncionVano.setOnClickListener { mostrarDialogoPlantillaVano() }
+        binding.btnFuncionEscuadra.setOnClickListener {
+            ocultarPanelesFlotantes()
+            binding.sketchMedidas.activarCotaAEscuadra()
+        }
         binding.btnHerramientaSeleccion.setOnClickListener {
             ocultarPanelesFlotantes()
             seleccionarHerramienta(SketchMedidasView.Tool.SELECT)

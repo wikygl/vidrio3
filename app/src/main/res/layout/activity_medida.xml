@@ -536,6 +536,19 @@
                     android:contentDescription="Vano exacto"
                     android:src="@drawable/vano" />
             </LinearLayout>
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="A escuadra" />
+
+                <ImageButton
+                    android:id="@+id/btnFuncionEscuadra"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Cota a escuadra"
+                    android:src="@drawable/escuadra" />
+            </LinearLayout>
+
 
             <Space
                 android:layout_width="0dp"
