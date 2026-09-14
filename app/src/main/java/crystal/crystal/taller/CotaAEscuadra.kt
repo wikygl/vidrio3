@@ -1,6 +1,5 @@
 package crystal.crystal.taller
 
-import kotlin.math.abs
 import kotlin.math.hypot
 
 /**
@@ -11,14 +10,14 @@ import kotlin.math.hypot
  * sino a qué altura queda ese corte contra la pared de enfrente. Se mide a escuadra, que es como
  * se mide en obra: la cinta perpendicular al lado, no en diagonal.
  *
- * [nodo] es la esquina desde la que se mide; [ladoOpuesto] el lado al que llega la escuadra, y
- * [aristaQueEmpuja] el lado que se mueve al escribir otra medida —el que va paralelo al de
- * enfrente, porque es el que de verdad decide esa distancia—.
+ * [nodo] es la esquina desde la que se mide y [ladoOpuesto] el lado al que llega la escuadra. Al
+ * escribir otra medida se mueve LA ESQUINA, ella sola: los dos lados que salen de ella la siguen y
+ * se quedan como queden. En obra es lo que pasa —una punta del corte está más arriba que la otra—,
+ * y moviendo la arista entera no había manera de apuntar un corte torcido.
  */
 data class MedidaAEscuadra(
     val nodo: Int,
     val ladoOpuesto: Int,
-    val aristaQueEmpuja: Int,
     val distanciaCm: Float,
     val pie: Pair<Float, Float>
 )
@@ -50,15 +49,14 @@ object CotaAEscuadra {
      * tiene el suelo debajo y el costado al lado, y las dos son medidas buenas. Cuál se quiere lo
      * dice el que mide, no el programa, así que aquí salen todas y el dibujo deja elegir.
      *
-     * Vale un lado que no toca la esquina, al que la perpendicular llega DENTRO del lado —no por su
-     * prolongación— y que va paralelo a una de las dos aristas de la esquina: si no es paralelo a
-     * ninguna, la escuadra mediría algo que no se puede cambiar sin torcer la forma.
+     * Vale un lado que no toca la esquina y al que la perpendicular llega DENTRO del lado, no por
+     * su prolongación ni justo en una punta: en la punta, la escuadra vuelve por el canto de la
+     * propia esquina y eso no es una medida. En un rectángulo, por eso, no hay ninguna.
      */
     fun candidatasDesdeNodo(contorno: List<Pair<Float, Float>>, nodo: Int): List<MedidaAEscuadra> {
         if (contorno.size < 3 || nodo !in contorno.indices) return emptyList()
         val n = contorno.size
         val p = contorno[nodo]
-        val aristas = listOf(anterior(nodo, n), nodo)   // las dos que salen de la esquina
         val salen = mutableListOf<MedidaAEscuadra>()
         for (lado in contorno.indices) {
             // Los lados que tocan la esquina no cuentan: desde ellos no hay nada que medir.
@@ -68,17 +66,7 @@ object CotaAEscuadra {
             val pie = pieDePerpendicular(p, a, b) ?: continue
             val d = distancia(p, pie)
             if (d <= NADA) continue
-            val arista = aristas.maxByOrNull { paralelismo(contorno, it, a, b) } ?: continue
-            if (paralelismo(contorno, arista, a, b) < 0.99f) continue
-            salen.add(
-                MedidaAEscuadra(
-                    nodo = nodo,
-                    ladoOpuesto = lado,
-                    aristaQueEmpuja = arista,
-                    distanciaCm = d,
-                    pie = pie
-                )
-            )
+            salen.add(MedidaAEscuadra(nodo = nodo, ladoOpuesto = lado, distanciaCm = d, pie = pie))
         }
         return salen.sortedBy { it.distanciaCm }
     }
@@ -117,11 +105,13 @@ object CotaAEscuadra {
     }
 
     /**
-     * Mueve la arista de la cota hasta que la medida sea [nuevaCm], y devuelve el contorno nuevo.
+     * Mueve LA ESQUINA hasta que la medida sea [nuevaCm], y devuelve el contorno nuevo.
      *
-     * La arista se empuja ENTERA y a escuadra del lado de enfrente —hacia arriba, hacia abajo o de
-     * lado, según cómo caiga—, que es lo que pasa en la realidad: el corte sube o baja, no se
-     * tuerce. Los demás vértices se quedan donde estaban.
+     * Se mueve solo ella, por la misma recta de la cota —a escuadra del lado de enfrente—, y los
+     * dos lados que salen de esa esquina la siguen. Los demás vértices se quedan donde estaban, así
+     * que el otro extremo del corte no se entera: un corte que en obra está más alto de un lado que
+     * del otro se apunta tal como es. Empujando la arista entera, como se hacía antes, el corte
+     * subía siempre a plomo y no había manera de apuntarlo torcido.
      */
     fun conDistancia(
         contorno: List<Pair<Float, Float>>,
@@ -132,34 +122,14 @@ object CotaAEscuadra {
         val p = contorno.getOrNull(medida.nodo) ?: return contorno
         val largo = distancia(p, medida.pie)
         if (largo <= NADA) return contorno
-        // Hacia dónde empujar: por la misma recta de la cota, alejándose del lado de enfrente.
+        // Hacia dónde empujar: por la recta de la cota, alejándose del lado de enfrente.
         val ux = (p.first - medida.pie.first) / largo
         val uy = (p.second - medida.pie.second) / largo
         val avance = nuevaCm - medida.distanciaCm
-        val cuales = setOf(
-            medida.aristaQueEmpuja,
-            siguiente(medida.aristaQueEmpuja, contorno.size)
-        )
         return contorno.mapIndexed { i, punto ->
-            if (i in cuales) (punto.first + ux * avance) to (punto.second + uy * avance)
+            if (i == medida.nodo) (punto.first + ux * avance) to (punto.second + uy * avance)
             else punto
         }
-    }
-
-    /** Cuánto se parecen en dirección la arista [lado] y el lado a→b: 1 es paralelo del todo. */
-    private fun paralelismo(
-        contorno: List<Pair<Float, Float>>,
-        lado: Int,
-        a: Pair<Float, Float>,
-        b: Pair<Float, Float>
-    ): Float {
-        val n = contorno.size
-        val d = normalizar(
-            (contorno[siguiente(lado, n)].first - contorno[lado].first) to
-                (contorno[siguiente(lado, n)].second - contorno[lado].second)
-        )
-        val o = normalizar((b.first - a.first) to (b.second - a.second))
-        return abs(d.first * o.first + d.second * o.second)
     }
 
     /** Dónde cae la perpendicular desde [p] al lado a→b; null si cae fuera del lado. */
@@ -180,7 +150,6 @@ object CotaAEscuadra {
     }
 
     private fun siguiente(i: Int, n: Int) = (i + 1) % n
-    private fun anterior(i: Int, n: Int) = (i - 1 + n) % n
 
     private fun distancia(a: Pair<Float, Float>, b: Pair<Float, Float>) =
         hypot(b.first - a.first, b.second - a.second)

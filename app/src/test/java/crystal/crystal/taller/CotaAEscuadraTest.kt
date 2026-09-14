@@ -58,49 +58,45 @@ class CotaAEscuadraTest {
     }
 
     /**
-     * Y la arista que empuja es la del corte que va PARALELA al suelo: la de (140,40)–(200,40).
+     * Escribir otra medida sube ESA ESQUINA sola, y nada más.
      *
-     * La otra que sale de esa esquina es vertical; moverla no cambiaría la altura del corte, lo
-     * torcería.
+     * La otra punta del corte —la de (200,40)— se queda donde estaba, así que el corte queda más
+     * alto de un lado que del otro. Eso es lo que pasa en obra, y es justo lo que no se podía
+     * apuntar cuando se empujaba la arista entera: el corte subía siempre a plomo.
      */
     @Test
-    fun empuja_la_arista_que_va_paralela_al_lado_de_enfrente() {
-        val medida = CotaAEscuadra.desdeNodo(conCorte, 2)!!
-        assertEquals("no empuja la arista del corte", 2, medida.aristaQueEmpuja)
-    }
-
-    /** Escribir otra medida sube el corte entero, sin torcerlo y sin mover el resto. */
-    @Test
-    fun escribir_la_medida_sube_el_corte_entero() {
+    fun escribir_la_medida_sube_solo_esa_esquina() {
         val medida = CotaAEscuadra.desdeNodo(conCorte, 2)!!
         val nuevo = CotaAEscuadra.conDistancia(conCorte, medida, 140f)
 
-        // Las dos puntas de la arista del corte suben 20, de y=40 a y=20.
+        // La esquina sube 20, de y=40 a y=20, sin irse a lo ancho.
         assertEquals(20f, nuevo[2].second, 0.01f)
-        assertEquals(20f, nuevo[3].second, 0.01f)
-        assertEquals("la arista se torció", nuevo[2].second, nuevo[3].second, 0.01f)
         assertEquals("se movió a lo ancho", 140f, nuevo[2].first, 0.01f)
-        assertEquals("se movió a lo ancho", 200f, nuevo[3].first, 0.01f)
 
-        // El resto del contorno se queda donde estaba.
+        // Y la otra punta del corte no se entera.
+        assertEquals("arrastró la otra punta del corte", conCorte[3], nuevo[3])
+
+        // El resto del contorno, igual.
         assertEquals(conCorte[0], nuevo[0])
         assertEquals(conCorte[1], nuevo[1])
         assertEquals(conCorte[4], nuevo[4])
         assertEquals(conCorte[5], nuevo[5])
 
-        // Y la cota vuelve a medir lo que se escribió.
-        val despues = CotaAEscuadra.desdeNodo(nuevo, 2)!!
+        // Y la cota vuelve a medir lo que se escribió. Se la vuelve a pedir HACIA ABAJO, que es
+        // por donde iba: movida la esquina, el lado más cercano puede ser ya otro —el costado— y
+        // preguntar por el más cercano sería preguntar por una cota distinta.
+        val despues = CotaAEscuadra.haciaDonde(nuevo, 2, 0f to 1f)!!
         assertEquals(140f, despues.distanciaCm, 0.01f)
     }
 
-    /** Y al revés: una medida más corta lo baja. */
+    /** Y al revés: una medida más corta baja esa esquina. */
     @Test
-    fun una_medida_mas_corta_baja_el_corte() {
+    fun una_medida_mas_corta_baja_esa_esquina() {
         val medida = CotaAEscuadra.desdeNodo(conCorte, 2)!!
         val nuevo = CotaAEscuadra.conDistancia(conCorte, medida, 100f)
         assertEquals(60f, nuevo[2].second, 0.01f)
-        assertEquals(60f, nuevo[3].second, 0.01f)
-        assertEquals(100f, CotaAEscuadra.desdeNodo(nuevo, 2)!!.distanciaCm, 0.01f)
+        assertEquals("arrastró la otra punta del corte", conCorte[3], nuevo[3])
+        assertEquals(100f, CotaAEscuadra.haciaDonde(nuevo, 2, 0f to 1f)!!.distanciaCm, 0.01f)
     }
 
     /**
@@ -108,7 +104,7 @@ class CotaAEscuadraTest {
      *
      * Rectángulo de 200 x 160 al que le falta una lengua por el costado derecho, entre y=60 e
      * y=100, que entra hasta x=40. Desde su esquina de dentro, lo más cercano a escuadra es el
-     * costado izquierdo, a 40, y lo que se empuja es la arista vertical del corte.
+     * costado izquierdo, a 40, y al escribir otra medida esa esquina se va de lado, no de alto.
      */
     @Test
     fun un_corte_hondo_por_el_costado_empuja_de_lado() {
@@ -125,13 +121,11 @@ class CotaAEscuadraTest {
         val medida = CotaAEscuadra.desdeNodo(corteLateral, 3)!!
         assertEquals("no mide hasta el costado izquierdo", 40f, medida.distanciaCm, 0.01f)
         assertEquals("el pie no cae en el costado", 0f, medida.pie.first, 0.01f)
-        assertEquals("no empuja la arista vertical del corte", 3, medida.aristaQueEmpuja)
 
         val nuevo = CotaAEscuadra.conDistancia(corteLateral, medida, 90f)
-        assertEquals("el corte no se movió de lado", 90f, nuevo[3].first, 0.01f)
-        assertEquals("el corte no se movió entero", 90f, nuevo[4].first, 0.01f)
-        assertEquals("el corte se movió de alto", 60f, nuevo[3].second, 0.01f)
-        assertEquals(100f, nuevo[4].second, 0.01f)
+        assertEquals("la esquina no se movió de lado", 90f, nuevo[3].first, 0.01f)
+        assertEquals("la esquina se movió de alto", 60f, nuevo[3].second, 0.01f)
+        assertEquals("arrastró la otra punta del corte", corteLateral[4], nuevo[4])
     }
 
     /**
@@ -190,17 +184,15 @@ class CotaAEscuadraTest {
         assertEquals("un tirón flojo escogió lado", 120f, flojo.distanciaCm, 0.01f)
     }
 
-    /** Y la que se escogió es la que empuja: la del costado mueve la arista vertical del corte. */
+    /** Y cada cota empuja por SU recta: la del costado mueve la esquina de lado, no de alto. */
     @Test
-    fun la_escogida_empuja_su_propia_arista() {
+    fun cada_cota_empuja_por_su_recta() {
         val alCostado = CotaAEscuadra.haciaDonde(conCorte, 2, -50f to 0f)!!
-        assertEquals("no empuja la arista vertical del corte", 1, alCostado.aristaQueEmpuja)
-
         val nuevo = CotaAEscuadra.conDistancia(conCorte, alCostado, 100f)
-        assertEquals("el corte no se movió de lado", 100f, nuevo[1].first, 0.01f)
-        assertEquals("el corte no se movió entero", 100f, nuevo[2].first, 0.01f)
-        assertEquals("se movió de alto", 0f, nuevo[1].second, 0.01f)
-        assertEquals(40f, nuevo[2].second, 0.01f)
+        assertEquals("la esquina no se movió de lado", 100f, nuevo[2].first, 0.01f)
+        assertEquals("la esquina se movió de alto", 40f, nuevo[2].second, 0.01f)
+        assertEquals("arrastró la esquina de arriba del corte", conCorte[1], nuevo[1])
+        assertEquals("arrastró la otra punta del corte", conCorte[3], nuevo[3])
     }
 
     /** Sin esquina que valga no hay candidatas, y eso no revienta. */
