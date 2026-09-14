@@ -735,4 +735,75 @@ class PlantaEsquinaTest {
         assertEquals("el trozo que queda cambió de panza", 12f, medida.lados[0].flecha, 0.5f)
         assertEquals("el trozo que queda cambió de desarrollo", 90f, medida.lados[0].ancho, 1f)
     }
+
+    /**
+     * El desarrollo del arco sigue al ancho de la ventana.
+     *
+     * Se escribe 210 en la cota de arriba y el rótulo de la curva se quedaba en 180: la ventana
+     * medía una cosa y su curva decía otra. Lo que se conserva es la curvatura, que es lo que se
+     * midió contra la pared.
+     */
+    @Test
+    fun el_desarrollo_sigue_al_ancho_de_la_ventana() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+        }
+        val radio = crystal.crystal.taller.ArcoEsquina.deDesarrolloYCuerda(180f, 160f)!!.radio
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.escribirAnchoDeLaVentanaParaPruebas(210f)
+        }
+
+        val lado = v.esquinaPrincipalEnCm()!!.lados[0]
+        assertEquals("el arco no siguió al ancho de la ventana", 210f, lado.ancho, 1f)
+        assertTrue("el trozo se quedó sin curva", lado.esCurva)
+        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(lado.ancho, lado.flecha)!!
+        assertEquals("la curva cambió de curvatura", radio, arco.radio, radio * 0.05f)
+    }
+
+    /**
+     * Un trozo más DENTRO de la ventana: se reparte lo que ya mide, no crece.
+     *
+     * Es la mitad de la pregunta que se hace al añadir un trozo a una curva. La de 180 con un punto
+     * de alto al medio son dos trozos de 90, y la cuerda de cada uno sale del círculo: 87.4, que no
+     * es la mitad de 160.
+     */
+    @Test
+    fun un_trozo_dentro_reparte_lo_que_ya_mide() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+            v.cambiarTramosParaPruebas(1, dentro = true)
+        }
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no partió en dos trozos", 2, medida.lados.size)
+        assertEquals("el primer trozo no mide la mitad", 90f, medida.lados[0].ancho, 0.5f)
+        assertEquals("el segundo trozo no mide la mitad", 90f, medida.lados[1].ancho, 0.5f)
+        assertEquals(
+            "la ventana creció al partirla",
+            180f, medida.lados.sumOf { it.ancho.toDouble() }.toFloat(), 1f
+        )
+        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(
+            medida.lados[0].ancho, medida.lados[0].flecha
+        )!!
+        assertEquals("la cuerda del trozo no es la del círculo", 87.4f, arco.cuerda, 1f)
+    }
+
+    /** Y la otra mitad: AÑADIDO, se pega al último y la ventana crece. */
+    @Test
+    fun un_trozo_anadido_pega_otra_pared() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
+            v.cambiarTramosParaPruebas(1, dentro = false)
+        }
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals("no añadió el trozo", 2, medida.lados.size)
+        assertEquals("le cambió la medida al trozo de siempre", 180f, medida.lados[0].ancho, 1f)
+        assertEquals("el trozo nuevo no mide como el anterior", 180f, medida.lados[1].ancho, 1f)
+    }
 }

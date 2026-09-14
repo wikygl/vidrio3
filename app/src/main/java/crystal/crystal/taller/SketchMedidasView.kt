@@ -3545,7 +3545,41 @@ class SketchMedidasView @JvmOverloads constructor(
      * Añade o quita un tramo de la ventana de esquina. El tramo nuevo entra por la derecha con su
      * arista, su ángulo y su cota de alto; el vano crece con él, porque cada tramo es una pared.
      */
+    /**
+     * Un trozo más en una ventana curva: hay que preguntar DÓNDE va.
+     *
+     * Las dos cosas son de verdad: partir el arco que ya se midió —una ventana de 180 con un punto
+     * de alto al medio son dos trozos de 90— o pegarle otra pared a continuación, y la ventana
+     * crece. Antes se hacía siempre lo segundo sin preguntar, y el que quería partir su medida se
+     * encontraba con la ventana del doble de grande.
+     */
     private fun cambiarTramos(etiquetaIndex: Int, delta: Int) {
+        val marcoIndex = marcoDePieza(etiquetaIndex) ?: return
+        if (delta > 0 && esMarcoCurvo(marcoIndex)) {
+            AlertDialog.Builder(context)
+                .setTitle("Un trozo más")
+                .setMessage(
+                    "¿El trozo nuevo va DENTRO de lo que ya mide la ventana, que se reparte entre " +
+                        "los trozos, o se AÑADE pegado al último y la ventana crece?"
+                )
+                .setPositiveButton("Dentro") { _, _ ->
+                    aplicarCambioDeTramos(etiquetaIndex, delta, repartir = true)
+                }
+                .setNegativeButton("Añadir") { _, _ ->
+                    aplicarCambioDeTramos(etiquetaIndex, delta, repartir = false)
+                }
+                .setNeutralButton("Cancelar", null)
+                .show()
+            return
+        }
+        aplicarCambioDeTramos(etiquetaIndex, delta, repartir = false)
+    }
+
+    /**
+     * Pone o quita un tramo. Con [repartir], lo que mide la ventana se reparte entre los trozos que
+     * queden en vez de crecer; solo vale en una curva de un solo círculo.
+     */
+    private fun aplicarCambioDeTramos(etiquetaIndex: Int, delta: Int, repartir: Boolean) {
         val marcoIndex = marcoDePieza(etiquetaIndex) ?: return
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
         val quiebres = quiebresDelMarco(marcoIndex)
@@ -3554,6 +3588,14 @@ class SketchMedidasView @JvmOverloads constructor(
         // en la de esquina —con una sola pared no hay esquina que doblar— y UNO en la curva: un
         // arco solo ya es una ventana, y partirlo es cosa de la obra, no una obligación.
         val curvo = esMarcoCurvo(marcoIndex)
+        // Lo que mide la curva entera y de qué círculo es, antes de tocar nada: hace falta para
+        // repartirla. Si el vidriero ya midió los trozos por separado, los radios no coinciden —eso
+        // ya no es un arco de círculo— y no hay nada que repartir sin borrarle lo medido.
+        val arcosAntes = curvasDeTramo(marcoIndex).values.mapNotNull { it.arco }
+        val desarrolloAntes = arcosAntes.sumOf { it.desarrollo.toDouble() }.toFloat()
+        val mismoCirculo = arcosAntes.isNotEmpty() &&
+            arcosAntes.all { abs(it.radio - arcosAntes[0].radio) <= arcosAntes[0].radio * 0.02f }
+        val radioDeLaCurva = if (repartir && mismoCirculo) arcosAntes[0].radio else null
         val minimo = if (curvo) 1 else 2
         val destino = (tramos + delta).coerceAtLeast(minimo)
         if (destino == tramos) {
@@ -3648,8 +3690,15 @@ class SketchMedidasView @JvmOverloads constructor(
             marco.bottomRight.x -= ultimoAncho
         }
         actualizarBoundsRectangulo(marco)
-        val ahora = elementos.indexOfFirst { it === marco }
+        var ahora = elementos.indexOfFirst { it === marco }
         if (ahora < 0) return
+        // Si el trozo va DENTRO, lo que medía la ventana se reparte entre los que quedan: sigue
+        // midiendo lo mismo, que su desarrollo es una medida de la pared.
+        if (radioDeLaCurva != null && desarrolloAntes > 0.5f) {
+            repartirLaCurva(ahora, desarrolloAntes, radioDeLaCurva)
+            ahora = elementos.indexOfFirst { it === marco }
+            if (ahora < 0) return
+        }
         etiquetaDelMarco(ahora, ROL_TRAMOS)?.let {
             (elementos[it] as Element.TextLabel).text = textoTramos(quiebresDelMarco(ahora).size + 1)
         }
@@ -3657,6 +3706,28 @@ class SketchMedidasView @JvmOverloads constructor(
         sincronizarMarco(ahora, reinterpolarAltos = false)
         registrarAccion()
         invalidate()
+    }
+
+    /**
+     * Reparte una curva de [totalCm] de desarrollo entre los trozos que tenga, a partes iguales.
+     *
+     * Todos siguen el mismo [radio], que es el de la curva de antes: partir la ventana no la
+     * cambia, solo dice por dónde se va a medir. Una de 180 con un punto al medio son dos trozos
+     * de 90, y la cuerda de cada uno sale del círculo —no es la mitad de la cuerda entera—. De ahí
+     * en adelante el vidriero corrige el trozo que no cuadre con la pared.
+     */
+    private fun repartirLaCurva(marcoIndex: Int, totalCm: Float, radio: Float) {
+        val etiquetas = etiquetasCurva(marcoIndex)
+        if (etiquetas.isEmpty() || totalCm <= 0.5f) return
+        val cacho = totalCm / etiquetas.size
+        if (cacho <= 0.5f) return
+        val arco = ArcoEsquina.deDesarrolloYRadio(cacho, radio)
+        etiquetas.forEach { i ->
+            (elementos.getOrNull(i) as? Element.TextLabel)?.text =
+                textoCurva(cacho, arco?.cuerda ?: cacho)
+        }
+        // Y el dibujo: cada trozo mide su desarrollo, que es lo que se ve en la alzada.
+        etiquetas.indices.forEach { tramo -> aplicarAnchoTramoEnPlanta(marcoIndex, tramo, cacho) }
     }
 
     /**
@@ -4098,10 +4169,40 @@ class SketchMedidasView @JvmOverloads constructor(
 
     /** Añade o quita un tramo, como el contador "N° de tramos" de la pantalla. */
     @androidx.annotation.VisibleForTesting
-    fun cambiarTramosParaPruebas(delta: Int) {
+    fun cambiarTramosParaPruebas(delta: Int, dentro: Boolean = false) {
         val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
         val etiqueta = etiquetaDelMarco(marco, ROL_TRAMOS) ?: return
-        cambiarTramos(etiqueta, delta)
+        // Se responde la pregunta sin diálogo: en una curva, el trozo nuevo va dentro o pegado.
+        aplicarCambioDeTramos(etiqueta, delta, repartir = dentro)
+    }
+
+    /** Escribe el ancho de la ventana entera, como al tocar su cota de arriba. */
+    @androidx.annotation.VisibleForTesting
+    fun escribirAnchoDeLaVentanaParaPruebas(valueCm: Float) {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+        val shape = elementos[marco] as? Element.Shape ?: return
+        aplicarNuevaCotaShape(shape, CotaType.WIDTH, valueCm, marco, null)
+        sincronizarMarco(marco, reinterpolarAltos = false)
+        arcosSiguenAlDibujo(marco)
+        invalidate()
+    }
+
+    /**
+     * Escribe la curva de un tramo de una ventana curva, como al tocar su rótulo.
+     *
+     * Es el arco de una PARED, no el de una arista entre dos: en la ventana curva lo que se curva
+     * son los tramos.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun curvaDeTramoParaPruebas(tramo: Int, desarrolloCm: Float, cuerdaCm: Float) {
+        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
+        val etiqueta = etiquetasCurva(marco).getOrNull(tramo) ?: return
+        (elementos[etiqueta] as Element.TextLabel).text = textoCurva(desarrolloCm, cuerdaCm)
+        aplicarAnchoTramoEnPlanta(marco, tramo, desarrolloCm)
+        elementos.indices.firstOrNull { esMarcoEsquina(it) }?.let {
+            sincronizarMarco(it, reinterpolarAltos = false)
+        }
+        invalidate()
     }
 
     /** Pone una esquina curva en esa arista, con su desarrollo y su cuerda. */
@@ -7996,6 +8097,9 @@ class SketchMedidasView @JvmOverloads constructor(
                 if (esMarco) {
                     if (altosAntes == automaticasAntes) ajustarAltosAutomaticos(hit.elementIndex)
                     sincronizarMarco(hit.elementIndex, cambiaAltura)
+                    // Después de sincronizar: las aristas se recolocan ahí, y hasta entonces lo que
+                    // mide cada trozo en el papel todavía no es lo que va a medir.
+                    if (!cambiaAltura) arcosSiguenAlDibujo(hit.elementIndex)
                 }
             }
             is Element.Composite -> {
@@ -8330,6 +8434,32 @@ class SketchMedidasView @JvmOverloads constructor(
         if (abs(delta) < 0.01f) return
         aplicarAnchoTramo(marcoIndex, tramo, valueCm)
         anchoArriba?.let { aplicarAnchoArribaTramo(marcoIndex, tramo, it + delta) }
+        arcosSiguenAlDibujo(marcoIndex)
+    }
+
+    /**
+     * Cada arco dice lo que mide su trozo en el dibujo, después de escribir un ancho.
+     *
+     * En una ventana curva la alzada dibuja el DESARROLLO, así que lo que mide el trozo en el papel
+     * es el desarrollo de su arco. Se escribía 210 en el ancho de la ventana y el rótulo del arco
+     * se quedaba en 180: la ventana medía una cosa y su curva decía otra.
+     *
+     * Lo que se conserva es la CURVATURA: el radio es lo que se midió contra la pared; el trozo se
+     * estira o se encoge sobre el mismo círculo. Solo se toca el trozo cuyo ancho cambió de verdad.
+     */
+    private fun arcosSiguenAlDibujo(marcoIndex: Int) {
+        val etiquetas = etiquetasCurva(marcoIndex)
+        if (etiquetas.isEmpty()) return
+        val bordes = bordesDeTramos(marcoIndex)
+        etiquetas.forEachIndexed { tramo, i ->
+            if (tramo + 1 >= bordes.size) return@forEachIndexed
+            val rotulo = elementos.getOrNull(i) as? Element.TextLabel ?: return@forEachIndexed
+            val arco = esquinaDesdeTexto(rotulo.text).arco ?: return@forEachIndexed
+            val desarrollo = pxToCm(bordes[tramo + 1] - bordes[tramo])
+            if (desarrollo <= 0.5f || abs(arco.desarrollo - desarrollo) < 0.05f) return@forEachIndexed
+            val nuevo = ArcoEsquina.deDesarrolloYRadio(desarrollo, arco.radio) ?: return@forEachIndexed
+            rotulo.text = textoCurva(desarrollo, nuevo.cuerda)
+        }
     }
 
     /**
