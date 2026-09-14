@@ -23,7 +23,11 @@ object MamparaPaflonRender {
         if (anchoCm <= 0f || altoCm <= 0f) return null
         val altoHojaCm = d.altoHoja
         val m = MamparaModulos.desde(d)
-        val hayPuente = (altoCm - (altoHojaCm + MamparaModulos.P_ALT + d.marco)) > 0f
+        // Marco inferior: opcional. Sin él la hoja apoya en el piso, que es lo normal en paflón.
+        // Con él la hoja apoya sobre el marco y conserva su alto, así que sube un marco entero:
+        // lo que se acorta es la mocheta de arriba.
+        val marcoInfCm = if (d.marcoInferior) d.marco else 0f
+        val hayPuente = (altoCm - (altoHojaCm + MamparaModulos.P_ALT + d.marco + marcoInfCm)) > 0f
 
         val bmpW = (anchoCm * 3f).toInt().coerceAtLeast(600)
         val bmpH = (altoCm * 3f).toInt().coerceAtLeast(600)
@@ -37,6 +41,7 @@ object MamparaPaflonRender {
         val rielPx = MamparaModulos.P_ALT * escala
         val paranteTramoPx = m.paranteTramo * escala
         val altoHojaPx = altoHojaCm * escala
+        val marcoInfPx = marcoInfCm * escala
 
         val bitmap = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
         val c = Canvas(bitmap)
@@ -78,9 +83,13 @@ object MamparaPaflonRender {
         rect(RectF(x0, y0, x0 + marcoPx, y0 + h), pMarco)
         rect(RectF(x0 + w - marcoPx, y0, x0 + w, y0 + h), pMarco)
         rect(RectF(x0 + marcoPx, y0, x0 + w - marcoPx, y0 + marcoPx), pMarco)
+        // Marco inferior, solo si el diseño lo pide: la paflón normal se apoya en el piso.
+        if (d.marcoInferior) rect(RectF(x0 + marcoPx, y0 + h - marcoPx, x0 + w - marcoPx, y0 + h), pMarco)
 
-        val hojaBottom = y0 + h
-        // Sin puente, altoHoja = alto - marco, así que hojaTop cae justo bajo el marco (sin banda
+        // La hoja apoya sobre el marco inferior cuando lo hay, y conserva su alto: altoHoja es
+        // una cota interna, no una distancia al piso.
+        val hojaBottom = y0 + h - marcoInfPx
+        // Sin puente, altoHoja = alto - marcos, así que hojaTop cae justo bajo el marco (sin banda
         // intermedia). El tope mínimo es y0+marcoPx (no +rielPx, que dejaba un puente pegado al marco).
         val hojaTop = (hojaBottom - altoHojaPx).coerceAtLeast(y0 + marcoPx)
         val vanoLeft = x0 + marcoPx

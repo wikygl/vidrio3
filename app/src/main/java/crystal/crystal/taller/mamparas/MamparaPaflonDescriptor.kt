@@ -6,14 +6,20 @@ package crystal.crystal.taller.mamparas
  * regenera con [MamparaPaflonRender], sin guardar PNG. Así el archivado siempre se ve con la
  * última lógica de dibujo.
  *
- * Formato: `MPF1:ancho;alto;altoHoja;divisiones;bastidor;marco;nMochetas[;patron]`
+ * Formato: `MPF1:ancho;alto;altoHoja;divisiones;bastidor;marco;nMochetas[;patron[;marcoInf]]`
  *
- * `patron` es opcional y va al FINAL a propósito: los diseños archivados antes de que existiera
- * tienen siete campos y se siguen leyendo igual, cayendo al patrón automático.
+ * `patron` y `marcoInf` son opcionales y van al FINAL a propósito: los diseños archivados antes de
+ * que existieran tienen siete campos y se siguen leyendo igual, cayendo al patrón automático y a
+ * la mampara sin marco inferior.
  */
 data class MamparaPaflonDescriptor(
     val ancho: Float,
     val alto: Float,
+    /**
+     * Altura de puente = alto de la hoja. Es una cota INTERNA: si se pide 210, la hoja mide 210
+     * lleve o no marco inferior. Con marco inferior la hoja apoya sobre él y arranca un marco más
+     * arriba, así que lo que se acorta es la mocheta.
+     */
     val altoHoja: Float,
     val divisiones: Int,
     val bastidor: Float,
@@ -23,11 +29,21 @@ data class MamparaPaflonDescriptor(
      * Disposición elegida a mano: `fcf|cf` (tramos separados por `|`, f = fijo, c = corrediza).
      * Vacío = la calcula el automático. Cuando está, manda sobre [divisiones].
      */
-    val patron: String = ""
+    val patron: String = "",
+    /**
+     * Mampara con marco inferior. Por defecto la paflón no lo lleva: se apoya en el piso o en el
+     * plato de ducha. Cuando lo lleva, la hoja apoya sobre el marco conservando su alto, de modo
+     * que todo sube un marco y la mocheta de arriba es la que se acorta.
+     */
+    val marcoInferior: Boolean = false
 ) {
-    fun serializar(): String =
-        "$PREFIJO$ancho;$alto;$altoHoja;$divisiones;$bastidor;$marco;$nMochetas" +
-            if (patron.isNotBlank()) ";$patron" else ""
+    fun serializar(): String = buildString {
+        append("$PREFIJO$ancho;$alto;$altoHoja;$divisiones;$bastidor;$marco;$nMochetas")
+        // El patrón se escribe aunque esté vacío cuando detrás va el marco inferior: si no, al
+        // releer, el campo del marco caería en la posición del patrón.
+        if (patron.isNotBlank() || marcoInferior) append(";$patron")
+        if (marcoInferior) append(";1")
+    }
 
     companion object {
         /** Clave bajo la que se archiva en el mapa (la misma que reconoce el recycler). */
@@ -49,7 +65,8 @@ data class MamparaPaflonDescriptor(
                     marco = partes[5].toFloat(),
                     nMochetas = partes[6].toInt(),
                     // Los descriptores de siete campos son los de antes del patrón manual.
-                    patron = partes.getOrNull(7).orEmpty()
+                    patron = partes.getOrNull(7).orEmpty(),
+                    marcoInferior = partes.getOrNull(8) == "1"
                 )
             }.getOrNull()
         }

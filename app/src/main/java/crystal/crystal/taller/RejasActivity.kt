@@ -12,5 +12,7 @@ class RejasActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityRejasBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+        crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
     }
 }

@@ -248,9 +248,17 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnEngraInterior.setOnClickListener { insertarInteriorExterior("interior") }
         binding.btnEngraExterior.setOnClickListener { insertarInteriorExterior("exterior") }
         binding.btnFuncionVano.setOnClickListener { mostrarDialogoPlantillaVano() }
+        // La cota a escuadra se queda puesta para poner varias seguidas, así que este botón es el
+        // interruptor: prende si está apagada y apaga si está prendida. Hay que mirar ANTES de
+        // cerrar los paneles, porque cerrarlos ya la apaga.
         binding.btnFuncionEscuadra.setOnClickListener {
+            val estaba = binding.sketchMedidas.eligiendoCotaAEscuadra
             ocultarPanelesFlotantes()
-            binding.sketchMedidas.activarCotaAEscuadra()
+            if (estaba) {
+                Toast.makeText(this, "Cota a escuadra: apagada", Toast.LENGTH_SHORT).show()
+            } else {
+                binding.sketchMedidas.activarCotaAEscuadra()
+            }
         }
         binding.btnHerramientaSeleccion.setOnClickListener {
             ocultarPanelesFlotantes()
@@ -418,6 +426,9 @@ class MedidaActivity : AppCompatActivity() {
         if (herramientaActual != SketchMedidasView.Tool.NONE) {
             seleccionarHerramienta(SketchMedidasView.Tool.NONE)
         }
+        // La cota a escuadra también se queda puesta, y mientras lo está se come los toques del
+        // lienzo. Irse a otro botón la suelta, igual que suelta el lápiz.
+        binding.sketchMedidas.cancelarCotaAEscuadra()
     }
 
     private fun seleccionarHerramientaDesdePanel(tool: SketchMedidasView.Tool) {

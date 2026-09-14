@@ -189,4 +189,71 @@ class CotaAEscuadraEnElApunteTest {
             alto - contorno[nodo].second, v.medidaAEscuadraParaPruebas()!!, 1f
         )
     }
+
+    /**
+     * Dos cotas seguidas en la misma esquina: la que baja y la que cruza al costado.
+     *
+     * Es lo que se hace de verdad al acotar un corte: primero una y enseguida la otra. Y entre una
+     * y otra el dibujo tiene que quedarse quieto.
+     */
+    @Test
+    fun se_pueden_poner_dos_cotas_seguidas() {
+        val v = vista()
+        v.insertarRecurrenteF1()
+        val contorno = v.contornoDelCompositeParaPruebas()
+        val nodo = esquinaDelCorte(contorno)
+        val caja = v.cajaDelCompositeParaPruebas()
+        val x = caja.first + v.cmAPixelesParaPruebas(contorno[nodo].first)
+        val y = caja.second + v.cmAPixelesParaPruebas(contorno[nodo].second)
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.cotaAEscuadraParaPruebas(x + 10f, y + 10f)   // la que baja
+        }
+        assertEquals("no puso la primera", 1, v.cuantasCotasAEscuadraParaPruebas())
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.cotaAEscuadraParaPruebas(x + 10f, y + 10f, x - v.cmAPixelesParaPruebas(40f), y)
+        }
+        assertEquals("no puso la segunda", 2, v.cuantasCotasAEscuadraParaPruebas())
+        assertEquals("el dibujo se movió al poner la segunda", contorno, v.contornoDelCompositeParaPruebas())
+    }
+
+    /**
+     * Y con el dedo de verdad: botón, esquina, botón, esquina.
+     *
+     * Es la secuencia que hace el que mide, y la que se quejaba de que la segunda ya no salía y el
+     * dibujo se iba de paseo.
+     */
+    @Test
+    fun dos_cotas_seguidas_con_el_dedo() {
+        val v = vista()
+        v.insertarRecurrenteF1()
+        val contorno = v.contornoDelCompositeParaPruebas()
+        val nodo = esquinaDelCorte(contorno)
+        val caja = v.cajaDelCompositeParaPruebas()
+        val x = caja.first + v.cmAPixelesParaPruebas(contorno[nodo].first) + 10f
+        val y = caja.second + v.cmAPixelesParaPruebas(contorno[nodo].second) + 10f
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.activarCotaAEscuadra()
+            v.toqueParaPruebas(android.view.MotionEvent.ACTION_DOWN, x, y)
+            v.toqueParaPruebas(android.view.MotionEvent.ACTION_UP, x, y)
+        }
+        assertEquals("no puso la primera con el dedo", 1, v.cuantasCotasAEscuadraParaPruebas())
+
+        // Y ahora la segunda SIN volver a tocar el botón: la herramienta se queda puesta, que un
+        // corte se acota con varias cotas seguidas. Apagándose sola, el toque de la segunda ya no
+        // era para medir y el lienzo se iba de paseo.
+        assertTrue("la herramienta se apagó sola al poner la primera", v.eligiendoCotaAEscuadra)
+        val alCostado = caja.first + v.cmAPixelesParaPruebas(contorno[nodo].first - 40f)
+        var comido = false
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            comido = v.toqueParaPruebas(android.view.MotionEvent.ACTION_DOWN, x, y)
+            comido = comido && v.toqueParaPruebas(android.view.MotionEvent.ACTION_MOVE, alCostado, y)
+            v.toqueParaPruebas(android.view.MotionEvent.ACTION_UP, alCostado, y)
+        }
+        assertTrue("el toque de la segunda no se consumió: el dibujo se movería", comido)
+        assertEquals("no puso la segunda con el dedo", 2, v.cuantasCotasAEscuadraParaPruebas())
+        assertEquals("el dibujo se movió", contorno, v.contornoDelCompositeParaPruebas())
+    }
 }

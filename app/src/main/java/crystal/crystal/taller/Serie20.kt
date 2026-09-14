@@ -10,6 +10,8 @@ class Serie20 : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding= ActivitySerie20Binding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+        crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
     }
     //serie 20 2 hojas
     // vidrio = anccho/2 -5 x alto - 10.7

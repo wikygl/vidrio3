@@ -484,6 +484,42 @@ class SketchMedidasView @JvmOverloads constructor(
             canvas.drawPath(trazoActual, if (herramienta == Tool.FREEHAND) paint else previewPaint)
         }
         canvas.restore()
+        dibujarAvisoEscuadra(canvas)
+    }
+
+    /**
+     * El cartel de que la cota a escuadra sigue puesta, clavado arriba de la pantalla.
+     *
+     * Como la herramienta ya no se apaga al poner una cota, tiene que verse que está prendida: si
+     * no, uno toca el dibujo esperando moverlo y lo que sale es otra cota. Va fuera del zoom, en
+     * píxeles de pantalla, y no sale en lo que se exporta.
+     */
+    private fun dibujarAvisoEscuadra(canvas: Canvas) {
+        if (!eligiendoEscuadra) return
+        val texto = "Cota a escuadra · toca una esquina y arrastra"
+        avisoTextoPaint.textSize = spToPx(12f)
+        val ancho = avisoTextoPaint.measureText(texto)
+        val alto = avisoTextoPaint.fontSpacing
+        val margen = spToPx(8f)
+        val caja = RectF(
+            (width - ancho) / 2f - margen,
+            margen,
+            (width + ancho) / 2f + margen,
+            margen + alto + margen
+        )
+        canvas.drawRoundRect(caja, margen, margen, avisoFondoPaint)
+        canvas.drawText(
+            texto, caja.left + margen,
+            caja.top + margen - avisoTextoPaint.fontMetrics.top / 1.25f,
+            avisoTextoPaint
+        )
+    }
+
+    private val avisoFondoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#E600AFEF"); style = Paint.Style.FILL
+    }
+    private val avisoTextoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
     }
 
     /**
@@ -4466,9 +4502,13 @@ class SketchMedidasView @JvmOverloads constructor(
      */
     @androidx.annotation.VisibleForTesting
     fun cotaAEscuadraParaPruebas(x: Float, y: Float, hx: Float = x, hy: Float = y): Boolean {
-        activarCotaAEscuadra()
+        if (!eligiendoEscuadra) activarCotaAEscuadra()
         return ponerCotaAEscuadra(PointF(x, y), PointF(hx, hy))
     }
+
+    /** Cuántas cotas a escuadra hay puestas en el apunte. */
+    @androidx.annotation.VisibleForTesting
+    fun cuantasCotasAEscuadraParaPruebas(): Int = cotasAEscuadra().size
 
     /** Lo que mide la primera cota a escuadra del apunte, en cm; null si no hay ninguna. */
     @androidx.annotation.VisibleForTesting
@@ -7099,7 +7139,8 @@ class SketchMedidasView @JvmOverloads constructor(
         eligiendoEscuadra = true
         Toast.makeText(
             context,
-            "Toca la esquina del corte y arrastra hacia el lado que quieras medir",
+            "Toca la esquina del corte y arrastra hacia el lado que quieras medir. " +
+                "Se quedan poniéndose hasta que vuelvas a tocar el botón",
             Toast.LENGTH_LONG
         ).show()
     }
@@ -7153,7 +7194,9 @@ class SketchMedidasView @JvmOverloads constructor(
             ).show()
             return true
         }
-        eligiendoEscuadra = false
+        // La herramienta SE QUEDA PUESTA: un corte se acota con varias —la que baja y la que cruza
+        // al costado—, y se ponen una detrás de otra. Apagándose sola, el toque siguiente ya no era
+        // para medir y el lienzo se iba de paseo. Se sale con el botón o cogiendo otra herramienta.
         elementos.add(
             crearShape(
                 Tool.LINE,
@@ -7166,6 +7209,18 @@ class SketchMedidasView @JvmOverloads constructor(
         invalidate()
         return true
     }
+
+    /** Apaga la herramienta sin decir nada: para cuando se coge otra o se abre otro panel. */
+    fun cancelarCotaAEscuadra() {
+        if (!eligiendoEscuadra && apuntandoEscuadra == null) return
+        eligiendoEscuadra = false
+        apuntandoEscuadra = null
+        arrastrandoEscuadra = null
+        invalidate()
+    }
+
+    /** Si la herramienta está puesta, para que quien tiene el botón sepa si prenderla o apagarla. */
+    val eligiendoCotaAEscuadra: Boolean get() = eligiendoEscuadra
 
     /** Las cotas a escuadra que hay puestas en el apunte. */
     private fun cotasAEscuadra(): List<Int> =
