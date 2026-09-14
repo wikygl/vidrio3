@@ -1454,22 +1454,6 @@ class SketchMedidasView @JvmOverloads constructor(
             .setNegativeButton("Cancelar", null)
             .show()
     }
-    /**
-     * El rótulo del arco al que pertenece esa cota de ancho, si la cota es de un trozo curvo.
-     *
-     * Null cuando no lo es: un tramo recto de una ventana de esquina se sigue tocando como lo que
-     * es, un ancho.
-     */
-    private fun etiquetaDeCurvaDeLaCota(hit: CotaHit): Int? {
-        if (hit.type != CotaType.ESQUINA_TRAMO && hit.type != CotaType.ESQUINA_TRAMO_PLANTA) {
-            return null
-        }
-        val tramo = hit.sideIndex ?: return null
-        val etiqueta = etiquetasCurva(hit.elementIndex).getOrNull(tramo) ?: return null
-        val texto = (elementos.getOrNull(etiqueta) as? Element.TextLabel)?.text ?: return null
-        return if (esquinaDesdeTexto(texto).arco != null) etiqueta else null
-    }
-
     /** El rótulo de la curva de un tramo: su desarrollo y su cuerda. */
     private fun textoCurva(desarrolloCm: Float, cuerdaCm: Float): String =
         "$MARCA_CURVA ${formatCm(desarrolloCm)}|${formatCm(cuerdaCm)}"
@@ -3570,17 +3554,6 @@ class SketchMedidasView @JvmOverloads constructor(
         // en la de esquina —con una sola pared no hay esquina que doblar— y UNO en la curva: un
         // arco solo ya es una ventana, y partirlo es cosa de la obra, no una obligación.
         val curvo = esMarcoCurvo(marcoIndex)
-        // Lo que mide la curva ENTERA y de qué círculo es, antes de tocar nada. Mientras todos los
-        // trozos sean del mismo círculo, partir la ventana no la hace más grande: reparte ese
-        // mismo arco entre los trozos que queden. Un punto de alto al medio de una curva de 180
-        // deja dos trozos de 90, cada uno con la cuerda que le toca por el radio.
-        val arcosAntes = curvasDeTramo(marcoIndex).values.mapNotNull { it.arco }
-        val desarrolloAntes = arcosAntes.sumOf { it.desarrollo.toDouble() }.toFloat()
-        // Si el vidriero ya midió los trozos por separado, los radios no coinciden: eso ya no es
-        // un arco de círculo y no hay nada que repartir. Repartiéndolo se le borrarían las medidas.
-        val mismoCirculo = arcosAntes.isNotEmpty() &&
-            arcosAntes.all { abs(it.radio - arcosAntes[0].radio) <= arcosAntes[0].radio * 0.02f }
-        val radioDeLaCurva = if (mismoCirculo) arcosAntes[0].radio else null
         val minimo = if (curvo) 1 else 2
         val destino = (tramos + delta).coerceAtLeast(minimo)
         if (destino == tramos) {
@@ -3675,16 +3648,8 @@ class SketchMedidasView @JvmOverloads constructor(
             marco.bottomRight.x -= ultimoAncho
         }
         actualizarBoundsRectangulo(marco)
-        var ahora = elementos.indexOfFirst { it === marco }
+        val ahora = elementos.indexOfFirst { it === marco }
         if (ahora < 0) return
-        // Y si es una curva de un solo círculo, se reparte entre los trozos que hayan quedado: la
-        // ventana sigue midiendo lo mismo, que su desarrollo es una medida de la pared y no cambia
-        // porque se le ponga o se le quite un punto de alto.
-        if (curvo && radioDeLaCurva != null) {
-            repartirLaCurva(ahora, desarrolloAntes, radioDeLaCurva)
-            ahora = elementos.indexOfFirst { it === marco }
-            if (ahora < 0) return
-        }
         etiquetaDelMarco(ahora, ROL_TRAMOS)?.let {
             (elementos[it] as Element.TextLabel).text = textoTramos(quiebresDelMarco(ahora).size + 1)
         }
@@ -3692,29 +3657,6 @@ class SketchMedidasView @JvmOverloads constructor(
         sincronizarMarco(ahora, reinterpolarAltos = false)
         registrarAccion()
         invalidate()
-    }
-
-    /**
-     * Reparte una curva de [totalCm] de desarrollo entre los trozos que tenga, a partes iguales.
-     *
-     * Todos siguen el mismo [radio], que es el de la curva de antes: partir la ventana no la
-     * cambia, solo dice por dónde se va a medir. Una de 180 con un punto al medio son dos trozos
-     * de 90, y la cuerda de cada uno sale del círculo —no es la mitad de la cuerda entera—. De ahí
-     * en adelante el vidriero corrige el trozo que no cuadre con la pared, y la ventana deja de
-     * ser el arco de un círculo.
-     */
-    private fun repartirLaCurva(marcoIndex: Int, totalCm: Float, radio: Float) {
-        val etiquetas = etiquetasCurva(marcoIndex)
-        if (etiquetas.isEmpty() || totalCm <= 0.5f) return
-        val cacho = totalCm / etiquetas.size
-        if (cacho <= 0.5f) return
-        val arco = ArcoEsquina.deDesarrolloYRadio(cacho, radio)
-        etiquetas.forEach { i ->
-            (elementos.getOrNull(i) as? Element.TextLabel)?.text =
-                textoCurva(cacho, arco?.cuerda ?: cacho)
-        }
-        // Y el dibujo: cada trozo mide su desarrollo, que es lo que se ve en la alzada.
-        etiquetas.indices.forEach { tramo -> aplicarAnchoTramoEnPlanta(marcoIndex, tramo, cacho) }
     }
 
     /**
@@ -4160,24 +4102,6 @@ class SketchMedidasView @JvmOverloads constructor(
         val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
         val etiqueta = etiquetaDelMarco(marco, ROL_TRAMOS) ?: return
         cambiarTramos(etiqueta, delta)
-    }
-
-    /**
-     * Escribe la curva de un tramo de una ventana curva, como al tocar su rótulo.
-     *
-     * Es el arco de una PARED, no el de una arista entre dos: en la ventana curva lo que se curva
-     * son los tramos.
-     */
-    @androidx.annotation.VisibleForTesting
-    fun curvaDeTramoParaPruebas(tramo: Int, desarrolloCm: Float, cuerdaCm: Float) {
-        val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
-        val etiqueta = etiquetasCurva(marco).getOrNull(tramo) ?: return
-        (elementos[etiqueta] as Element.TextLabel).text = textoCurva(desarrolloCm, cuerdaCm)
-        aplicarAnchoTramoEnPlanta(marco, tramo, desarrolloCm)
-        elementos.indices.firstOrNull { esMarcoEsquina(it) }?.let {
-            sincronizarMarco(it, reinterpolarAltos = false)
-        }
-        invalidate()
     }
 
     /** Pone una esquina curva en esa arista, con su desarrollo y su cuerda. */
@@ -7681,11 +7605,6 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun editarCota(hit: CotaHit) {
         val element = elementos.getOrNull(hit.elementIndex) ?: return
-        // El ancho de un trozo de curva ES el desarrollo de su arco, así que tocarlo abre la curva
-        // entera —desarrollo, flecha y cuerda—, que es donde hay que escribir. El rótulo del arco
-        // vive en la banda de abajo, lejos de la ventana, y ahí nadie lo encontraba: se tocaba el
-        // número que está debajo del trozo, como es natural, y salía un ancho pelado.
-        etiquetaDeCurvaDeLaCota(hit)?.let { editarCurvaDeTramo(it); return }
         val actual = when (hit.type) {
             CotaType.WIDTH -> when (element) {
                 // En el triángulo la cota es la BASE, no el ancho de la caja: girado, no son lo
@@ -8411,23 +8330,6 @@ class SketchMedidasView @JvmOverloads constructor(
         if (abs(delta) < 0.01f) return
         aplicarAnchoTramo(marcoIndex, tramo, valueCm)
         anchoArriba?.let { aplicarAnchoArribaTramo(marcoIndex, tramo, it + delta) }
-        arcoSigueAlAncho(marcoIndex, tramo, valueCm)
-    }
-
-    /**
-     * Si el tramo es curvo, su arco se estira o se encoge con él, sin cambiar de curvatura.
-     *
-     * El ancho de un trozo de curva es su desarrollo. Cambiándolo sin tocar el arco, el rótulo se
-     * quedaba con la cuerda de antes y la curva decía una cosa y medía otra. La curvatura —el
-     * radio— es lo que se midió en la pared, así que es lo que se respeta.
-     */
-    private fun arcoSigueAlAncho(marcoIndex: Int, tramo: Int, desarrolloCm: Float) {
-        val etiqueta = etiquetasCurva(marcoIndex).getOrNull(tramo) ?: return
-        val rotulo = elementos.getOrNull(etiqueta) as? Element.TextLabel ?: return
-        val arco = esquinaDesdeTexto(rotulo.text).arco ?: return
-        if (abs(arco.desarrollo - desarrolloCm) < 0.05f) return
-        val nuevo = ArcoEsquina.deDesarrolloYRadio(desarrolloCm, arco.radio) ?: return
-        rotulo.text = textoCurva(desarrolloCm, nuevo.cuerda)
     }
 
     /**
