@@ -61,7 +61,10 @@ class VistaVolumenNova @JvmOverloads constructor(
     fun mostrar(paquete: String?): Boolean {
         val d = runCatching { DisenoNova.desdePaquete(paquete.orEmpty()) }.getOrNull()
         diseno = d
-        val planta = d?.let { PlantaDelDiseno.de(it) }
+        // La panza de toda la ventana se saca del paquete tal cual: la calculadora curva la mete
+        // dentro de la franja de sistema, donde el modelo no la ve.
+        val panza = PlantaDelDiseno.panzaDelPaquete(paquete)
+        val planta = d?.let { PlantaDelDiseno.de(it, panza) }
         volumen = planta?.let { VolumenDelDiseno.de(it) }
         planta?.let { giroGrados = giroQueLaPresentaBien(it) }
         invalidate()
@@ -88,6 +91,10 @@ class VistaVolumenNova @JvmOverloads constructor(
         val rumbo = Math.toDegrees(kotlin.math.atan2(dy, dx)).toFloat()
         return -45f - rumbo
     }
+
+    /** Cuántas de sus caras salieron curvas. 0 = la ventana se armó plana. */
+    @androidx.annotation.VisibleForTesting
+    fun carasCurvasParaPruebas(): Int = volumen?.caras?.count { it.esCurva } ?: 0
 
     // Girar la ventana arrastrando: es lo que salva al isométrico de su pega, que desde un solo
     // sitio siempre hay una pared que se ve de canto.

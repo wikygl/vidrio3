@@ -3,6 +3,7 @@ package crystal.crystal.Diseno.nova
 import android.graphics.Bitmap
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -87,14 +88,29 @@ class VistaVolumenNovaTest {
         )
     }
 
-    /** La ventana curva tal como la escribe la calculadora: una panza para toda la ventana. */
+    /**
+     * La ventana curva tal como la escribe la calculadora.
+     *
+     * OJO al formato: la panza de toda la ventana va DENTRO de la franja de sistema del primer
+     * tramo (`s<120>(fU<20>)`), no suelta al final. Escrita suelta, la prueba pasaba y la ventana
+     * seguía saliendo plana en el celular.
+     */
     @Test
     fun retrato_de_la_ventana_curva_de_la_calculadora() {
-        retrato(
-            "vol_curva_entera.png",
-            "{nova,ina,[180,160:Tl<60>(H<160>;m<40>(f);s<120>(f))" +
-                " P<2.5> Tl<60>(H<160>;m<40>(f);s<120>(f))" +
-                " P<2.5> Tl<60>(H<160>;m<40>(f);s<120>(f)) U<20>]}"
+        val paquete = "{nova,ina,[180,160:Tl<60>(H<160>;m<40>(f);s<120>(fU<20>))" +
+            " P<2.5> Tl<60>(H<160>;m<40>(f);s<120>(f))" +
+            " P<2.5> Tl<60>(H<160>;m<40>(f);s<120>(f))]}"
+        assertEquals(
+            "no encuentra la panza donde la escribe la calculadora",
+            20f, PlantaDelDiseno.panzaDelPaquete(paquete), 0.01f
         )
+        retrato("vol_curva_entera.png", paquete)
+
+        // Y lo que de verdad importa, preguntándoselo A LA VISTA y no a la geometría suelta: que
+        // el volumen que arma salga curvo. Comprobándolo por fuera, la prueba pasaba en verde
+        // mientras en el celular la ventana seguía saliendo plana.
+        val v = vista()
+        v.mostrar(paquete)
+        assertTrue("la ventana curva se armó plana", v.carasCurvasParaPruebas() > 0)
     }
 }

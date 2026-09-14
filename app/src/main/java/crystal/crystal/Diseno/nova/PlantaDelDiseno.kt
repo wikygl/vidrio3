@@ -69,13 +69,29 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
          * siguiente va en perspectiva, pero el giro ya lo hizo la curva. Contándolo otra vez, la
          * ventana doblaba el doble en cada esquina redondeada.
          */
-        fun de(diseno: DisenoNova): PlantaDelDiseno {
+        /**
+         * La panza de toda la ventana, buscada en el paquete tal cual.
+         *
+         * La calculadora curva NO la escribe como etiqueta suelta: la mete DENTRO de la franja de
+         * sistema del primer tramo (`s<120>(fU<20>)`), donde el modelo no la ve porque ahí solo
+         * lee módulos. Por eso hay que buscarla en el texto, como ya se hace con la silueta del
+         * vano por la misma clase de motivo.
+         */
+        fun panzaDelPaquete(paquete: String?): Float =
+            RE_ARCO_ENTERO.find(paquete.orEmpty())
+                ?.groupValues?.get(1)?.replace(",", ".")?.toFloatOrNull()
+                ?.coerceAtLeast(0f) ?: 0f
+
+        private val RE_ARCO_ENTERO = Regex("""[uU]\s*<\s*([\d.,]+)\s*>""")
+
+        fun de(diseno: DisenoNova, panzaDeLaVentana: Float = 0f): PlantaDelDiseno {
+
             val paredes = mutableListOf<ParedEnPlanta>()
             var x = 0f
             var y = 0f
             var rumbo = 0.0                       // radianes; 0 = hacia la derecha
             var veniaDeCurva = false
-            val radioEntero = radioDeLaVentanaCurva(diseno)
+            val radioEntero = radioDeLaVentanaCurva(diseno, panzaDeLaVentana)
 
             diseno.tramos.forEachIndexed { i, tramo ->
                 val grados = tramo.pliegue?.let { gradosDePliegue(it) }
@@ -135,9 +151,10 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
          * de una por tramo. Sus tramos son trozos de ese mismo arco, así que del desarrollo entero
          * y de esa panza sale el radio, y de ahí lo que curva cada trozo.
          */
-        private fun radioDeLaVentanaCurva(diseno: DisenoNova): Float? {
+        private fun radioDeLaVentanaCurva(diseno: DisenoNova, panzaDeLaVentana: Float): Float? {
             if (diseno.tramos.any { it.flecha > 0f }) return null
-            val flecha = diseno.etiquetas
+            val flecha = if (panzaDeLaVentana > 0f) panzaDeLaVentana
+            else diseno.etiquetas
                 .firstOrNull { it.trim().startsWith("U<", ignoreCase = true) }
                 ?.substringAfter("<")?.substringBefore(">")
                 ?.trim()?.replace(",", ".")?.toFloatOrNull()
