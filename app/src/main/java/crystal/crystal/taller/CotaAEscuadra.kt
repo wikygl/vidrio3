@@ -44,18 +44,22 @@ object CotaAEscuadra {
     }
 
     /**
-     * La cota a escuadra que sale de esa esquina, o null si desde ahí no se alcanza ningún lado.
+     * TODOS los lados a los que se llega a escuadra desde esa esquina, del más cerca al más lejos.
      *
-     * El lado de enfrente es el más cercano de los que se pueden alcanzar A ESCUADRA: los que no
-     * tocan la esquina y a los que la perpendicular llega dentro del lado, no por su prolongación.
-     * De los que quedan manda el más cercano, que es el que uno mediría con la cinta.
+     * Una esquina de corte casi nunca tiene un solo lado de enfrente: la del escalón de un alféizar
+     * tiene el suelo debajo y el costado al lado, y las dos son medidas buenas. Cuál se quiere lo
+     * dice el que mide, no el programa, así que aquí salen todas y el dibujo deja elegir.
+     *
+     * Vale un lado que no toca la esquina, al que la perpendicular llega DENTRO del lado —no por su
+     * prolongación— y que va paralelo a una de las dos aristas de la esquina: si no es paralelo a
+     * ninguna, la escuadra mediría algo que no se puede cambiar sin torcer la forma.
      */
-    fun desdeNodo(contorno: List<Pair<Float, Float>>, nodo: Int): MedidaAEscuadra? {
-        if (contorno.size < 3 || nodo !in contorno.indices) return null
+    fun candidatasDesdeNodo(contorno: List<Pair<Float, Float>>, nodo: Int): List<MedidaAEscuadra> {
+        if (contorno.size < 3 || nodo !in contorno.indices) return emptyList()
         val n = contorno.size
         val p = contorno[nodo]
         val aristas = listOf(anterior(nodo, n), nodo)   // las dos que salen de la esquina
-        var mejor: MedidaAEscuadra? = null
+        val salen = mutableListOf<MedidaAEscuadra>()
         for (lado in contorno.indices) {
             // Los lados que tocan la esquina no cuentan: desde ellos no hay nada que medir.
             if (lado == nodo || siguiente(lado, n) == nodo) continue
@@ -64,22 +68,52 @@ object CotaAEscuadra {
             val pie = pieDePerpendicular(p, a, b) ?: continue
             val d = distancia(p, pie)
             if (d <= NADA) continue
-            // Solo vale el lado al que se le puede EMPUJAR una de las dos aristas de la esquina,
-            // o sea uno que vaya paralelo a ella. Contra un lado que no es paralelo a ninguna, la
-            // escuadra mediría algo que no se puede cambiar sin torcer la forma.
             val arista = aristas.maxByOrNull { paralelismo(contorno, it, a, b) } ?: continue
             if (paralelismo(contorno, arista, a, b) < 0.99f) continue
-            if (mejor == null || d < mejor.distanciaCm) {
-                mejor = MedidaAEscuadra(
+            salen.add(
+                MedidaAEscuadra(
                     nodo = nodo,
                     ladoOpuesto = lado,
                     aristaQueEmpuja = arista,
                     distanciaCm = d,
                     pie = pie
                 )
-            }
+            )
         }
-        return mejor
+        return salen.sortedBy { it.distanciaCm }
+    }
+
+    /**
+     * La cota a escuadra que sale de esa esquina, o null si desde ahí no se alcanza ningún lado.
+     *
+     * De las que hay manda la más corta, que es la que uno mediría con la cinta si no dice otra
+     * cosa. Para elegir a mano están [candidatasDesdeNodo] y [haciaDonde].
+     */
+    fun desdeNodo(contorno: List<Pair<Float, Float>>, nodo: Int): MedidaAEscuadra? =
+        candidatasDesdeNodo(contorno, nodo).firstOrNull()
+
+    /**
+     * De las candidatas de esa esquina, la que cae hacia donde se arrastró el dedo.
+     *
+     * Se compara la dirección del arrastre con la dirección de cada cota —de la esquina a su pie—,
+     * y gana la que apunta más parecido. Sin arrastre, o arrastrando casi nada, manda la más corta.
+     */
+    fun haciaDonde(
+        contorno: List<Pair<Float, Float>>,
+        nodo: Int,
+        arrastre: Pair<Float, Float>,
+        minimo: Float = 0f
+    ): MedidaAEscuadra? {
+        val salen = candidatasDesdeNodo(contorno, nodo)
+        if (salen.isEmpty()) return null
+        val largo = hypot(arrastre.first, arrastre.second)
+        if (largo <= minimo || largo <= NADA) return salen.first()
+        val u = (arrastre.first / largo) to (arrastre.second / largo)
+        val p = contorno[nodo]
+        return salen.maxByOrNull {
+            val v = normalizar((it.pie.first - p.first) to (it.pie.second - p.second))
+            u.first * v.first + u.second * v.second
+        }
     }
 
     /**

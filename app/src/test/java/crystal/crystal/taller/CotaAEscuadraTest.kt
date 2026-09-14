@@ -3,6 +3,7 @@ package crystal.crystal.taller
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -153,5 +154,61 @@ class CotaAEscuadraTest {
         assertNull(CotaAEscuadra.desdeNodo(emptyList(), 0))
         assertNull(CotaAEscuadra.desdeNodo(listOf(0f to 0f, 10f to 0f), 0))
         assertNull(CotaAEscuadra.desdeNodo(conCorte, 99))
+    }
+
+    /**
+     * Esa esquina no tiene UN lado de enfrente, tiene dos: el suelo y el costado.
+     *
+     * Desde la esquina de dentro del corte se llega a escuadra al lado de abajo (120) y también al
+     * costado izquierdo (140). Las dos son medidas buenas; cuál se quiere lo dice el que mide.
+     */
+    @Test
+    fun una_esquina_tiene_mas_de_un_lado_de_enfrente() {
+        val salen = CotaAEscuadra.candidatasDesdeNodo(conCorte, 2)
+        assertEquals("no vio los dos lados de enfrente", 2, salen.size)
+        assertEquals("la más corta no es la del suelo", 120f, salen[0].distanciaCm, 0.01f)
+        assertEquals("la otra no es la del costado", 140f, salen[1].distanciaCm, 0.01f)
+    }
+
+    /** Arrastrando hacia abajo sale la del suelo; hacia el costado, la del costado. */
+    @Test
+    fun el_arrastre_escoge_el_lado() {
+        val abajo = CotaAEscuadra.haciaDonde(conCorte, 2, 0f to 50f)!!
+        assertEquals("arrastrando hacia abajo no cogió el suelo", 120f, abajo.distanciaCm, 0.01f)
+        assertEquals(4, abajo.ladoOpuesto)
+
+        val alCostado = CotaAEscuadra.haciaDonde(conCorte, 2, -50f to 0f)!!
+        assertEquals("arrastrando al costado no cogió el costado", 140f, alCostado.distanciaCm, 0.01f)
+        assertEquals(5, alCostado.ladoOpuesto)
+    }
+
+    /** Un toque sin arrastre, o un tirón más corto que el mínimo, se queda con la más corta. */
+    @Test
+    fun sin_arrastre_manda_la_mas_corta() {
+        assertEquals(120f, CotaAEscuadra.haciaDonde(conCorte, 2, 0f to 0f)!!.distanciaCm, 0.01f)
+        val flojo = CotaAEscuadra.haciaDonde(conCorte, 2, -3f to 0f, minimo = 10f)!!
+        assertEquals("un tirón flojo escogió lado", 120f, flojo.distanciaCm, 0.01f)
+    }
+
+    /** Y la que se escogió es la que empuja: la del costado mueve la arista vertical del corte. */
+    @Test
+    fun la_escogida_empuja_su_propia_arista() {
+        val alCostado = CotaAEscuadra.haciaDonde(conCorte, 2, -50f to 0f)!!
+        assertEquals("no empuja la arista vertical del corte", 1, alCostado.aristaQueEmpuja)
+
+        val nuevo = CotaAEscuadra.conDistancia(conCorte, alCostado, 100f)
+        assertEquals("el corte no se movió de lado", 100f, nuevo[1].first, 0.01f)
+        assertEquals("el corte no se movió entero", 100f, nuevo[2].first, 0.01f)
+        assertEquals("se movió de alto", 0f, nuevo[1].second, 0.01f)
+        assertEquals(40f, nuevo[2].second, 0.01f)
+    }
+
+    /** Sin esquina que valga no hay candidatas, y eso no revienta. */
+    @Test
+    fun sin_candidatas_no_hay_a_donde_ir() {
+        val rect = listOf(0f to 0f, 200f to 0f, 200f to 160f, 0f to 160f)
+        assertTrue(CotaAEscuadra.candidatasDesdeNodo(rect, 0).isEmpty())
+        assertNull(CotaAEscuadra.haciaDonde(rect, 0, 0f to 50f))
+        assertTrue(CotaAEscuadra.candidatasDesdeNodo(emptyList(), 0).isEmpty())
     }
 }

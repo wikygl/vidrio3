@@ -525,21 +525,31 @@ class SketchMedidasView @JvmOverloads constructor(
         // La cota se pone al LEVANTAR, así se puede corregir sin soltar.
         if (eligiendoEscuadra) {
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                MotionEvent.ACTION_DOWN -> {
                     parent?.requestDisallowInterceptTouchEvent(true)
                     apuntandoEscuadra = screenToWorld(event.x, event.y)
+                    arrastrandoEscuadra = screenToWorld(event.x, event.y)
+                    invalidate()
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    arrastrandoEscuadra = screenToWorld(event.x, event.y)
                     invalidate()
                     return true
                 }
                 MotionEvent.ACTION_UP -> {
-                    val p = screenToWorld(event.x, event.y)
+                    val desde = apuntandoEscuadra
+                    val hasta = screenToWorld(event.x, event.y)
                     apuntandoEscuadra = null
-                    ponerCotaAEscuadra(p)
+                    arrastrandoEscuadra = null
+                    if (desde != null) ponerCotaAEscuadra(desde, hasta)
                     invalidate()
                     return true
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     apuntandoEscuadra = null
+                    arrastrandoEscuadra = null
                     invalidate()
                     return true
                 }
@@ -4449,11 +4459,15 @@ class SketchMedidasView @JvmOverloads constructor(
         e.recycle()
         return comido
     }
-    /** Pone una cota a escuadra tocando cerca de esa esquina del contorno, como haría el dedo. */
+    /**
+     * Pone una cota a escuadra tocando cerca de esa esquina y arrastrando hasta (hx,hy).
+     *
+     * Sin arrastre —que es lo que pasa si no se le dan hx,hy— se queda con la cota más corta.
+     */
     @androidx.annotation.VisibleForTesting
-    fun cotaAEscuadraParaPruebas(x: Float, y: Float): Boolean {
+    fun cotaAEscuadraParaPruebas(x: Float, y: Float, hx: Float = x, hy: Float = y): Boolean {
         activarCotaAEscuadra()
-        return ponerCotaAEscuadra(PointF(x, y))
+        return ponerCotaAEscuadra(PointF(x, y), PointF(hx, hy))
     }
 
     /** Lo que mide la primera cota a escuadra del apunte, en cm; null si no hay ninguna. */
@@ -7043,8 +7057,19 @@ class SketchMedidasView @JvmOverloads constructor(
     /** true mientras se espera que el dedo elija la esquina desde la que medir. */
     private var eligiendoEscuadra = false
 
-    /** Dónde está el dedo mientras apunta, para enseñar qué esquina va a coger el imán. */
+    /** Dónde bajó el dedo: de ahí sale la esquina que coge el imán. */
     private var apuntandoEscuadra: PointF? = null
+
+    /** Dónde está el dedo AHORA: del tirón desde la esquina sale a qué lado va la escuadra. */
+    private var arrastrandoEscuadra: PointF? = null
+
+    /** Menos tirón que esto es un toque sin dirección, y entonces manda la cota más corta. */
+    private val tironMinimo: Float get() = cmToPx(4f)
+
+    private val imanFlojo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#5500AFEF"); style = Paint.Style.STROKE; strokeWidth = 2f
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 10f), 0f)
+    }
 
     private val imanRelleno = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#5500AFEF"); style = Paint.Style.FILL
@@ -7072,7 +7097,11 @@ class SketchMedidasView @JvmOverloads constructor(
             return
         }
         eligiendoEscuadra = true
-        Toast.makeText(context, "Toca la esquina del corte", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            context,
+            "Toca la esquina del corte y arrastra hacia el lado que quieras medir",
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     /** La figura recortada más grande del apunte, que es de la que se miden estas cotas. */
@@ -7086,12 +7115,17 @@ class SketchMedidasView @JvmOverloads constructor(
         c.contours.firstOrNull()?.takeIf { it.size >= 3 }?.map { it.x to it.y }
 
     /**
-     * Pone la cota en la esquina más cercana al dedo.
+     * Pone la cota: el imán coge la esquina de [punto] y el tirón hasta [hacia] dice a qué lado.
+     *
+     * Una esquina de corte tiene casi siempre más de un lado de enfrente —el suelo debajo y el
+     * costado al lado—, y cuál se quiere no lo puede adivinar el programa. Por eso se baja el dedo
+     * en la esquina y se arrastra hacia el lado que se quiere medir. Un toque sin arrastre coge la
+     * cota más corta, que es lo que uno mediría si no dice otra cosa.
      *
      * Se trabaja en píxeles del apunte, que es como se guarda el contorno; a centímetros se pasa
      * solo para enseñar la medida y para leer la que se escriba.
      */
-    private fun ponerCotaAEscuadra(punto: PointF): Boolean {
+    private fun ponerCotaAEscuadra(punto: PointF, hacia: PointF = punto): Boolean {
         val composite = compositePrincipal()
         val contorno = composite?.let { contornoDelComposite(it) }
         if (composite == null || contorno == null) {
@@ -7106,7 +7140,11 @@ class SketchMedidasView @JvmOverloads constructor(
             Toast.makeText(context, "Toca más cerca de una esquina", Toast.LENGTH_SHORT).show()
             return true
         }
-        val medida = CotaAEscuadra.desdeNodo(contorno, nodo)
+        val medida = CotaAEscuadra.haciaDonde(
+            contorno, nodo,
+            (hacia.x - contorno[nodo].first) to (hacia.y - contorno[nodo].second),
+            tironMinimo
+        )
         if (medida == null) {
             Toast.makeText(
                 context,
@@ -7140,6 +7178,11 @@ class SketchMedidasView @JvmOverloads constructor(
      *
      * Se vuelve a buscar su esquina en el contorno de hoy en vez de fiarse de dónde se puso: así la
      * cota sigue a la forma cuando esta cambia, en lugar de quedarse clavada midiendo el aire.
+     *
+     * Y el lado de enfrente se vuelve a elegir por donde APUNTA la propia cota, no por cercanía:
+     * una esquina tiene varios lados a los que llegar a escuadra, y el que se eligió al ponerla es
+     * el que la línea ya está señalando. Buscando otra vez el más cercano, una cota puesta hacia el
+     * costado se saltaba sola al suelo en cuanto la figura cambiaba.
      */
     private fun medidaDeLaCotaAEscuadra(index: Int): Pair<Element.Composite, MedidaAEscuadra>? {
         val linea = elementos.getOrNull(index) as? Element.Shape ?: return null
@@ -7147,14 +7190,23 @@ class SketchMedidasView @JvmOverloads constructor(
         val contorno = contornoDelComposite(composite) ?: return null
         val nodo = CotaAEscuadra.nodoMasCerca(contorno, linea.start.x to linea.start.y, cmToPx(60f))
             ?: return null
-        val medida = CotaAEscuadra.desdeNodo(contorno, nodo) ?: return null
+        val medida = CotaAEscuadra.haciaDonde(
+            contorno, nodo,
+            (linea.end.x - linea.start.x) to (linea.end.y - linea.start.y)
+        ) ?: return null
         // La línea se recoloca sola: es lo que la hace seguir a la forma.
         linea.start.set(contorno[nodo].first, contorno[nodo].second)
         linea.end.set(medida.pie.first, medida.pie.second)
         return composite to medida
     }
 
-    /** Mientras se apunta, se marca la esquina que cogería el imán si se levantara el dedo ahí. */
+    /**
+     * Mientras se apunta: la esquina cogida, TODAS las cotas que salen de ella en flojo, y maciza
+     * la que se llevaría el dedo si lo levantara ahí.
+     *
+     * Enseñar las otras es la mitad del asunto: así se ve de un vistazo que esa esquina tiene suelo
+     * y costado, y hacia dónde hay que tirar para coger el que se quiere.
+     */
     private fun dibujarImanEscuadra(canvas: Canvas) {
         val donde = apuntandoEscuadra ?: return
         val composite = compositePrincipal() ?: return
@@ -7164,8 +7216,19 @@ class SketchMedidasView @JvmOverloads constructor(
         val r = ce(16f)
         canvas.drawCircle(p.first, p.second, r, imanRelleno)
         canvas.drawCircle(p.first, p.second, r, imanBorde)
-        CotaAEscuadra.desdeNodo(contorno, nodo)?.let { medida ->
+
+        val candidatas = CotaAEscuadra.candidatasDesdeNodo(contorno, nodo)
+        candidatas.forEach {
+            canvas.drawLine(p.first, p.second, it.pie.first, it.pie.second, imanFlojo)
+        }
+        val tirando = arrastrandoEscuadra ?: donde
+        CotaAEscuadra.haciaDonde(
+            contorno, nodo,
+            (tirando.x - p.first) to (tirando.y - p.second),
+            tironMinimo
+        )?.let { medida ->
             canvas.drawLine(p.first, p.second, medida.pie.first, medida.pie.second, imanBorde)
+            canvas.drawCircle(medida.pie.first, medida.pie.second, ce(8f), imanRelleno)
         }
     }
 

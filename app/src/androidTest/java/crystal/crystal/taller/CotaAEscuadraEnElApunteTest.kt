@@ -127,4 +127,66 @@ class CotaAEscuadraEnElApunteTest {
         }
         assertNotNull("no puso la cota al levantar el dedo", v.medidaAEscuadraParaPruebas())
     }
+
+    /**
+     * Esa esquina tiene dos lados de enfrente, y el arrastre dice cuál.
+     *
+     * Bajando el dedo en la esquina del corte y tirando HACIA EL COSTADO, la cota no es la de
+     * siempre —la que baja al alféizar— sino la que cruza hasta el costado. Es lo que no se podía
+     * hacer cuando el programa escogía él solo el lado más cercano.
+     */
+    @Test
+    fun arrastrar_hacia_el_costado_coge_el_otro_lado() {
+        val v = vista()
+        v.insertarRecurrenteF1()
+        val contorno = v.contornoDelCompositeParaPruebas()
+        val nodo = esquinaDelCorte(contorno)
+        val caja = v.cajaDelCompositeParaPruebas()
+        val x = caja.first + v.cmAPixelesParaPruebas(contorno[nodo].first)
+        val y = caja.second + v.cmAPixelesParaPruebas(contorno[nodo].second)
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            // Se toca la esquina y se tira hacia la izquierda, que es donde está el otro lado.
+            v.cotaAEscuadraParaPruebas(x + 10f, y + 10f, x - v.cmAPixelesParaPruebas(40f), y)
+        }
+        val medida = v.medidaAEscuadraParaPruebas()
+        assertNotNull("no puso la cota tirando al costado", medida)
+        assertEquals(
+            "cogió el lado de abajo en vez del costado",
+            contorno[nodo].first, medida!!, 1f
+        )
+
+        // Y al escribirle otra medida, el corte se mueve DE LADO, no de alto.
+        v.escribirEscuadraParaPruebas(medida - 20f)
+        val ahora = v.contornoDelCompositeParaPruebas()
+        assertEquals(
+            "el corte no se movió de lado",
+            contorno[nodo].first - 20f, ahora[nodo].first, 1.5f
+        )
+        assertEquals(
+            "el corte se movió de alto",
+            contorno[nodo].second, ahora[nodo].second, 1.5f
+        )
+    }
+
+    /** Y sin arrastre sigue saliendo la de siempre: la más corta, la que baja al alféizar. */
+    @Test
+    fun sin_arrastre_sale_la_de_siempre() {
+        val v = vista()
+        v.insertarRecurrenteF1()
+        val contorno = v.contornoDelCompositeParaPruebas()
+        val nodo = esquinaDelCorte(contorno)
+        val caja = v.cajaDelCompositeParaPruebas()
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.cotaAEscuadraParaPruebas(
+                caja.first + v.cmAPixelesParaPruebas(contorno[nodo].first) + 10f,
+                caja.second + v.cmAPixelesParaPruebas(contorno[nodo].second) + 10f
+            )
+        }
+        val alto = contorno.maxOf { it.second }
+        assertEquals(
+            "sin tirar no cogió la más corta",
+            alto - contorno[nodo].second, v.medidaAEscuadraParaPruebas()!!, 1f
+        )
+    }
 }
