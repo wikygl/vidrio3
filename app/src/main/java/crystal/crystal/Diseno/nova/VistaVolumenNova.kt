@@ -1,0 +1,221 @@
+package crystal.crystal.Diseno.nova
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.util.AttributeSet
+import android.view.View
+
+/**
+ * La ventana en tres dimensiones, levantada de su planta y puesta en isométrico.
+ *
+ * Es una vista de MIRAR: no se toca nada en ella, se edita en la alzada. Aquí solo se comprueba
+ * cómo queda la ventana armada —los ángulos de verdad, las curvas girando— que en la alzada no se
+ * puede ver porque allí la profundidad va fingida.
+ *
+ * Toda la geometría viene hecha de [PlantaDelDiseno] y [VolumenDelDiseno], que se comprueban en
+ * frío; aquí solo se proyecta, se escala para que quepa y se pintan cuadriláteros.
+ */
+class VistaVolumenNova @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyle: Int = 0
+) : View(context, attrs, defStyle) {
+
+    private var diseno: DisenoNova? = null
+    private var volumen: VolumenDelDiseno? = null
+
+    /** Desde dónde se mira. Se puede girar arrastrando el dedo. */
+    var giroGrados: Float = VolumenDelDiseno.GIRO_POR_DEFECTO
+        set(value) {
+            field = ((value % 360f) + 360f) % 360f
+            invalidate()
+        }
+
+    private val pVidrio = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#CFE3F5"); style = Paint.Style.FILL
+    }
+    private val pVidrioFondo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        // Las paredes que miran al otro lado van un punto más apagadas: es lo que deja ver de un
+        // vistazo cuáles dan la cara y cuáles se van al fondo.
+        color = Color.parseColor("#AFC6DC"); style = Paint.Style.FILL
+    }
+    private val pMarco = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 4.5f
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val pDivision = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#22384F"); style = Paint.Style.STROKE; strokeWidth = 2.5f
+    }
+    private val pSuelo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#55000000"); style = Paint.Style.STROKE; strokeWidth = 2f
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 8f), 0f)
+    }
+    private val pAviso = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#88000000"); textSize = 34f
+    }
+
+    /** Arma el volumen desde el paquete del diseño. Devuelve false si no se pudo leer. */
+    fun mostrar(paquete: String?): Boolean {
+        val d = runCatching { DisenoNova.desdePaquete(paquete.orEmpty()) }.getOrNull()
+        diseno = d
+        volumen = d?.let { VolumenDelDiseno.de(PlantaDelDiseno.de(it)) }
+        invalidate()
+        return volumen?.caras?.isNotEmpty() == true
+    }
+
+    // Girar la ventana arrastrando: es lo que salva al isométrico de su pega, que desde un solo
+    // sitio siempre hay una pared que se ve de canto.
+    private var xAnterior = 0f
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                xAnterior = event.x
+                return true
+            }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                giroGrados += (event.x - xAnterior) * 0.4f
+                xAnterior = event.x
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val v = volumen
+        val d = diseno
+        if (v == null || d == null || v.caras.isEmpty()) {
+            canvas.drawText("Sin diseño que mostrar", 24f, 48f, pAviso)
+            return
+        }
+
+        // Todo proyectado primero, para saber cuánto ocupa y meterlo en la pantalla.
+        val caras = v.deLejosACerca(giroGrados)
+        val puntos = caras.flatMap { cara ->
+            cara.esquinas.map { VolumenDelDiseno.proyectar(it, giroGrados) }
+        }
+        val minX = puntos.minOf { it.x }
+        val maxX = puntos.maxOf { it.x }
+        val minY = puntos.minOf { it.y }
+        val maxY = puntos.maxOf { it.y }
+        val margen = 28f
+        val escala = minOf(
+            (width - margen * 2) / (maxX - minX).coerceAtLeast(1f),
+            (height - margen * 2) / (maxY - minY).coerceAtLeast(1f)
+        ).coerceAtLeast(0.01f)
+        val dx = margen - minX * escala + ((width - margen * 2) - (maxX - minX) * escala) / 2f
+        val dy = margen - minY * escala + ((height - margen * 2) - (maxY - minY) * escala) / 2f
+
+        fun aPapel(p: Punto3D): PuntoPlano {
+            val q = VolumenDelDiseno.proyectar(p, giroGrados)
+            return PuntoPlano(q.x * escala + dx, q.y * escala + dy)
+        }
+
+        // La huella en el suelo, punteada: dice de un vistazo cómo dobla la ventana.
+        val suelo = Path()
+        caras.sortedBy { it.indiceTramo }.forEachIndexed { i, cara ->
+            val a = aPapel(cara.abajoIzq)
+            if (i == 0) suelo.moveTo(a.x, a.y) else suelo.lineTo(a.x, a.y)
+            val b = aPapel(cara.abajoDer)
+            suelo.lineTo(b.x, b.y)
+        }
+        canvas.drawPath(suelo, pSuelo)
+
+        // Y las caras, de la más lejana a la más cercana: lo de atrás se tapa solo.
+        caras.forEach { cara -> dibujarCara(canvas, cara, d, ::aPapel) }
+    }
+
+    /**
+     * Una cara con lo que lleva dentro: sus franjas de abajo arriba y los módulos de cada una.
+     *
+     * Los módulos se reparten sobre el trozo de tramo que ocupa esta cara ([CaraDelVolumen.desdeU]
+     * a [hastaU]), así que una pared curva —que son varias caras— sale con sus divisiones
+     * siguiendo el arco, sin repartir nada aparte.
+     */
+    private fun dibujarCara(
+        canvas: Canvas,
+        cara: CaraDelVolumen,
+        diseno: DisenoNova,
+        aPapel: (Punto3D) -> PuntoPlano
+    ) {
+        val tramo = diseno.tramos.getOrNull(cara.indiceTramo)
+        val alto = (cara.arribaIzq.z - cara.abajoIzq.z).coerceAtLeast(1f)
+
+        /** Un punto de la cara: [u] de izquierda a derecha, [v] de abajo arriba, los dos de 0 a 1. */
+        fun enLaCara(u: Float, v: Float): PuntoPlano {
+            val x = cara.abajoIzq.x + (cara.abajoDer.x - cara.abajoIzq.x) * u
+            val y = cara.abajoIzq.y + (cara.abajoDer.y - cara.abajoIzq.y) * u
+            return aPapel(Punto3D(x, y, cara.abajoIzq.z + alto * v))
+        }
+
+        fun cuadro(u0: Float, v0: Float, u1: Float, v1: Float): Path {
+            val a = enLaCara(u0, v0)
+            val b = enLaCara(u1, v0)
+            val c = enLaCara(u1, v1)
+            val e = enLaCara(u0, v1)
+            return Path().apply {
+                moveTo(a.x, a.y); lineTo(b.x, b.y); lineTo(c.x, c.y); lineTo(e.x, e.y); close()
+            }
+        }
+
+        // La pared entera, rellena. Mirando de frente o de canto se pinta distinto para que se lea
+        // cuál es cuál sin tener que contar esquinas.
+        val daLaCara = VolumenDelDiseno.profundidad(cara.abajoIzq, giroGrados) <
+            VolumenDelDiseno.profundidad(cara.arribaDer, giroGrados) + 0.001
+        canvas.drawPath(cuadro(0f, 0f, 1f, 1f), if (daLaCara) pVidrio else pVidrioFondo)
+
+        // Las franjas, de abajo arriba, y dentro de cada una sus módulos.
+        val franjas = tramo?.franjas.orEmpty()
+        val altoDeclarado = franjas.sumOf { it.alto.toDouble() }.toFloat()
+        var v0 = 0f
+        franjas.forEach { franja ->
+            val parte = when {
+                altoDeclarado > 0f && franja.alto > 0f -> franja.alto / altoDeclarado
+                franjas.isNotEmpty() -> 1f / franjas.size
+                else -> 1f
+            }
+            val v1 = (v0 + parte).coerceAtMost(1f)
+            if (v1 > v0 + 0.001f) {
+                // La raya entre franja y franja.
+                if (v0 > 0.001f) {
+                    val a = enLaCara(0f, v0)
+                    val b = enLaCara(1f, v0)
+                    canvas.drawLine(a.x, a.y, b.x, b.y, pDivision)
+                }
+                // Y los módulos de esta franja que caen en el trozo de pared de esta cara.
+                val n = franja.modulos.size
+                for (k in 1 until n) {
+                    val uTramo = k / n.toFloat()
+                    if (uTramo <= cara.desdeU + 0.0001f || uTramo >= cara.hastaU - 0.0001f) continue
+                    val u = (uTramo - cara.desdeU) / (cara.hastaU - cara.desdeU).coerceAtLeast(0.0001f)
+                    val a = enLaCara(u, v0)
+                    val b = enLaCara(u, v1)
+                    canvas.drawLine(a.x, a.y, b.x, b.y, pDivision)
+                }
+            }
+            v0 = v1
+        }
+
+        // El contorno, encima de todo. En una pared curva NO se cierra cada trozo: el facetado es
+        // cosa del dibujo, no de la ventana, y trazándolo entero la curva salía como una empalizada
+        // de diez paños. Solo sus rieles, y los cantos donde la pared de verdad empieza y acaba.
+        if (!cara.esCurva) {
+            canvas.drawPath(cuadro(0f, 0f, 1f, 1f), pMarco)
+        } else {
+            val abajoI = enLaCara(0f, 0f)
+            val abajoD = enLaCara(1f, 0f)
+            val arribaI = enLaCara(0f, 1f)
+            val arribaD = enLaCara(1f, 1f)
+            canvas.drawLine(abajoI.x, abajoI.y, abajoD.x, abajoD.y, pMarco)
+            canvas.drawLine(arribaI.x, arribaI.y, arribaD.x, arribaD.y, pMarco)
+            if (cara.desdeU < 0.001f) canvas.drawLine(abajoI.x, abajoI.y, arribaI.x, arribaI.y, pMarco)
+            if (cara.hastaU > 0.999f) canvas.drawLine(abajoD.x, abajoD.y, arribaD.x, arribaD.y, pMarco)
+        }
+    }
+}

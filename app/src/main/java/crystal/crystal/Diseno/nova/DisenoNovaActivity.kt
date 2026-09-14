@@ -234,6 +234,7 @@ class DisenoNovaActivity : AppCompatActivity() {
 
         actualizarInfoSeleccion()
         actualizarVista()
+        instalarChip3D()
     }
 
     // ===================================== MENÚ EDITAR =====================================
@@ -2350,6 +2351,65 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarVista()
     }
 
+
+    // ==================== LA VENTANA EN TRES DIMENSIONES ====================
+    // Una vista de MIRAR, encima del dibujo: sirve para comprobar cómo queda la ventana armada
+    // —los ángulos de verdad, las curvas girando—, que en la alzada no se puede ver porque allí la
+    // profundidad va fingida. Se edita en la alzada; aquí no se toca nada.
+
+    private var vista3D: VistaVolumenNova? = null
+    private var chip3D: TextView? = null
+
+    private fun alternarVista3D() {
+        val puesta = vista3D
+        if (puesta != null && puesta.visibility == View.VISIBLE) {
+            puesta.visibility = View.GONE
+            chip3D?.text = "◰ ver en 3D"
+            return
+        }
+        val vista = puesta ?: VistaVolumenNova(this).also { nueva ->
+            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(0, 0).apply {
+                topToTop = binding.vistaDiseno.id
+                bottomToBottom = binding.vistaDiseno.id
+                startToStart = binding.vistaDiseno.id
+                endToEnd = binding.vistaDiseno.id
+            }
+            binding.root.addView(nueva, lp)
+            nueva.elevation = 4 * resources.displayMetrics.density
+            vista3D = nueva
+        }
+        if (!vista.mostrar(paqueteActualLectura())) {
+            Toast.makeText(this, "No se pudo armar la ventana en 3D", Toast.LENGTH_SHORT).show()
+            return
+        }
+        vista.visibility = View.VISIBLE
+        chip3D?.text = "◰ volver al plano"
+        Toast.makeText(this, "Arrastra para girarla", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun instalarChip3D() {
+        if (chip3D != null) return
+        val dp = resources.displayMetrics.density
+        val chip = TextView(this).apply {
+            setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+            setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+            textSize = 14f
+            text = "◰ ver en 3D"
+            setOnClickListener { alternarVista3D() }
+        }
+        val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            topMargin = (12 * dp).toInt()
+            marginEnd = (12 * dp).toInt()
+        }
+        binding.root.addView(chip, lp)
+        chip.elevation = 8 * dp
+        chip3D = chip
+    }
     // ==================== LA VENTANA DE ESQUINA SE EDITA LADO A LADO ====================
     // Una ventana en L (o en C, o con una pared curva) no se edita entera: se parte en sus lados
     // y se edita cada uno de FRENTE, como una ventana normal. Mientras se edita no hay esquina
