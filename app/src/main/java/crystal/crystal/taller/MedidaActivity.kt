@@ -276,6 +276,7 @@ class MedidaActivity : AppCompatActivity() {
             true
         }
         binding.btnPlantillaVentanaEsquina.setOnClickListener { insertarVentanaEsquinaEstandar() }
+        binding.btnPlantillaVentanaCurva.setOnClickListener { insertarVentanaCurvaEstandar() }
         binding.btnPlantillaMampara.setOnClickListener { insertarMamparaEstandar() }
         binding.btnPlantillaMampara.setOnLongClickListener {
             mostrarDialogoPlantilla("Mampara", incluyeBisagra = false, incluyeApertura = false, incluyeVista = true, hojasPorDefecto = 2)
@@ -567,6 +568,20 @@ class MedidaActivity : AppCompatActivity() {
     private fun insertarVentanaEsquinaEstandar() {
         ocultarPanelesFlotantes()
         binding.sketchMedidas.insertarPlantillaVentanaEsquina()
+        productoActual = "Ventana"
+        actualizarPanelInformacion()
+    }
+
+    /**
+     * Ventana curva, en desarrollo: dos tramos de 90 con su arco, que el vidriero parte en los
+     * que haga falta y acota uno a uno.
+     *
+     * Se parte porque una ventana curva de obra casi nunca es el arco de un círculo perfecto: cada
+     * trozo lleva su propio desarrollo y su cuerda, medidos contra la pared.
+     */
+    private fun insertarVentanaCurvaEstandar() {
+        ocultarPanelesFlotantes()
+        binding.sketchMedidas.insertarPlantillaVentanaCurva()
         productoActual = "Ventana"
         actualizarPanelInformacion()
     }

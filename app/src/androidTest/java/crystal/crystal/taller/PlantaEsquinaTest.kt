@@ -574,4 +574,67 @@ class PlantaEsquinaTest {
         }
         assertEquals("se quedó sin esquina", 2, v.esquinaPrincipalEnCm()!!.lados.size)
     }
+
+    /**
+     * La ventana curva: una fila de arcos, cada uno con su desarrollo y su cuerda.
+     *
+     * No es la de esquina con una curva en el rincón: aquí no hay tramos rectos. Se parte en
+     * divisiones porque una ventana curva de obra casi nunca es el arco de un círculo perfecto.
+     */
+    @Test
+    fun la_ventana_curva_es_una_fila_de_arcos() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(90f, 90f), altoCm = 160f, flechaCm = 12f)
+
+        val medida = v.esquinaPrincipalEnCm()
+        assertNotNull("la ventana curva no llegó a salir", medida)
+        assertEquals("no son dos paredes", 2, medida!!.lados.size)
+        assertTrue("el primer tramo no es curvo", medida.lados[0].esCurva)
+        assertTrue("el segundo tramo no es curvo", medida.lados[1].esCurva)
+        assertEquals("el tramo no mide su desarrollo", 90f, medida.lados[0].ancho, 1f)
+        assertEquals("la panza no es la que se pidió", 12f, medida.lados[0].flecha, 0.5f)
+        // Entre dos arcos no hay esquina en punta: se encuentran sin doblar.
+        assertEquals("falta la arista entre los dos arcos", 1, medida.angulos.size)
+        assertEquals("dos arcos no doblan en punta", 180f, medida.gradosDe(0)!!, 0.5f)
+    }
+
+    /** Y en la planta cada arco gira lo suyo: la ventana sale curvada, no recta. */
+    @Test
+    fun la_planta_de_una_ventana_curva_gira_en_cada_arco() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(90f, 90f), altoCm = 160f, flechaCm = 12f)
+        val recorrido = v.recorridoPlantaParaPruebas()
+        assertEquals("la planta no tiene los dos arcos", 3, recorrido.size)
+
+        // Cada arco ocupa su cuerda, que es más corta que su desarrollo.
+        val primera = kotlin.math.hypot(
+            recorrido[1].first - recorrido[0].first, recorrido[1].second - recorrido[0].second
+        )
+        assertTrue("el arco ocupa su desarrollo en vez de su cuerda: $primera", primera < 89f)
+        assertTrue("el arco se quedó en nada: $primera", primera > 80f)
+
+        // Y el segundo no sigue de largo: gira respecto al primero.
+        val rumbo1 = kotlin.math.atan2(
+            recorrido[1].second - recorrido[0].second, recorrido[1].first - recorrido[0].first
+        )
+        val rumbo2 = kotlin.math.atan2(
+            recorrido[2].second - recorrido[1].second, recorrido[2].first - recorrido[1].first
+        )
+        assertTrue(
+            "los dos arcos salieron en línea recta",
+            kotlin.math.abs(Math.toDegrees((rumbo2 - rumbo1).toDouble())) > 10.0
+        )
+    }
+
+    /** Y un retrato de la ventana curva, con su planta, para poder mirarla. */
+    @Test
+    fun retrato_de_la_ventana_curva() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(90f, 90f, 90f), altoCm = 160f, flechaCm = 12f)
+        val bmp = v.exportBitmap()
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val f = java.io.File(ctx.getExternalFilesDir(null), "ventana_curva.png")
+        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
+    }
 }
