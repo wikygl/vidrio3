@@ -4321,15 +4321,25 @@ class NovaCorrediza : AppCompatActivity() {
         // La ventana curva no tiene lados que agregar: es UNA ventana con su arco. Lo que la
         // describe es su desarrollo —lo que se corta— y su cuerda, que van a sus casillas.
         if (geo == "ncu") {
-            val curva = medida.lados.first()
-            binding.etAncho.setText(df1(medida.lados.sumOf { it.ancho.toDouble() }.toFloat()))
-            binding.etAlto.setText(df1(curva.alto))
-            binding.etHoja.setText(df1(curva.puente))
+            val primera = medida.lados.first()
+            // El ancho de una ventana curva es su DESARROLLO entero, sumando todos sus arcos: es
+            // lo que se corta. Y la flecha, la del arco equivalente a todos ellos —el mismo
+            // desarrollo girando lo mismo—, no la del primero: dándole la cuerda de UN arco y el
+            // desarrollo de la ventana entera, la calculadora rehacía el arco desde esa cuerda y
+            // se quedaba con un arco solo, que es de donde salían los 89 en vez de los 180.
+            val desarrollo = medida.lados.sumOf { it.ancho.toDouble() }.toFloat()
+            val giroTotal = medida.lados.sumOf { lado ->
+                (crystal.crystal.taller.ArcoEsquina
+                    .deDesarrolloYFlecha(lado.ancho, lado.flecha)?.anguloGrados ?: 0f).toDouble()
+            }
+            binding.etAncho.setText(df1(desarrollo))
+            binding.etAlto.setText(df1(primera.alto))
+            binding.etHoja.setText(df1(primera.puente))
             binding.etPartes.setText("0")
-            val arco = crystal.crystal.taller.ArcoEsquina
-                .deDesarrolloYFlecha(curva.ancho, curva.flecha)
-            binding.etFlecha.setText(df1(curva.flecha))
-            binding.etCuerda.setText(df1(arco?.cuerda ?: 0f))
+            binding.etFlecha.setText(df1(flechaDeTodaLaCurva(desarrollo, giroTotal.toFloat())))
+            // La cuerda se deja en blanco a propósito: escrita, manda sobre el ancho y la
+            // calculadora rehace el arco desde ella. Aquí el arco YA es el desarrollo medido.
+            binding.etCuerda.setText("")
             avisarDeLaEsquina(medida)
             return true
         }
@@ -4403,7 +4413,22 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     /**
+     * La flecha del arco que equivale a toda la ventana curva.
+     *
+     * Varios arcos seguidos, cada uno con su panza, hacen en conjunto una curva sola: la que tiene
+     * ese mismo desarrollo y gira lo que giran todos juntos. Con un arco solo devuelve su propia
+     * flecha, que es lo mismo por definición.
+     */
+    private fun flechaDeTodaLaCurva(desarrolloCm: Float, giroGrados: Float): Float {
+        if (desarrolloCm <= 0f || giroGrados <= 0.01f) return 0f
+        val giro = Math.toRadians(giroGrados.toDouble())
+        val radio = desarrolloCm / giro
+        return (radio * (1.0 - kotlin.math.cos(giro / 2.0))).toFloat()
+    }
+
+    /**
      * Lo que el vidriero tiene que mirar antes de calcular
+
 : qué se armó y qué se dio por supuesto.
      *
      * El apunte sabe más que la calculadora —el descuadre de cada pared, el ángulo real, la esquina
