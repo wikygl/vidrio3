@@ -78,9 +78,17 @@ data class EsquinaMedida(
     /** Los grados de esa arista, si dobla en punta. */
     fun gradosDe(arista: Int): Float? = angulos.getOrNull(arista)?.toFloatOrNull()
 
-    /** La geometría de Nova que le toca; null si con un solo lado no hay esquina que armar. */
+    /**
+     * La geometría de Nova que le toca; null si no hay nada que armar.
+     *
+     * Si TODAS sus paredes son curvas, la ventana es curva y va en `ncu`: no es una L ni una C, no
+     * dobla en ninguna esquina, y abrirla en una geometría de esquina no describía lo que es. Con
+     * paredes rectas manda la cantidad: 2 en L, 3 en C, más en serie.
+     */
     val geometria: String?
         get() = when {
+            lados.isEmpty() -> null
+            lados.all { it.esCurva } -> "ncu"
             lados.size == 2 -> "nl"
             lados.size == 3 -> "nu"
             lados.size > 3 -> "ns"

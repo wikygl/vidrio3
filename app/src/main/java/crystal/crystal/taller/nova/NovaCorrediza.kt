@@ -4313,10 +4313,26 @@ class NovaCorrediza : AppCompatActivity() {
         val dibujo = when (geo) {
             "nl" -> R.drawable.venl
             "nu" -> R.drawable.venc
+            "ncu" -> R.drawable.vcurvo
             else -> R.drawable.vserie
         }
         seleccionarDesdePanel(dibujo, geo)
         esquinaDeLaMedida = medida
+        // La ventana curva no tiene lados que agregar: es UNA ventana con su arco. Lo que la
+        // describe es su desarrollo —lo que se corta— y su cuerda, que van a sus casillas.
+        if (geo == "ncu") {
+            val curva = medida.lados.first()
+            binding.etAncho.setText(df1(medida.lados.sumOf { it.ancho.toDouble() }.toFloat()))
+            binding.etAlto.setText(df1(curva.alto))
+            binding.etHoja.setText(df1(curva.puente))
+            binding.etPartes.setText("0")
+            val arco = crystal.crystal.taller.ArcoEsquina
+                .deDesarrolloYFlecha(curva.ancho, curva.flecha)
+            binding.etFlecha.setText(df1(curva.flecha))
+            binding.etCuerda.setText(df1(arco?.cuerda ?: 0f))
+            avisarDeLaEsquina(medida)
+            return true
+        }
         contadorLado = 1
         binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
         medida.lados.dropLast(1).forEach { agregarLado(it.ancho, it.alto, it.puente, 0) }
@@ -4396,9 +4412,11 @@ class NovaCorrediza : AppCompatActivity() {
      */
     private fun avisarDeLaEsquina(medida: EsquinaMedida) {
         val partes = mutableListOf(
-            when (medida.lados.size) {
-                2 -> "en L"
-                3 -> "en C"
+            when {
+                medida.lados.all { it.esCurva } && medida.lados.size == 1 -> "curva"
+                medida.lados.all { it.esCurva } -> "curva, de ${medida.lados.size} arcos"
+                medida.lados.size == 2 -> "en L"
+                medida.lados.size == 3 -> "en C"
                 else -> "en serie de ${medida.lados.size} lados"
             }
         )

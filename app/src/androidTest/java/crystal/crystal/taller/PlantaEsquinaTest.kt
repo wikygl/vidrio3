@@ -637,4 +637,53 @@ class PlantaEsquinaTest {
         f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         assertTrue("no se guardó el retrato", f.exists() && f.length() > 0)
     }
+
+    /**
+     * Una ventana curva puede ser un solo arco: no hay por qué partirla.
+     *
+     * La de esquina necesita dos paredes para doblar; una curva no necesita ninguna otra para ser
+     * una ventana. Y como no dobla en ningún sitio, en la calculadora abre en curvo, no en L.
+     */
+    @Test
+    fun una_ventana_curva_puede_ser_un_solo_arco() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
+
+        val medida = v.esquinaPrincipalEnCm()
+        assertNotNull("un arco solo no llegó a salir", medida)
+        assertEquals("no es un solo tramo", 1, medida!!.lados.size)
+        assertTrue("el tramo no es curvo", medida.lados[0].esCurva)
+        assertEquals("no mide su desarrollo", 180f, medida.lados[0].ancho, 1f)
+        assertEquals("una ventana curva no es una L", "ncu", medida.geometria)
+        assertTrue("un arco solo no tiene esquinas", medida.angulos.isEmpty())
+    }
+
+    /** Y varios arcos siguen siendo una ventana curva, no una C. */
+    @Test
+    fun varios_arcos_siguen_siendo_una_ventana_curva() {
+        val v = vista()
+        v.insertarPlantillaVentanaCurva(tramosCm = listOf(90f, 90f, 90f), altoCm = 160f, flechaCm = 12f)
+        val medida = v.esquinaPrincipalEnCm()!!
+        assertEquals(3, medida.lados.size)
+        assertTrue("algún tramo salió recto", medida.lados.all { it.esCurva })
+        assertEquals("tres arcos no son una C", "ncu", medida.geometria)
+    }
+
+    /** Se le puede quitar un tramo hasta dejarla en uno; a la de esquina no, que necesita dos. */
+    @Test
+    fun la_curva_baja_hasta_un_tramo_y_la_esquina_se_planta_en_dos() {
+        val curva = vista()
+        curva.insertarPlantillaVentanaCurva(tramosCm = listOf(90f, 90f), altoCm = 160f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            repeat(4) { curva.cambiarTramosParaPruebas(-1) }
+        }
+        assertEquals("la curva no bajó a un solo arco", 1, curva.esquinaPrincipalEnCm()!!.lados.size)
+
+        val esquina = vista()
+        esquina.insertarPlantillaVentanaEsquina(tramosCm = listOf(150f, 120f), altoCm = 160f)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            repeat(4) { esquina.cambiarTramosParaPruebas(-1) }
+        }
+        assertEquals("la esquina se quedó sin doblar", 2, esquina.esquinaPrincipalEnCm()!!.lados.size)
+    }
 }

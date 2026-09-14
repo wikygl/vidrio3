@@ -1141,13 +1141,13 @@ class SketchMedidasView @JvmOverloads constructor(
      * cuerda y gira lo que diga su arco.
      */
     fun insertarPlantillaVentanaCurva(
-        tramosCm: List<Float> = listOf(90f, 90f),
+        tramosCm: List<Float> = listOf(180f),
         altoCm: Float = 160f,
         puenteCm: Float = 120f,
         alfeizarCm: Float = 90f,
         flechaCm: Float = 12f
     ) {
-        val tramos = tramosCm.map { it.coerceAtLeast(20f) }.ifEmpty { listOf(90f, 90f) }
+        val tramos = tramosCm.map { it.coerceAtLeast(20f) }.ifEmpty { listOf(180f) }
         val ancho = tramos.sum()
         val alto = altoCm.coerceAtLeast(20f)
         val anchoPx = cmToPx(ancho)
@@ -1507,7 +1507,10 @@ class SketchMedidasView @JvmOverloads constructor(
     /** ¿Ese elemento es un marco de ventana de esquina con aristas? */
     private fun esMarcoEsquina(index: Int): Boolean {
         val s = elementos.getOrNull(index) as? Element.Shape ?: return false
-        return s.cotaHint == ESQUINA_MARCO && quiebresDelMarco(index).isNotEmpty()
+        if (s.cotaHint != ESQUINA_MARCO) return false
+        // Una de esquina se reconoce porque dobla en algún sitio, o sea porque tiene aristas. Una
+        // ventana curva puede ser un solo arco, sin ninguna: lo que la delata es su curva.
+        return quiebresDelMarco(index).isNotEmpty() || etiquetasCurva(index).isNotEmpty()
     }
 
     /**
@@ -3419,11 +3422,18 @@ class SketchMedidasView @JvmOverloads constructor(
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
         val quiebres = quiebresDelMarco(marcoIndex)
         val tramos = quiebres.size + 1
-        // Sin tope por arriba: una ventana en serie lleva los lados que lleve la obra. Abajo sí,
-        // dos: con una sola pared no hay esquina que doblar.
-        val destino = (tramos + delta).coerceAtLeast(2)
+        // Sin tope por arriba: una ventana en serie lleva los lados que lleve la obra. Abajo, dos
+        // en la de esquina —con una sola pared no hay esquina que doblar— y UNO en la curva: un
+        // arco solo ya es una ventana, y partirlo es cosa de la obra, no una obligación.
+        val minimo = if (esMarcoCurvo(marcoIndex)) 1 else 2
+        val destino = (tramos + delta).coerceAtLeast(minimo)
         if (destino == tramos) {
-            Toast.makeText(context, "Una esquina lleva al menos dos tramos", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                if (minimo == 1) "Una ventana curva lleva al menos un tramo"
+                else "Una esquina lleva al menos dos tramos",
+                Toast.LENGTH_SHORT
+            ).show()
             return
         }
         val bordes = bordesDeTramos(marcoIndex)
@@ -4495,7 +4505,9 @@ class SketchMedidasView @JvmOverloads constructor(
         val marco = elementos[marcoIndex] as Element.Shape
         val bordes = bordesDeTramos(marcoIndex)
         val arriba = puntosArriba(marcoIndex)
-        if (bordes.size < 3 || arriba.size != bordes.size) return null
+        // Dos bordes ya son un tramo: una ventana curva de un solo arco.
+        if (bordes.size < 2 || arriba.size != bordes.size) return null
+
         val bandas = bandasDeCurva(marcoIndex).map { (elementos[it] as Element.Shape).end.x }
         val curvasPropias = curvasDeTramo(marcoIndex)
         val puentes = puentesDelMarco(marcoIndex).map { elementos[it] as Element.Shape }
@@ -4589,7 +4601,11 @@ class SketchMedidasView @JvmOverloads constructor(
                 )
             }
         }
-        return if (lados.size >= 2) EsquinaMedida(lados, angulos) else null
+        // Dos paredes hacen una esquina, pero UNA sola curva ya es una ventana: la curva no
+        // necesita que haya otra pared para ser algo que la calculadora sepa armar.
+        val vale = lados.size >= 2 || (lados.size == 1 && lados[0].esCurva)
+        return if (vale) EsquinaMedida(lados, angulos) else null
+
     }
 
     fun contornoPrincipalEnCm(): List<Pair<Float, Float>>? {
