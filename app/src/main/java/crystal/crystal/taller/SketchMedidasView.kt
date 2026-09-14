@@ -7139,8 +7139,7 @@ class SketchMedidasView @JvmOverloads constructor(
         eligiendoEscuadra = true
         Toast.makeText(
             context,
-            "Toca la esquina del corte y arrastra hacia el lado que quieras medir. " +
-                "Se quedan poniéndose hasta que vuelvas a tocar el botón",
+            "Toca la esquina del corte y arrastra hacia el lado que quieras medir",
             Toast.LENGTH_LONG
         ).show()
     }
@@ -7194,9 +7193,10 @@ class SketchMedidasView @JvmOverloads constructor(
             ).show()
             return true
         }
-        // La herramienta SE QUEDA PUESTA: un corte se acota con varias —la que baja y la que cruza
-        // al costado—, y se ponen una detrás de otra. Apagándose sola, el toque siguiente ya no era
-        // para medir y el lienzo se iba de paseo. Se sale con el botón o cogiendo otra herramienta.
+        // Puesta la cota, la herramienta se APAGA: mientras está puesta se come los toques del
+        // lienzo, y dejarla prendida para encadenar varias era un estorbo —no se podía mover el
+        // dibujo ni hacer otra cosa sin acordarse de apagarla—. Para otra cota, el botón otra vez.
+        eligiendoEscuadra = false
         elementos.add(
             crearShape(
                 Tool.LINE,

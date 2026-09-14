@@ -219,10 +219,11 @@ class CotaAEscuadraEnElApunteTest {
     }
 
     /**
-     * Y con el dedo de verdad: botón, esquina, botón, esquina.
+     * Con el dedo de verdad: botón, esquina, botón, esquina.
      *
-     * Es la secuencia que hace el que mide, y la que se quejaba de que la segunda ya no salía y el
-     * dibujo se iba de paseo.
+     * Y entre una y otra la herramienta se APAGA sola. Tiene que apagarse: mientras está puesta se
+     * come los toques del lienzo, y dejándola prendida para encadenar cotas no se podía mover el
+     * dibujo ni hacer nada más. Cada cota, su botón.
      */
     @Test
     fun dos_cotas_seguidas_con_el_dedo() {
@@ -241,13 +242,16 @@ class CotaAEscuadraEnElApunteTest {
         }
         assertEquals("no puso la primera con el dedo", 1, v.cuantasCotasAEscuadraParaPruebas())
 
-        // Y ahora la segunda SIN volver a tocar el botón: la herramienta se queda puesta, que un
-        // corte se acota con varias cotas seguidas. Apagándose sola, el toque de la segunda ya no
-        // era para medir y el lienzo se iba de paseo.
-        assertTrue("la herramienta se apagó sola al poner la primera", v.eligiendoCotaAEscuadra)
+        assertTrue(
+            "la herramienta se quedó prendida: se comería los toques del lienzo",
+            !v.eligiendoCotaAEscuadra
+        )
+
+        // Y la segunda, con su botón: a la misma esquina, tirando al costado.
         val alCostado = caja.first + v.cmAPixelesParaPruebas(contorno[nodo].first - 40f)
         var comido = false
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            v.activarCotaAEscuadra()
             comido = v.toqueParaPruebas(android.view.MotionEvent.ACTION_DOWN, x, y)
             comido = comido && v.toqueParaPruebas(android.view.MotionEvent.ACTION_MOVE, alCostado, y)
             v.toqueParaPruebas(android.view.MotionEvent.ACTION_UP, alCostado, y)
