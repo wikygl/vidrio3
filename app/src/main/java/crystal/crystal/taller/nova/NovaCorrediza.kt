@@ -4318,6 +4318,9 @@ class NovaCorrediza : AppCompatActivity() {
         }
         seleccionarDesdePanel(dibujo, geo)
         esquinaDeLaMedida = medida
+        // Lo que traiga la medida SIEMBRA el diseño; la última palabra es de Nova. El reparto a
+        // mano de la ventana anterior no tiene nada que decir sobre esta.
+        NovaCalculos.repartoManual = null
         // La ventana curva no tiene lados que agregar: es UNA ventana con su arco. Lo que la
         // describe es su desarrollo —lo que se corta— y su cuerda, que van a sus casillas.
         if (geo == "ncu") {
@@ -4340,6 +4343,16 @@ class NovaCorrediza : AppCompatActivity() {
             // La cuerda se deja en blanco a propósito: escrita, manda sobre el ancho y la
             // calculadora rehace el arco desde ella. Aquí el arco YA es el desarrollo medido.
             binding.etCuerda.setText("")
+            // Si la curva se midió partida, sus trozos son el punto de PARTIDA de los tramos: se
+            // siembran como reparto a mano. Y con eso queda dicho lo demás solo, porque un reparto
+            // a mano solo vale mientras las divisiones sean las mismas: en cuanto en Nova se
+            // cambian —se acepta el parante que sugiere, o se le quita uno— el reparto deja de
+            // valer y manda otra vez la regla de Nova. La medida siembra; Nova decide.
+            if (medida.lados.size > 1) {
+                val divisiones = NovaCalculos.divisiones(desarrollo, 0)
+                NovaCalculos.repartoManual =
+                    repartoSegunLosArcos(medida.lados.map { it.ancho }, divisiones)
+            }
             avisarDeLaEsquina(medida)
             return true
         }
@@ -4413,7 +4426,36 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     /**
+     * Reparte los módulos entre los arcos medidos, a lo que le toca a cada uno por su desarrollo.
+     *
+     * Cada arco se queda con al menos uno —un trozo de ventana sin módulos no es nada— y entre
+     * todos suman exactamente los que Nova dice que lleva la ventana: el reparto a mano cambia
+     * dónde caen los parantes, no cuántas divisiones hay.
+     */
+    private fun repartoSegunLosArcos(anchos: List<Float>, divisiones: Int): List<Int>? {
+        if (anchos.size < 2 || divisiones < anchos.size) return null
+        val total = anchos.sum().takeIf { it > 0f } ?: return null
+        val reparto = anchos.map { (divisiones * it / total).toInt().coerceAtLeast(1) }.toMutableList()
+        var sobran = divisiones - reparto.sum()
+        // Lo que sobre o falte por redondear va al arco más largo, que es el que menos lo nota.
+        var vuelta = 0
+        while (sobran != 0 && vuelta < 1000) {
+            val cual = if (sobran > 0) {
+                anchos.indices.maxByOrNull { anchos[it] / reparto[it] } ?: 0
+            } else {
+                anchos.indices.filter { reparto[it] > 1 }.minByOrNull { anchos[it] / reparto[it] }
+                    ?: return null
+            }
+            reparto[cual] += if (sobran > 0) 1 else -1
+            sobran = divisiones - reparto.sum()
+            vuelta++
+        }
+        return if (reparto.sum() == divisiones) reparto else null
+    }
+
+    /**
      * La flecha del arco que equivale a toda la ventana curva.
+
      *
      * Varios arcos seguidos, cada uno con su panza, hacen en conjunto una curva sola: la que tiene
      * ese mismo desarrollo y gira lo que giran todos juntos. Con un arco solo devuelve su propia
