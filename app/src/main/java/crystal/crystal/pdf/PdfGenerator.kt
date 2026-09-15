@@ -298,23 +298,27 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         // Por ambientes: la sala, el consultorio, el piso. Una obra entera se lee por sitios —"sala
         // de partos" con lo suyo, "sexto piso" con lo suyo—, no como una lista corrida de medidas.
         for ((ambiente, items) in crystal.crystal.pos.AmbientesDeProforma.agrupar(lista)) {
-        if (ambiente.isNotEmpty()) {
-            document.add(
-                Paragraph(ambiente)
-                    .setFont(negrita).setFontSize(19f).setBold()
-                    .setFontColor(ColorConstants.DARK_GRAY)
-                    .setMarginTop(6f)
-                    // El nombre de la sala no se queda solo al pie de una hoja: baja con su
-                    // primer ítem, que si no parece el final de la anterior.
-                    .setKeepWithNext(true)
-            )
-        }
-        for (item in items) {
+        items.forEachIndexed { cual, item ->
             itemNum++
             // TODO el ítem va en un solo bloque que el PDF no puede partir: su número, su medida y
             // su tabla de opciones caen juntos en la misma hoja. Añadiéndolos sueltos, el corte de
             // página caía en medio y el ítem salía recortado, con media tabla en la hoja siguiente.
-            val bloque = com.itextpdf.layout.element.Div().setKeepTogether(true)
+            //
+            // El margen de abajo hace de separación: un párrafo en blanco puesto aparte se quedaba
+            // solo al principio de la hoja siguiente.
+            val bloque = com.itextpdf.layout.element.Div()
+                .setKeepTogether(true)
+                .setMarginBottom(14f)
+            // Y el nombre de la sala va DENTRO del bloque de su primer ítem, no suelto encima:
+            // suelto saltaba de página él solo y dejaba una hoja con dos palabras y nada más.
+            if (cual == 0 && ambiente.isNotEmpty()) {
+                bloque.add(
+                    Paragraph(ambiente)
+                        .setFont(negrita).setFontSize(19f).setBold()
+                        .setFontColor(ColorConstants.DARK_GRAY)
+                        .setMarginTop(6f)
+                )
+            }
             bloque.add(
                 Paragraph("Ítem $itemNum").setFont(negrita).setFontSize(16f).setBold()
             )
@@ -351,7 +355,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 val celdaFoto = Cell().setPadding(6f)
                 val deDondeSale = if (orden == 0) item.uri else opcion.imagen
                 if (deDondeSale.isNotBlank()) {
-                    val foto = crearImagenPdf(primeraImagen(deDondeSale), 150f, 110f)
+                    val foto = crearImagenPdf(primeraImagen(deDondeSale), 140f, 88f)
                     // Si la imagen no se puede leer se dice, en vez de dejar el hueco callado: así
                     // se sabe que a esa opción le falta su foto y hay que volver a anexarla.
                     if (foto != null) celdaFoto.add(foto)
@@ -383,7 +387,6 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             separator.setStrokeWidth(1f)
             bloque.add(separator)
             document.add(bloque)
-            document.add(Paragraph("\n"))
         }
         }
 
@@ -425,18 +428,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         // Por ambientes, si se apuntaron: la sala, el consultorio, el piso. Sin ellos sale como
         // salía, en una sola tirada.
         for ((ambiente, items) in crystal.crystal.pos.AmbientesDeProforma.agrupar(lista)) {
-        if (ambiente.isNotEmpty()) {
-            document.add(
-                Paragraph(ambiente)
-                    .setFont(PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD))
-                    .setFontSize(19f).setBold()
-                    .setFontColor(ColorConstants.DARK_GRAY)
-                    .setMarginTop(6f)
-                    // La sala no se queda sola al pie de una hoja: baja con su primer item.
-                    .setKeepWithNext(true)
-            )
-        }
-        for (item in items) {
+        items.forEachIndexed { cual, item ->
             itemNum++
 
             val itemTitleFont = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
@@ -446,8 +438,22 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 .setBold()
 
             // El ítem entero en un bloque que no se puede partir: su título, su medida, su costo y
-            // su imagen caen juntos en la misma hoja. Sueltos, el corte de página caía en medio.
-            val bloque = com.itextpdf.layout.element.Div().setKeepTogether(true)
+            // su imagen caen juntos en la misma hoja. Sueltos, el corte de página caía en medio. La
+            // separación va como margen: un párrafo en blanco aparte se quedaba solo en la hoja
+            // siguiente, y con él la hoja quedaba casi vacía.
+            val bloque = com.itextpdf.layout.element.Div()
+                .setKeepTogether(true)
+                .setMarginBottom(14f)
+            // El nombre de la sala va DENTRO del bloque de su primer ítem: suelto encima saltaba de
+            // página él solo y dejaba una hoja con dos palabras y nada más.
+            if (cual == 0 && ambiente.isNotEmpty()) {
+                bloque.add(
+                    Paragraph(ambiente)
+                        .setFont(itemTitleFont).setFontSize(19f).setBold()
+                        .setFontColor(ColorConstants.DARK_GRAY)
+                        .setMarginTop(6f)
+                )
+            }
             bloque.add(tituloItemParagraph)
 
             val table = Table(UnitValue.createPercentArray(floatArrayOf(50f, 50f)))
@@ -495,8 +501,6 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             separator.setStrokeWidth(1f)
             bloque.add(separator)
             document.add(bloque)
-
-            document.add(Paragraph("\n"))
         }
         }
 
