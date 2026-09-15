@@ -41,7 +41,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class PdfGenerator(private val activity: AppCompatActivity) {
+/**
+ * Arma las proformas en PDF.
+ *
+ * Armar el documento solo necesita un CONTEXTO —leer imágenes y escribir el archivo—; la pantalla
+ * hace falta únicamente para compartirlo. Por eso se puede construir con un contexto a secas, que
+ * es lo que permite generar una proforma en una prueba y mirarla, sin levantar la pantalla
+ * principal con su autenticación.
+ */
+class PdfGenerator private constructor(
+    private val contexto: android.content.Context,
+    private val activity: AppCompatActivity?
+) {
+    constructor(activity: AppCompatActivity) : this(activity, activity)
+
+    /** Solo para armar documentos: sin pantalla no se puede compartir, pero sí escribir el PDF. */
+    constructor(contexto: android.content.Context) : this(contexto, null)
 
     /**
      * Quién hace la proforma y qué se ve al fondo. Lo pone la pantalla antes de generar; sin ello,
@@ -141,7 +156,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
     /** El sello como mapa de bits: un SVG se dibuja primero, y lo demás se lee como imagen. */
     private fun rasterizarSello(ruta: String): Bitmap? = runCatching {
         if (ruta.substringBefore('?').endsWith(".svg", ignoreCase = true)) {
-            val texto = activity.contentResolver.openInputStream(Uri.parse(ruta))
+            val texto = contexto.contentResolver.openInputStream(Uri.parse(ruta))
                 ?.use { it.readBytes().toString(Charsets.UTF_8) } ?: return@runCatching null
             val svg = com.caverock.androidsvg.SVG.getFromString(texto)
             val lado = 900
@@ -192,36 +207,37 @@ class PdfGenerator(private val activity: AppCompatActivity) {
 
     fun generarYCompartir(cliente: String, lista: List<Listado>, precioTotal: String) {
         // Candado (Fase 3): exportar PDF es de pago. Con el cobro apagado no bloquea.
-        if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.puedeExportarPdf(),
+        val pantalla = activity ?: return
+        if (!crystal.crystal.Suscripcion.exigir(pantalla, crystal.crystal.Suscripcion.puedeExportarPdf(),
                 "Exportar/compartir PDF es una función de pago.")) return
         if (lista.isEmpty()) {
-            Toast.makeText(activity, "La lista vacia", Toast.LENGTH_SHORT).show()
+            Toast.makeText(pantalla, "La lista vacia", Toast.LENGTH_SHORT).show()
             return
         }
 
         val listaSnapshot = lista.map { it.copy() }
-        Toast.makeText(activity, "Generando PDF...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(pantalla, "Generando PDF...", Toast.LENGTH_SHORT).show()
 
-        activity.lifecycleScope.launch {
+        pantalla.lifecycleScope.launch {
             val pdfFile = withContext(Dispatchers.IO) {
                 runCatching { generar(cliente, listaSnapshot, precioTotal) }
                     .onFailure { android.util.Log.e("PdfGenerator", "No se pudo armar la proforma", it) }
                     .getOrNull()
             }
 
-            if (activity.isFinishing || activity.isDestroyed) return@launch
+            if (pantalla.isFinishing || pantalla.isDestroyed) return@launch
 
             if (pdfFile != null && pdfFile.exists() && pdfFile.length() > 0) {
-                val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", pdfFile)
+                val uri = FileProvider.getUriForFile(pantalla, "${pantalla.packageName}.fileprovider", pdfFile)
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                     putExtra(Intent.EXTRA_STREAM, uri)
                     type = "application/pdf"
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                Toast.makeText(activity, "PDF generado", Toast.LENGTH_SHORT).show()
-                activity.startActivity(Intent.createChooser(shareIntent, "Compartir archivo"))
+                Toast.makeText(pantalla, "PDF generado", Toast.LENGTH_SHORT).show()
+                pantalla.startActivity(Intent.createChooser(shareIntent, "Compartir archivo"))
             } else {
-                Toast.makeText(activity, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
+                Toast.makeText(pantalla, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -235,39 +251,40 @@ class PdfGenerator(private val activity: AppCompatActivity) {
      * una, lo que costarían todas con ese material.
      */
     fun generarOpcionesYCompartir(cliente: String, lista: List<Listado>) {
-        if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.puedeExportarPdf(),
+        val pantalla = activity ?: return
+        if (!crystal.crystal.Suscripcion.exigir(pantalla, crystal.crystal.Suscripcion.puedeExportarPdf(),
                 "Exportar/compartir PDF es una función de pago.")) return
         if (lista.isEmpty()) {
-            Toast.makeText(activity, "La lista vacia", Toast.LENGTH_SHORT).show()
+            Toast.makeText(pantalla, "La lista vacia", Toast.LENGTH_SHORT).show()
             return
         }
         val listaSnapshot = lista.map { it.copy() }
-        Toast.makeText(activity, "Generando PDF...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(pantalla, "Generando PDF...", Toast.LENGTH_SHORT).show()
 
-        activity.lifecycleScope.launch {
+        pantalla.lifecycleScope.launch {
             val pdfFile = withContext(Dispatchers.IO) {
                 runCatching { generarOpciones(cliente, listaSnapshot) }
                     .onFailure { android.util.Log.e("PdfGenerator", "No se pudo armar la proforma de opciones", it) }
                     .getOrNull()
             }
-            if (activity.isFinishing || activity.isDestroyed) return@launch
+            if (pantalla.isFinishing || pantalla.isDestroyed) return@launch
             if (pdfFile != null && pdfFile.exists() && pdfFile.length() > 0) {
-                val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", pdfFile)
+                val uri = FileProvider.getUriForFile(pantalla, "${pantalla.packageName}.fileprovider", pdfFile)
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                     putExtra(Intent.EXTRA_STREAM, uri)
                     type = "application/pdf"
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                Toast.makeText(activity, "PDF generado", Toast.LENGTH_SHORT).show()
-                activity.startActivity(Intent.createChooser(shareIntent, "Compartir archivo"))
+                Toast.makeText(pantalla, "PDF generado", Toast.LENGTH_SHORT).show()
+                pantalla.startActivity(Intent.createChooser(shareIntent, "Compartir archivo"))
             } else {
-                Toast.makeText(activity, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
+                Toast.makeText(pantalla, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     fun generarOpciones(cliente: String, lista: List<Listado>): File? {
-        val pdfFile = File(activity.getExternalFilesDir(null), nombreDeArchivo("Proforma_de_opciones", cliente))
+        val pdfFile = File(contexto.getExternalFilesDir(null), nombreDeArchivo("Proforma_de_opciones", cliente))
         val pdfDoc = PdfDocument(PdfWriter(pdfFile))
         pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE, PageNumeration())
         val document = Document(pdfDoc, PageSize.A4)
@@ -355,7 +372,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 val celdaFoto = Cell().setPadding(6f)
                 val deDondeSale = if (orden == 0) item.uri else opcion.imagen
                 if (deDondeSale.isNotBlank()) {
-                    val foto = crearImagenPdf(primeraImagen(deDondeSale), 140f, 88f)
+                    val foto = crearImagenPdf(primeraImagen(deDondeSale), 130f, 78f)
                     // Si la imagen no se puede leer se dice, en vez de dejar el hueco callado: así
                     // se sabe que a esa opción le falta su foto y hay que volver a anexarla.
                     if (foto != null) celdaFoto.add(foto)
@@ -397,7 +414,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
     }
 
     fun generar(cliente: String, lista: List<Listado>, precioTotal: String): File? {
-        val pdfFile = File(activity.getExternalFilesDir(null), nombreDeArchivo("Presupuesto", cliente))
+        val pdfFile = File(contexto.getExternalFilesDir(null), nombreDeArchivo("Presupuesto", cliente))
 
         val writer = PdfWriter(pdfFile)
         val pdfDoc = PdfDocument(writer)
@@ -611,9 +628,11 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         bitmap.recycle()
         val imageData = ImageDataFactory.create(stream.toByteArray())
         return Image(imageData).apply {
-            setAutoScale(true)
-            setMaxWidth(maxWidth)
-            setMaxHeight(maxHeight)
+            // `scaleToFit` y no `setAutoScale`: el autoescalado estira la foto al ANCHO de su celda
+            // y se salta el alto que se le pide, así que una foto vertical salía de 230 puntos con
+            // 88 pedidos. Un ítem con tres opciones ocupaba una hoja entera, no cabía donde tocaba
+            // y saltaba de página dejando la anterior casi vacía. Esto respeta las dos medidas.
+            scaleToFit(maxWidth, maxHeight)
         }
     }
 
@@ -666,7 +685,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
 
         return runCatching {
-            val source = ImageDecoder.createSource(activity.contentResolver, imageUri)
+            val source = ImageDecoder.createSource(contexto.contentResolver, imageUri)
             ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
                 val width = info.size.width
                 val height = info.size.height
@@ -701,7 +720,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             inJustDecodeBounds = true
         }
 
-        activity.contentResolver.openInputStream(imageUri)?.use { input ->
+        contexto.contentResolver.openInputStream(imageUri)?.use { input ->
             BitmapFactory.decodeStream(input, null, bounds)
         } ?: return@runCatching null
 
@@ -712,7 +731,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             inPreferredConfig = Bitmap.Config.RGB_565
         }
 
-        activity.contentResolver.openInputStream(imageUri)?.use { input ->
+        contexto.contentResolver.openInputStream(imageUri)?.use { input ->
             BitmapFactory.decodeStream(input, null, opciones)
         }
     }.getOrNull()
@@ -723,7 +742,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         maxHeight: Int
     ): Bitmap? {
         return runCatching {
-            Glide.with(activity.applicationContext)
+            Glide.with(contexto.applicationContext)
                 .asBitmap()
                 .load(imageUri)
                 .submit(maxWidth, maxHeight)
