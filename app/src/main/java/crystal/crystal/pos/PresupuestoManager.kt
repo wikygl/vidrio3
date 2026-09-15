@@ -46,7 +46,7 @@ class PresupuestoManager(
     fun mostrarMenuPresupuesto() {
         // El menú abre libre; se bloquean ítems puntuales (cargar/guardar/compartir) en su función.
         val opciones = if (lista.isEmpty()) {
-            arrayOf("Cargar presupuesto desde archivo", "Membrete y sello de la proforma")
+            arrayOf("Cargar presupuesto desde archivo", "Edición de la proforma")
         } else {
             arrayOf(
                 "Enviar por chat",
@@ -54,7 +54,7 @@ class PresupuestoManager(
                 "Cargar presupuesto desde archivo",
                 "Guardar como archivo JSON",
                 "Compartir como archivo",
-                "Membrete y sello de la proforma"
+                "Edición de la proforma"
             )
         }
 
@@ -62,23 +62,20 @@ class PresupuestoManager(
         builder.setTitle("Opciones de Presupuesto")
         builder.setItems(opciones) { _, which ->
             Log.d("DEBUG", "Opción menú principal: $which")
-            when (which) {
-                // Con la lista vacía el menú es corto: cargar, y el membrete.
-                1 -> if (lista.isEmpty()) {
-                    alPedirMembrete?.invoke()
-                } else {
+            // Con la lista vacía el menú es corto: cargar y la edición de la proforma.
+            val vacia = lista.isEmpty()
+            when {
+                vacia && which == 0 -> abrirSelectorPresupuesto()
+                vacia && which == 1 -> alPedirMembrete?.invoke()
+                which == 0 -> enviarPresupuestoPorChat()
+                which == 1 -> {
                     Log.d("DEBUG", "Llamando a mostrarMenuEdicionMasiva()")
                     edicionMasivaManager?.mostrarMenuEdicionMasiva()
                 }
-                5 -> alPedirMembrete?.invoke()
-                0 -> if (lista.isEmpty()) {
-                    abrirSelectorPresupuesto()
-                } else {
-                    enviarPresupuestoPorChat()
-                }
-                2 -> abrirSelectorPresupuesto()
-                3 -> if (lista.isNotEmpty()) guardarComoJSON()
-                4 -> if (lista.isNotEmpty()) compartirPresupuesto()
+                which == 2 -> abrirSelectorPresupuesto()
+                which == 3 -> guardarComoJSON()
+                which == 4 -> compartirPresupuesto()
+                which == 5 -> alPedirMembrete?.invoke()
             }
         }
 

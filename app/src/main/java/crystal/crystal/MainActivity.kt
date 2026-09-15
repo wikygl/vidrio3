@@ -2736,16 +2736,23 @@ class MainActivity : AppCompatActivity() {
         }
         return uri.lastPathSegment?.substringAfterLast('/') ?: "archivo"
     }
+    /**
+     * OJO: este menú es el que se ve. `PresupuestoManager` tiene otro igual que no lo abre nadie.
+     *
+     * "Edición de la proforma" es lo que sale impreso: el membrete de la tienda, el sello de agua
+     * y la nota del pie. Se llega desde aquí porque es donde ya viven las cosas del presupuesto.
+     */
     private fun mostrarMenuPresupuesto() {
         val opciones = if (lista.isEmpty()) {
-            arrayOf("Cargar presupuesto desde archivo")
+            arrayOf("Cargar presupuesto desde archivo", "Edición de la proforma")
         } else {
             arrayOf(
                 "Enviar por chat",
                 "Edición masiva",
                 "Cargar presupuesto desde archivo",
                 "Guardar como archivo JSON",
-                "Compartir como archivo"
+                "Compartir como archivo",
+                "Edición de la proforma"
             )
         }
 
@@ -2753,19 +2760,19 @@ class MainActivity : AppCompatActivity() {
         builder.setTitle("Opciones de Presupuesto")
         builder.setItems(opciones) { _, which ->
             Log.d("DEBUG", "Opción menú principal: $which")
-            when (which) {
-                0 -> if (lista.isEmpty()) {
-                    abrirSelectorPresupuesto()
-                } else {
-                    enviarPresupuestoPorChat()
-                }
-                1 -> {
+            val vacia = lista.isEmpty()
+            when {
+                vacia && which == 0 -> abrirSelectorPresupuesto()
+                vacia && which == 1 -> mostrarMembreteDeProforma()
+                which == 0 -> enviarPresupuestoPorChat()
+                which == 1 -> {
                     Log.d("DEBUG", "Llamando a mostrarMenuEdicionMasiva()")
                     edicionMasivaManager.mostrarMenuEdicionMasiva()
                 }
-                2 -> abrirSelectorPresupuesto()
-                3 -> if (lista.isNotEmpty()) guardarComoJSON()
-                4 -> if (lista.isNotEmpty()) compartirPresupuesto()
+                which == 2 -> abrirSelectorPresupuesto()
+                which == 3 -> guardarComoJSON()
+                which == 4 -> compartirPresupuesto()
+                which == 5 -> mostrarMembreteDeProforma()
             }
         }
 
