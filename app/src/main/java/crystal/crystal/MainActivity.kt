@@ -291,6 +291,7 @@ class MainActivity : AppCompatActivity() {
             it.onListaModificada = { actualizar() }
             it.obtenerCurrentUserId = { currentUserId }
             it.edicionMasivaManager = edicionMasivaManager
+            it.alPedirMembrete = { mostrarMembreteDeProforma() }
         }
         manejarPresupuestoRecibido()
         roleConfigManager.verificarAutorizacionTerminal()
@@ -2500,7 +2501,14 @@ class MainActivity : AppCompatActivity() {
             }
             if (isFinishing || isDestroyed) return@launch
             if (local == null) {
+                esperandoSello = false
                 Toast.makeText(this@MainActivity, "No se pudo guardar la imagen", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            // El sello de agua no es el anexo de ningún ítem: es de la proforma entera.
+            if (esperandoSello) {
+                esperandoSello = false
+                membreteManager.ponerSello(local)
                 return@launch
             }
             anexarUriElegida(local)
@@ -2528,8 +2536,37 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** El membrete y el sello de las proformas: quién las hace y qué se ve al fondo. */
+    private val membreteManager by lazy {
+        crystal.crystal.pos.MembreteManager(this, sharedPreferences) { posManager.datosEmpresa }
+            .also { manager ->
+                manager.alPedirSello = {
+                    esperandoSello = true
+                    openGallery()
+                }
+                manager.alPedirDatosDeLaTienda = {
+                    Toast.makeText(
+                        this,
+                        "Los datos de la tienda se apuntan en la configuración del ticket",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+    }
+
+    /** true mientras se elige la imagen del sello de agua, para no anexarla a ningún ítem. */
+    private var esperandoSello = false
+
+    fun mostrarMembreteDeProforma() = membreteManager.mostrar()
+
     private fun openPdf() {
         val cliente = binding.clienteEditxt.text.toString()
+        // El papel lleva quién lo hace y a quién va: el membrete de la tienda, el técnico que
+        // midió, los datos del cliente y el sello de agua al fondo.
+        pdfGenerator.membrete = crystal.crystal.pos.DatosDeLaProforma.membrete(
+            sharedPreferences, posManager.datosEmpresa
+        )
+        pdfGenerator.cliente = crystal.crystal.pos.DatosDeLaProforma.cliente(cliente, clienteSeleccionado)
         // Si algún ítem tiene opciones caben dos proformas distintas, y no se puede adivinar cuál
         // se quiere: la de siempre, que suma, o la de elección, que enseña cada medida con sus
         // materiales y NO suma, porque el cliente escoge uno.

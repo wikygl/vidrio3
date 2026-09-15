@@ -40,17 +40,21 @@ class PresupuestoManager(
     var obtenerCurrentUserId: (() -> String)? = null
     var edicionMasivaManager: EdicionMasivaManager? = null
 
+    /** Abre el membrete y el sello de agua de las proformas; lo enseña la pantalla principal. */
+    var alPedirMembrete: (() -> Unit)? = null
+
     fun mostrarMenuPresupuesto() {
         // El menú abre libre; se bloquean ítems puntuales (cargar/guardar/compartir) en su función.
         val opciones = if (lista.isEmpty()) {
-            arrayOf("Cargar presupuesto desde archivo")
+            arrayOf("Cargar presupuesto desde archivo", "Membrete y sello de la proforma")
         } else {
             arrayOf(
                 "Enviar por chat",
                 "Edición masiva",
                 "Cargar presupuesto desde archivo",
                 "Guardar como archivo JSON",
-                "Compartir como archivo"
+                "Compartir como archivo",
+                "Membrete y sello de la proforma"
             )
         }
 
@@ -59,14 +63,18 @@ class PresupuestoManager(
         builder.setItems(opciones) { _, which ->
             Log.d("DEBUG", "Opción menú principal: $which")
             when (which) {
+                // Con la lista vacía el menú es corto: cargar, y el membrete.
+                1 -> if (lista.isEmpty()) {
+                    alPedirMembrete?.invoke()
+                } else {
+                    Log.d("DEBUG", "Llamando a mostrarMenuEdicionMasiva()")
+                    edicionMasivaManager?.mostrarMenuEdicionMasiva()
+                }
+                5 -> alPedirMembrete?.invoke()
                 0 -> if (lista.isEmpty()) {
                     abrirSelectorPresupuesto()
                 } else {
                     enviarPresupuestoPorChat()
-                }
-                1 -> {
-                    Log.d("DEBUG", "Llamando a mostrarMenuEdicionMasiva()")
-                    edicionMasivaManager?.mostrarMenuEdicionMasiva()
                 }
                 2 -> abrirSelectorPresupuesto()
                 3 -> if (lista.isNotEmpty()) guardarComoJSON()

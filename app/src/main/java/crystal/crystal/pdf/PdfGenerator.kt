@@ -43,6 +43,153 @@ import kotlinx.coroutines.withContext
 
 class PdfGenerator(private val activity: AppCompatActivity) {
 
+    /**
+     * Quién hace la proforma y qué se ve al fondo. Lo pone la pantalla antes de generar; sin ello,
+     * la proforma sale como salía —sin membrete y sin sello—, que es lo que había.
+     */
+    var membrete: crystal.crystal.pos.MembreteDeProforma? = null
+    var cliente: crystal.crystal.pos.ClienteDeLaProforma? = null
+
+    /**
+     * El membrete: el logo de la tienda, sus datos y quién midió.
+     *
+     * Va arriba del todo y antes del título, que es donde se mira primero para saber de quién es el
+     * papel. Los datos son los mismos que ya usa el ticket: una tienda no tiene dos direcciones.
+     */
+    private fun ponerMembrete(document: Document) {
+        val m = membrete ?: return
+        if (!m.hayMembrete) return
+        val negrita = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
+        val tabla = Table(UnitValue.createPercentArray(floatArrayOf(22f, 78f)))
+        tabla.setWidth(UnitValue.createPercentValue(100f))
+
+        val celdaLogo = Cell().setBorder(com.itextpdf.layout.borders.Border.NO_BORDER).setPadding(2f)
+        m.logo?.let { crearImagenPdf(it, 110f, 90f) }?.let { celdaLogo.add(it) }
+        tabla.addCell(celdaLogo)
+
+        val datos = Cell().setBorder(com.itextpdf.layout.borders.Border.NO_BORDER).setPadding(4f)
+        m.empresa?.let { e ->
+            datos.add(
+                Paragraph(e.nombreComercial ?: e.razonSocial)
+                    .setFont(negrita).setFontSize(15f).setBold().setMarginBottom(0f)
+            )
+            val lineas = listOfNotNull(
+                e.ruc.takeIf { it.isNotBlank() }?.let { "RUC: $it" },
+                e.direccion.takeIf { it.isNotBlank() },
+                e.telefono.takeIf { it.isNotBlank() }?.let { "Tel. $it" },
+                e.email?.takeIf { it.isNotBlank() }
+            )
+            if (lineas.isNotEmpty()) {
+                datos.add(
+                    Paragraph(lineas.joinToString("   ·   "))
+                        .setFontSize(10f).setFontColor(ColorConstants.DARK_GRAY).setMarginTop(0f)
+                )
+            }
+        }
+        if (m.tecnico.isNotBlank()) {
+            datos.add(
+                Paragraph("Atendido por: ${m.tecnico}")
+                    .setFontSize(10f).setFontColor(ColorConstants.DARK_GRAY).setMarginTop(0f)
+            )
+        }
+        tabla.addCell(datos)
+        document.add(tabla)
+
+        val raya = com.itextpdf.layout.element.LineSeparator(
+            com.itextpdf.kernel.pdf.canvas.draw.SolidLine()
+        )
+        raya.setStrokeColor(ColorConstants.GRAY)
+        raya.setStrokeWidth(1f)
+        document.add(raya)
+    }
+
+    /** Los datos del cliente, debajo del título: a quién va dirigida y cómo encontrarlo. */
+    private fun ponerCliente(document: Document) {
+        val c = cliente ?: return
+        if (!c.hayDatos) return
+        document.add(
+            Paragraph(c.lineas().joinToString("   ·   "))
+                .setFontSize(10f).setFontColor(ColorConstants.DARK_GRAY)
+        )
+    }
+
+    /** La nota del pie: validez, forma de pago, lo que la tienda quiera dejar dicho. */
+    private fun ponerNota(document: Document) {
+        val nota = membrete?.nota.orEmpty()
+        if (nota.isBlank()) return
+        document.add(
+            Paragraph(nota).setFontSize(9f).setFontColor(ColorConstants.GRAY).setMarginTop(10f)
+        )
+    }
+
+    /**
+     * El sello de agua, al fondo de CADA hoja y por debajo de lo escrito.
+     *
+     * Se dibuja en el canvas de fondo de la página y con la tinta muy rebajada, así que no estorba
+     * la lectura: se ve la marca de la tienda detrás de los números. Vale PNG, JPG y SVG —el SVG se
+     * rasteriza antes, que iText no lo dibuja—.
+     */
+    private fun ponerSello(pdfDoc: PdfDocument, ruta: String) {
+        val bitmap = rasterizarSello(ruta) ?: return
+        val stream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        bitmap.recycle()
+        val datos = runCatching { ImageDataFactory.create(stream.toByteArray()) }.getOrNull() ?: return
+        pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE, SelloDeAgua(datos))
+    }
+
+    /** El sello como mapa de bits: un SVG se dibuja primero, y lo demás se lee como imagen. */
+    private fun rasterizarSello(ruta: String): Bitmap? = runCatching {
+        if (ruta.substringBefore('?').endsWith(".svg", ignoreCase = true)) {
+            val texto = activity.contentResolver.openInputStream(Uri.parse(ruta))
+                ?.use { it.readBytes().toString(Charsets.UTF_8) } ?: return@runCatching null
+            val svg = com.caverock.androidsvg.SVG.getFromString(texto)
+            val lado = 900
+            svg.documentWidth.takeIf { it > 0f } ?: svg.setDocumentWidth(lado.toFloat())
+            svg.documentHeight.takeIf { it > 0f } ?: svg.setDocumentHeight(lado.toFloat())
+            val bmp = Bitmap.createBitmap(lado, lado, Bitmap.Config.ARGB_8888)
+            android.graphics.Canvas(bmp).drawPicture(
+                svg.renderToPicture(lado, lado),
+                android.graphics.Rect(0, 0, lado, lado)
+            )
+            bmp
+        } else {
+            decodificarImagenReducida(Uri.parse(ruta), 1200, 1200)
+        }
+    }.onFailure { android.util.Log.e("PdfGenerator", "No se pudo leer el sello: $ruta", it) }
+        .getOrNull()
+
+    /** Estampa la imagen del sello centrada en cada hoja, en claro y por detrás de lo escrito. */
+    private class SelloDeAgua(
+        private val imagen: com.itextpdf.io.image.ImageData
+    ) : IEventHandler {
+        override fun handleEvent(event: Event) {
+            val docEvent = event as PdfDocumentEvent
+            val pagina = docEvent.page
+            val caja = pagina.pageSize
+            val lienzo = PdfCanvas(pagina.newContentStreamBefore(), pagina.resources, docEvent.document)
+            val estado = com.itextpdf.kernel.pdf.extgstate.PdfExtGState().setFillOpacity(0.07f)
+            lienzo.saveState().setExtGState(estado)
+            val lado = minOf(caja.width, caja.height) * 0.6f
+            com.itextpdf.layout.Canvas(lienzo, caja).use { canvas ->
+                canvas.add(
+                    Image(imagen).apply {
+                        setAutoScale(true)
+                        setMaxWidth(lado)
+                        setMaxHeight(lado)
+                        setFixedPosition(
+                            docEvent.document.getPageNumber(pagina),
+                            (caja.width - lado) / 2f,
+                            (caja.height - lado) / 2f,
+                            UnitValue.createPointValue(lado)
+                        )
+                    }
+                )
+            }
+            lienzo.restoreState()
+        }
+    }
+
     fun generarYCompartir(cliente: String, lista: List<Listado>, precioTotal: String) {
         // Candado (Fase 3): exportar PDF es de pago. Con el cobro apagado no bloquea.
         if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.puedeExportarPdf(),
@@ -126,10 +273,14 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         val document = Document(pdfDoc, PageSize.A4)
         document.setMargins(36f, 36f, 36f, 36f)
 
+        membrete?.selloRuta?.takeIf { membrete?.haySello == true }?.let { ponerSello(pdfDoc, it) }
+
         val negrita = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
+        ponerMembrete(document)
         document.add(
             Paragraph("Proforma de $cliente").setFont(negrita).setFontSize(27f).setBold()
         )
+        ponerCliente(document)
         document.add(
             Paragraph(
                 "Cada ítem se ofrece en varios materiales. Los precios no se suman: " +
@@ -229,6 +380,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         }
 
         // Y aquí NO va el total: es una proforma de elección.
+        ponerNota(document)
         document.close()
         return pdfFile
     }
@@ -244,12 +396,16 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         val document = Document(pdfDoc, PageSize.A4)
         document.setMargins(36f, 36f, 36f, 36f)
 
+        membrete?.selloRuta?.takeIf { membrete?.haySello == true }?.let { ponerSello(pdfDoc, it) }
+
         val tituloFont = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
+        ponerMembrete(document)
         val titulo = Paragraph("Proforma de $cliente")
             .setFont(tituloFont)
             .setFontSize(27f)
             .setBold()
         document.add(titulo)
+        ponerCliente(document)
 
         if (lista.isEmpty()) {
             document.close()
@@ -347,6 +503,8 @@ class PdfGenerator(private val activity: AppCompatActivity) {
 
         tablaTotalBox.addCell(cellTotal)
         document.add(tablaTotalBox)
+
+        ponerNota(document)
 
         document.close()
 
