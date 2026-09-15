@@ -140,7 +140,18 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         }
 
         var itemNum = 0
-        for (item in lista) {
+        // Por ambientes: la sala, el consultorio, el piso. Una obra entera se lee por sitios —"sala
+        // de partos" con lo suyo, "sexto piso" con lo suyo—, no como una lista corrida de medidas.
+        for ((ambiente, items) in crystal.crystal.pos.AmbientesDeProforma.agrupar(lista)) {
+        if (ambiente.isNotEmpty()) {
+            document.add(
+                Paragraph(ambiente)
+                    .setFont(negrita).setFontSize(19f).setBold()
+                    .setFontColor(ColorConstants.DARK_GRAY)
+                    .setMarginTop(6f)
+            )
+        }
+        for (item in items) {
             itemNum++
             document.add(
                 Paragraph("Ítem $itemNum").setFont(negrita).setFontSize(16f).setBold()
@@ -207,6 +218,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             document.add(separator)
             document.add(Paragraph("\n"))
         }
+        }
 
         // Y aquí NO va el total: es una proforma de elección.
         document.close()
@@ -239,7 +251,19 @@ class PdfGenerator(private val activity: AppCompatActivity) {
 
         var itemNum = 0
 
-        for (item in lista) {
+        // Por ambientes, si se apuntaron: la sala, el consultorio, el piso. Sin ellos sale como
+        // salía, en una sola tirada.
+        for ((ambiente, items) in crystal.crystal.pos.AmbientesDeProforma.agrupar(lista)) {
+        if (ambiente.isNotEmpty()) {
+            document.add(
+                Paragraph(ambiente)
+                    .setFont(PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD))
+                    .setFontSize(19f).setBold()
+                    .setFontColor(ColorConstants.DARK_GRAY)
+                    .setMarginTop(6f)
+            )
+        }
+        for (item in items) {
             itemNum++
 
             val itemTitleFont = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
@@ -296,6 +320,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             document.add(separator)
 
             document.add(Paragraph("\n"))
+        }
         }
 
         val tituloTotal = "Precio total: S/.$precioTotal"

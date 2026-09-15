@@ -204,6 +204,26 @@
                     tools:ignore="ButtonStyle,TextContrastCheck" />
             </LinearLayout>
 
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnAmbiente"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/azul"
+                    android:minWidth="96dp"
+                    android:text="ambiente"
+                    android:textColor="@color/blanco"
+                    android:textSize="13sp"
+                    tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
+            </LinearLayout>
+
         </LinearLayout>
     </LinearLayout>
 

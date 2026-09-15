@@ -33,7 +33,15 @@ data class Listado(
      * En null, el ítem es lo que era: una línea con un producto y un precio. Con opciones, además,
      * puede salir en una proforma de elección, que no suma porque el cliente escoge una.
      */
-    var opciones: String? = null
+    var opciones: String? = null,
+    /**
+     * El AMBIENTE donde va este ítem: la sala, el consultorio, el piso. En un trabajo de una obra
+     * entera —una clínica, un hotel— la proforma se lee por ambientes, no como una lista corrida:
+     * "sala de partos" con lo suyo, "sala sexto piso" con lo suyo.
+     *
+     * En null, el ítem no está en ningún ambiente y sale al final, sin encabezado.
+     */
+    var ambiente: String? = null
 ) : Serializable {
 
     companion object {

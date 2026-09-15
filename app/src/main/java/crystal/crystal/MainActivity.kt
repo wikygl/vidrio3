@@ -906,11 +906,21 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                val spannableString = SpannableString(text)
+                // El ambiente delante, cuando lo hay: en una obra con salas, sin verlo no se sabe
+                // de qué sitio es cada línea. Y una marca si el ítem lleva opciones de material.
+                val ambiente = crystal.crystal.pos.AmbientesDeProforma.de(datos)
+                val cabeza = buildString {
+                    if (ambiente.isNotEmpty()) append("[$ambiente] ")
+                    val cuantas = crystal.crystal.pos.OpcionesDeProforma.de(datos).size
+                    if (cuantas > 0) append("(+$cuantas) ")
+                }
+                val conCabeza = cabeza + text
+
+                val spannableString = SpannableString(conCabeza)
                 spannableString.setSpan(
                     ForegroundColorSpan(datos.color),
-                    text.indexOf("(${datos.escala})"),
-                    text.indexOf("(${datos.escala})") + datos.escala.length + 2,
+                    conCabeza.indexOf("(${datos.escala})"),
+                    conCabeza.indexOf("(${datos.escala})") + datos.escala.length + 2,
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
                 spannableString
@@ -1611,6 +1621,13 @@ class MainActivity : AppCompatActivity() {
                 modelo.findViewById<Button>(R.id.btnOpciones)?.setOnClickListener {
                     dialogoPer.dismiss()
                     opcionesManager.mostrar(position)
+                }
+
+                // El ambiente donde va el ítem: la sala, el consultorio, el piso. Es lo que agrupa
+                // la proforma de una obra entera.
+                modelo.findViewById<Button>(R.id.btnAmbiente)?.setOnClickListener {
+                    dialogoPer.dismiss()
+                    ambienteManager.mostrar(position)
                 }
 
                 eliminar.setOnClickListener {
@@ -2446,6 +2463,13 @@ class MainActivity : AppCompatActivity() {
     /** Las opciones de cada ítem: el mismo producto en otros materiales, cada uno con su precio. */
     private val opcionesManager by lazy {
         crystal.crystal.pos.OpcionesManager(this, lista).also {
+            it.onListaModificada = { actualizar() }
+        }
+    }
+
+    /** El ambiente de cada ítem: la sala, el consultorio, el piso donde va. */
+    private val ambienteManager by lazy {
+        crystal.crystal.pos.AmbienteManager(this, lista).also {
             it.onListaModificada = { actualizar() }
         }
     }
