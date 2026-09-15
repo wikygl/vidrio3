@@ -38,7 +38,10 @@ class OpcionesManager(
         // La primera línea es lo que el ítem ya es: su producto y su precio. No se toca aquí —se
         // edita donde siempre—, pero se enseña porque en la proforma sale como una opción más.
         val propia = OpcionesDeProforma.comoEstaApuntado(item)
-        filas.add("• ${propia.producto}  ·  ${df2(OpcionesDeProforma.precioUnitario(item, propia))} c/u")
+        val fotoDelItem = if (item.uri.isNotBlank()) "  🖼" else ""
+        filas.add(
+            "• ${propia.producto}  ·  ${df2(OpcionesDeProforma.precioUnitario(item, propia))} c/u$fotoDelItem"
+        )
         opciones.forEach { o ->
             val conFoto = if (o.imagen.isNotEmpty()) "  🖼" else ""
             filas.add("• ${o.producto}  ·  ${df2(OpcionesDeProforma.precioUnitario(item, o))} c/u$conFoto")
@@ -53,12 +56,10 @@ class OpcionesManager(
                 val iAnadir = opciones.size + 1
                 val iQuitar = if (opciones.isEmpty()) -1 else opciones.size + 2
                 when (cual) {
-                    // La primera es la del propio ítem: se edita en su diálogo de siempre.
-                    0 -> Toast.makeText(
-                        activity,
-                        "Esa es la del ítem: se cambia en Editar",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    // La primera es la del propio ítem, y se toca como las demás: su material, su
+                    // precio y su imagen. Mandando a "Editar" se rompía la simetría —la A no podía
+                    // tener su foto en su recuadro— y la imagen acababa suelta en el ítem.
+                    0 -> pedirOpcion(posicion, LA_DEL_ITEM)
                     iAnadir -> pedirOpcion(posicion, null)
                     iQuitar -> {
                         opciones.removeAt(opciones.size - 1)
@@ -73,11 +74,19 @@ class OpcionesManager(
             .show()
     }
 
-    /** Pide el material y su precio. Con [cual] a null, la opción es nueva. */
+    /**
+     * Pide el material y su precio. Con [cual] a null la opción es nueva, y con [LA_DEL_ITEM] es la
+     * del propio ítem: lo que se escriba va a su producto y a su precio, y su imagen es la del ítem.
+     */
     private fun pedirOpcion(posicion: Int, cual: Int?) {
         val item = lista.getOrNull(posicion) ?: return
         val opciones = OpcionesDeProforma.de(item).toMutableList()
-        val actual = cual?.let { opciones.getOrNull(it) }
+        val esDelItem = cual == LA_DEL_ITEM
+        val actual = when {
+            esDelItem -> OpcionesDeProforma.comoEstaApuntado(item).copy(imagen = item.uri)
+            cual != null -> opciones.getOrNull(cual)
+            else -> null
+        }
         val dp = activity.resources.displayMetrics.density
 
         val etProducto = EditText(activity).apply {
@@ -107,6 +116,18 @@ class OpcionesManager(
                     Toast.LENGTH_LONG
                 ).show()
                 return null
+            }
+            // La de propio ítem no vive en la lista de opciones: es el ítem. Lo escrito va a su
+            // producto y a su precio, y el costo se rehace con la misma cuenta de siempre para que
+            // la lista y la proforma no digan cosas distintas.
+            if (esDelItem) {
+                item.producto = producto
+                item.precio = precio
+                item.costo = OpcionesDeProforma.precioPorLaCantidad(
+                    item, OpcionDeProforma(producto, precio)
+                )
+                onListaModificada?.invoke()
+                return LA_DEL_ITEM
             }
             // La imagen que ya tuviera se respeta: aquí se escriben el material y el precio.
             val nueva = OpcionDeProforma(producto, precio, actual?.imagen.orEmpty())
@@ -140,12 +161,25 @@ class OpcionesManager(
     /** Guarda la imagen elegida en esa opción. La llama la pantalla al volver del anexador. */
     fun ponerImagen(posicion: Int, cual: Int, imagen: String) {
         val item = lista.getOrNull(posicion) ?: return
+        // La de la primera fila es la imagen del ítem, que es la que la proforma enseña en su
+        // recuadro: se guarda donde siempre.
+        if (cual == LA_DEL_ITEM) {
+            item.uri = imagen.trim()
+            onListaModificada?.invoke()
+            Toast.makeText(activity, "Imagen puesta en ${item.producto}", Toast.LENGTH_SHORT).show()
+            return
+        }
         val opciones = OpcionesDeProforma.de(item).toMutableList()
         val opcion = opciones.getOrNull(cual) ?: return
         opciones[cual] = opcion.copy(imagen = imagen.trim())
         OpcionesDeProforma.guardar(item, opciones)
         onListaModificada?.invoke()
         Toast.makeText(activity, "Imagen puesta en ${opcion.producto}", Toast.LENGTH_SHORT).show()
+    }
+
+    companion object {
+        /** La fila de la primera opción: la del propio ítem, que no vive en la lista de opciones. */
+        const val LA_DEL_ITEM = -1
     }
 
     private fun df2(valor: Float): String = "%.2f".format(valor)

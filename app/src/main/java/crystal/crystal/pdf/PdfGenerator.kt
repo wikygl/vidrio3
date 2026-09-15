@@ -157,28 +157,16 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 Paragraph("Ítem $itemNum").setFont(negrita).setFontSize(16f).setBold()
             )
 
-            val table = Table(UnitValue.createPercentArray(floatArrayOf(50f, 50f)))
-            table.setWidth(UnitValue.createPercentValue(100f))
-
+            // La medida, en una línea: aquí las imágenes van con cada opción, en su recuadro, así
+            // que arriba no se repite ninguna.
             val textoMedidas = when (item.escala) {
-                "p2", "m2" -> "Ancho: ${df1(item.medi1)}\nAlto: ${df1(item.medi2)}\nCantidad: ${df1(item.canti)}"
-                "ml" -> "Metros: ${df1(item.medi1)}\nCantidad: ${df1(item.canti)}"
-                "m3" -> "Ancho: ${df1(item.medi1)}\nAlto: ${df1(item.medi2)}\nFondo: ${df1(item.medi3)}\nCantidad: ${df1(item.canti)}"
+                "p2", "m2" -> "Ancho: ${df1(item.medi1)}   Alto: ${df1(item.medi2)}   Cantidad: ${df1(item.canti)}"
+                "ml" -> "Metros: ${df1(item.medi1)}   Cantidad: ${df1(item.canti)}"
+                "m3" -> "Ancho: ${df1(item.medi1)}   Alto: ${df1(item.medi2)}   Fondo: ${df1(item.medi3)}   Cantidad: ${df1(item.canti)}"
                 "uni" -> "Cantidad: ${df1(item.canti)}"
                 else -> ""
             }
-            val cellTexto = Cell()
-            cellTexto.add(Paragraph(textoMedidas))
-            cellTexto.setBorder(com.itextpdf.layout.borders.Border.NO_BORDER)
-            cellTexto.setPadding(9f)
-            table.addCell(cellTexto)
-
-            val imageCell = crearCeldaImagenes(item.uri)
-            imageCell.setBorder(com.itextpdf.layout.borders.Border.NO_BORDER)
-            imageCell.setPadding(9f)
-            table.addCell(imageCell)
-            table.setKeepTogether(true)
-            document.add(table)
+            document.add(Paragraph(textoMedidas).setFontSize(12f))
 
             // Las opciones: la del propio ítem primero —es la que se apuntó al medir— y detrás las
             // demás, en el orden en que se escribieron.
@@ -195,14 +183,14 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 tablaOpciones.addCell(
                     Cell().add(Paragraph(opcion.producto)).setPadding(6f)
                 )
-                // La imagen de la opción: un arenado laminado y un policarbonato no se parecen en
-                // nada, y el cliente elige mirando. La de la primera —la del propio ítem— ya está
-                // arriba, en grande, así que su celda va vacía.
+                // La imagen de la opción, en SU recuadro: un arenado laminado y un policarbonato no
+                // se parecen en nada, y el cliente elige mirando. La de la primera es la del ítem,
+                // y va aquí como las demás: enseñándola solo arriba, esa opción parecía no tener.
                 val celdaFoto = Cell().setPadding(6f)
-                val foto = if (orden == 0) null
-                else opcion.imagen.takeIf { it.isNotBlank() }
-                    ?.let { crearImagenPdf(it, 150f, 110f) }
-                if (foto != null) celdaFoto.add(foto)
+                val deDondeSale = if (orden == 0) item.uri else opcion.imagen
+                deDondeSale.takeIf { it.isNotBlank() }
+                    ?.let { crearImagenPdf(primeraImagen(it), 150f, 110f) }
+                    ?.let { celdaFoto.add(it) }
                 tablaOpciones.addCell(celdaFoto)
                 val unidad = crystal.crystal.pos.OpcionesDeProforma.precioUnitario(item, opcion)
                 val todas = crystal.crystal.pos.OpcionesDeProforma.precioPorLaCantidad(item, opcion)
@@ -433,6 +421,13 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             setMaxHeight(maxHeight)
         }
     }
+
+    /**
+     * La primera imagen de un anexo. El ítem puede llevar varias —van una por línea— y en el
+     * recuadro de su opción cabe una: la primera, que es la que lo representa.
+     */
+    private fun primeraImagen(anexo: String): String =
+        extraerImagenesAnexo(anexo).firstOrNull() ?: anexo
 
     private fun extraerImagenesAnexo(anexo: String): List<String> {
         return anexo

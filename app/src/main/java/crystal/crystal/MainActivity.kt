@@ -2467,7 +2467,11 @@ class MainActivity : AppCompatActivity() {
             // La opción pide su imagen y se elige con el anexador de siempre; al volver, la
             // imagen sabe a qué opción pertenece.
             manager.alPedirImagen = { posicion, cual ->
-                opcionEsperandoImagen = posicion to cual
+                // La de la primera fila es la del propio ítem: su imagen va donde siempre, y por
+                // eso ahí no se apunta ninguna opción esperando.
+                opcionEsperandoImagen =
+                    if (cual == crystal.crystal.pos.OpcionesManager.LA_DEL_ITEM) null
+                    else posicion to cual
                 selectedPosition = posicion
                 mostrarOpcionesAnexar(posicion)
             }

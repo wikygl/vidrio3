@@ -138,4 +138,26 @@ class OpcionesDeProformaTest {
         })
         assertTrue(OpcionesDeProforma.hayEnLaLista(conOpciones))
     }
+
+    /**
+     * La opción del propio ítem se toca como las demás: cambiarle el material y el precio deja el
+     * ítem con lo escrito, y su costo rehecho con la misma cuenta.
+     *
+     * Antes esa fila solo sabía decir "eso se cambia en Editar", así que no podía tener su imagen
+     * en su recuadro y la foto acababa suelta en el ítem.
+     */
+    @Test
+    fun la_opcion_del_item_cambia_el_item() {
+        val item = ventana(cantidad = 2f)
+        val nueva = OpcionDeProforma("Serie 80", 210f)
+        item.producto = nueva.producto
+        item.precio = nueva.precio
+        item.costo = OpcionesDeProforma.precioPorLaCantidad(item, nueva)
+
+        assertEquals("Serie 80", OpcionesDeProforma.comoEstaApuntado(item).producto)
+        // 1.8 m² a 210 son 378 la pieza, y 756 las dos.
+        assertEquals(378f, OpcionesDeProforma.precioUnitario(item, nueva), 0.5f)
+        assertEquals(756f, item.costo, 0.5f)
+        assertEquals(item.costo, OpcionesDeProforma.precioPorLaCantidad(item, nueva), 0.5f)
+    }
 }
