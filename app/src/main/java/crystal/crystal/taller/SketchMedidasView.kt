@@ -1442,10 +1442,18 @@ class SketchMedidasView @JvmOverloads constructor(
                 }
                 val c = arco.cuerda
                 etiqueta.text = textoCurva(d, c)
-                // El tramo mide su desarrollo: es lo que se corta y lo que se ve en la alzada.
                 marcoDePieza(index)?.let { marco ->
-                    val tramo = etiquetasCurva(marco).indexOf(index)
-                    if (tramo >= 0) aplicarAnchoTramoEnPlanta(marco, tramo, d)
+                    if (curvaDeUnaPared(marco)) {
+                        // La pared mide la SUMA de sus trozos: corregir uno contra la pared alarga
+                        // o acorta la ventana, y las cotas de alto se recolocan donde acaba cada
+                        // trozo. Los demás trozos no se tocan: lo que se midió, se respeta.
+                        val suma = arcosDeLaCurva(marco).sumOf { it.desarrollo.toDouble() }.toFloat()
+                        if (suma > 0.5f) aplicarAnchoTramoEnPlanta(marco, 0, suma)
+                    } else {
+                        // El tramo mide su desarrollo: es lo que se corta y lo que se ve en la alzada.
+                        val tramo = etiquetasCurva(marco).indexOf(index)
+                        if (tramo >= 0) aplicarAnchoTramoEnPlanta(marco, tramo, d)
+                    }
                     sincronizarMarco(marco, reinterpolarAltos = false)
                 }
                 registrarAccion()
@@ -1666,6 +1674,46 @@ class SketchMedidasView @JvmOverloads constructor(
         }
     }
 
+    // ---- Los TROZOS de una ventana curva ----------------------------------------------------
+    // Una ventana curva es UNA pared curvada, y se apunta por trozos: de un canto a la primera
+    // altura que se mide dentro, de esa a la siguiente, y así. Los trozos NO son tramos —un tramo
+    // es otra pared, pegada al final— sino los pedazos en los que las cotas de alto parten el arco.
+    // Cada uno lleva su desarrollo y su cuerda, que es lo que permite apuntar una curva de obra que
+    // no es el arco de un círculo.
+
+    /** ¿Esta ventana es una sola pared curva, la que se parte por sus cotas de alto? */
+    private fun curvaDeUnaPared(marcoIndex: Int): Boolean =
+        esMarcoCurvo(marcoIndex) &&
+            quiebresDelMarco(marcoIndex).isEmpty() &&
+            bandasDeCurva(marcoIndex).isEmpty()
+
+    /** Los arcos de sus trozos, de izquierda a derecha, leídos de sus rótulos. */
+    private fun arcosDeLaCurva(marcoIndex: Int): List<ArcoEsquina> =
+        etiquetasCurva(marcoIndex).mapNotNull {
+            esquinaDesdeTexto((elementos[it] as Element.TextLabel).text).arco
+        }
+
+    /**
+     * Los cortes que parten el arco: el canto izquierdo, cada cota de alto de dentro y el derecho.
+     *
+     * En cualquier otra ventana son los bordes de sus tramos, que es lo que había.
+     */
+    private fun bordesDeTrozos(marcoIndex: Int): List<Float> {
+        if (!curvaDeUnaPared(marcoIndex)) return bordesDeTramos(marcoIndex)
+        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
+        val cotas = altosLibres(marcoIndex)
+            .map { (elementos[it] as Element.Shape).start.x }
+            .sorted()
+        return listOf(marco.bottomLeft.x) + cotas + listOf(marco.bottomRight.x)
+    }
+
+    /** El punto de arriba de cada uno de esos cortes, siguiendo la línea del cabezal. */
+    private fun puntosArribaDeTrozos(marcoIndex: Int): List<PointF> {
+        if (!curvaDeUnaPared(marcoIndex)) return puntosArriba(marcoIndex)
+        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
+        return bordesDeTrozos(marcoIndex).map { x -> PointF(x, interpolarTecho(marco, x)) }
+    }
+
     /** La curva de cada tramo, por su número. Vacío en una ventana que no es curva. */
     private fun curvasDeTramo(marcoIndex: Int): Map<Int, EsquinaVentana> {
         val out = HashMap<Int, EsquinaVentana>()
@@ -1744,7 +1792,9 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun plantaDeEsquina(marcoIndex: Int): PlantaDeEsquina {
         val vacia = PlantaDeEsquina(emptyList(), emptyMap())
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return vacia
-        val bordes = bordesDeTramos(marcoIndex)
+        // Los trozos de una curva son sus pedazos de arco, partidos por las cotas de alto; en las
+        // demás ventanas, los tramos de siempre.
+        val bordes = bordesDeTrozos(marcoIndex)
         if (bordes.size < 2) return vacia
         val esquinas = esquinasDeVentana(marcoIndex)
 
@@ -1841,7 +1891,9 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun dibujarPlantaEsquina(canvas: Canvas, marcoIndex: Int, collectHits: Boolean) {
         val planta = plantaDeEsquina(marcoIndex)
         if (planta.paredes.isEmpty()) return
-        val bordes = bordesDeTramos(marcoIndex)
+        // Los mismos cortes con los que se armó la planta: en una curva, los trozos en que la
+        // parten sus cotas de alto; en las demás, los bordes de sus tramos.
+        val bordes = bordesDeTrozos(marcoIndex)
         val angulos = angulosDeEsquina(marcoIndex)
 
         // Cada pared, y en las esquinas curvas el arco que las une, con su panza.
@@ -2137,16 +2189,6 @@ class SketchMedidasView @JvmOverloads constructor(
      * al tramo que se toca, no a la ventana entera.
      */
     private fun colocarContadoresAltos(marcoIndex: Int) {
-        // En una curva el contador es UNO y cuenta los puntos de dentro por donde se parte el arco:
-        // con dos trozos hay una altura medida dentro, con tres hay dos. No hay cotas sueltas que
-        // contar, así que un contador por trozo no diría nada.
-        if (esMarcoCurvo(marcoIndex)) {
-            val dentro = (quiebresDelMarco(marcoIndex).size).coerceAtLeast(0)
-            contadoresAltos(marcoIndex).forEach {
-                (elementos[it] as Element.TextLabel).text = textoAltos(dentro)
-            }
-            return
-        }
         val grupos = altosLibresPorTramo(marcoIndex)
         contadoresAltos(marcoIndex).forEachIndexed { tramo, i ->
             (elementos[i] as Element.TextLabel).text = textoAltos(grupos.getOrNull(tramo).orEmpty().size)
@@ -2183,11 +2225,14 @@ class SketchMedidasView @JvmOverloads constructor(
             }
         }
 
-        // Las curvas de los tramos, cada una bajo el suyo: son las que se tocan para escribir el
-        // desarrollo y la cuerda medidos en la pared.
+        // Las curvas, cada una bajo SU trozo: en una ventana curva los trozos son los pedazos en
+        // que la parten sus cotas de alto, y en las demás son los tramos. Son los rótulos que se
+        // tocan para escribir el desarrollo y la cuerda medidos en la pared.
         val curvas = etiquetasCurva(marcoIndex)
-        if (curvas.isNotEmpty() && bordes.size >= 2) {
-            val centros = (0 until bordes.size - 1).map { (bordes[it] + bordes[it + 1]) / 2f }
+        val bordesCurva = bordesDeTrozos(marcoIndex)
+        if (curvas.isNotEmpty() && bordesCurva.size >= 2) {
+            val centros = (0 until bordesCurva.size - 1)
+                .map { (bordesCurva[it] + bordesCurva[it + 1]) / 2f }
             // Un renglón de sobra: los rótulos de curva son largos y se parten en dos filas, y con
             // la separación de siempre los contadores se les montaban encima.
             y = colocarFilaRotulos(curvas, centros, y) + ce(46f)
@@ -2265,6 +2310,23 @@ class SketchMedidasView @JvmOverloads constructor(
         val aristas = quiebresDelMarco(marcoIndex).map { (elementos[it] as Element.Shape).end.x }
         altosDelMarco(marcoIndex, VENTANA_ALTO_ESQUINA).forEachIndexed { orden, i ->
             colocarAlto(i, aristas.getOrNull(orden) ?: marco.rect.centerX(), marco, reinterpolar)
+        }
+        // En una ventana curva las cotas de alto de dentro no se reparten a ojo: van donde ACABA
+        // cada trozo del arco, porque es ahí donde se midió esa altura. Con todos los trozos
+        // iguales caen a partes iguales, y en cuanto uno se corrige, la cota se mueve con él.
+        if (curvaDeUnaPared(marcoIndex)) {
+            val arcos = arcosDeLaCurva(marcoIndex)
+            val cotas = altosLibres(marcoIndex).sortedBy { (elementos[it] as Element.Shape).start.x }
+            val total = arcos.sumOf { it.desarrollo.toDouble() }.toFloat()
+            if (arcos.size == cotas.size + 1 && total > 0.5f) {
+                val ancho = marco.rect.width()
+                var acumulado = 0f
+                cotas.forEachIndexed { k, i ->
+                    acumulado += arcos[k].desarrollo
+                    colocarAlto(i, marco.rect.left + ancho * (acumulado / total), marco, reinterpolar)
+                }
+                return
+            }
         }
         // Cada tramo reparte LAS SUYAS: son paredes distintas, y una cota del tramo de al lado no
         // dice nada de esta.
@@ -3568,14 +3630,7 @@ class SketchMedidasView @JvmOverloads constructor(
      * Partir lo que ya se midió es otra cosa y se hace con el contador de alturas de dentro: en una
      * ventana curva, cada altura que se mide dentro es un punto por donde se parte el arco.
      */
-    private fun cambiarTramos(etiquetaIndex: Int, delta: Int) =
-        aplicarCambioDeTramos(etiquetaIndex, delta, repartir = false)
-
-    /**
-     * Pone o quita un tramo. Con [repartir], lo que mide la ventana se reparte entre los trozos que
-     * queden en vez de crecer; solo vale en una curva de un solo círculo.
-     */
-    private fun aplicarCambioDeTramos(etiquetaIndex: Int, delta: Int, repartir: Boolean) {
+    private fun cambiarTramos(etiquetaIndex: Int, delta: Int) {
         val marcoIndex = marcoDePieza(etiquetaIndex) ?: return
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
         val quiebres = quiebresDelMarco(marcoIndex)
@@ -3584,14 +3639,16 @@ class SketchMedidasView @JvmOverloads constructor(
         // en la de esquina —con una sola pared no hay esquina que doblar— y UNO en la curva: un
         // arco solo ya es una ventana, y partirlo es cosa de la obra, no una obligación.
         val curvo = esMarcoCurvo(marcoIndex)
-        // Lo que mide la curva entera y de qué círculo es, antes de tocar nada: hace falta para
-        // repartirla. Si el vidriero ya midió los trozos por separado, los radios no coinciden —eso
-        // ya no es un arco de círculo— y no hay nada que repartir sin borrarle lo medido.
-        val arcosAntes = curvasDeTramo(marcoIndex).values.mapNotNull { it.arco }
-        val desarrolloAntes = arcosAntes.sumOf { it.desarrollo.toDouble() }.toFloat()
-        val mismoCirculo = arcosAntes.isNotEmpty() &&
-            arcosAntes.all { abs(it.radio - arcosAntes[0].radio) <= arcosAntes[0].radio * 0.02f }
-        val radioDeLaCurva = if (repartir && mismoCirculo) arcosAntes[0].radio else null
+        // Una curva ya partida por sus cotas no puede estrenar otra pared sin enredarse: sus trozos
+        // dejarían de cuadrar con los tramos. Se avisa en vez de deshacerle lo medido.
+        if (delta > 0 && curvaDeUnaPared(marcoIndex) && altosLibres(marcoIndex).isNotEmpty()) {
+            Toast.makeText(
+                context,
+                "Esta curva está partida por sus cotas de alto. Quítalas antes de pegarle otra pared",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
         val minimo = if (curvo) 1 else 2
         val destino = (tramos + delta).coerceAtLeast(minimo)
         if (destino == tramos) {
@@ -3695,13 +3752,6 @@ class SketchMedidasView @JvmOverloads constructor(
         actualizarBoundsRectangulo(marco)
         var ahora = elementos.indexOfFirst { it === marco }
         if (ahora < 0) return
-        // Si el trozo va DENTRO, lo que medía la ventana se reparte entre los que quedan: sigue
-        // midiendo lo mismo, que su desarrollo es una medida de la pared.
-        if (radioDeLaCurva != null && desarrolloAntes > 0.5f) {
-            repartirLaCurva(ahora, desarrolloAntes, radioDeLaCurva)
-            ahora = elementos.indexOfFirst { it === marco }
-            if (ahora < 0) return
-        }
         etiquetaDelMarco(ahora, ROL_TRAMOS)?.let {
             (elementos[it] as Element.TextLabel).text = textoTramos(quiebresDelMarco(ahora).size + 1)
         }
@@ -3712,14 +3762,63 @@ class SketchMedidasView @JvmOverloads constructor(
     }
 
     /**
-     * Reparte una curva de [totalCm] de desarrollo entre los trozos que tenga, a partes iguales.
+     * Deja un arco por trozo: uno más si entró una cota de alto, uno menos si salió.
      *
-     * Todos siguen el mismo [radio], que es el de la curva de antes: partir la ventana no la
-     * cambia, solo dice por dónde se va a medir. Una de 180 con un punto al medio son dos trozos
-     * de 90, y la cuerda de cada uno sale del círculo —no es la mitad de la cuerda entera—. De ahí
-     * en adelante el vidriero corrige el trozo que no cuadre con la pared.
+     * La ventana no cambia de medida —su desarrollo es lo que se midió en la pared—, lo que cambia
+     * es por dónde se parte. Mientras todos los trozos sean del mismo círculo se reparte a partes
+     * iguales, que es lo que uno espera: 180 con una cota dentro son dos de 90, con dos cotas son
+     * tres de 60. En cuanto el vidriero corrige un trozo contra la pared, los radios dejan de
+     * coincidir —la ventana ya no es el arco de un círculo— y entonces no se reparte nada: la cota
+     * nueva parte en dos el último trozo, y lo medido se queda como está.
      */
-    private fun repartirLaCurva(marcoIndex: Int, totalCm: Float, radio: Float) {
+    private fun ajustarTrozosDeCurva(marcoIndex: Int) {
+        if (!curvaDeUnaPared(marcoIndex)) return
+        val quieren = altosLibres(marcoIndex).size + 1
+        val arcos = arcosDeLaCurva(marcoIndex)
+        if (arcos.isEmpty() || etiquetasCurva(marcoIndex).size == quieren) return
+        val total = arcos.sumOf { it.desarrollo.toDouble() }.toFloat()
+        if (total <= 0.5f) return
+        val mismoCirculo = arcos.all { abs(it.radio - arcos[0].radio) <= arcos[0].radio * 0.02f }
+
+        // Primero, tantos rótulos como trozos. El que nace copia al último, que después se reparte.
+        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
+        while (etiquetasCurva(marcoIndex).size < quieren) {
+            val ultimo = etiquetasCurva(marcoIndex).lastOrNull()
+                ?.let { elementos[it] as Element.TextLabel } ?: return
+            elementos.add(
+                Element.TextLabel(
+                    text = ultimo.text,
+                    x = marco.rect.right,
+                    y = marco.rect.bottom,
+                    textSize = ultimo.textSize,
+                    rol = ROL_CURVA
+                )
+            )
+        }
+        while (etiquetasCurva(marcoIndex).size > quieren) {
+            etiquetasCurva(marcoIndex).lastOrNull()?.let { elementos.removeAt(it) }
+        }
+
+        val etiquetas = etiquetasCurva(marcoIndex)
+        if (mismoCirculo) {
+            repartirLosTrozos(marcoIndex, total, arcos[0].radio)
+            return
+        }
+        // Sin círculo común: se respeta lo medido. Lo que había se queda, y el desarrollo que sobra
+        // o que falta lo pone el último trozo, partido o juntado sobre su propio radio.
+        val fijos = arcos.take((etiquetas.size - 1).coerceAtLeast(0))
+        val resto = (total - fijos.sumOf { it.desarrollo.toDouble() }.toFloat()).coerceAtLeast(0.5f)
+        val radio = arcos.last().radio
+        fijos.forEachIndexed { k, a ->
+            (elementos[etiquetas[k]] as Element.TextLabel).text = textoCurva(a.desarrollo, a.cuerda)
+        }
+        val ultimo = ArcoEsquina.deDesarrolloYRadio(resto, radio)
+        (elementos[etiquetas.last()] as Element.TextLabel).text =
+            textoCurva(resto, ultimo?.cuerda ?: resto)
+    }
+
+    /** Todos los trozos iguales sobre el mismo círculo: [totalCm] repartido entre los que haya. */
+    private fun repartirLosTrozos(marcoIndex: Int, totalCm: Float, radio: Float) {
         val etiquetas = etiquetasCurva(marcoIndex)
         if (etiquetas.isEmpty() || totalCm <= 0.5f) return
         val cacho = totalCm / etiquetas.size
@@ -3729,8 +3828,6 @@ class SketchMedidasView @JvmOverloads constructor(
             (elementos.getOrNull(i) as? Element.TextLabel)?.text =
                 textoCurva(cacho, arco?.cuerda ?: cacho)
         }
-        // Y el dibujo: cada trozo mide su desarrollo, que es lo que se ve en la alzada.
-        etiquetas.indices.forEach { tramo -> aplicarAnchoTramoEnPlanta(marcoIndex, tramo, cacho) }
     }
 
     /**
@@ -3739,22 +3836,16 @@ class SketchMedidasView @JvmOverloads constructor(
      */
     private fun cambiarAltos(etiquetaIndex: Int, delta: Int) {
         val marcoIndex = marcoDePieza(etiquetaIndex) ?: return
-        // En una VENTANA CURVA una cota de alto de dentro no es una cota suelta: es el punto por
-        // donde se parte el arco. Se apunta la curva entera y después se dice cuántas alturas se
-        // miden dentro; el arco se reparte en tantos trozos iguales, cada uno con su desarrollo y
-        // su cuerda sacados del mismo círculo. De ahí en adelante se corrige el trozo que no cuadre
-        // con la pared, y la ventana deja de ser el arco de un círculo: se deforma con lo escrito.
-        if (esMarcoCurvo(marcoIndex)) {
-            aplicarCambioDeTramos(etiquetaIndex, delta, repartir = true)
-            return
-        }
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
         val bordes = bordesDeTramos(marcoIndex)
         // Se toca el contador del tramo, así que la cota se añade o se quita EN ESE tramo.
         val tramo = contadoresAltos(marcoIndex).indexOf(etiquetaIndex).coerceAtLeast(0)
         if (tramo + 1 >= bordes.size) return
         val enElTramo = altosLibresPorTramo(marcoIndex).getOrNull(tramo).orEmpty()
-        if ((delta > 0 && enElTramo.size >= 5) || (delta < 0 && enElTramo.isEmpty())) {
+        // En una curva cada cota de alto parte el arco, así que caben las que haga falta: una pared
+        // curva de obra se apunta por los pedazos que se hayan podido medir.
+        val tope = if (curvaDeUnaPared(marcoIndex)) 11 else 5
+        if ((delta > 0 && enElTramo.size >= tope) || (delta < 0 && enElTramo.isEmpty())) {
             Toast.makeText(
                 context,
                 if (delta > 0) "No caben más cotas de alto en este tramo"
@@ -3769,7 +3860,12 @@ class SketchMedidasView @JvmOverloads constructor(
             elementos.removeAt(enElTramo.last())
         }
         rehacerAltos(marco)
-        val ahora = elementos.indexOfFirst { it === marco }
+        var ahora = elementos.indexOfFirst { it === marco }
+        if (ahora < 0) return
+        // Y en una curva, la cota que entra o sale parte o junta el arco: un trozo más, o uno
+        // menos, con su desarrollo y su cuerda.
+        ajustarTrozosDeCurva(ahora)
+        ahora = elementos.indexOfFirst { it === marco }
         if (ahora < 0) return
         selectedIndices.clear()
         sincronizarMarco(ahora, reinterpolarAltos = false)
@@ -4184,11 +4280,10 @@ class SketchMedidasView @JvmOverloads constructor(
 
     /** Añade o quita un tramo, como el contador "N° de tramos" de la pantalla. */
     @androidx.annotation.VisibleForTesting
-    fun cambiarTramosParaPruebas(delta: Int, dentro: Boolean = false) {
+    fun cambiarTramosParaPruebas(delta: Int) {
         val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
         val etiqueta = etiquetaDelMarco(marco, ROL_TRAMOS) ?: return
-        // Se responde la pregunta sin diálogo: en una curva, el trozo nuevo va dentro o pegado.
-        aplicarCambioDeTramos(etiqueta, delta, repartir = dentro)
+        cambiarTramos(etiqueta, delta)
     }
 
     /** Toca el contador de alturas de dentro, como el dedo en su − o su +. */
@@ -4840,8 +4935,10 @@ class SketchMedidasView @JvmOverloads constructor(
     fun esquinaPrincipalEnCm(): EsquinaMedida? {
         val marcoIndex = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return null
         val marco = elementos[marcoIndex] as Element.Shape
-        val bordes = bordesDeTramos(marcoIndex)
-        val arriba = puntosArriba(marcoIndex)
+        // Una ventana curva se parte por sus cotas de alto, no por tramos: cada trozo del arco es
+        // un lado con su desarrollo. En las demás esto es lo de siempre, los bordes de sus tramos.
+        val bordes = bordesDeTrozos(marcoIndex)
+        val arriba = puntosArribaDeTrozos(marcoIndex)
         // Dos bordes ya son un tramo: una ventana curva de un solo arco.
         if (bordes.size < 2 || arriba.size != bordes.size) return null
 
@@ -8473,6 +8570,24 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun arcosSiguenAlDibujo(marcoIndex: Int) {
         val etiquetas = etiquetasCurva(marcoIndex)
         if (etiquetas.isEmpty()) return
+        // En una curva partida por sus cotas, escribir el ancho de la VENTANA estira o encoge todos
+        // sus trozos a la vez, cada uno sobre su propio círculo: la ventana es la suma de ellos.
+        if (curvaDeUnaPared(marcoIndex)) {
+            val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
+            val arcos = arcosDeLaCurva(marcoIndex)
+            val suma = arcos.sumOf { it.desarrollo.toDouble() }.toFloat()
+            val ancho = pxToCm(marco.rect.width())
+            if (arcos.size != etiquetas.size || suma <= 0.5f || ancho <= 0.5f) return
+            if (abs(suma - ancho) < 0.05f) return
+            val factor = ancho / suma
+            etiquetas.forEachIndexed { k, i ->
+                val nuevoLargo = arcos[k].desarrollo * factor
+                val nuevo = ArcoEsquina.deDesarrolloYRadio(nuevoLargo, arcos[k].radio)
+                (elementos[i] as Element.TextLabel).text =
+                    textoCurva(nuevoLargo, nuevo?.cuerda ?: nuevoLargo)
+            }
+            return
+        }
         val bordes = bordesDeTramos(marcoIndex)
         etiquetas.forEachIndexed { tramo, i ->
             if (tramo + 1 >= bordes.size) return@forEachIndexed

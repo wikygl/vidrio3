@@ -763,49 +763,7 @@ class PlantaEsquinaTest {
         assertEquals("la curva cambió de curvatura", radio, arco.radio, radio * 0.05f)
     }
 
-    /**
-     * Un trozo más DENTRO de la ventana: se reparte lo que ya mide, no crece.
-     *
-     * Es la mitad de la pregunta que se hace al añadir un trozo a una curva. La de 180 con un punto
-     * de alto al medio son dos trozos de 90, y la cuerda de cada uno sale del círculo: 87.4, que no
-     * es la mitad de 160.
-     */
-    @Test
-    fun un_trozo_dentro_reparte_lo_que_ya_mide() {
-        val v = vista()
-        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
-            v.cambiarTramosParaPruebas(1, dentro = true)
-        }
-        val medida = v.esquinaPrincipalEnCm()!!
-        assertEquals("no partió en dos trozos", 2, medida.lados.size)
-        assertEquals("el primer trozo no mide la mitad", 90f, medida.lados[0].ancho, 0.5f)
-        assertEquals("el segundo trozo no mide la mitad", 90f, medida.lados[1].ancho, 0.5f)
-        assertEquals(
-            "la ventana creció al partirla",
-            180f, medida.lados.sumOf { it.ancho.toDouble() }.toFloat(), 1f
-        )
-        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(
-            medida.lados[0].ancho, medida.lados[0].flecha
-        )!!
-        assertEquals("la cuerda del trozo no es la del círculo", 87.4f, arco.cuerda, 1f)
-    }
 
-    /** Y la otra mitad: AÑADIDO, se pega al último y la ventana crece. */
-    @Test
-    fun un_trozo_anadido_pega_otra_pared() {
-        val v = vista()
-        v.insertarPlantillaVentanaCurva(tramosCm = listOf(180f), altoCm = 160f, flechaCm = 20f)
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            v.curvaDeTramoParaPruebas(0, desarrolloCm = 180f, cuerdaCm = 160f)
-            v.cambiarTramosParaPruebas(1, dentro = false)
-        }
-        val medida = v.esquinaPrincipalEnCm()!!
-        assertEquals("no añadió el trozo", 2, medida.lados.size)
-        assertEquals("le cambió la medida al trozo de siempre", 180f, medida.lados[0].ancho, 1f)
-        assertEquals("el trozo nuevo no mide como el anterior", 180f, medida.lados[1].ancho, 1f)
-    }
 
     /**
      * El flujo de la curva: la medida general, después cuántas alturas se miden dentro.
