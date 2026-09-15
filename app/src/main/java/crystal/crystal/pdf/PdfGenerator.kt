@@ -192,9 +192,16 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 // y va aquí como las demás: enseñándola solo arriba, esa opción parecía no tener.
                 val celdaFoto = Cell().setPadding(6f)
                 val deDondeSale = if (orden == 0) item.uri else opcion.imagen
-                deDondeSale.takeIf { it.isNotBlank() }
-                    ?.let { crearImagenPdf(primeraImagen(it), 150f, 110f) }
-                    ?.let { celdaFoto.add(it) }
+                if (deDondeSale.isNotBlank()) {
+                    val foto = crearImagenPdf(primeraImagen(deDondeSale), 150f, 110f)
+                    // Si la imagen no se puede leer se dice, en vez de dejar el hueco callado: así
+                    // se sabe que a esa opción le falta su foto y hay que volver a anexarla.
+                    if (foto != null) celdaFoto.add(foto)
+                    else celdaFoto.add(
+                        Paragraph("Imagen no disponible")
+                            .setFontSize(9f).setFontColor(ColorConstants.GRAY)
+                    )
+                }
                 tablaOpciones.addCell(celdaFoto)
                 val unidad = crystal.crystal.pos.OpcionesDeProforma.precioUnitario(item, opcion)
                 val todas = crystal.crystal.pos.OpcionesDeProforma.precioPorLaCantidad(item, opcion)
@@ -409,7 +416,16 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         }
     }
 
-    private fun crearImagenPdf(anexo: String, maxWidth: Float, maxHeight: Float): Image? {
+    /**
+     * Una imagen para el documento, o null si no se pudo leer. NUNCA revienta: ninguna imagen puede
+     * llevarse por delante una proforma —el vidriero necesita el papel aunque le falte una foto—.
+     */
+    private fun crearImagenPdf(anexo: String, maxWidth: Float, maxHeight: Float): Image? =
+        runCatching { armarImagenPdf(anexo, maxWidth, maxHeight) }
+            .onFailure { android.util.Log.e("PdfGenerator", "No se pudo poner la imagen: $anexo", it) }
+            .getOrNull()
+
+    private fun armarImagenPdf(anexo: String, maxWidth: Float, maxHeight: Float): Image? {
         val imageUri = Uri.parse(anexo)
         val bitmap = decodificarImagenReducida(imageUri) ?: return null
         val stream = ByteArrayOutputStream()
@@ -492,30 +508,38 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         }.getOrNull()
     }
 
+    /**
+     * Ojo: todo va dentro de un `runCatching`, como en los otros dos decodificadores.
+     *
+     * `openInputStream` REVIENTA cuando la imagen ya no se puede leer —una de la galería anexada en
+     * otra sesión, una foto borrada del teléfono—, y estando suelto se llevaba por delante la
+     * proforma entera: una sola imagen mala y no salía el PDF. Devolviendo null, esa imagen se
+     * salta y el documento se arma igual.
+     */
     private fun decodificarConBitmapFactory(
         imageUri: Uri,
         maxWidth: Int,
         maxHeight: Int
-    ): Bitmap? {
+    ): Bitmap? = runCatching {
         val bounds = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
 
         activity.contentResolver.openInputStream(imageUri)?.use { input ->
             BitmapFactory.decodeStream(input, null, bounds)
-        } ?: return null
+        } ?: return@runCatching null
 
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
 
         val opciones = BitmapFactory.Options().apply {
             inSampleSize = calcularInSampleSize(bounds.outWidth, bounds.outHeight, maxWidth, maxHeight)
             inPreferredConfig = Bitmap.Config.RGB_565
         }
 
-        return activity.contentResolver.openInputStream(imageUri)?.use { input ->
+        activity.contentResolver.openInputStream(imageUri)?.use { input ->
             BitmapFactory.decodeStream(input, null, opciones)
         }
-    }
+    }.getOrNull()
 
     private fun decodificarConGlide(
         imageUri: Uri,
