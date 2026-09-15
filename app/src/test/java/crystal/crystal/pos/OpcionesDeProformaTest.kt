@@ -62,6 +62,29 @@ class OpcionesDeProformaTest {
         assertTrue(OpcionesDeProforma.desdeTexto("cualquier cosa").isEmpty())
     }
 
+    /** La imagen de cada opción viaja con ella, y las de antes —sin imagen— se leen igual. */
+    @Test
+    fun la_imagen_va_con_su_opcion() {
+        val item = ventana()
+        OpcionesDeProforma.guardar(
+            item,
+            listOf(
+                OpcionDeProforma("Arenado laminado", 180f, "/fotos/arenado.jpg"),
+                OpcionDeProforma("Policarbonato", 95f)
+            )
+        )
+        val leidas = OpcionesDeProforma.de(item)
+        assertEquals("/fotos/arenado.jpg", leidas[0].imagen)
+        assertEquals("la que no tiene imagen se inventó una", "", leidas[1].imagen)
+
+        // Y una opción escrita antes de que hubiera imágenes se sigue leyendo.
+        assertEquals(
+            1,
+            OpcionesDeProforma.desdeTexto("Vidrio templado|150").size
+        )
+        assertEquals("", OpcionesDeProforma.desdeTexto("Vidrio templado|150")[0].imagen)
+    }
+
     /** Los separadores no pueden colarse en el nombre: al leerlo partiría por donde no es. */
     @Test
     fun el_nombre_no_parte_el_texto() {

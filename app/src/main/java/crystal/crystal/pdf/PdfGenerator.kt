@@ -124,7 +124,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
 
         val negrita = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
         document.add(
-            Paragraph("Proforma de opciones  $cliente").setFont(negrita).setFontSize(27f).setBold()
+            Paragraph("Proforma de $cliente").setFont(negrita).setFontSize(27f).setBold()
         )
         document.add(
             Paragraph(
@@ -184,7 +184,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             // demás, en el orden en que se escribieron.
             val opciones = listOf(crystal.crystal.pos.OpcionesDeProforma.comoEstaApuntado(item)) +
                 crystal.crystal.pos.OpcionesDeProforma.de(item)
-            val tablaOpciones = Table(UnitValue.createPercentArray(floatArrayOf(8f, 54f, 38f)))
+            val tablaOpciones = Table(UnitValue.createPercentArray(floatArrayOf(8f, 30f, 32f, 30f)))
             tablaOpciones.setWidth(UnitValue.createPercentValue(100f))
             opciones.forEachIndexed { orden, opcion ->
                 val letra = ('A' + orden).toString()
@@ -195,6 +195,15 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 tablaOpciones.addCell(
                     Cell().add(Paragraph(opcion.producto)).setPadding(6f)
                 )
+                // La imagen de la opción: un arenado laminado y un policarbonato no se parecen en
+                // nada, y el cliente elige mirando. La de la primera —la del propio ítem— ya está
+                // arriba, en grande, así que su celda va vacía.
+                val celdaFoto = Cell().setPadding(6f)
+                val foto = if (orden == 0) null
+                else opcion.imagen.takeIf { it.isNotBlank() }
+                    ?.let { crearImagenPdf(it, 150f, 110f) }
+                if (foto != null) celdaFoto.add(foto)
+                tablaOpciones.addCell(celdaFoto)
                 val unidad = crystal.crystal.pos.OpcionesDeProforma.precioUnitario(item, opcion)
                 val todas = crystal.crystal.pos.OpcionesDeProforma.precioPorLaCantidad(item, opcion)
                 val texto = if (item.canti > 1f) {
@@ -238,7 +247,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         document.setMargins(36f, 36f, 36f, 36f)
 
         val tituloFont = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
-        val titulo = Paragraph("Proforma $cliente")
+        val titulo = Paragraph("Proforma de $cliente")
             .setFont(tituloFont)
             .setFontSize(27f)
             .setBold()

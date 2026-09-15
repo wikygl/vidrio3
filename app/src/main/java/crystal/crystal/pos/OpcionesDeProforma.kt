@@ -13,7 +13,15 @@ import crystal.crystal.Listado
  * lineal o la unidad—, igual que el `precio` de siempre de [Listado]: así el importe de cada opción
  * sale con la misma cuenta y no hay dos maneras de calcular lo mismo.
  */
-data class OpcionDeProforma(val producto: String, val precio: Float)
+data class OpcionDeProforma(
+    val producto: String,
+    val precio: Float,
+    /**
+     * La imagen de ESTA opción: casi siempre las hay, porque un arenado laminado y un
+     * policarbonato no se parecen en nada y el cliente elige mirando. Vacío si no tiene.
+     */
+    val imagen: String = ""
+)
 
 /**
  * Las opciones de un ítem, guardadas en su propia línea del presupuesto.
@@ -38,8 +46,11 @@ object OpcionesDeProforma {
             if (partes.size < 2) return@mapNotNull null
             val producto = partes[0].trim()
             val precio = partes[1].trim().replace(",", ".").toFloatOrNull()
+            // La imagen llegó después: las opciones escritas antes traen solo dos campos y se leen
+            // igual, sin ella.
+            val imagen = partes.getOrNull(2)?.trim().orEmpty()
             if (producto.isEmpty() || precio == null || precio < 0f) null
-            else OpcionDeProforma(producto, precio)
+            else OpcionDeProforma(producto, precio, imagen)
         }
     }
 
@@ -47,11 +58,17 @@ object OpcionesDeProforma {
     fun aTexto(opciones: List<OpcionDeProforma>): String? {
         if (opciones.isEmpty()) return null
         return opciones.joinToString(ENTRE_OPCIONES) { opcion ->
-            // El nombre no puede llevar los separadores, o al leerlo se partiría por donde no es.
-            val limpio = opcion.producto.replace(ENTRE_OPCIONES, " ").replace(ENTRE_CAMPOS, " ").trim()
-            "$limpio$ENTRE_CAMPOS${opcion.precio}"
+            // Ni el nombre ni la ruta pueden llevar los separadores, o al leerlo se partiría por
+            // donde no es.
+            val limpio = sinSeparadores(opcion.producto)
+            val imagen = sinSeparadores(opcion.imagen)
+            if (imagen.isEmpty()) "$limpio$ENTRE_CAMPOS${opcion.precio}"
+            else "$limpio$ENTRE_CAMPOS${opcion.precio}$ENTRE_CAMPOS$imagen"
         }
     }
+
+    private fun sinSeparadores(texto: String) =
+        texto.replace(ENTRE_OPCIONES, " ").replace(ENTRE_CAMPOS, " ").replace("\n", " ").trim()
 
     /** Guarda las opciones en el ítem. */
     fun guardar(item: Listado, opciones: List<OpcionDeProforma>) {

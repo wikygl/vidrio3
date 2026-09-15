@@ -1959,8 +1959,7 @@ class MainActivity : AppCompatActivity() {
                     // Remota (Firebase): descargarla a un archivo local para que el PDF la pueda leer.
                     descargarImagenCatalogo(uri, selectedPosition)
                 } else {
-                    lista[selectedPosition].uri = uri
-                    usoImagenUri(if (uri.length > 20) "...${uri.takeLast(20)}" else uri)
+                    anexarUriElegida(uri)
                 }
             }
             return
@@ -2014,8 +2013,9 @@ class MainActivity : AppCompatActivity() {
                             val uriCompleto = imageUriString
                             val uriAcortado = if (uriCompleto.length > 20) "...${uriCompleto.takeLast(20)}" else uriCompleto
 
-                            // Guardar el URI completo en el objeto Listado
-                            lista[selectedPosition].uri = uriCompleto
+                            // Guardar el URI completo donde toque: en el item o en la opcion
+                            // que esta esperando su imagen.
+                            anexarUriElegida(uriCompleto)
 
                             // Mostrar la versión acortada en la interfaz
                             usoImagenUri(uriAcortado)
@@ -2462,8 +2462,38 @@ class MainActivity : AppCompatActivity() {
 
     /** Las opciones de cada ítem: el mismo producto en otros materiales, cada uno con su precio. */
     private val opcionesManager by lazy {
-        crystal.crystal.pos.OpcionesManager(this, lista).also {
-            it.onListaModificada = { actualizar() }
+        crystal.crystal.pos.OpcionesManager(this, lista).also { manager ->
+            manager.onListaModificada = { actualizar() }
+            // La opción pide su imagen y se elige con el anexador de siempre; al volver, la
+            // imagen sabe a qué opción pertenece.
+            manager.alPedirImagen = { posicion, cual ->
+                opcionEsperandoImagen = posicion to cual
+                selectedPosition = posicion
+                mostrarOpcionesAnexar(posicion)
+            }
+        }
+    }
+
+    /**
+     * Qué opción está esperando su imagen: el ítem y cuál de sus opciones.
+     *
+     * La imagen se elige en otra pantalla —galería, base local o catálogo— y vuelve por
+     * `onActivityResult`, que no sabe para quién es. Con esto sí: si hay una opción esperando, la
+     * imagen es suya; si no, es del ítem, como siempre.
+     */
+    private var opcionEsperandoImagen: Pair<Int, Int>? = null
+
+    /** Deja la imagen elegida donde toca: en la opción que la espera, o en el ítem. */
+    private fun anexarUriElegida(uri: String) {
+        val esperando = opcionEsperandoImagen
+        if (esperando != null) {
+            opcionEsperandoImagen = null
+            opcionesManager.ponerImagen(esperando.first, esperando.second, uri)
+            return
+        }
+        if (selectedPosition in lista.indices) {
+            lista[selectedPosition].uri = uri
+            usoImagenUri(if (uri.length > 20) "...${uri.takeLast(20)}" else uri)
         }
     }
 

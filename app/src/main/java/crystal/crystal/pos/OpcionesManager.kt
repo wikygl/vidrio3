@@ -21,6 +21,14 @@ class OpcionesManager(
 ) {
     var onListaModificada: (() -> Unit)? = null
 
+    /**
+     * Le pide a la pantalla que abra el anexador para la opción [cual] del ítem [posicion].
+     *
+     * La imagen se elige con lo de siempre —galería, base local o catálogo—, que vive en la
+     * pantalla principal; aquí solo se dice cuál es la opción que la está esperando.
+     */
+    var alPedirImagen: ((posicion: Int, cual: Int) -> Unit)? = null
+
     /** Abre las opciones de ese ítem: las que tiene, para tocarlas, y una más para añadir. */
     fun mostrar(posicion: Int) {
         val item = lista.getOrNull(posicion) ?: return
@@ -32,7 +40,8 @@ class OpcionesManager(
         val propia = OpcionesDeProforma.comoEstaApuntado(item)
         filas.add("• ${propia.producto}  ·  ${df2(OpcionesDeProforma.precioUnitario(item, propia))} c/u")
         opciones.forEach { o ->
-            filas.add("• ${o.producto}  ·  ${df2(OpcionesDeProforma.precioUnitario(item, o))} c/u")
+            val conFoto = if (o.imagen.isNotEmpty()) "  🖼" else ""
+            filas.add("• ${o.producto}  ·  ${df2(OpcionesDeProforma.precioUnitario(item, o))} c/u$conFoto")
         }
         filas.add("➕  Añadir otra opción")
         if (opciones.isNotEmpty()) filas.add("🗑  Quitar la última")
@@ -87,29 +96,56 @@ class OpcionesManager(
             addView(etPrecio)
         }
 
+        /** Lo escrito, guardado en su sitio. Devuelve en qué posición quedó la opción. */
+        fun guardarLoEscrito(): Int? {
+            val producto = etProducto.text?.toString()?.trim().orEmpty()
+            val precio = etPrecio.text?.toString()?.replace(",", ".")?.toFloatOrNull()
+            if (producto.isEmpty() || precio == null || precio <= 0f) {
+                Toast.makeText(
+                    activity,
+                    "La opción necesita su material y su precio",
+                    Toast.LENGTH_LONG
+                ).show()
+                return null
+            }
+            // La imagen que ya tuviera se respeta: aquí se escriben el material y el precio.
+            val nueva = OpcionDeProforma(producto, precio, actual?.imagen.orEmpty())
+            val donde = if (cual != null && cual in opciones.indices) {
+                opciones[cual] = nueva; cual
+            } else {
+                opciones.add(nueva); opciones.size - 1
+            }
+            OpcionesDeProforma.guardar(item, opciones)
+            onListaModificada?.invoke()
+            return donde
+        }
+
+        val tieneImagen = !actual?.imagen.isNullOrEmpty()
         AlertDialog.Builder(activity)
             .setTitle(if (actual == null) "Otra opción" else "Cambiar la opción")
             .setView(cont)
             .setPositiveButton("Aceptar") { _, _ ->
-                val producto = etProducto.text?.toString()?.trim().orEmpty()
-                val precio = etPrecio.text?.toString()?.replace(",", ".")?.toFloatOrNull()
-                if (producto.isEmpty() || precio == null || precio <= 0f) {
-                    Toast.makeText(
-                        activity,
-                        "La opción necesita su material y su precio",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    return@setPositiveButton
-                }
-                val nueva = OpcionDeProforma(producto, precio)
-                if (cual != null && cual in opciones.indices) opciones[cual] = nueva
-                else opciones.add(nueva)
-                OpcionesDeProforma.guardar(item, opciones)
-                onListaModificada?.invoke()
-                mostrar(posicion)
+                if (guardarLoEscrito() != null) mostrar(posicion)
+            }
+            // La imagen va aparte porque se elige en otra pantalla: primero se guarda lo escrito
+            // —si no, al volver ya no estaría— y después se abre el anexador.
+            .setNeutralButton(if (tieneImagen) "Cambiar imagen" else "Imagen…") { _, _ ->
+                val donde = guardarLoEscrito() ?: return@setNeutralButton
+                alPedirImagen?.invoke(posicion, donde)
             }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    /** Guarda la imagen elegida en esa opción. La llama la pantalla al volver del anexador. */
+    fun ponerImagen(posicion: Int, cual: Int, imagen: String) {
+        val item = lista.getOrNull(posicion) ?: return
+        val opciones = OpcionesDeProforma.de(item).toMutableList()
+        val opcion = opciones.getOrNull(cual) ?: return
+        opciones[cual] = opcion.copy(imagen = imagen.trim())
+        OpcionesDeProforma.guardar(item, opciones)
+        onListaModificada?.invoke()
+        Toast.makeText(activity, "Imagen puesta en ${opcion.producto}", Toast.LENGTH_SHORT).show()
     }
 
     private fun df2(valor: Float): String = "%.2f".format(valor)
