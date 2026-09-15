@@ -57,7 +57,9 @@ class PdfGenerator(private val activity: AppCompatActivity) {
 
         activity.lifecycleScope.launch {
             val pdfFile = withContext(Dispatchers.IO) {
-                runCatching { generar(cliente, listaSnapshot, precioTotal) }.getOrNull()
+                runCatching { generar(cliente, listaSnapshot, precioTotal) }
+                    .onFailure { android.util.Log.e("PdfGenerator", "No se pudo armar la proforma", it) }
+                    .getOrNull()
             }
 
             if (activity.isFinishing || activity.isDestroyed) return@launch
@@ -97,7 +99,9 @@ class PdfGenerator(private val activity: AppCompatActivity) {
 
         activity.lifecycleScope.launch {
             val pdfFile = withContext(Dispatchers.IO) {
-                runCatching { generarOpciones(cliente, listaSnapshot) }.getOrNull()
+                runCatching { generarOpciones(cliente, listaSnapshot) }
+                    .onFailure { android.util.Log.e("PdfGenerator", "No se pudo armar la proforma de opciones", it) }
+                    .getOrNull()
             }
             if (activity.isFinishing || activity.isDestroyed) return@launch
             if (pdfFile != null && pdfFile.exists() && pdfFile.length() > 0) {
@@ -116,7 +120,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
     }
 
     fun generarOpciones(cliente: String, lista: List<Listado>): File? {
-        val pdfFile = File(activity.getExternalFilesDir(null), "Proforma_de_opciones_${cliente}.pdf")
+        val pdfFile = File(activity.getExternalFilesDir(null), nombreDeArchivo("Proforma_de_opciones", cliente))
         val pdfDoc = PdfDocument(PdfWriter(pdfFile))
         pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE, PageNumeration())
         val document = Document(pdfDoc, PageSize.A4)
@@ -223,8 +227,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
     }
 
     fun generar(cliente: String, lista: List<Listado>, precioTotal: String): File? {
-        val pdfFileName = "Presupuesto_${cliente}.pdf"
-        val pdfFile = File(activity.getExternalFilesDir(null), pdfFileName)
+        val pdfFile = File(activity.getExternalFilesDir(null), nombreDeArchivo("Presupuesto", cliente))
 
         val writer = PdfWriter(pdfFile)
         val pdfDoc = PdfDocument(writer)
@@ -420,6 +423,21 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             setMaxWidth(maxWidth)
             setMaxHeight(maxHeight)
         }
+    }
+
+    /**
+     * El nombre del archivo, con el del cliente limpio de lo que no cabe en un nombre.
+     *
+     * Un cliente se llama "Clínica Bilbao S.A.C. / sede 2" y esa barra es un directorio que no
+     * existe: el archivo no se podía crear y la proforma fallaba entera sin decir por qué.
+     */
+    private fun nombreDeArchivo(que: String, cliente: String): String {
+        val limpio = cliente.trim()
+            .replace(Regex("""[\\/:*?"<>|\r\n\t]"""), " ")
+            .replace(Regex(" +"), " ")
+            .trim()
+            .take(60)
+        return if (limpio.isEmpty()) "$que.pdf" else "${que}_$limpio.pdf"
     }
 
     /**

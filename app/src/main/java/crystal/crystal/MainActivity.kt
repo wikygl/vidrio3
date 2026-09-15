@@ -2007,23 +2007,12 @@ class MainActivity : AppCompatActivity() {
                         val selectedImageUri: Uri? = data.data
 
                         if (selectedImageUri != null) {
-                            val imageUriString = selectedImageUri.toString()
-
-                            // Guardar el URI completo
-                            val uriCompleto = imageUriString
-                            val uriAcortado = if (uriCompleto.length > 20) "...${uriCompleto.takeLast(20)}" else uriCompleto
-
-                            // Guardar el URI completo donde toque: en el item o en la opcion
-                            // que esta esperando su imagen.
-                            anexarUriElegida(uriCompleto)
-
-                            // Mostrar la versión acortada en la interfaz
-                            usoImagenUri(uriAcortado)
-
-                            // Cargar la imagen utilizando Glide en ivScan
-                            Glide.with(this)
-                                .load(selectedImageUri)
-
+                            // La imagen se COPIA a la carpeta de la app y se guarda esa copia, no
+                            // el content:// de la galería. El permiso de la galería dura lo que
+                            // dura la elección: al volver a abrir Crystal, ese content:// ya no se
+                            // puede leer, la imagen no cargaba y el PDF se caía al intentarla. Con
+                            // la copia propia, la imagen es nuestra aunque la borren del teléfono.
+                            guardarAnexoPropio(selectedImageUri)
                         } else {
                             Toast.makeText(this, "Error: URI de imagen es nulo", Toast.LENGTH_SHORT).show()
                         }
@@ -2486,6 +2475,37 @@ class MainActivity : AppCompatActivity() {
      * imagen es suya; si no, es del ítem, como siempre.
      */
     private var opcionEsperandoImagen: Pair<Int, Int>? = null
+
+    /**
+     * Se queda con una COPIA de la imagen elegida y la anexa desde su propia carpeta.
+     *
+     * Un `content://` de la galería se puede leer mientras dura la elección y poco más: cerrada la
+     * app, el permiso ya no está, así que al reabrir el presupuesto la imagen no cargaba y el PDF
+     * se quedaba sin ella. Copiándola, el anexo es un archivo nuestro y dura lo que dure el
+     * presupuesto, aunque la foto se borre del teléfono. Es lo que ya se hacía con las del catálogo.
+     */
+    private fun guardarAnexoPropio(origen: Uri) {
+        Toast.makeText(this, "Guardando imagen…", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val local = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = File(filesDir, "anexos_catalogo").apply { mkdirs() }
+                    val destino = File(dir, "anexo_${System.currentTimeMillis()}.jpg")
+                    contentResolver.openInputStream(origen).use { entrada ->
+                        requireNotNull(entrada) { "no se pudo abrir la imagen" }
+                        destino.outputStream().use { salida -> entrada.copyTo(salida) }
+                    }
+                    Uri.fromFile(destino).toString()
+                }.onFailure { Log.e("MainActivity", "No se pudo copiar el anexo", it) }.getOrNull()
+            }
+            if (isFinishing || isDestroyed) return@launch
+            if (local == null) {
+                Toast.makeText(this@MainActivity, "No se pudo guardar la imagen", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            anexarUriElegida(local)
+        }
+    }
 
     /** Deja la imagen elegida donde toca: en la opción que la espera, o en el ítem. */
     private fun anexarUriElegida(uri: String) {
