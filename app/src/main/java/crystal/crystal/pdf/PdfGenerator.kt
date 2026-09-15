@@ -304,11 +304,18 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                     .setFont(negrita).setFontSize(19f).setBold()
                     .setFontColor(ColorConstants.DARK_GRAY)
                     .setMarginTop(6f)
+                    // El nombre de la sala no se queda solo al pie de una hoja: baja con su
+                    // primer ítem, que si no parece el final de la anterior.
+                    .setKeepWithNext(true)
             )
         }
         for (item in items) {
             itemNum++
-            document.add(
+            // TODO el ítem va en un solo bloque que el PDF no puede partir: su número, su medida y
+            // su tabla de opciones caen juntos en la misma hoja. Añadiéndolos sueltos, el corte de
+            // página caía en medio y el ítem salía recortado, con media tabla en la hoja siguiente.
+            val bloque = com.itextpdf.layout.element.Div().setKeepTogether(true)
+            bloque.add(
                 Paragraph("Ítem $itemNum").setFont(negrita).setFontSize(16f).setBold()
             )
 
@@ -321,7 +328,7 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 "uni" -> "Cantidad: ${df1(item.canti)}"
                 else -> ""
             }
-            document.add(Paragraph(textoMedidas).setFontSize(12f))
+            bloque.add(Paragraph(textoMedidas).setFontSize(12f))
 
             // Las opciones: la del propio ítem primero —es la que se apuntó al medir— y detrás las
             // demás, en el orden en que se escribieron.
@@ -367,14 +374,15 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 )
             }
             tablaOpciones.setKeepTogether(true)
-            document.add(tablaOpciones)
+            bloque.add(tablaOpciones)
 
             val separator = com.itextpdf.layout.element.LineSeparator(
                 com.itextpdf.kernel.pdf.canvas.draw.SolidLine()
             )
             separator.setStrokeColor(ColorConstants.GRAY)
             separator.setStrokeWidth(1f)
-            document.add(separator)
+            bloque.add(separator)
+            document.add(bloque)
             document.add(Paragraph("\n"))
         }
         }
@@ -424,6 +432,8 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                     .setFontSize(19f).setBold()
                     .setFontColor(ColorConstants.DARK_GRAY)
                     .setMarginTop(6f)
+                    // La sala no se queda sola al pie de una hoja: baja con su primer item.
+                    .setKeepWithNext(true)
             )
         }
         for (item in items) {
@@ -435,7 +445,10 @@ class PdfGenerator(private val activity: AppCompatActivity) {
                 .setFontSize(16f)
                 .setBold()
 
-            document.add(tituloItemParagraph)
+            // El ítem entero en un bloque que no se puede partir: su título, su medida, su costo y
+            // su imagen caen juntos en la misma hoja. Sueltos, el corte de página caía en medio.
+            val bloque = com.itextpdf.layout.element.Div().setKeepTogether(true)
+            bloque.add(tituloItemParagraph)
 
             val table = Table(UnitValue.createPercentArray(floatArrayOf(50f, 50f)))
             table.setWidth(UnitValue.createPercentValue(100f))
@@ -473,14 +486,15 @@ class PdfGenerator(private val activity: AppCompatActivity) {
             table.addCell(imageCell)
 
             table.setKeepTogether(true)
-            document.add(table)
+            bloque.add(table)
 
             val separator = com.itextpdf.layout.element.LineSeparator(
                 com.itextpdf.kernel.pdf.canvas.draw.SolidLine()
             )
             separator.setStrokeColor(ColorConstants.GRAY)
             separator.setStrokeWidth(1f)
-            document.add(separator)
+            bloque.add(separator)
+            document.add(bloque)
 
             document.add(Paragraph("\n"))
         }
