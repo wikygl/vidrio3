@@ -77,6 +77,142 @@ class PdfGenerator(private val activity: AppCompatActivity) {
         }
     }
 
+    /**
+     * La proforma de ELECCIÓN: cada medida una vez, con su imagen, y debajo sus opciones.
+     *
+     * Es la que pide un cliente que quiere el mismo producto en varios materiales —vidrio arenado
+     * laminado, policarbonato, serie 80— para escoger uno. Por eso NO lleva total: sumar las
+     * opciones sería cobrarlas todas. Cada una dice lo que cuesta una pieza y, si se pidió más de
+     * una, lo que costarían todas con ese material.
+     */
+    fun generarOpcionesYCompartir(cliente: String, lista: List<Listado>) {
+        if (!crystal.crystal.Suscripcion.exigir(activity, crystal.crystal.Suscripcion.puedeExportarPdf(),
+                "Exportar/compartir PDF es una función de pago.")) return
+        if (lista.isEmpty()) {
+            Toast.makeText(activity, "La lista vacia", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val listaSnapshot = lista.map { it.copy() }
+        Toast.makeText(activity, "Generando PDF...", Toast.LENGTH_SHORT).show()
+
+        activity.lifecycleScope.launch {
+            val pdfFile = withContext(Dispatchers.IO) {
+                runCatching { generarOpciones(cliente, listaSnapshot) }.getOrNull()
+            }
+            if (activity.isFinishing || activity.isDestroyed) return@launch
+            if (pdfFile != null && pdfFile.exists() && pdfFile.length() > 0) {
+                val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", pdfFile)
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    type = "application/pdf"
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                Toast.makeText(activity, "PDF generado", Toast.LENGTH_SHORT).show()
+                activity.startActivity(Intent.createChooser(shareIntent, "Compartir archivo"))
+            } else {
+                Toast.makeText(activity, "Error al generar el archivo PDF", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun generarOpciones(cliente: String, lista: List<Listado>): File? {
+        val pdfFile = File(activity.getExternalFilesDir(null), "Proforma_de_opciones_${cliente}.pdf")
+        val pdfDoc = PdfDocument(PdfWriter(pdfFile))
+        pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE, PageNumeration())
+        val document = Document(pdfDoc, PageSize.A4)
+        document.setMargins(36f, 36f, 36f, 36f)
+
+        val negrita = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
+        document.add(
+            Paragraph("Proforma de opciones  $cliente").setFont(negrita).setFontSize(27f).setBold()
+        )
+        document.add(
+            Paragraph(
+                "Cada ítem se ofrece en varios materiales. Los precios no se suman: " +
+                    "se elige una opción por ítem."
+            ).setFontSize(11f).setFontColor(ColorConstants.DARK_GRAY)
+        )
+        document.add(Paragraph("\n"))
+
+        if (lista.isEmpty()) {
+            document.close()
+            return null
+        }
+
+        var itemNum = 0
+        for (item in lista) {
+            itemNum++
+            document.add(
+                Paragraph("Ítem $itemNum").setFont(negrita).setFontSize(16f).setBold()
+            )
+
+            val table = Table(UnitValue.createPercentArray(floatArrayOf(50f, 50f)))
+            table.setWidth(UnitValue.createPercentValue(100f))
+
+            val textoMedidas = when (item.escala) {
+                "p2", "m2" -> "Ancho: ${df1(item.medi1)}\nAlto: ${df1(item.medi2)}\nCantidad: ${df1(item.canti)}"
+                "ml" -> "Metros: ${df1(item.medi1)}\nCantidad: ${df1(item.canti)}"
+                "m3" -> "Ancho: ${df1(item.medi1)}\nAlto: ${df1(item.medi2)}\nFondo: ${df1(item.medi3)}\nCantidad: ${df1(item.canti)}"
+                "uni" -> "Cantidad: ${df1(item.canti)}"
+                else -> ""
+            }
+            val cellTexto = Cell()
+            cellTexto.add(Paragraph(textoMedidas))
+            cellTexto.setBorder(com.itextpdf.layout.borders.Border.NO_BORDER)
+            cellTexto.setPadding(9f)
+            table.addCell(cellTexto)
+
+            val imageCell = crearCeldaImagenes(item.uri)
+            imageCell.setBorder(com.itextpdf.layout.borders.Border.NO_BORDER)
+            imageCell.setPadding(9f)
+            table.addCell(imageCell)
+            table.setKeepTogether(true)
+            document.add(table)
+
+            // Las opciones: la del propio ítem primero —es la que se apuntó al medir— y detrás las
+            // demás, en el orden en que se escribieron.
+            val opciones = listOf(crystal.crystal.pos.OpcionesDeProforma.comoEstaApuntado(item)) +
+                crystal.crystal.pos.OpcionesDeProforma.de(item)
+            val tablaOpciones = Table(UnitValue.createPercentArray(floatArrayOf(8f, 54f, 38f)))
+            tablaOpciones.setWidth(UnitValue.createPercentValue(100f))
+            opciones.forEachIndexed { orden, opcion ->
+                val letra = ('A' + orden).toString()
+                tablaOpciones.addCell(
+                    Cell().add(Paragraph(letra).setFont(negrita).setBold())
+                        .setPadding(6f)
+                )
+                tablaOpciones.addCell(
+                    Cell().add(Paragraph(opcion.producto)).setPadding(6f)
+                )
+                val unidad = crystal.crystal.pos.OpcionesDeProforma.precioUnitario(item, opcion)
+                val todas = crystal.crystal.pos.OpcionesDeProforma.precioPorLaCantidad(item, opcion)
+                val texto = if (item.canti > 1f) {
+                    "S/ ${df2(unidad)} c/u\nS/ ${df2(todas)} por ${df1(item.canti)}"
+                } else {
+                    "S/ ${df2(unidad)}"
+                }
+                tablaOpciones.addCell(
+                    Cell().add(Paragraph(texto).setFont(negrita).setBold())
+                        .setTextAlignment(TextAlignment.RIGHT).setPadding(6f)
+                )
+            }
+            tablaOpciones.setKeepTogether(true)
+            document.add(tablaOpciones)
+
+            val separator = com.itextpdf.layout.element.LineSeparator(
+                com.itextpdf.kernel.pdf.canvas.draw.SolidLine()
+            )
+            separator.setStrokeColor(ColorConstants.GRAY)
+            separator.setStrokeWidth(1f)
+            document.add(separator)
+            document.add(Paragraph("\n"))
+        }
+
+        // Y aquí NO va el total: es una proforma de elección.
+        document.close()
+        return pdfFile
+    }
+
     fun generar(cliente: String, lista: List<Listado>, precioTotal: String): File? {
         val pdfFileName = "Presupuesto_${cliente}.pdf"
         val pdfFile = File(activity.getExternalFilesDir(null), pdfFileName)

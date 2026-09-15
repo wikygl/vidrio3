@@ -1606,6 +1606,13 @@ class MainActivity : AppCompatActivity() {
                     dialogoPer.dismiss()
                 }
 
+                // Las opciones de ESTE ítem: el mismo producto medido, ofrecido en otros
+                // materiales y a otro precio. De ahí sale la proforma de elección.
+                modelo.findViewById<Button>(R.id.btnOpciones)?.setOnClickListener {
+                    dialogoPer.dismiss()
+                    opcionesManager.mostrar(position)
+                }
+
                 eliminar.setOnClickListener {
                     lista.removeAt(position)
                     actualizar()
@@ -2436,8 +2443,35 @@ class MainActivity : AppCompatActivity() {
     // ─── GENERACIÓN DE PDF (delegado a PdfGenerator) ───
     private val pdfGenerator by lazy { crystal.crystal.pdf.PdfGenerator(this) }
 
+    /** Las opciones de cada ítem: el mismo producto en otros materiales, cada uno con su precio. */
+    private val opcionesManager by lazy {
+        crystal.crystal.pos.OpcionesManager(this, lista).also {
+            it.onListaModificada = { actualizar() }
+        }
+    }
+
     private fun openPdf() {
         val cliente = binding.clienteEditxt.text.toString()
+        // Si algún ítem tiene opciones caben dos proformas distintas, y no se puede adivinar cuál
+        // se quiere: la de siempre, que suma, o la de elección, que enseña cada medida con sus
+        // materiales y NO suma, porque el cliente escoge uno.
+        if (crystal.crystal.pos.OpcionesDeProforma.hayEnLaLista(lista)) {
+            AlertDialog.Builder(this)
+                .setTitle("¿Qué proforma?")
+                .setMessage(
+                    "Hay ítems con opciones. La proforma de opciones enseña cada medida con sus " +
+                        "materiales y sus precios, sin sumar; la normal suma los ítems como siempre."
+                )
+                .setPositiveButton("De opciones") { _, _ ->
+                    pdfGenerator.generarOpcionesYCompartir(cliente, lista)
+                }
+                .setNegativeButton("Normal") { _, _ ->
+                    pdfGenerator.generarYCompartir(cliente, lista, binding.precioTotal.text.toString())
+                }
+                .setNeutralButton("Cancelar", null)
+                .show()
+            return
+        }
         pdfGenerator.generarYCompartir(cliente, lista, binding.precioTotal.text.toString())
     }
     // FUNCIONES PARA ENVIAR Y ABRIR PERUSPUESTOS

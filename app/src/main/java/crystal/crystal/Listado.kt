@@ -24,7 +24,16 @@ data class Listado(
      * Es el vínculo que permite descontar stock al vender; queda null en presupuestos de taller,
      * que no mueven inventario.
      */
-    var productoId: String? = null
+    var productoId: String? = null,
+    /**
+     * Las OPCIONES de este ítem: el mismo producto medido, ofrecido con otro material y a otro
+     * precio —arenado laminado, policarbonato, serie 80—. Van como texto
+     * (`producto|precio;producto|precio`); las lee y las escribe [crystal.crystal.pos.OpcionesDeProforma].
+     *
+     * En null, el ítem es lo que era: una línea con un producto y un precio. Con opciones, además,
+     * puede salir en una proforma de elección, que no suma porque el cliente escoge una.
+     */
+    var opciones: String? = null
 ) : Serializable {
 
     companion object {
@@ -37,7 +46,8 @@ data class Listado(
          * Cuando no se declara, Java lo calcula a partir de los campos y métodos de la clase, así
          * que **agregar un campo lo cambia** y rompe todo lo ya guardado. Este es el valor que
          * tenía la clase antes de sumarle [productoId]; al fijarlo, los archivos viejos se siguen
-         * leyendo y el campo nuevo simplemente queda en null.
+         * leyendo y el campo nuevo simplemente queda en null. Con [opciones] se hizo lo mismo: se
+         * añadió con valor por defecto y este número NO se tocó.
          *
          * Si en el futuro se agregan más campos, hay que dejar este número tal cual y darles
          * siempre un valor por defecto.
