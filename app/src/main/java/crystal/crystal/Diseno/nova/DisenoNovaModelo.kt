@@ -90,7 +90,7 @@ data class NovaTramo(
      * La silueta de la PARED que arranca en este tramo, cuando no es un rectángulo: la que se midió
      * en obra, en cm y relativa a la esquina de arriba a la izquierda de esa pared. Va en el primer
      * tramo del lado y abarca el lado entero, aunque después se parta con un parante. Vacía = la
-     * pared es el rectángulo de sus medidas. Viaja como tag `W<x/y|x/y|…>` dentro del tramo.
+     * pared es el rectángulo de sus medidas. Viaja como tag `L<x/y|x/y|…>` (la silueta del Lado) dentro del tramo.
      */
     val contorno: List<Pair<Float, Float>> = emptyList()
 ) {
@@ -804,7 +804,7 @@ data class DisenoNova(
         // Y la silueta de su pared, si no es un rectángulo. Con `|` y `/` como el `V<>`: ni `;`
         // ni `,`, que son los separadores de los otros parsers.
         val cabezaContorno = if (tramo.contorno.size >= 3) {
-            "W<" + tramo.contorno.joinToString("|") { (x, y) -> "${df(x)}/${df(y)}" } + ">;"
+            "L<" + tramo.contorno.joinToString("|") { (x, y) -> "${df(x)}/${df(y)}" } + ">;"
         } else ""
         return "Tl<${df(tramo.ancho)}>($cabezaAlto$cabezaCaida$cabezaCurva$cabezaContorno$franjas)"
     }
@@ -839,8 +839,8 @@ data class DisenoNova(
         private val RE_ARRANQUE = Regex("""^(?:t[a-z]?<|[auo]<)""", RegexOption.IGNORE_CASE)
         /** La panza de un tramo curvo: `Q<29.3>`, esté como tag de cabecera o pegada al sistema. */
         private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*([\d.,]+)\s*>""")
-        /** La silueta de la pared que arranca en un tramo: `W<x/y|x/y|…>`. */
-        private val RE_CONTORNO_TRAMO = Regex("""^[wW]\s*<[^>]*>""")
+        /** La silueta de la pared que arranca en un tramo: `L<x/y|x/y|…>` (la silueta del Lado). */
+        private val RE_CONTORNO_TRAMO = Regex("""^[lL]\s*<[^>]*>""")
 
 
         /**
@@ -973,7 +973,7 @@ data class DisenoNova(
                 // y el modelo la guarda como tag de cabecera; vale de las dos maneras.
                 val flecha = RE_CURVA_TRAMO.find(interior)
                     ?.groupValues?.get(1)?.let { num(it) } ?: 0f
-                // `W<…>`: la silueta de la pared que arranca aquí, si no es un rectángulo.
+                // `L<…>`: la silueta de la pared que arranca aquí, si no es un rectángulo.
                 val contorno = tokens.firstNotNullOfOrNull { tk ->
                     RE_CONTORNO_TRAMO.find(tk.trim())?.let { ContornoEnTramos.desdeEtiqueta(it.value) }
                         ?.takeIf { it.size >= 3 }

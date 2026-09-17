@@ -2335,7 +2335,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             // Si el diseño no trae la silueta guardada, se saca de sus tramos: los escalones y las
             // inclinaciones hechos a mano también son la forma del vano, y tampoco se tiran.
             d?.contornoVano?.ifEmpty {
-                // Un lado de esquina abierto solo trae su silueta en su tramo (`W<…>`): al
+                // Un lado de esquina abierto solo trae su silueta en su tramo (`L<…>`): al
                 // limpiarlo, esa es la forma del vano.
                 d.tramos.firstOrNull()?.contorno?.takeIf { it.size >= 3 && d.tramos.size == 1 }
                     ?: if (d.esIrregular) d.contornoDesdeTramos() else emptyList()

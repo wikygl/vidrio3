@@ -50,7 +50,7 @@ data class SegmentoNs(
     val flechaCm: Float = 0f,
     /**
      * La silueta de la pared que arranca en este tramo, en cm relativos a su esquina de arriba a
-     * la izquierda; vacía = la pared es el rectángulo de sus medidas. Es el `W<…>` del tramo.
+     * la izquierda; vacía = la pared es el rectángulo de sus medidas. Es el `L<…>` del tramo.
      */
     val contornoCm: List<Pair<Float, Float>> = emptyList()
 ) {
@@ -804,7 +804,7 @@ class VistaDiseno @JvmOverloads constructor(
         // o escalonado necesita el camino de segmentos, que es el que sabe dibujarlo.
         if (bloques.size == 1) {
             val b = bloques[0]
-            // Un lado suelto que trae su silueta (`W<…>`, el editor abre la esquina lado a lado):
+            // Un lado suelto que trae su silueta (`L<…>`, el editor abre la esquina lado a lado):
             // con un solo tramo, esa silueta es la del vano entero.
             if (contornoVanoCm.isEmpty()) {
                 RE_CONTORNO_TRAMO.find(b.contenido)?.let { m ->
@@ -871,7 +871,7 @@ class VistaDiseno @JvmOverloads constructor(
             // `H<106.2>` dentro del tramo: su alto propio, el de la ventana escalonada.
             val altoTramo = RE_ALTO_TRAMO.find(contenido)?.groupValues?.get(1)
             val caidaTramo = RE_CAIDA_TRAMO.find(contenido)?.groupValues?.get(1)
-            // `W<…>`: la silueta de la pared que arranca en este tramo, si no es un rectángulo.
+            // `L<…>`: la silueta de la pared que arranca en este tramo, si no es un rectángulo.
             val silueta = RE_CONTORNO_TRAMO.find(contenido)
                 ?.let { ContornoEnTramos.desdeEtiqueta(it.value) }.orEmpty()
             segs.add(
@@ -4195,8 +4195,8 @@ class VistaDiseno @JvmOverloads constructor(
          * de una esquina es un paño más entre paños rectos.
          */
         private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*([\d.,]+)\s*>""")
-        /** La silueta de la pared de un tramo: `W<x/y|x/y|…>`. */
-        private val RE_CONTORNO_TRAMO = Regex("""[wW]\s*<[^>]*>""")
+        /** La silueta de la pared de un tramo: `L<x/y|x/y|…>` (la silueta del Lado). */
+        private val RE_CONTORNO_TRAMO = Regex("""[lL]\s*<[^>]*>""")
         /** El contorno del vano: `V<x/y|x/y|…>`, en centímetros. */
         private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
     }

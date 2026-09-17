@@ -15,13 +15,13 @@ import java.util.concurrent.TimeUnit
 
 /**
  * La ventana de esquina cuya pared de frente no es un rectángulo: el dintel baja en diagonal
- * desde 60 hasta 40 con un pico a 145. La silueta viaja en el tramo de esa pared (`W<…>`), el
+ * desde 60 hasta 40 con un pico a 145. La silueta viaja en el tramo de esa pared (`L<…>`), el
  * editor la abre por lados y en cada lado se ve, y al volver a armar la ventana no se pierde.
  */
 @RunWith(AndroidJUnit4::class)
 class EsquinaConSiluetaTest {
 
-    private val silueta = "W<0/60|145/0|280/40|280/220|0/220>"
+    private val silueta = "L<0/60|145/0|280/40|280/220|0/220>"
     private val enL = "{nova,apa,[280,220:Tl<280>($silueta;s(f;P;cc)) A<90> Tl<64.5>(s(f))]}"
 
     private fun esperar(ms: Long = 500) {
@@ -78,7 +78,7 @@ class EsquinaConSiluetaTest {
             val d = DisenoNova.desdePaquete(entera!!)!!
             assertEquals(2, d.tramos.size)
             assertEquals("la silueta se perdió al armar: $entera", 5, d.tramos[0].contorno.size)
-            assertTrue(entera.contains("W<0/60|145/0|280/40|280/220|0/220>"))
+            assertTrue(entera.contains("L<0/60|145/0|280/40|280/220|0/220>"))
         }
     }
 }

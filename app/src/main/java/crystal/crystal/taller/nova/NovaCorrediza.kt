@@ -3860,7 +3860,7 @@ class NovaCorrediza : AppCompatActivity() {
      */
     /**
      * Le pone al paquete de la esquina lo que el apunte midió de cada pared: la silueta de las que
-     * no son rectángulo (`W<…>` en su tramo) y los parantes marcados (`;P;` entre hojas). Solo
+     * no son rectángulo (`L<…>` en su tramo) y los parantes marcados (`;P;` entre hojas). Solo
      * cuando la medida trajo algo: el paquete de siempre no se toca.
      */
     private fun conLoQueTrajoLaMedida(paquete: String): String {

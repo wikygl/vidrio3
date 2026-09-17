@@ -112,13 +112,13 @@ class DisenoNovaModeloTest {
     }
 
     /**
-     * La pared de una esquina que no es un rectángulo viaja con su silueta en su tramo (`W<…>`),
+     * La pared de una esquina que no es un rectángulo viaja con su silueta en su tramo (`L<…>`),
      * relativa a esa pared, y sobrevive a la ida y vuelta, al reparto de anchos y a partir la
      * pared con un parante (se queda en el primer trozo).
      */
     @Test
     fun la_silueta_de_una_pared_viaja_en_su_tramo() {
-        val l = "{nova,apa,[280,220: Tl<280>(W<0/60|145/0|280/40|280/220|0/220>;s(f c c)) A<90> Tl<64.5>(s(f))]}"
+        val l = "{nova,apa,[280,220: Tl<280>(L<0/60|145/0|280/40|280/220|0/220>;s(f c c)) A<90> Tl<64.5>(s(f))]}"
         val d = DisenoNova.desdePaquete(l)
         assertNotNull(d)
         assertEquals(2, d!!.tramos.size)
@@ -128,7 +128,7 @@ class DisenoNovaModeloTest {
         assertTrue(d.doblaEnEsquina)
 
         val ida = d.aPaquete()
-        assertTrue("el tag no se escribe: $ida", ida.contains("W<0/60|145/0|280/40|280/220|0/220>"))
+        assertTrue("el tag no se escribe: $ida", ida.contains("L<0/60|145/0|280/40|280/220|0/220>"))
         assertEquals(d, DisenoNova.desdePaquete(ida))
 
         val repartido = d.conAnchosRepartidos()

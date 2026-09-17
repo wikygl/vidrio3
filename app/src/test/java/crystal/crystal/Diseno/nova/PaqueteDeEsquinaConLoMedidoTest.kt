@@ -26,7 +26,7 @@ class PaqueteDeEsquinaConLoMedidoTest {
         val silueta = listOf(0f to 60f, 145f to 0f, 280f to 40f, 280f to 220f, 0f to 220f)
         val con = d.conSiluetasYParantesPorLado(listOf(silueta, null), listOf(listOf(100f), emptyList()))
         val ida = con.aPaquete()
-        assertTrue("no lleva la silueta: $ida", ida.contains("W<0/60|145/0|280/40|280/220|0/220>"))
+        assertTrue("no lleva la silueta: $ida", ida.contains("L<0/60|145/0|280/40|280/220|0/220>"))
         assertTrue("no lleva el parante: $ida", ida.contains(";P;"))
         assertEquals("A<90>", DisenoNova.desdePaquete(ida)!!.tramos[1].pliegue)
     }
