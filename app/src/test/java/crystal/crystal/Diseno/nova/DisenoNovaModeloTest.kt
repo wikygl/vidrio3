@@ -161,4 +161,28 @@ class DisenoNovaModeloTest {
         // Sin nada que poner, el diseño no se toca.
         assertEquals(d, d.conSiluetasYParantesPorLado(listOf(null, null), listOf(emptyList(), emptyList())))
     }
+
+    /**
+     * Cada pared con su alto: la de al lado, más baja, cuelga más abajo del dintel y mide lo suyo;
+     * la ventana mide lo que la pared más alta. El 3D sube cada una hasta su alto.
+     */
+    @Test
+    fun cada_lado_con_su_alto() {
+        val l = "{nova,apa,[280,221.9: Tl<280>(s(f c c)) A<90> Tl<64.5>(s(f))]}"
+        val d = DisenoNova.desdePaquete(l)!!
+        val con = d.conAltosDeLado(listOf(221.9f, 162f))
+        assertEquals(221.9f, con.alto, 0.01f)
+        assertEquals("el primer lado no cambia", 0f, con.tramos[0].alto, 0.01f)
+        assertEquals(162f, con.tramos[1].alto, 0.01f)
+        assertEquals("cuelga lo que le falta", 59.9f, con.tramos[1].caida, 0.01f)
+        val planta = PlantaDelDiseno.de(con)
+        assertEquals(listOf(221.9f, 162f), planta.paredes.map { it.altoCm })
+        // Si la segunda es la alta, la ventana crece hasta ella y la primera es la que cuelga.
+        val alReves = d.conAltosDeLado(listOf(221.9f, 250f))
+        assertEquals(250f, alReves.alto, 0.01f)
+        assertEquals(221.9f, alReves.tramos[0].alto, 0.01f)
+        assertEquals(0f, alReves.tramos[1].alto, 0.01f)
+        // Iguales: no se toca nada.
+        assertEquals(d, d.conAltosDeLado(listOf(221.9f, 221.9f)))
+    }
 }

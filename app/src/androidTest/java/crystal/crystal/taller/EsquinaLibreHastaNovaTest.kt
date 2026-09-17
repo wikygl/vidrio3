@@ -90,6 +90,9 @@ class EsquinaLibreHastaNovaTest {
             assertNotNull("el paquete no se lee: $paquete", d)
             assertTrue("no es una esquina: $paquete", d!!.doblaEnEsquina)
             assertEquals("la pared de frente llegó sin silueta: $paquete", 5, d.tramos[0].contorno.size)
+            // Y cada pared con su alto: la de al lado es más baja y cuelga del dintel.
+            assertTrue("la pared de al lado no lleva su alto: $paquete", d.tramos[1].alto > 0f && d.tramos[1].alto < d.alto - 1f)
+            assertEquals(d.alto - d.tramos[1].alto, d.tramos[1].caida, 0.1f)
         }
     }
 }

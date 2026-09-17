@@ -238,7 +238,28 @@ class VistaVolumenNova @JvmOverloads constructor(
         val izq = enLaCara(0f, 0f)
         val der = enLaCara(1f, 0f)
         val daLaCara = der.x >= izq.x
-        canvas.drawPath(cuadro(0f, 0f, 1f, 1f), if (daLaCara) pVidrio else pVidrioFondo)
+
+        // La pared con su silueta medida —el dintel en diagonal, el corte— en vez del rectángulo:
+        // su contorno viene en cm desde su esquina de arriba a la izquierda, y aquí se pasa a la
+        // cara (u de izquierda a derecha, v de abajo arriba). Solo cuando la pared es una sola
+        // cara: partida en tramos, la silueta abarca más que esta cara y se deja el rectángulo.
+        val silueta = tramo?.contorno?.takeIf { it.size >= 3 && !cara.esCurva && cara.desdeU < 0.001f && cara.hastaU > 0.999f }
+        val contornoDeLaCara = silueta?.let { puntos ->
+            val anchoSilueta = puntos.maxOf { it.first }.coerceAtLeast(0.01f)
+            val altoSilueta = puntos.maxOf { it.second }.coerceAtLeast(0.01f)
+            Path().apply {
+                puntos.forEachIndexed { i, (xCm, yCm) ->
+                    val p = enLaCara(xCm / anchoSilueta, 1f - yCm / altoSilueta)
+                    if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y)
+                }
+                close()
+            }
+        }
+        val formaDeLaPared = contornoDeLaCara ?: cuadro(0f, 0f, 1f, 1f)
+        canvas.drawPath(formaDeLaPared, if (daLaCara) pVidrio else pVidrioFondo)
+        // Lo de dentro —franjas y cortes— se queda dentro de la silueta.
+        canvas.save()
+        if (contornoDeLaCara != null) canvas.clipPath(contornoDeLaCara)
 
         // Las franjas, de abajo arriba, y dentro de cada una sus módulos.
         val franjas = tramo?.franjas.orEmpty()
@@ -278,12 +299,13 @@ class VistaVolumenNova @JvmOverloads constructor(
             }
             v0 = v1
         }
+        canvas.restore()
 
         // El contorno, encima de todo. En una pared curva NO se cierra cada trozo: el facetado es
         // cosa del dibujo, no de la ventana, y trazándolo entero la curva salía como una empalizada
         // de diez paños. Solo sus rieles, y los cantos donde la pared de verdad empieza y acaba.
         if (!cara.esCurva) {
-            canvas.drawPath(cuadro(0f, 0f, 1f, 1f), pMarco)
+            canvas.drawPath(formaDeLaPared, pMarco)
         } else {
             val abajoI = enLaCara(0f, 0f)
             val abajoD = enLaCara(1f, 0f)

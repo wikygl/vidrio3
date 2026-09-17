@@ -326,6 +326,31 @@ data class DisenoNova(
     }
 
     /**
+     * Pone a cada lado el alto con el que se midió su pared, cuando no es el de la ventana.
+     *
+     * La ventana en L de obra tiene el alféizar corrido y cada pared su alto: la de al lado puede
+     * ser más baja. En el modelo eso es un tramo que cuelga más abajo del dintel ([NovaTramo.caida])
+     * y mide lo suyo ([NovaTramo.alto]); el 3D sube cada pared hasta su alto. [altos] va en el orden
+     * de los lados; 0 o igual al de la ventana deja el lado como está. Las franjas no se tocan: la
+     * calculadora ya las repartió para ese alto.
+     */
+    fun conAltosDeLado(altos: List<Float>): DisenoNova {
+        val validos = altos.filter { it > 0f }
+        if (validos.isEmpty()) return this
+        // La ventana mide lo que la pared más alta; las demás cuelgan más abajo del dintel.
+        val altoVentana = maxOf(alto, validos.max())
+        val nuevos = tramos.toMutableList()
+        var lado = -1
+        tramos.forEachIndexed { i, tramo ->
+            if (abreLado(i)) lado++
+            val altoLado = altos.getOrNull(lado) ?: return@forEachIndexed
+            if (altoLado <= 0f || kotlin.math.abs(altoLado - altoVentana) < 0.05f) return@forEachIndexed
+            nuevos[i] = tramo.copy(alto = altoLado, caida = altoVentana - altoLado, altoDer = null, caidaDer = null)
+        }
+        return copy(alto = altoVentana, tramos = nuevos)
+    }
+
+    /**
      * Lo que hay al principio de cada lado: su pliegue y su panza.
      *
      * Se guarda aparte de los lados porque el editor los devuelve cambiados —franjas, módulos,

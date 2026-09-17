@@ -3864,10 +3864,22 @@ class NovaCorrediza : AppCompatActivity() {
      * cuando la medida trajo algo: el paquete de siempre no se toca.
      */
     private fun conLoQueTrajoLaMedida(paquete: String): String {
-        if (siluetasDeLaMedida.all { it == null } && parantesDeLaMedida.all { it.isEmpty() }) return paquete
+        val medida = esquinaDeLaMedida ?: return paquete
+        // Con una esquina curva el paño del arco es un lado más en el diseño y los lados del apunte
+        // ya no van uno a uno con los tramos: no se toca nada.
+        if (medida.hayCurva) return paquete
+        // Los altos de cada pared, tal como se midieron: la pared más baja cuelga más abajo del
+        // dintel, y el 3D la sube hasta su alto. Sin esto las dos paredes salían igual de altas.
+        val altos = medida.lados.map { it.alto }
+        val distintos = altos.any { kotlin.math.abs(it - altos.first()) > 0.05f }
+        val hayQuePoner = distintos || siluetasDeLaMedida.any { it != null } || parantesDeLaMedida.any { it.isNotEmpty() }
+        if (!hayQuePoner) return paquete
         val diseno = runCatching { crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(paquete) }.getOrNull()
             ?: return paquete
-        return diseno.conSiluetasYParantesPorLado(siluetasDeLaMedida, parantesDeLaMedida).aPaquete()
+        return diseno
+            .conAltosDeLado(if (distintos) altos else emptyList())
+            .conSiluetasYParantesPorLado(siluetasDeLaMedida, parantesDeLaMedida)
+            .aPaquete()
     }
 
     private fun conTagEnElSistema(tramos: String, tag: String): String {
