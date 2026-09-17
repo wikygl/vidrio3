@@ -44,6 +44,7 @@ import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityNovaCorredizaBinding
 import crystal.crystal.taller.CurvaEsquina
 import crystal.crystal.taller.EsquinaMedida
+import crystal.crystal.taller.LadosLibres
 import crystal.crystal.taller.ColaCalculadoras
 import crystal.crystal.taller.ModoMasivoHelper
 import crystal.crystal.taller.NavegadorCola
@@ -134,6 +135,12 @@ class NovaCorrediza : AppCompatActivity() {
     private var cargandoDiseno = false
     /** La ventana de esquina que llegó del apunte: sus lados y lo que hay en cada arista. */
     private var esquinaDeLaMedida: EsquinaMedida? = null
+    /**
+     * Lo que además trajo una esquina armada sobre figuras: la silueta de cada pared que no es
+     * rectángulo y los parantes marcados en cada una, por lado. Vacíos en las demás.
+     */
+    private var siluetasDeLaMedida: List<List<Pair<Float, Float>>?> = emptyList()
+    private var parantesDeLaMedida: List<List<Float>> = emptyList()
     private var primeraMedidaNl: MedidaNl? = null
 
     private var primeraMedidaNu: MedidaNl? = null
@@ -3478,7 +3485,7 @@ class NovaCorrediza : AppCompatActivity() {
                 val esquina = esquinaEnElDiseno(0, primeraC.alto, primeraC.hoja)
                 val base = conPanzaDelLado(0, tramosBase)
                 val aleta = conPanzaDelLado(1, tramosAleta)
-                return "{nova,${tipoPaquete()},[$cabecera$base $esquina $aleta]}"
+                return conLoQueTrajoLaMedida("{nova,${tipoPaquete()},[$cabecera$base $esquina $aleta]}")
             }
         }
         if (texto == "nu") {
@@ -3512,7 +3519,7 @@ class NovaCorrediza : AppCompatActivity() {
                 val centroP = conPanzaDelLado(1, tramosCentro)
                 val derP = conPanzaDelLado(2, tramosDer)
                 val esq2 = esquinaEnElDiseno(1, centroC.alto, centroC.hoja)
-                return "{nova,${tipoPaquete()},[$cabecera$izqP $esq1 $centroP $esq2 $derP]}"
+                return conLoQueTrajoLaMedida("{nova,${tipoPaquete()},[$cabecera$izqP $esq1 $centroP $esq2 $derP]}")
             }
         }
         if (texto == "ns") {
@@ -3542,7 +3549,7 @@ class NovaCorrediza : AppCompatActivity() {
                     partes.add(conPanzaDelLado(i, tramosLado))
                 }
                 val cabecera = "${NovaCalculos.df1(base.ancho)},${NovaCalculos.df1(base.alto)}:"
-                return "{nova,${tipoPaquete()},[${cabecera}A<90> ${partes.joinToString(" ")}]}"
+                return conLoQueTrajoLaMedida("{nova,${tipoPaquete()},[${cabecera}A<90> ${partes.joinToString(" ")}]}")
             }
         }
         if (texto == "ncu") {
@@ -3741,6 +3748,8 @@ class NovaCorrediza : AppCompatActivity() {
 
     private fun limpiarEstadoNl() {
         esquinaDeLaMedida = null
+        siluetasDeLaMedida = emptyList()
+        parantesDeLaMedida = emptyList()
         materialesNlArchivables = null
         primeraMedidaNl = null
         primeraMedidaNu = null
@@ -3845,6 +3854,18 @@ class NovaCorrediza : AppCompatActivity() {
      * diseño y no tiene cabecera propia, así que el camino que buscaba los dos puntos devolvía el
      * texto tal cual y la curva se dibujaba recta.
      */
+    /**
+     * Le pone al paquete de la esquina lo que el apunte midió de cada pared: la silueta de las que
+     * no son rectángulo (`W<…>` en su tramo) y los parantes marcados (`;P;` entre hojas). Solo
+     * cuando la medida trajo algo: el paquete de siempre no se toca.
+     */
+    private fun conLoQueTrajoLaMedida(paquete: String): String {
+        if (siluetasDeLaMedida.all { it == null } && parantesDeLaMedida.all { it.isEmpty() }) return paquete
+        val diseno = runCatching { crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(paquete) }.getOrNull()
+            ?: return paquete
+        return diseno.conSiluetasYParantesPorLado(siluetasDeLaMedida, parantesDeLaMedida).aPaquete()
+    }
+
     private fun conTagEnElSistema(tramos: String, tag: String): String {
         if (tag.isBlank()) return tramos
         val patronSistema = Regex("s(?:<[^>]*>)?\\([^)]*\\)", RegexOption.IGNORE_CASE)
@@ -4046,7 +4067,7 @@ class NovaCorrediza : AppCompatActivity() {
         // La PRIMERA medida no pasa por el navegador: sus datos llegan en el intent. El contorno
         // no viaja ahí, así que se aplica aquí o el vano escalonado entraría como un rectángulo.
         val actual = ColaCalculadoras.cola(this).getOrNull(ColaCalculadoras.indice(this))
-        if (actual != null && cargarEsquinaDeMedida(actual.esquina)) return
+        if (actual != null && cargarEsquinaDeMedida(actual.esquina, actual.contornosLados, actual.parantesLados)) return
         if (actual != null && cargarDisenoDelContorno(actual.contorno)) {
             Toast.makeText(
                 this,
@@ -4260,7 +4281,7 @@ class NovaCorrediza : AppCompatActivity() {
         cargarYMostrarBocetoOriginal(item.bocetoArchivo)
         binding.etAncho.requestFocus()
         // Una ventana de esquina trae sus lados: se arma su geometría en vez de un vano plano.
-        if (cargarEsquinaDeMedida(item.esquina)) return
+        if (cargarEsquinaDeMedida(item.esquina, item.contornosLados, item.parantesLados)) return
         val escalonada = cargarDisenoDelContorno(item.contorno)
         Toast.makeText(
             this,
@@ -4306,9 +4327,12 @@ class NovaCorrediza : AppCompatActivity() {
         runCatching { crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(paquete) }
             .getOrNull()?.doblaEnEsquina == true
 
-    private fun cargarEsquinaDeMedida(texto: String): Boolean {
+    private fun cargarEsquinaDeMedida(texto: String, contornosLados: String = "", parantesLados: String = ""): Boolean {
 
         val medida = EsquinaMedida.desdeTexto(texto) ?: return false
+        // Cada medida trae lo suyo: lo de la anterior no vale para esta.
+        siluetasDeLaMedida = LadosLibres.contornosDesdeTexto(contornosLados)
+        parantesDeLaMedida = LadosLibres.parantesDesdeTexto(parantesLados)
         val geo = medida.geometria ?: return false
         val dibujo = when (geo) {
             "nl" -> R.drawable.venl

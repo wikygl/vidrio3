@@ -110,4 +110,55 @@ class DisenoNovaModeloTest {
         // Y al escribirlo salen sin medida, no con cero.
         assertTrue(d.aPaquete().contains("(fccf)"))
     }
+
+    /**
+     * La pared de una esquina que no es un rectángulo viaja con su silueta en su tramo (`W<…>`),
+     * relativa a esa pared, y sobrevive a la ida y vuelta, al reparto de anchos y a partir la
+     * pared con un parante (se queda en el primer trozo).
+     */
+    @Test
+    fun la_silueta_de_una_pared_viaja_en_su_tramo() {
+        val l = "{nova,apa,[280,220: Tl<280>(W<0/60|145/0|280/40|280/220|0/220>;s(f c c)) A<90> Tl<64.5>(s(f))]}"
+        val d = DisenoNova.desdePaquete(l)
+        assertNotNull(d)
+        assertEquals(2, d!!.tramos.size)
+        assertEquals(5, d.tramos[0].contorno.size)
+        assertEquals(145f to 0f, d.tramos[0].contorno[1])
+        assertTrue("la pared recta no lleva silueta", d.tramos[1].contorno.isEmpty())
+        assertTrue(d.doblaEnEsquina)
+
+        val ida = d.aPaquete()
+        assertTrue("el tag no se escribe: $ida", ida.contains("W<0/60|145/0|280/40|280/220|0/220>"))
+        assertEquals(d, DisenoNova.desdePaquete(ida))
+
+        val repartido = d.conAnchosRepartidos()
+        assertEquals(5, repartido.tramos[0].contorno.size)
+        val partido = d.conTramoPartido(0, 1)
+        assertEquals(3, partido.tramos.size)
+        assertEquals(5, partido.tramos[0].contorno.size)
+        assertTrue("el segundo trozo no lleva la silueta", partido.tramos[1].contorno.isEmpty())
+        assertEquals(5, partido.conTramosUnidos(0).tramos[0].contorno.size)
+    }
+
+    /**
+     * Lo que trae el apunte de una esquina armada sobre figuras se pone por lado: la silueta en
+     * el primer tramo del lado y los parantes en la frontera de hojas más cercana a donde se
+     * marcaron. En una ventana de 280 con tres hojas de 93.3, un parante marcado a 100 cae
+     * entre la primera y la segunda.
+     */
+    @Test
+    fun lo_medido_de_cada_pared_se_pone_en_su_lado() {
+        val l = "{nova,apa,[280,220: Tl<280>(s(f c c)) A<90> Tl<64.5>(s(f))]}"
+        val d = DisenoNova.desdePaquete(l)!!
+        val silueta = listOf(0f to 60f, 145f to 0f, 280f to 40f, 280f to 220f, 0f to 220f)
+        val con = d.conSiluetasYParantesPorLado(listOf(silueta, null), listOf(listOf(100f), emptyList()))
+        assertEquals(silueta, con.tramos[0].contorno)
+        assertTrue(con.tramos[1].contorno.isEmpty())
+        assertEquals(listOf(0), con.tramos[0].sistema!!.parantes)
+        assertTrue(con.tramos[1].sistema!!.parantes.isEmpty())
+        assertTrue("el parante no se escribe: ${con.aPaquete()}", con.aPaquete().contains("f;P;cc"))
+        assertEquals(con, DisenoNova.desdePaquete(con.aPaquete()))
+        // Sin nada que poner, el diseño no se toca.
+        assertEquals(d, d.conSiluetasYParantesPorLado(listOf(null, null), listOf(emptyList(), emptyList())))
+    }
 }

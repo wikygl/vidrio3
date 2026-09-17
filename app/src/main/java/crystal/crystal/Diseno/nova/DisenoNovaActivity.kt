@@ -2334,7 +2334,12 @@ class DisenoNovaActivity : AppCompatActivity() {
             val d = DisenoNova.desdePaquete(paqueteActualLectura())
             // Si el diseño no trae la silueta guardada, se saca de sus tramos: los escalones y las
             // inclinaciones hechos a mano también son la forma del vano, y tampoco se tiran.
-            d?.contornoVano?.ifEmpty { if (d.esIrregular) d.contornoDesdeTramos() else emptyList() }
+            d?.contornoVano?.ifEmpty {
+                // Un lado de esquina abierto solo trae su silueta en su tramo (`W<…>`): al
+                // limpiarlo, esa es la forma del vano.
+                d.tramos.firstOrNull()?.contorno?.takeIf { it.size >= 3 && d.tramos.size == 1 }
+                    ?: if (d.esIrregular) d.contornoDesdeTramos() else emptyList()
+            }
                 .orEmpty()
         }.getOrElse { emptyList() }
         val enBlanco = "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
@@ -2754,6 +2759,12 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     @androidx.annotation.VisibleForTesting
     fun flechasDeTramoParaPruebas(): List<Float> = binding.vistaDiseno.flechasDeTramoParaPruebas()
+
+    @androidx.annotation.VisibleForTesting
+    fun siluetasDeTramoParaPruebas(): List<Int> = binding.vistaDiseno.siluetasDeTramoParaPruebas()
+
+    @androidx.annotation.VisibleForTesting
+    fun contornoVanoParaPruebas(): List<Pair<Float, Float>> = binding.vistaDiseno.contornoVanoParaPruebas()
 
     /** El dibujo tal cual se está viendo, para poder mirarlo desde fuera del celular. */
     @androidx.annotation.VisibleForTesting

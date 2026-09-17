@@ -14,6 +14,12 @@ object MetadatosProduccion {
 
     private val CLAVES = listOf("DisenoSimbolicoV2", "MetadatosProduccion")
 
+    // Ventana de aluminio archivaba el color y el vidrio en dos listas sueltas en vez del sufijo
+    // -MAT<...>. Se leen también, porque hay proyectos ya archivados así: sin esto, sus piezas se
+    // quedaban sin color y desaparecían de las listas de corte con color de los demás productos.
+    private const val CLAVE_ALU_LEGADO = "Color aluminio"
+    private const val CLAVE_VID_LEGADO = "Tipo vidrio"
+
     /** Mapa idVentana -> (colorAluminio, tipoVidrio). Solo incluye ventanas con algún dato. */
     fun mapaPorVentana(mapListas: Map<String, List<List<String>>>): Map<String, Pair<String, String>> {
         val resultado = mutableMapOf<String, Pair<String, String>>()
@@ -28,6 +34,17 @@ object MetadatosProduccion {
                 }
             }
         }
+        // Las listas sueltas solo rellenan lo que falte: el sufijo -MAT<...> manda siempre.
+        fun legado(clave: String, aplicar: (Pair<String, String>, String) -> Pair<String, String>) {
+            mapListas[clave]?.forEach { lista ->
+                val valor = lista.getOrNull(0)?.trim().orEmpty()
+                val ventana = lista.getOrElse(2) { "" }.ifBlank { null } ?: return@forEach
+                if (valor.isBlank()) return@forEach
+                resultado[ventana] = aplicar(resultado[ventana] ?: ("" to ""), valor)
+            }
+        }
+        legado(CLAVE_ALU_LEGADO) { actual, valor -> if (actual.first.isBlank()) valor to actual.second else actual }
+        legado(CLAVE_VID_LEGADO) { actual, valor -> if (actual.second.isBlank()) actual.first to valor else actual }
         return resultado
     }
 

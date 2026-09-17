@@ -30,6 +30,9 @@ class CorteListManager(private val context: Context) {
         return n == "ancho" || n == "alto"
     }
 
+    /** Etiqueta de las piezas cuya ventana no dejó anotado el color de aluminio o el tipo de vidrio. */
+    private val SIN_DATO = "sin dato"
+
     private fun ensureProjectInitialized() {
         if (!ProyectoManager.hayProyectoActivo()) {
             ProyectoManager.inicializarDesdeStorage(context)
@@ -111,17 +114,24 @@ class CorteListManager(private val context: Context) {
 
             val esVidrio = nombreLista.startsWith("Vidrio", ignoreCase = true)
             val sufijosUsados = mutableSetOf<String>()
+            var haySinDato = false
             listasValidas.forEach { lista ->
                 val ventana = lista[2]
                 val (colorAlu, tipoVidrio) = ventanaColorMap[ventana] ?: Pair("", "")
                 val sufijo = if (esVidrio) tipoVidrio else colorAlu
                 if (sufijo.isNotBlank() && !nombreLista.contains(sufijo, ignoreCase = true)) {
                     sufijosUsados.add(sufijo)
+                } else if (sufijo.isBlank()) {
+                    haySinDato = true
                 }
             }
 
             if (sufijosUsados.isNotEmpty()) {
                 sufijosUsados.sorted().forEach { sufijo -> nombresListasValidas.add("$nombreLista [$sufijo]") }
+                // Piezas de una ventana que no dejó anotado su color (o su tipo de vidrio) en un
+                // proyecto donde otras sí. Sin esta opción quedaban fuera de TODAS las listas: no
+                // se cargaban ni sumaban en ninguna, y sus cortes no llegaban al taller.
+                if (haySinDato) nombresListasValidas.add("$nombreLista [$SIN_DATO]")
             } else {
                 nombresListasValidas.add(nombreLista)
             }
@@ -171,7 +181,10 @@ class CorteListManager(private val context: Context) {
             if (colorFiltro != null) {
                 val (colorAlu, tipoVidrio) = ventanaColorMap[ventana] ?: Pair("", "")
                 val sufijoEntrada = (if (esVidrio) tipoVidrio else colorAlu).lowercase()
-                if (sufijoEntrada != colorFiltro) return@forEach
+                // La lista "[sin dato]" recoge justo las que no traen color ni tipo de vidrio, y no
+                // se solapa con ninguna de las otras: nada se corta dos veces.
+                val entra = if (colorFiltro == SIN_DATO) sufijoEntrada.isBlank() else sufijoEntrada == colorFiltro
+                if (!entra) return@forEach
             }
 
             val dato1 = dato1Str.toFloatOrNull()
@@ -205,7 +218,16 @@ class CorteListManager(private val context: Context) {
     /**
      * Verifica si hay listas disponibles
      */
+    /**
+     * Si hay algo que ofrecer. Pregunta por los PROYECTOS archivados, no por el proyecto activo:
+     * el diálogo deja elegir cualquiera de ellos, así que mirar solo el activo dejaba el botón
+     * mudo al entrar recién a la pantalla (todavía sin proyecto activo) o con un proyecto activo
+     * vacío, aunque hubiera diez proyectos llenos guardados. Eso era lo que obligaba a pasar por
+     * Resultados y volver para que el diálogo apareciera.
+     */
     fun hayListasDisponibles(): Boolean {
+        ensureProjectInitialized()
+        if (MapStorage.obtenerListaProyectos(context).isNotEmpty()) return true
         val mapListas = MapStorage.cargarMap(context)
         return mapListas != null && mapListas.isNotEmpty()
     }

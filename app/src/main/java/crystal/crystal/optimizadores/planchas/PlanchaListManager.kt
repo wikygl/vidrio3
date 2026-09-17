@@ -36,7 +36,15 @@ class PlanchaListManager(private val context: Context) {
             .mapValues { it.value.second }
             .filterValues { it.isNotBlank() }
 
+    /**
+     * Si hay algo que ofrecer. Pregunta por los PROYECTOS archivados, no por el proyecto activo:
+     * el diálogo deja elegir cualquiera de ellos, así que mirar solo el activo dejaba el botón
+     * mudo al entrar recién a la pantalla (todavía sin proyecto activo) o con un proyecto activo
+     * vacío, aunque hubiera diez proyectos llenos guardados.
+     */
     fun hayListasDisponibles(): Boolean {
+        ensureProjectInitialized()
+        if (MapStorage.obtenerListaProyectos(context).isNotEmpty()) return true
         val map = MapStorage.cargarMap(context)
         return map != null && map.isNotEmpty()
     }

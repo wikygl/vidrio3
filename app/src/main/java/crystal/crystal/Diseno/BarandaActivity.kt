@@ -56,6 +56,8 @@ class BarandaActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityBarandaBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Tocar "Referencias y Cálculos" abre la calculadora flotante.
+        crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
 
         ProyectoManager.inicializarDesdeStorage(this)
         proyectoCallback = ProyectoUIHelper.crearCallbackConActualizacionUI(

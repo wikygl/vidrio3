@@ -47,7 +47,12 @@ data class SegmentoNs(
      * Es la pared curva de una esquina: un paño más entre paños rectos, al revés que el arco de
      * `U<>`, que curva la ventana entera.
      */
-    val flechaCm: Float = 0f
+    val flechaCm: Float = 0f,
+    /**
+     * La silueta de la pared que arranca en este tramo, en cm relativos a su esquina de arriba a
+     * la izquierda; vacía = la pared es el rectángulo de sus medidas. Es el `W<…>` del tramo.
+     */
+    val contornoCm: List<Pair<Float, Float>> = emptyList()
 ) {
     val altoDerecho: Float get() = altoDerCm ?: altoCm
     val caidaDerecha: Float get() = caidaDerCm ?: caidaCm
@@ -799,6 +804,13 @@ class VistaDiseno @JvmOverloads constructor(
         // o escalonado necesita el camino de segmentos, que es el que sabe dibujarlo.
         if (bloques.size == 1) {
             val b = bloques[0]
+            // Un lado suelto que trae su silueta (`W<…>`, el editor abre la esquina lado a lado):
+            // con un solo tramo, esa silueta es la del vano entero.
+            if (contornoVanoCm.isEmpty()) {
+                RE_CONTORNO_TRAMO.find(b.contenido)?.let { m ->
+                    contornoVanoCm = ContornoEnTramos.desdeEtiqueta(m.value)
+                }
+            }
             val tieneMedidas = RE_ALTO_TRAMO.containsMatchIn(b.contenido) ||
                 RE_CAIDA_TRAMO.containsMatchIn(b.contenido)
             if (!tieneMedidas) return parsearModeloConAlturas(b.contenido)
@@ -859,12 +871,16 @@ class VistaDiseno @JvmOverloads constructor(
             // `H<106.2>` dentro del tramo: su alto propio, el de la ventana escalonada.
             val altoTramo = RE_ALTO_TRAMO.find(contenido)?.groupValues?.get(1)
             val caidaTramo = RE_CAIDA_TRAMO.find(contenido)?.groupValues?.get(1)
+            // `W<…>`: la silueta de la pared que arranca en este tramo, si no es un rectángulo.
+            val silueta = RE_CONTORNO_TRAMO.find(contenido)
+                ?.let { ContornoEnTramos.desdeEtiqueta(it.value) }.orEmpty()
             segs.add(
                 SegmentoNs(
                     bloque.tipo, bloque.ancho, franjas,
                     altoCm = medidaIzq(altoTramo), caidaCm = medidaIzq(caidaTramo),
                     altoDerCm = medidaDer(altoTramo), caidaDerCm = medidaDer(caidaTramo),
-                    flechaCm = flecha
+                    flechaCm = flecha,
+                    contornoCm = silueta
                 )
             )
             if (primerFranjas.isEmpty()) primerFranjas = franjas
@@ -1037,16 +1053,64 @@ class VistaDiseno @JvmOverloads constructor(
     private data class Cotas(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val escala: Float)
     private var cotasPendientes: Cotas? = null
 
+    /**
+     * La silueta de una pared de la esquina, apuntada mientras se dibuja su tramo y aplicada al
+     * final: en cm relativos a su esquina de arriba a la izquierda, que en el papel está en
+     * ([x0], [y0]) con esa [escala].
+     */
+    private data class SiluetaDePared(
+        val contornoCm: List<Pair<Float, Float>>,
+        val x0: Float,
+        val y0: Float,
+        val escala: Float
+    )
+    private val siluetasPendientes = mutableListOf<SiluetaDePared>()
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         cotasPendientes = null
+        siluetasPendientes.clear()
         dibujarContenido(canvas)
         // La silueta del vano manda sobre el reparto: lo que el dibujo saca fuera del hueco medido
         // se recorta y el borde de la forma se traza encima.
         enmascararVano(canvas)
+        // Y en una ventana de esquina, cada pared con su propia silueta se recorta igual.
+        siluetasPendientes.forEach { enmascararPared(canvas, it) }
         // Las cotas van DESPUÉS de recortar: la del salto de un escalón se dibuja justo en el
         // trozo de vano que no existe, y el recorte se la llevaba por delante.
         cotasPendientes?.let { dibujarCotas(canvas, it.x0, it.y0, it.x1, it.y1, it.escala) }
+        if (!omitirFondoAlExportar) {
+            siluetasPendientes.forEach { s ->
+                val anchoLado = s.contornoCm.maxOf { it.first }
+                val altoLado = s.contornoCm.maxOf { it.second }
+                dibujarCotasDePoligono(canvas, s.contornoCm, s.x0, s.y0, s.escala, anchoLado, altoLado)
+            }
+        }
+    }
+
+    /** Recorta el dibujo de una pared con su silueta y traza su borde, como [enmascararVano]. */
+    private fun enmascararPared(canvas: Canvas, s: SiluetaDePared) {
+        val anchoPx = s.contornoCm.maxOf { it.first } * s.escala
+        val altoPx = s.contornoCm.maxOf { it.second } * s.escala
+        if (anchoPx <= 1f || altoPx <= 1f) return
+        val silueta = android.graphics.Path().apply {
+            s.contornoCm.forEachIndexed { i, (xCm, yCm) ->
+                val px = s.x0 + xCm * s.escala
+                val py = s.y0 + yCm * s.escala
+                if (i == 0) moveTo(px, py) else lineTo(px, py)
+            }
+            close()
+        }
+        val borde = anchoMarcoPx
+        val fuera = android.graphics.Path().apply {
+            addRect(
+                RectF(s.x0 - borde, s.y0 - borde, s.x0 + anchoPx + borde, s.y0 + altoPx + borde),
+                android.graphics.Path.Direction.CW
+            )
+            op(silueta, android.graphics.Path.Op.DIFFERENCE)
+        }
+        canvas.drawPath(fuera, if (omitirFondoAlExportar) pBorrarVano else pFondo)
+        canvas.drawPath(silueta, pMarco)
     }
 
     /**
@@ -1682,6 +1746,13 @@ class VistaDiseno @JvmOverloads constructor(
                     val xFinPano = xIni + anchoNominalPx
                     if (curvo) xFin = xIni + anchoNominalPx * ANCHO_VISTO_DE_LA_CURVA
                     rangosTramoX.add(Pair(xIni, xFin))
+                    // La pared que arranca aquí con su silueta medida: se recorta al final, con
+                    // todo dibujado, porque la silueta abarca el lado entero aunque lo partan.
+                    if (segmento.contornoCm.size >= 3 && !curvo) {
+                        siluetasPendientes.add(
+                            SiluetaDePared(segmento.contornoCm, xIni, yArribaTramo, escalaLocal)
+                        )
+                    }
                     val segIdx = segmentosPlanoInfo.size
                     segmentosPlanoInfo.add(Triple(xIni, xFin, segmento.franjas))
                     val anchoVentPx = xFinPano - xIni
@@ -3321,6 +3392,8 @@ class VistaDiseno @JvmOverloads constructor(
      * que traen su propio contorno curvo.
      */
     private fun contornoConLados(): Boolean {
+        // Una pared de la esquina con su propia silueta también lleva las cotas de sus lados.
+        if (segmentosNs.any { it.contornoCm.size >= 3 && it.flechaCm <= 0f }) return true
         if (contornoVanoCm.size < 3 || modoArcoCurvo || modoCircular) return false
         if (contornoVanoCm.size != 4) return true
         val izq = contornoVanoCm.minOf { it.first }
@@ -3339,8 +3412,25 @@ class VistaDiseno @JvmOverloads constructor(
      * es justo lo que hace falta para repartir el diseño a mano. Un lado que mide lo mismo que el
      * ancho o el alto total no se repite: ya está en la cota total.
      */
-    private fun dibujarCotasDelContorno(canvas: Canvas, x0: Float, y0: Float, escala: Float) {
-        val puntos = contornoVanoCm.map { (xCm, yCm) -> PointF(x0 + xCm * escala, y0 + yCm * escala) }
+    private fun dibujarCotasDelContorno(canvas: Canvas, x0: Float, y0: Float, escala: Float) =
+        dibujarCotasDePoligono(canvas, contornoVanoCm, x0, y0, escala, anchoEfectivoCm(), altoCm)
+
+    /**
+     * La cota de cada lado de un polígono en cm, puesto en el papel en ([x0], [y0]) con esa
+     * [escala]. Un lado que mide lo mismo que [anchoTotal] o [altoTotal] no se repite: ya está en
+     * la cota total. Sirve para el vano entero y para la silueta de cada pared de una esquina.
+     */
+    private fun dibujarCotasDePoligono(
+        canvas: Canvas,
+        contorno: List<Pair<Float, Float>>,
+        x0: Float,
+        y0: Float,
+        escala: Float,
+        anchoTotal: Float,
+        altoTotal: Float
+    ) {
+        if (contorno.size < 3) return
+        val puntos = contorno.map { (xCm, yCm) -> PointF(x0 + xCm * escala, y0 + yCm * escala) }
         val n = puntos.size
         // Orientación del recorrido, para saber hacia qué lado queda "fuera" en cada tramo.
         var doble = 0f
@@ -3352,14 +3442,13 @@ class VistaDiseno @JvmOverloads constructor(
         val signo = if (doble >= 0f) 1f else -1f
         val separacion = 24f
         val flecha = 10f
-        val anchoTotal = anchoEfectivoCm()
         fun fmt(v: Float) = if (v % 1 == 0f) v.toInt().toString() else "%.1f".format(v).replace(",", ".")
 
         for (i in 0 until n) {
             val a = puntos[i]
             val b = puntos[(i + 1) % n]
-            val (axCm, ayCm) = contornoVanoCm[i]
-            val (bxCm, byCm) = contornoVanoCm[(i + 1) % n]
+            val (axCm, ayCm) = contorno[i]
+            val (bxCm, byCm) = contorno[(i + 1) % n]
             val medidaCm = sqrt((bxCm - axCm) * (bxCm - axCm) + (byCm - ayCm) * (byCm - ayCm))
             val dx = b.x - a.x
             val dy = b.y - a.y
@@ -3368,7 +3457,7 @@ class VistaDiseno @JvmOverloads constructor(
             val horizontal = kotlin.math.abs(dx) >= kotlin.math.abs(dy)
             // Lo que ya dice la cota total no se repite.
             if (horizontal && kotlin.math.abs(medidaCm - anchoTotal) < 0.05f) continue
-            if (!horizontal && kotlin.math.abs(medidaCm - altoCm) < 0.05f) continue
+            if (!horizontal && kotlin.math.abs(medidaCm - altoTotal) < 0.05f) continue
 
             val ux = dx / largo
             val uy = dy / largo
@@ -3954,6 +4043,12 @@ class VistaDiseno @JvmOverloads constructor(
 
     fun flechasDeTramoParaPruebas(): List<Float> = segmentosNs.map { it.flechaCm }
 
+    /** Cuántos vértices tiene la silueta de cada tramo: 0 los que son rectángulo. */
+    fun siluetasDeTramoParaPruebas(): List<Int> = segmentosNs.map { it.contornoCm.size }
+
+    /** La silueta del vano que quedó puesta, en cm; vacía si el vano es el rectángulo. */
+    fun contornoVanoParaPruebas(): List<Pair<Float, Float>> = contornoVanoCm
+
     fun diagnosticoParaPruebas(): String
  = "segmentos=${segmentosNs.size} franjas=${franjasAbajoArriba.size} modo=$modo"
 
@@ -4100,6 +4195,8 @@ class VistaDiseno @JvmOverloads constructor(
          * de una esquina es un paño más entre paños rectos.
          */
         private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*([\d.,]+)\s*>""")
+        /** La silueta de la pared de un tramo: `W<x/y|x/y|…>`. */
+        private val RE_CONTORNO_TRAMO = Regex("""[wW]\s*<[^>]*>""")
         /** El contorno del vano: `V<x/y|x/y|…>`, en centímetros. */
         private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
     }

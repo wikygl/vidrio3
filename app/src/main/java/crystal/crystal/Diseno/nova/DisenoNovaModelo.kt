@@ -85,7 +85,14 @@ data class NovaTramo(
      */
     val pliegue: String? = null,
     /** Su panza, si es la pared curva de una esquina: `Q<29.3>`. 0 = pared recta. */
-    val flecha: Float = 0f
+    val flecha: Float = 0f,
+    /**
+     * La silueta de la PARED que arranca en este tramo, cuando no es un rectángulo: la que se midió
+     * en obra, en cm y relativa a la esquina de arriba a la izquierda de esa pared. Va en el primer
+     * tramo del lado y abarca el lado entero, aunque después se parta con un parante. Vacía = la
+     * pared es el rectángulo de sus medidas. Viaja como tag `W<x/y|x/y|…>` dentro del tramo.
+     */
+    val contorno: List<Pair<Float, Float>> = emptyList()
 ) {
     val sistema: NovaFranja? get() = franjas.firstOrNull { it.esSistema }
     val mochetas: List<NovaFranja> get() = franjas.filter { !it.esSistema }
@@ -280,6 +287,45 @@ data class DisenoNova(
     }
 
     /**
+     * Pone en cada lado lo que el apunte midió de su pared: la silueta, si no es un rectángulo,
+     * y los parantes que el vidriero marcó, como `;P;` en la franja de sistema del primer tramo
+     * del lado. [siluetas] y [parantes] van en el orden de los lados; null o vacío = nada.
+     *
+     * Cada parante cae en la frontera de módulos más cercana a donde se marcó (en cm desde el
+     * canto izquierdo de la pared): la calculadora ya repartió las hojas, y el parante parte
+     * entre dos de ellas, no una hoja por la mitad.
+     */
+    fun conSiluetasYParantesPorLado(
+        siluetas: List<List<Pair<Float, Float>>?>,
+        parantes: List<List<Float>>
+    ): DisenoNova {
+        if (siluetas.all { it == null || it.size < 3 } && parantes.all { it.isEmpty() }) return this
+        val nuevos = tramos.toMutableList()
+        var lado = -1
+        tramos.forEachIndexed { i, tramo ->
+            if (!abreLado(i)) return@forEachIndexed
+            lado++
+            val silueta = siluetas.getOrNull(lado)?.takeIf { it.size >= 3 }
+            val marcados = parantes.getOrNull(lado).orEmpty()
+            val franjas = tramo.franjas.map { fr ->
+                if (!fr.esSistema || marcados.isEmpty() || fr.modulos.size < 2) return@map fr
+                val n = fr.modulos.size
+                val anchos = fr.modulos.map { it.ancho ?: (tramo.ancho / n) }
+                val fronteras = anchos.runningReduce { acc, w -> acc + w }.dropLast(1)
+                val indices = marcados.mapNotNull { x ->
+                    fronteras.indices.minByOrNull { kotlin.math.abs(fronteras[it] - x) }
+                }
+                fr.copy(parantes = (fr.parantes + indices).distinct().sorted())
+            }
+            nuevos[i] = tramo.copy(
+                franjas = franjas,
+                contorno = silueta ?: tramo.contorno
+            )
+        }
+        return copy(tramos = nuevos)
+    }
+
+    /**
      * Lo que hay al principio de cada lado: su pliegue y su panza.
      *
      * Se guarda aparte de los lados porque el editor los devuelve cambiados —franjas, módulos,
@@ -378,7 +424,8 @@ data class DisenoNova(
                 // Repartir anchos no endereza la ventana ni estira la curva: el pliegue y la
                 // panza son de la pared, no del reparto.
                 pliegue = tramo.pliegue,
-                flecha = tramo.flecha
+                flecha = tramo.flecha,
+                contorno = tramo.contorno
             )
         })
     }
@@ -420,7 +467,9 @@ data class DisenoNova(
         // ventana— y si era curva las dos mitades siguen siéndolo.
         nuevos[indice] = NovaTramo(
             tramo.ancho, izq, tramo.alto, tramo.caida, altoMedio, caidaMedia,
-            pliegue = tramo.pliegue, flecha = tramo.flecha
+            pliegue = tramo.pliegue, flecha = tramo.flecha,
+            // La silueta es de la pared entera y se queda en su primer trozo.
+            contorno = tramo.contorno
         )
         nuevos.add(
             indice + 1,
@@ -468,7 +517,8 @@ data class DisenoNova(
             // parante, que es justo lo que se está quitando. Y si alguna era curva, lo sigue
             // siendo la pared unida.
             pliegue = a.pliegue,
-            flecha = if (a.flecha > 0f) a.flecha else b.flecha
+            flecha = if (a.flecha > 0f) a.flecha else b.flecha,
+            contorno = if (a.contorno.isNotEmpty()) a.contorno else b.contorno
         )
         nuevos.removeAt(indice + 1)
         return copy(tramos = nuevos).conAnchosRepartidos()
@@ -751,7 +801,12 @@ data class DisenoNova(
         }
         // Y su panza, si es la pared curva de una esquina.
         val cabezaCurva = if (tramo.flecha > 0f) "Q<${df(tramo.flecha)}>;" else ""
-        return "Tl<${df(tramo.ancho)}>($cabezaAlto$cabezaCaida$cabezaCurva$franjas)"
+        // Y la silueta de su pared, si no es un rectángulo. Con `|` y `/` como el `V<>`: ni `;`
+        // ni `,`, que son los separadores de los otros parsers.
+        val cabezaContorno = if (tramo.contorno.size >= 3) {
+            "W<" + tramo.contorno.joinToString("|") { (x, y) -> "${df(x)}/${df(y)}" } + ">;"
+        } else ""
+        return "Tl<${df(tramo.ancho)}>($cabezaAlto$cabezaCaida$cabezaCurva$cabezaContorno$franjas)"
     }
 
     companion object {
@@ -784,6 +839,8 @@ data class DisenoNova(
         private val RE_ARRANQUE = Regex("""^(?:t[a-z]?<|[auo]<)""", RegexOption.IGNORE_CASE)
         /** La panza de un tramo curvo: `Q<29.3>`, esté como tag de cabecera o pegada al sistema. */
         private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*([\d.,]+)\s*>""")
+        /** La silueta de la pared que arranca en un tramo: `W<x/y|x/y|…>`. */
+        private val RE_CONTORNO_TRAMO = Regex("""^[wW]\s*<[^>]*>""")
 
 
         /**
@@ -916,6 +973,11 @@ data class DisenoNova(
                 // y el modelo la guarda como tag de cabecera; vale de las dos maneras.
                 val flecha = RE_CURVA_TRAMO.find(interior)
                     ?.groupValues?.get(1)?.let { num(it) } ?: 0f
+                // `W<…>`: la silueta de la pared que arranca aquí, si no es un rectángulo.
+                val contorno = tokens.firstNotNullOfOrNull { tk ->
+                    RE_CONTORNO_TRAMO.find(tk.trim())?.let { ContornoEnTramos.desdeEtiqueta(it.value) }
+                        ?.takeIf { it.size >= 3 }
+                }.orEmpty()
                 val franjas = tokens.mapNotNull { franjaDesdeTexto(it) }
                 if (franjas.isNotEmpty()) {
                     tramos.add(
@@ -927,7 +989,8 @@ data class DisenoNova(
                             altoDer = alturas?.second,
                             caidaDer = caidas?.second,
                             pliegue = pliegue,
-                            flecha = flecha
+                            flecha = flecha,
+                            contorno = contorno
                         )
                     )
                     pliegue = null

@@ -245,7 +245,14 @@ object Suscripcion {
             }
             vista.findViewById<android.view.View>(crystal.crystal.R.id.btnFull).setOnClickListener {
                 dialog.dismiss()
-                runCatching { crystal.crystal.pagos.CanalPagos.abrirPlanes(activity) }
+                // Se pide volver atrás: el usuario estaba a media medición o a medio cálculo, y
+                // devolverlo a MainActivity tras pagar le obliga a rehacer todo desde cero.
+                runCatching {
+                    crystal.crystal.pagos.CanalPagos.abrirPlanes(
+                        activity,
+                        crystal.crystal.pagos.CanalPagos.EXTRA_VOLVER_ATRAS to true
+                    )
+                }
             }
             vista.findViewById<android.view.View>(crystal.crystal.R.id.btnAhoraNo).setOnClickListener { dialog.dismiss() }
             dialogoInvitacionAbierto = true

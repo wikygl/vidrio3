@@ -190,6 +190,11 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
         binding.btAgregar.setOnClickListener { abrirDialogoPlancha() }
 
         // Ajustes (edición en masa): seleccionar medidas iguales, etc.
+        // Tercer botón de la cabecera (icono de calculadora): la misma calculadora flotante que
+        // se abre desde "Referencias y Cálculos" en las calculadoras de taller.
+        binding.micro.setOnClickListener {
+            crystal.crystal.calculadora.CalculadoraFlotante.alternar(this)
+        }
         binding.btnCatalogo.setOnClickListener { mostrarMenuAjustesPlanchas() }
 
         // Eliminar planchas disponibles

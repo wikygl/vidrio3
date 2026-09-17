@@ -11,8 +11,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import crystal.crystal.calculadora.Expresion
 import crystal.crystal.databinding.ActivityVendePapaBinding
-import java.util.Locale
 
 class VendePapa : AppCompatActivity() {
 
@@ -373,7 +373,7 @@ class VendePapa : AppCompatActivity() {
         val expresion = textoPantalla()
         if (expresion.isBlank() || expresion == "-") return 0.0
         return runCatching {
-            ExpressionParser(expresion).parse()
+            Expresion.evaluar(expresion)
         }.onFailure {
             mostrarError(it.message ?: "Operacion invalida")
         }.getOrNull()
@@ -397,12 +397,7 @@ class VendePapa : AppCompatActivity() {
         Toast.makeText(this, mensaje, Toast.LENGTH_SHORT).show()
     }
 
-    private fun puedeCerrarParentesis(texto: String): Boolean {
-        if (texto.isBlank()) return false
-        val abiertos = texto.count { it == '(' }
-        val cerrados = texto.count { it == ')' }
-        return abiertos > cerrados && (texto.last().isDigit() || texto.last() == ')' || texto.last() == '%')
-    }
+    private fun puedeCerrarParentesis(texto: String): Boolean = Expresion.puedeCerrarParentesis(texto)
 
     private fun traido() {
         val monto: Intent = intent
@@ -429,17 +424,9 @@ class VendePapa : AppCompatActivity() {
         return if (index >= 0) substring(index + 1) else this
     }
 
-    private fun Char.isOperator(): Boolean = this == '+' || this == '-' || this == '*' || this == '/'
+    private fun Char.isOperator(): Boolean = Expresion.esOperador(this)
 
-    private fun df(value: Double): String {
-        val rounded = if (kotlin.math.abs(value) < 0.0000001) 0.0 else value
-        val text = if (rounded % 1.0 == 0.0) {
-            rounded.toLong().toString()
-        } else {
-            "%.2f".format(Locale.US, rounded).trimEnd('0').trimEnd('.')
-        }
-        return text.replace(",", ".")
-    }
+    private fun df(value: Double): String = Expresion.formatear(value)
 
     private data class CamposVidrio(
         val layout: LinearLayout,
@@ -449,111 +436,6 @@ class VendePapa : AppCompatActivity() {
         val cantidad: EditText,
         val retazo: EditText
     )
-
-    private class ExpressionParser(raw: String) {
-        private val input = raw
-            .replace(",", ".")
-            .replace("x", "*", ignoreCase = true)
-            .replace("÷", "/")
-            .replace("×", "*")
-        private var pos = 0
-
-        fun parse(): Double {
-            val value = parseExpression()
-            skipSpaces()
-            if (pos != input.length) {
-                throw IllegalArgumentException("Operacion invalida")
-            }
-            if (!value.isFinite()) {
-                throw IllegalArgumentException("Resultado invalido")
-            }
-            return value
-        }
-
-        private fun parseExpression(): Double {
-            var value = parseTerm()
-            while (true) {
-                skipSpaces()
-                value = when {
-                    match('+') -> value + parseTerm()
-                    match('-') -> value - parseTerm()
-                    else -> return value
-                }
-            }
-        }
-
-        private fun parseTerm(): Double {
-            var value = parseFactor()
-            while (true) {
-                skipSpaces()
-                value = when {
-                    match('*') -> value * parseFactor()
-                    match('/') -> {
-                        val divisor = parseFactor()
-                        if (divisor == 0.0) throw IllegalArgumentException("No se puede dividir entre cero")
-                        value / divisor
-                    }
-                    else -> return value
-                }
-            }
-        }
-
-        private fun parseFactor(): Double {
-            skipSpaces()
-            var value = when {
-                match('+') -> parseFactor()
-                match('-') -> -parseFactor()
-                match('(') -> {
-                    val inner = parseExpression()
-                    if (!match(')')) throw IllegalArgumentException("Falta cerrar parentesis")
-                    inner
-                }
-                else -> parseNumber()
-            }
-
-            while (true) {
-                skipSpaces()
-                if (match('%')) {
-                    value /= 100.0
-                } else {
-                    return value
-                }
-            }
-        }
-
-        private fun parseNumber(): Double {
-            skipSpaces()
-            val start = pos
-            var hasPoint = false
-            while (pos < input.length) {
-                val c = input[pos]
-                when {
-                    c.isDigit() -> pos++
-                    c == '.' && !hasPoint -> {
-                        hasPoint = true
-                        pos++
-                    }
-                    else -> break
-                }
-            }
-            if (start == pos) throw IllegalArgumentException("Numero esperado")
-            return input.substring(start, pos).toDoubleOrNull()
-                ?: throw IllegalArgumentException("Numero invalido")
-        }
-
-        private fun match(char: Char): Boolean {
-            skipSpaces()
-            if (pos < input.length && input[pos] == char) {
-                pos++
-                return true
-            }
-            return false
-        }
-
-        private fun skipSpaces() {
-            while (pos < input.length && input[pos].isWhitespace()) pos++
-        }
-    }
 
     private fun mostrarEnHist(texto: String) {
         binding.hist.text = texto

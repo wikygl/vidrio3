@@ -135,6 +135,10 @@ class CorteActivity: AppCompatActivity() {
                 spinnerConProyectosOptimizador = false
                 spinnerProyectoKeys = emptyList()
                 listManager.poblarSpinnerConDatosGuardados(binding.spCortes)
+            } else {
+                // Nunca en silencio: el pulsado largo vibra, así que sin aviso parece que la
+                // pantalla se colgó en vez de que no haya nada archivado.
+                Toast.makeText(this, "No hay proyectos archivados disponibles", Toast.LENGTH_SHORT).show()
             }
             true
         }
@@ -213,6 +217,12 @@ class CorteActivity: AppCompatActivity() {
 
         binding.tvResultado.setOnClickListener {
             abrirUltimoResultadoGuardado(mostrarAvisoSiNoExiste = true)
+        }
+
+        // Tercer botón de la cabecera (icono de calculadora): la misma calculadora flotante que
+        // se abre desde "Referencias y Cálculos" en las calculadoras de taller.
+        binding.micro.setOnClickListener {
+            crystal.crystal.calculadora.CalculadoraFlotante.alternar(this)
         }
 
         binding.btAjustes.setOnClickListener {
@@ -1430,6 +1440,9 @@ class CorteActivity: AppCompatActivity() {
     // Recibe medidas en metro lineal desde MainActivity. Si ya hay una lista cargada (queda guardada
     // en preferences entre sesiones), pregunta qué hacer en vez de sumar en silencio: sumar,
     // reemplazar, o revisar antes lo que hay.
+    /** Escala en la que pidió mostrarse la última lista recibida por intent. */
+    private var escalaEntrante: EscalaCorte = EscalaCorte.METRO
+
     private fun cargarPiezasDesdeIntent(intent: Intent?) {
         val json = intent?.getStringExtra("piezas_cortes_json") ?: return
         val entrantes = runCatching {
@@ -1446,7 +1459,13 @@ class CorteActivity: AppCompatActivity() {
             return
         }
         if (entrantes.isEmpty()) return
+        // En qué escala quiere verse la lista que llega. El apunte de medidas trabaja en
+        // centímetros y llegaba mostrándose en metros, que no es como se lee en el taller.
+        escalaEntrante = EscalaCorte.entries
+            .firstOrNull { it.name == intent.getStringExtra("piezas_cortes_escala") }
+            ?: EscalaCorte.METRO
         intent.removeExtra("piezas_cortes_json")
+        intent.removeExtra("piezas_cortes_escala")
 
         if (lista.isEmpty()) {
             aplicarPiezasEntrantes(entrantes, reemplazar = false)
@@ -1507,9 +1526,10 @@ class CorteActivity: AppCompatActivity() {
     }
 
     private fun aplicarPiezasEntrantes(entrantes: List<PiezaCorte>, reemplazar: Boolean) {
-        // Vienen en metro lineal → mostrar en metros
-        formatter.escala = EscalaCorte.METRO
-        EscalaCorte.guardar(this, EscalaCorte.METRO)
+        // La lista se muestra en la escala que pidió quien la manda: metros el metro lineal del
+        // listado, centímetros el apunte de medidas. El cálculo por dentro sigue siendo en cm.
+        formatter.escala = escalaEntrante
+        EscalaCorte.guardar(this, escalaEntrante)
         if (reemplazar) lista.clear()
         lista.addAll(entrantes)
         dataManager.guardarPiezas(lista)
@@ -1518,7 +1538,7 @@ class CorteActivity: AppCompatActivity() {
         val accion = if (reemplazar) "reemplazaron" else "cargaron"
         Toast.makeText(
             this,
-            "Se $accion ${entrantes.size} medida(s) en cortes (metros)",
+            "Se $accion ${entrantes.size} medida(s) en cortes (${escalaEntrante.sigla})",
             Toast.LENGTH_SHORT
         ).show()
     }
