@@ -540,12 +540,12 @@
 
                 <TextView
                     style="@style/RotuloIconoMedida"
-                    android:text="A escuadra" />
+                    android:text="Cotas" />
 
                 <ImageButton
                     android:id="@+id/btnFuncionEscuadra"
                     style="@style/IconoMedida"
-                    android:contentDescription="Cota a escuadra"
+                    android:contentDescription="Cotas a escuadra y a la prolongación"
                     android:src="@drawable/escuadra" />
             </LinearLayout>
 
@@ -861,6 +861,79 @@
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1" />
+        </LinearLayout>
+
+        <!-- Extender y recortar líneas contra lo dibujado, y mover agarrando por una esquina. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal">
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Extender" />
+
+                <ImageButton
+                    android:id="@+id/btnExtenderPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Extender línea hasta un borde"
+                    android:src="@drawable/extender" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Recortar" />
+
+                <ImageButton
+                    android:id="@+id/btnRecortarPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Recortar línea contra un borde"
+                    android:src="@drawable/recortar" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Imán" />
+
+                <ImageButton
+                    android:id="@+id/btnMoverImanPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Mover imantado por esquina"
+                    android:src="@drawable/iman_mover" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Estilo" />
+
+                <ImageButton
+                    android:id="@+id/btnEstiloLineaPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Grosor y trazo de la línea"
+                    android:src="@drawable/estilo_linea" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="V. esquina" />
+
+                <ImageButton
+                    android:id="@+id/btnEsquinaPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Armar ventana de esquina con las figuras seleccionadas"
+                    android:src="@drawable/esquina_libre" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 

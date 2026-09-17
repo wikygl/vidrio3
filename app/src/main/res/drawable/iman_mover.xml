@@ -1,0 +1,39 @@
+<!--
+  Mover imantado: una figura que se traslada agarrada por una esquina hasta caer sobre la esquina
+  de otra. El punto lleno es el agarre; el hueco, el destino.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M3,21 L3,13 L11,13"
+        android:strokeColor="#B0BEC5"
+        android:strokeWidth="1.6" />
+
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M13,11 L13,3 L21,3 L21,11 Z"
+        android:strokeColor="#37474F"
+        android:strokeWidth="1.6" />
+
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M5,11 L11,5"
+        android:strokeColor="#37474F"
+        android:strokeWidth="1.4" />
+
+    <path
+        android:fillColor="#37474F"
+        android:pathData="M3,13m-2.4,0a2.4,2.4 0 1,0 4.8,0a2.4,2.4 0 1,0 -4.8,0" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M13,11m-2.4,0a2.4,2.4 0 1,0 4.8,0a2.4,2.4 0 1,0 -4.8,0"
+        android:strokeColor="#37474F"
+        android:strokeWidth="1.6" />
+
+</vector>

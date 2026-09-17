@@ -51,6 +51,13 @@ object ColaCalculadoras {
          * serie. Ver [LadoEsquina].
          */
         val esquina: String = "",
+        /**
+         * De una esquina armada sobre figuras: el contorno de cada pared que no es rectángulo y
+         * los parantes marcados en cada una, lado por lado. Vacíos en las demás medidas. Ver
+         * [LadosLibres].
+         */
+        val contornosLados: String = "",
+        val parantesLados: String = "",
         val estado: EstadoCola = EstadoCola.PENDIENTE
 
     ) : java.io.Serializable

@@ -1,5 +1,6 @@
 package crystal.crystal.taller
 
+import kotlin.math.abs
 import kotlin.math.hypot
 
 /**
@@ -19,7 +20,14 @@ data class MedidaAEscuadra(
     val nodo: Int,
     val ladoOpuesto: Int,
     val distanciaCm: Float,
-    val pie: Pair<Float, Float>
+    val pie: Pair<Float, Float>,
+    /**
+     * El pie cayó FUERA del lado, sobre su prolongación: el lado no llega hasta la escuadra. Para
+     * que la cota tenga dónde apoyarse se dibuja una sombra del lado desde [desde] hasta el pie.
+     */
+    val prolongado: Boolean = false,
+    /** La punta del lado desde la que sale la sombra, cuando [prolongado]. */
+    val desde: Pair<Float, Float>? = null
 )
 
 object CotaAEscuadra {
@@ -53,21 +61,37 @@ object CotaAEscuadra {
      * su prolongación ni justo en una punta: en la punta, la escuadra vuelve por el canto de la
      * propia esquina y eso no es una medida. En un rectángulo, por eso, no hay ninguna.
      */
-    fun candidatasDesdeNodo(contorno: List<Pair<Float, Float>>, nodo: Int): List<MedidaAEscuadra> {
+    fun candidatasDesdeNodo(
+        contorno: List<Pair<Float, Float>>,
+        nodo: Int,
+        conProlongacion: Boolean = false,
+        bordesExtra: List<Pair<Pair<Float, Float>, Pair<Float, Float>>> = emptyList()
+    ): List<MedidaAEscuadra> {
         if (contorno.size < 3 || nodo !in contorno.indices) return emptyList()
         val n = contorno.size
         val p = contorno[nodo]
         val salen = mutableListOf<MedidaAEscuadra>()
+        fun probar(lado: Int, a: Pair<Float, Float>, b: Pair<Float, Float>) {
+            val (pie, t) = pieDePerpendicular(p, a, b, conProlongacion) ?: return
+            val d = distancia(p, pie)
+            if (d <= NADA) return
+            val fuera = t < 0.01f || t > 0.99f
+            salen.add(
+                MedidaAEscuadra(
+                    nodo = nodo, ladoOpuesto = lado, distanciaCm = d, pie = pie,
+                    prolongado = fuera,
+                    desde = if (!fuera) null else if (t < 0.01f) a else b
+                )
+            )
+        }
         for (lado in contorno.indices) {
             // Los lados que tocan la esquina no cuentan: desde ellos no hay nada que medir.
             if (lado == nodo || siguiente(lado, n) == nodo) continue
-            val a = contorno[lado]
-            val b = contorno[siguiente(lado, n)]
-            val pie = pieDePerpendicular(p, a, b) ?: continue
-            val d = distancia(p, pie)
-            if (d <= NADA) continue
-            salen.add(MedidaAEscuadra(nodo = nodo, ladoOpuesto = lado, distanciaCm = d, pie = pie))
+            probar(lado, contorno[lado], contorno[siguiente(lado, n)])
         }
+        // Lo suelto que haya alrededor —una línea, otra figura— también se mide: van con índice
+        // negativo, que no es lado de la forma.
+        bordesExtra.forEachIndexed { k, (a, b) -> probar(-1 - k, a, b) }
         return salen.sortedBy { it.distanciaCm }
     }
 
@@ -83,24 +107,40 @@ object CotaAEscuadra {
     /**
      * De las candidatas de esa esquina, la que cae hacia donde se arrastró el dedo.
      *
-     * Se compara la dirección del arrastre con la dirección de cada cota —de la esquina a su pie—,
-     * y gana la que apunta más parecido. Sin arrastre, o arrastrando casi nada, manda la más corta.
+     * Sin arrastre, o arrastrando casi nada, manda la más corta. Con arrastre cuentan solo las que
+     * salen hacia donde va el dedo, y entre ellas:
+     * - [porRecorrido] (poniendo la cota): el dedo va pasando líneas. Gana la primera que el dedo
+     *   NO ha pasado todavía —la que tiene más cerca por delante—; pasadas todas, la última. Así
+     *   se elige entre varias líneas en la misma dirección estirando más o menos.
+     * - Sin [porRecorrido] (volviendo a medir una cota puesta): la que apunta igual y mide lo más
+     *   parecido a lo que la cota ya medía, para que la cota no se salte sola a otra línea.
      */
     fun haciaDonde(
         contorno: List<Pair<Float, Float>>,
         nodo: Int,
         arrastre: Pair<Float, Float>,
-        minimo: Float = 0f
+        minimo: Float = 0f,
+        conProlongacion: Boolean = false,
+        bordesExtra: List<Pair<Pair<Float, Float>, Pair<Float, Float>>> = emptyList(),
+        porRecorrido: Boolean = false
     ): MedidaAEscuadra? {
-        val salen = candidatasDesdeNodo(contorno, nodo)
+        val salen = candidatasDesdeNodo(contorno, nodo, conProlongacion, bordesExtra)
         if (salen.isEmpty()) return null
         val largo = hypot(arrastre.first, arrastre.second)
         if (largo <= minimo || largo <= NADA) return salen.first()
         val u = (arrastre.first / largo) to (arrastre.second / largo)
         val p = contorno[nodo]
-        return salen.maxByOrNull {
-            val v = normalizar((it.pie.first - p.first) to (it.pie.second - p.second))
-            u.first * v.first + u.second * v.second
+        fun rumbo(m: MedidaAEscuadra): Float {
+            val v = normalizar((m.pie.first - p.first) to (m.pie.second - p.second))
+            return u.first * v.first + u.second * v.second
+        }
+        val mejorRumbo = salen.maxOf { rumbo(it) }
+        // Las que van hacia donde va el dedo (a menos de unos 25°); si ninguna, la que más se acerca.
+        val enRumbo = salen.filter { rumbo(it) >= 0.9f }.ifEmpty { salen.filter { rumbo(it) >= mejorRumbo - 1e-4f } }
+        return if (porRecorrido) {
+            enRumbo.firstOrNull { it.distanciaCm >= largo } ?: enRumbo.last()
+        } else {
+            enRumbo.minByOrNull { abs(it.distanciaCm - largo) }
         }
     }
 
@@ -132,12 +172,17 @@ object CotaAEscuadra {
         }
     }
 
-    /** Dónde cae la perpendicular desde [p] al lado a→b; null si cae fuera del lado. */
+    /**
+     * Dónde cae la perpendicular desde [p] al lado a→b, con la fracción `t` del lado en que cae.
+     * Null si cae fuera del lado, salvo [conProlongacion], que la admite sobre su prolongación:
+     * es la cota al lado que no llega, la que necesita la sombra.
+     */
     private fun pieDePerpendicular(
         p: Pair<Float, Float>,
         a: Pair<Float, Float>,
-        b: Pair<Float, Float>
-    ): Pair<Float, Float>? {
+        b: Pair<Float, Float>,
+        conProlongacion: Boolean = false
+    ): Pair<Pair<Float, Float>, Float>? {
         val vx = b.first - a.first
         val vy = b.second - a.second
         val largo2 = vx * vx + vy * vy
@@ -145,8 +190,8 @@ object CotaAEscuadra {
         val t = ((p.first - a.first) * vx + (p.second - a.second) * vy) / largo2
         // Tiene que caer DENTRO del lado, y no en una de sus puntas: en la punta, la escuadra
         // vuelve por el canto de la que ya es la propia esquina, y eso no es una medida.
-        if (t < 0.01f || t > 0.99f) return null
-        return (a.first + vx * t) to (a.second + vy * t)
+        if (!conProlongacion && (t < 0.01f || t > 0.99f)) return null
+        return ((a.first + vx * t) to (a.second + vy * t)) to t
     }
 
     private fun siguiente(i: Int, n: Int) = (i + 1) % n

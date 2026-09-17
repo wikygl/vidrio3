@@ -203,4 +203,46 @@ class CotaAEscuadraTest {
         assertNull(CotaAEscuadra.haciaDonde(rect, 0, 0f to 50f))
         assertTrue(CotaAEscuadra.candidatasDesdeNodo(emptyList(), 0).isEmpty())
     }
+
+    /**
+     * La cota al lado que NO llega: desde la esquina de fuera del corte (200, 40) hacia arriba, la
+     * escuadra cae en (200, 0), que está más allá de donde termina el lado de arriba (140, 0). A
+     * escuadra normal ese lado no cuenta; con prolongación sí, y dice desde dónde va la sombra.
+     */
+    @Test
+    fun la_prolongacion_llega_al_lado_que_no_alcanza() {
+        val sinProlongar = CotaAEscuadra.candidatasDesdeNodo(conCorte, 3)
+        assertTrue("sin prolongación no debería ver el lado de arriba", sinProlongar.none { it.ladoOpuesto == 0 })
+
+        val arriba = CotaAEscuadra.haciaDonde(conCorte, 3, 0f to -50f, conProlongacion = true)!!
+        assertEquals(0, arriba.ladoOpuesto)
+        assertEquals(40f, arriba.distanciaCm, 0.01f)
+        assertTrue("tenía que ser prolongada", arriba.prolongado)
+        assertEquals(200f, arriba.pie.first, 0.01f)
+        assertEquals(0f, arriba.pie.second, 0.01f)
+        assertEquals("la sombra sale de la punta del lado", 140f to 0f, arriba.desde)
+    }
+
+    /**
+     * Una línea suelta cruzada por delante también se mide, y el dedo va pasando líneas: hasta
+     * la primera que no ha pasado. Desde la esquina de dentro del corte (140, 40) hacia abajo hay
+     * una línea suelta a 40 (en y = 80) y el suelo a 120.
+     */
+    @Test
+    fun el_dedo_va_pasando_lineas_una_por_una() {
+        val linea = listOf((100f to 80f) to (180f to 80f))
+        val corto = CotaAEscuadra.haciaDonde(conCorte, 2, 0f to 30f, bordesExtra = linea, porRecorrido = true)!!
+        assertEquals("con poco arrastre tenía que coger la línea suelta", 40f, corto.distanciaCm, 0.01f)
+        assertTrue("la línea suelta va con índice negativo", corto.ladoOpuesto < 0)
+
+        val pasada = CotaAEscuadra.haciaDonde(conCorte, 2, 0f to 100f, bordesExtra = linea, porRecorrido = true)!!
+        assertEquals("pasada la línea, toca el suelo", 120f, pasada.distanciaCm, 0.01f)
+
+        val lejos = CotaAEscuadra.haciaDonde(conCorte, 2, 0f to 300f, bordesExtra = linea, porRecorrido = true)!!
+        assertEquals("pasadas todas, se queda con la última", 120f, lejos.distanciaCm, 0.01f)
+
+        // Volviendo a medir una cota ya puesta, manda la que mide lo más parecido a lo que medía.
+        val remedida = CotaAEscuadra.haciaDonde(conCorte, 2, 0f to 40f, bordesExtra = linea)!!
+        assertEquals(40f, remedida.distanciaCm, 0.01f)
+    }
 }

@@ -141,3 +141,38 @@ data class EsquinaMedida(
             else String.format(java.util.Locale.US, "%.1f", v)
     }
 }
+
+/**
+ * Lo que una esquina armada sobre figuras dibujadas a mano lleva además de sus lados: el contorno
+ * de las paredes que no son un rectángulo y los parantes que el vidriero marcó en cada una.
+ *
+ * Como texto para viajar en la cola: un trozo por lado, separados por `#`, en el mismo orden que
+ * los lados de [EsquinaMedida]. Un contorno va como `x,y;x,y;…` (el de [ContornoEnTramos]) y
+ * vacío si esa pared es rectangular; los parantes van como `x,x,…` en cm desde el canto izquierdo
+ * de la pared, y vacío si no tiene.
+ */
+object LadosLibres {
+    fun contornosATexto(contornos: List<List<Pair<Float, Float>>?>): String =
+        if (contornos.all { it == null }) ""
+        else contornos.joinToString("#") { c ->
+            c?.let { crystal.crystal.Diseno.nova.ContornoEnTramos.aTexto(it) }.orEmpty()
+        }
+
+    fun contornosDesdeTexto(texto: String): List<List<Pair<Float, Float>>?> =
+        if (texto.isBlank()) emptyList()
+        else texto.split("#").map { trozo ->
+            crystal.crystal.Diseno.nova.ContornoEnTramos.desdeTexto(trozo).takeIf { it.size >= 3 }
+        }
+
+    fun parantesATexto(parantes: List<List<Float>>): String =
+        if (parantes.all { it.isEmpty() }) ""
+        else parantes.joinToString("#") { lado ->
+            lado.joinToString(",") { crystal.crystal.taller.nova.NovaCalculos.df1(it) }
+        }
+
+    fun parantesDesdeTexto(texto: String): List<List<Float>> =
+        if (texto.isBlank()) emptyList()
+        else texto.split("#").map { lado ->
+            lado.split(",").mapNotNull { it.trim().toFloatOrNull() }
+        }
+}

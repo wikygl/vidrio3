@@ -142,6 +142,11 @@ class DisenoNovaActivity : AppCompatActivity() {
 
         binding.vistaDiseno.setEncuentroVacio(encuentroVacio)
         binding.vistaDiseno.setDireccion(direccion)
+        // La calculadora flotante cuelga del recuadro de medidas, como del título "Referencias y
+        // Cálculos" en las calculadoras: las cuentas del reparto a mano se hacen aquí mismo.
+        binding.panelInfoSeleccion.setOnClickListener {
+            crystal.crystal.calculadora.CalculadoraFlotante.alternar(this)
+        }
         // Una ventana de esquina se abre por lados, de frente; una plana, entera como siempre.
         if (!abrirPorLadosSiDobla(paqueteIntent)) cargarDesdePaquete(paqueteIntent)
 

@@ -260,4 +260,35 @@ class CotaAEscuadraEnElApunteTest {
         assertEquals("no puso la segunda con el dedo", 2, v.cuantasCotasAEscuadraParaPruebas())
         assertEquals("el dibujo se movió", contorno, v.contornoDelCompositeParaPruebas())
     }
+
+    /**
+     * La cota a la prolongación: desde la esquina de fuera del corte (la de la derecha, a la altura
+     * del corte) hacia arriba. El lado de arriba se queda corto —termina donde empieza el corte—,
+     * así que a escuadra normal no hay cota; con prolongación mide lo que baja el corte, y se
+     * apoya en la sombra del lado.
+     */
+    @Test
+    fun la_prolongacion_mide_contra_el_lado_que_no_llega() {
+        val v = vista()
+        v.insertarRecurrenteF1()
+        val contorno = v.contornoDelCompositeParaPruebas()
+        val xMax = contorno.maxOf { it.first }
+        val yMax = contorno.maxOf { it.second }
+        val nodo = contorno.indices.first { i ->
+            contorno[i].first > xMax - 1f && contorno[i].second > 1f && contorno[i].second < yMax - 1f
+        }
+        val caja = v.cajaDelCompositeParaPruebas()
+        val x = caja.first + v.cmAPixelesParaPruebas(contorno[nodo].first)
+        val y = caja.second + v.cmAPixelesParaPruebas(contorno[nodo].second)
+        var puesta = false
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            puesta = v.cotaAEscuadraParaPruebas(
+                x - 10f, y + 10f, x, y - v.cmAPixelesParaPruebas(40f), prolongacion = true
+            )
+        }
+        assertTrue("no puso la cota a la prolongación", puesta)
+        val medida = v.medidaAEscuadraParaPruebas()
+        assertNotNull("la cota no mide nada", medida)
+        assertEquals("no mide lo que baja el corte", contorno[nodo].second, medida!!, 1f)
+    }
 }

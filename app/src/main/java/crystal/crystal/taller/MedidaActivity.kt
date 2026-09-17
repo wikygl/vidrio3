@@ -22,10 +22,13 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import kotlin.math.abs
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import crystal.crystal.MainActivity
@@ -186,8 +189,10 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnAdelanteMedida.setOnClickListener { binding.sketchMedidas.redo() }
         binding.btnZoomMasPanel.setOnClickListener { binding.sketchMedidas.zoomIn() }
         binding.btnZoomMenosPanel.setOnClickListener { binding.sketchMedidas.zoomOut() }
-        binding.btnMoverMedida.setOnClickListener { seleccionarHerramientaDesdePanelAjustes(SketchMedidasView.Tool.NONE) }
-        binding.btnNuloMedida.setOnClickListener { seleccionarHerramientaDesdePanelAjustes(SketchMedidasView.Tool.NONE) }
+        // Mover y Nulo sueltan TODO lo que esté puesto: la herramienta del enum y también la cota
+        // a escuadra, que vive aparte (no es una Tool) y solo se apaga con cancelarCotaAEscuadra().
+        binding.btnMoverMedida.setOnClickListener { soltarHerramientaActiva() }
+        binding.btnNuloMedida.setOnClickListener { soltarHerramientaActiva() }
         binding.btnLimpiaMedida.setOnClickListener {
             soltarHerramientaActiva()
             confirmarLimpiar()
@@ -248,16 +253,16 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnEngraInterior.setOnClickListener { insertarInteriorExterior("interior") }
         binding.btnEngraExterior.setOnClickListener { insertarInteriorExterior("exterior") }
         binding.btnFuncionVano.setOnClickListener { mostrarDialogoPlantillaVano() }
-        // La cota a escuadra se queda puesta para poner varias seguidas, así que este botón es el
-        // interruptor: prende si está apagada y apaga si está prendida. Hay que mirar ANTES de
-        // cerrar los paneles, porque cerrarlos ya la apaga.
+        // Las cotas se quedan puestas para poner varias seguidas, así que este botón es el
+        // interruptor: si hay una prendida la apaga; si no, pregunta cuál poner. Hay que mirar
+        // ANTES de cerrar los paneles, porque cerrarlos ya la apaga.
         binding.btnFuncionEscuadra.setOnClickListener {
             val estaba = binding.sketchMedidas.eligiendoCotaAEscuadra
             ocultarPanelesFlotantes()
             if (estaba) {
-                Toast.makeText(this, "Cota a escuadra: apagada", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Cota: apagada", Toast.LENGTH_SHORT).show()
             } else {
-                binding.sketchMedidas.activarCotaAEscuadra()
+                mostrarDialogoCotas()
             }
         }
         binding.btnHerramientaSeleccion.setOnClickListener {
@@ -275,6 +280,13 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnCompasPanelMedida.setOnClickListener { mostrarDialogoCompas() }
         binding.btnAgruparPanelMedida.setOnClickListener { agruparSeleccion() }
         binding.btnDesagruparPanelMedida.setOnClickListener { desagruparSeleccion() }
+        // Extender, recortar y mover imantado son modos: se quedan puestos para encadenar varias
+        // operaciones y los suelta Nulo, otra herramienta u otro panel. El mismo botón los apaga.
+        binding.btnExtenderPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.EXTENDER) }
+        binding.btnRecortarPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.RECORTAR) }
+        binding.btnMoverImanPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.MOVER_IMAN) }
+        binding.btnEstiloLineaPanelMedida.setOnClickListener { mostrarDialogoEstiloLinea() }
+        binding.btnEsquinaPanelMedida.setOnClickListener { armarEsquinaConLaSeleccion() }
         binding.btnTabFormasBasicas.setOnClickListener { seleccionarTabFormas(true) }
         binding.btnTabFormasRecurrentes.setOnClickListener { seleccionarTabFormas(false) }
         binding.btnPlantillaPuerta.setOnClickListener { insertarPuertaEstandar() }
@@ -429,14 +441,108 @@ class MedidaActivity : AppCompatActivity() {
         // La cota a escuadra también se queda puesta, y mientras lo está se come los toques del
         // lienzo. Irse a otro botón la suelta, igual que suelta el lápiz.
         binding.sketchMedidas.cancelarCotaAEscuadra()
+        binding.sketchMedidas.cancelarModoEdicion()
+    }
+
+    /**
+     * Grosor y trazo de las líneas seleccionadas. Se elige con dos filas de opciones y se aplica
+     * al aceptar; el diálogo arranca con el estilo que ya tiene la primera figura elegida.
+     */
+    private fun mostrarDialogoEstiloLinea() {
+        val actual = binding.sketchMedidas.estiloDeLaSeleccion()
+        if (actual == null) {
+            mostrar("Selecciona primero una línea (herramienta Selec)")
+            return
+        }
+        val dp = resources.displayMetrics.density
+        val grosores = listOf("Fina" to 0.6f, "Normal" to 1f, "Gruesa" to 2f, "Muy gruesa" to 3f)
+        val trazos = listOf(
+            "Continuo" to EstiloDeLinea.CONTINUO,
+            "Punteado" to EstiloDeLinea.PUNTEADO,
+            "Trazos" to EstiloDeLinea.TRAZOS,
+            "Trazo y punto" to EstiloDeLinea.TRAZO_PUNTO
+        )
+        val contenido = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * dp).toInt(), (8 * dp).toInt(), (20 * dp).toInt(), 0)
+        }
+        fun grupo(titulo: String, opciones: List<String>, elegida: Int): RadioGroup {
+            contenido.addView(TextView(this).apply {
+                text = titulo
+                setPadding(0, (10 * dp).toInt(), 0, (2 * dp).toInt())
+            })
+            val grupo = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+            opciones.forEachIndexed { i, nombre ->
+                grupo.addView(RadioButton(this).apply {
+                    id = View.generateViewId()
+                    text = nombre
+                    isChecked = i == elegida
+                })
+            }
+            contenido.addView(grupo)
+            return grupo
+        }
+        val grosorElegido = grosores.indexOfFirst { abs(it.second - actual.first) < 0.05f }.coerceAtLeast(0)
+        val trazoElegido = trazos.indexOfFirst { it.second == actual.second }.coerceAtLeast(0)
+        val grupoGrosor = grupo("Grosor", grosores.map { it.first }, grosorElegido)
+        val grupoTrazo = grupo("Trazo", trazos.map { it.first }, trazoElegido)
+        AlertDialog.Builder(this)
+            .setTitle("Estilo de línea")
+            .setView(contenido)
+            .setPositiveButton("Aplicar") { _, _ ->
+                val g = grupoGrosor.indexOfChild(grupoGrosor.findViewById(grupoGrosor.checkedRadioButtonId))
+                val t = grupoTrazo.indexOfChild(grupoTrazo.findViewById(grupoTrazo.checkedRadioButtonId))
+                binding.sketchMedidas.aplicarEstiloASeleccion(
+                    grosores.getOrNull(g)?.second, trazos.getOrNull(t)?.second
+                )
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /**
+     * Qué cota poner. Las dos salen de una esquina y llegan a escuadra a un lado: la normal, al
+     * lado de enfrente; la de prolongación, también al lado que se queda corto, con una sombra
+     * del lado hasta donde cae la escuadra.
+     */
+    private fun mostrarDialogoCotas() {
+        val opciones = arrayOf(
+            "A escuadra · de una esquina al lado de enfrente",
+            "A la prolongación · al lado que no llega (con sombra)",
+            "Mover o cambiar de estilo una cota"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Cotas")
+            .setItems(opciones) { _, cual ->
+                if (cual == 2) binding.sketchMedidas.activarModoEdicion(SketchMedidasView.ModoEdicion.MOVER_COTA)
+                else binding.sketchMedidas.activarCotaAEscuadra(prolongacion = cual == 1)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /**
+     * Arma una ventana de esquina con las figuras seleccionadas como paredes (de izquierda a
+     * derecha) y pide el ángulo de cada arista, arrancando en 90.
+     */
+    private fun armarEsquinaConLaSeleccion() {
+        ocultarPanelesFlotantes()
+        val marco = binding.sketchMedidas.convertirSeleccionEnEsquina() ?: return
+        productoActual = "Ventana"
+        actualizarPanelInformacion()
+        binding.sketchMedidas.pedirAngulosDeEsquina(marco)
+    }
+
+    /** El mismo botón prende el modo y lo apaga; hay que mirar ANTES de cerrar los paneles. */
+    private fun alternarModoEdicion(modo: SketchMedidasView.ModoEdicion) {
+        val estaba = binding.sketchMedidas.modoEdicionActivo == modo
+        ocultarPanelesFlotantes()
+        if (estaba) return
+        binding.sketchMedidas.activarModoEdicion(modo)
     }
 
     private fun seleccionarHerramientaDesdePanel(tool: SketchMedidasView.Tool) {
         ocultarPanelesFlotantes()
-        seleccionarHerramienta(tool)
-    }
-
-    private fun seleccionarHerramientaDesdePanelAjustes(tool: SketchMedidasView.Tool) {
         seleccionarHerramienta(tool)
     }
 
@@ -2160,7 +2266,11 @@ class MedidaActivity : AppCompatActivity() {
                         // para armarla en L, en C o en serie, que con el ancho total no se sabe.
                         esquina = binding.sketchMedidas.esquinaPrincipalEnCm()
                             ?.let { EsquinaMedida.aTexto(it) }
-                            .orEmpty()
+                            .orEmpty(),
+                        // Y si esa esquina se armó sobre figuras dibujadas a mano, la forma de cada
+                        // pared y sus parantes, que el ancho y el alto no cuentan.
+                        contornosLados = LadosLibres.contornosATexto(binding.sketchMedidas.contornosDeLadosEnCm()),
+                        parantesLados = LadosLibres.parantesATexto(binding.sketchMedidas.parantesDeLadosEnCm())
                     )
                 )
             }

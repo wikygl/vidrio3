@@ -113,7 +113,9 @@ class VistaDiseno @JvmOverloads constructor(
     )
 
     // ------------ Estética / grosores ------------
-    private val margenPx = 55f   // margen para cotas
+    // Margen para las cotas. Con las cotas de cada lado del vano hacen falta dos filas por lado
+    // (la del lado y la total, apartada), y con 55 px los números se salían de la pantalla.
+    private val margenPx: Float get() = if (contornoConLados()) 120f else 55f
     private val anchoMarcoPx   = 7f   // contorno exterior
     private val anchoLineaPx   = 4f   // resto de líneas
     private val anchoReflejoPx = 1.5f // rayas de "reflejo"
@@ -919,10 +921,25 @@ class VistaDiseno @JvmOverloads constructor(
      * Ambos lados usan la misma fórmula simétrica — sin distinción IZQ/DER —
      * para que anchoTotalCm sea exactamente lo que ocupa el dibujo en pantalla.
      */
+    /**
+     * Lo que sobra del ancho de la ventana después de sumar sus tramos, en cm: es el sitio de los
+     * parantes. El reparto del modelo descuenta 2.5 por cada parante (`anchoUtil`), así que dos
+     * tramos de 112.2 en una ventana de 226.9 dejan 2.5 entre los dos. Dibujando los tramos
+     * pegados, ese trozo quedaba al final como una franja delgada fuera del marco —y con la
+     * silueta del vano encima se veía—. Solo vale para tramos planos y rectos: en una ventana
+     * que dobla o curva el ancho que se ve no es el que mide.
+     */
+    private fun huecoDeParantesCm(): Float {
+        if (segmentosNs.size < 2) return 0f
+        if (segmentosNs.any { it.tipo != TipoSegmentoNs.PLANO || it.flechaCm > 0f }) return 0f
+        val suma = segmentosNs.sumOf { it.anchoCm.toDouble() }.toFloat()
+        return (anchoCm - suma).coerceAtLeast(0f) / (segmentosNs.size - 1)
+    }
+
     private fun anchoEfectivoCm(): Float {
         val h = altoCm.coerceAtLeast(1f)
         return if (segmentosNs.isNotEmpty()) {
-            segmentosNs.sumOf { seg ->
+            huecoDeParantesCm() * (segmentosNs.size - 1) + segmentosNs.sumOf { seg ->
                 if (seg.flechaCm > 0f) {
                     // La pared curva no ocupa lo que mide: gira, y de un cuarto de vuelta se ve
                     // 2/π de su desarrollo. Contándola entera, el dibujo se salía por la derecha.
@@ -1595,10 +1612,14 @@ class VistaDiseno @JvmOverloads constructor(
         var yTopPlanoActual = yTop
         var yBottomPlanoActual = yBottom
         var escalaAcumulada = 1f
+        val huecoParanteCm = huecoDeParantesCm()
 
         segmentosNs.forEachIndexed { idx, segmento ->
             val escalaLocal = (escalaPxPorCm * escalaAcumulada).coerceAtLeast(0.0001f)
             val anchoNominalPx = (segmento.anchoCm * escalaLocal).coerceAtLeast(1f)
+            // El sitio del parante entre tramo y tramo: lo que el reparto descontó del ancho.
+            val huecoPx = if (idx > 0) huecoParanteCm * escalaLocal else 0f
+            xCursor += huecoPx
             val xIni = xCursor
             var xFin = xCursor + anchoNominalPx
             val anchoParante = max(10f, 2.5f * escalaLocal)
@@ -1621,11 +1642,15 @@ class VistaDiseno @JvmOverloads constructor(
                 val vecino = segmentosNs.getOrNull(idx - 1)
                 val yAbajoParante = min(yAbajoTramo, yAbajoDe(vecino))
                 val yArribaParante = max(yArribaTramo, yArribaDe(vecino))
+                // Con hueco, el parante lo llena; sin hueco (tramos que suman el ancho entero,
+                // como los que salen del contorno) va centrado en la frontera, como siempre.
+                val xParante = xIni - huecoPx / 2f
+                val medioParante = max(anchoParante, huecoPx) / 2f
                 if (modo == ModoEnsamble.INA) {
-                    canvas.drawLine(xIni, yArribaParante, xIni, yAbajoParante, pLineaIna)
+                    canvas.drawLine(xParante, yArribaParante, xParante, yAbajoParante, pLineaIna)
                 } else {
                     canvas.drawRect(
-                        RectF(xIni - anchoParante / 2, yArribaParante, xIni + anchoParante / 2, yAbajoParante),
+                        RectF(xParante - medioParante, yArribaParante, xParante + medioParante, yAbajoParante),
                         pRellenoNegro
                     )
                 }
@@ -3229,8 +3254,12 @@ class VistaDiseno @JvmOverloads constructor(
 
     // ================= COTAS =================
     private fun dibujarCotas(canvas: Canvas, x0: Float, y0: Float, x1: Float, y1: Float, escala: Float) {
-        val offsetH = 40f // separación horizontal
-        val offsetV = 35f // separación vertical
+        // Con un vano que no es rectángulo, cada lado lleva su cota pegada a la forma y las dos
+        // totales se apartan para no montarse encima.
+        val conLados = contornoConLados()
+        val aparte = if (conLados) 34f else 0f
+        val offsetH = 40f + aparte // separación horizontal
+        val offsetV = 35f + aparte // separación vertical
         val flechaLen = 12f // longitud de las flechas
         val espacioTexto = 50f // espacio necesario para el texto rotado
 
@@ -3282,7 +3311,93 @@ class VistaDiseno @JvmOverloads constructor(
         canvas.drawText(textoAlto, xLineaV, yCentroV + 8f, pTextoCota)
         canvas.restore()
 
-        dibujarCotasEscalon(canvas, y0, y1, escala)
+        dibujarCotasEscalon(canvas, y0, y1, escala, aparte, conLados)
+        if (conLados) dibujarCotasDelContorno(canvas, x0, y0, escala)
+    }
+
+    /**
+     * ¿El vano tiene lados que contar además del ancho y el alto? Un rectángulo liso no: sus
+     * cuatro lados ya están dichos con las dos cotas de siempre. El arco y el círculo tampoco,
+     * que traen su propio contorno curvo.
+     */
+    private fun contornoConLados(): Boolean {
+        if (contornoVanoCm.size < 3 || modoArcoCurvo || modoCircular) return false
+        if (contornoVanoCm.size != 4) return true
+        val izq = contornoVanoCm.minOf { it.first }
+        val der = contornoVanoCm.maxOf { it.first }
+        val arriba = contornoVanoCm.minOf { it.second }
+        val abajo = contornoVanoCm.maxOf { it.second }
+        fun cerca(a: Float, b: Float) = kotlin.math.abs(a - b) < 0.05f
+        return contornoVanoCm.any { (x, y) ->
+            !((cerca(x, izq) || cerca(x, der)) && (cerca(y, arriba) || cerca(y, abajo)))
+        }
+    }
+
+    /**
+     * La cota de cada lado del vano, pegada por fuera de la forma, como la muestra el apunte de
+     * medidas. Sin ellas el escalón o la muesca se ven pero no se sabe de cuánto es cada trozo, y
+     * es justo lo que hace falta para repartir el diseño a mano. Un lado que mide lo mismo que el
+     * ancho o el alto total no se repite: ya está en la cota total.
+     */
+    private fun dibujarCotasDelContorno(canvas: Canvas, x0: Float, y0: Float, escala: Float) {
+        val puntos = contornoVanoCm.map { (xCm, yCm) -> PointF(x0 + xCm * escala, y0 + yCm * escala) }
+        val n = puntos.size
+        // Orientación del recorrido, para saber hacia qué lado queda "fuera" en cada tramo.
+        var doble = 0f
+        for (i in 0 until n) {
+            val a = puntos[i]
+            val b = puntos[(i + 1) % n]
+            doble += a.x * b.y - b.x * a.y
+        }
+        val signo = if (doble >= 0f) 1f else -1f
+        val separacion = 24f
+        val flecha = 10f
+        val anchoTotal = anchoEfectivoCm()
+        fun fmt(v: Float) = if (v % 1 == 0f) v.toInt().toString() else "%.1f".format(v).replace(",", ".")
+
+        for (i in 0 until n) {
+            val a = puntos[i]
+            val b = puntos[(i + 1) % n]
+            val (axCm, ayCm) = contornoVanoCm[i]
+            val (bxCm, byCm) = contornoVanoCm[(i + 1) % n]
+            val medidaCm = sqrt((bxCm - axCm) * (bxCm - axCm) + (byCm - ayCm) * (byCm - ayCm))
+            val dx = b.x - a.x
+            val dy = b.y - a.y
+            val largo = sqrt(dx * dx + dy * dy)
+            if (largo < 1f || medidaCm < 0.05f) continue
+            val horizontal = kotlin.math.abs(dx) >= kotlin.math.abs(dy)
+            // Lo que ya dice la cota total no se repite.
+            if (horizontal && kotlin.math.abs(medidaCm - anchoTotal) < 0.05f) continue
+            if (!horizontal && kotlin.math.abs(medidaCm - altoCm) < 0.05f) continue
+
+            val ux = dx / largo
+            val uy = dy / largo
+            val nx = signo * dy / largo
+            val ny = -signo * dx / largo
+            val ax = a.x + nx * separacion
+            val ay = a.y + ny * separacion
+            val bx = b.x + nx * separacion
+            val by = b.y + ny * separacion
+            // Línea de cota con sus dos llamadas desde las esquinas y las flechas.
+            canvas.drawLine(a.x, a.y, a.x + nx * (separacion + 6f), a.y + ny * (separacion + 6f), pLineaCota)
+            canvas.drawLine(b.x, b.y, b.x + nx * (separacion + 6f), b.y + ny * (separacion + 6f), pLineaCota)
+            canvas.drawLine(ax, ay, bx, by, pLineaCota)
+            canvas.drawLine(ax, ay, ax + ux * flecha + nx * flecha / 2f, ay + uy * flecha + ny * flecha / 2f, pLineaCota)
+            canvas.drawLine(ax, ay, ax + ux * flecha - nx * flecha / 2f, ay + uy * flecha - ny * flecha / 2f, pLineaCota)
+            canvas.drawLine(bx, by, bx - ux * flecha + nx * flecha / 2f, by - uy * flecha + ny * flecha / 2f, pLineaCota)
+            canvas.drawLine(bx, by, bx - ux * flecha - nx * flecha / 2f, by - uy * flecha - ny * flecha / 2f, pLineaCota)
+
+            // El número siempre derecho, al lado de fuera de la línea: encima o debajo si el lado
+            // es horizontal, a un costado si es vertical.
+            val texto = fmt(medidaCm)
+            val anchoTexto = pTextoCota.measureText(texto)
+            val mx = (ax + bx) / 2f
+            val my = (ay + by) / 2f
+            val hueco = if (horizontal) 16f else 8f + anchoTexto / 2f
+            val tx = mx + nx * hueco
+            val ty = my + ny * (if (horizontal) 16f else 8f) + 10f
+            canvas.drawText(texto, tx, ty, pTextoCota)
+        }
     }
 
     /**
@@ -3292,14 +3407,16 @@ class VistaDiseno @JvmOverloads constructor(
      * Sin ellas el plano no sirve para el taller: se ve la forma, pero no de cuánto es cada trozo.
      * En una ventana recta no se dibuja nada de esto, que ya está dicho con el ancho y el alto.
      */
-    private fun dibujarCotasEscalon(canvas: Canvas, y0: Float, y1: Float, escala: Float) {
+    private fun dibujarCotasEscalon(
+        canvas: Canvas, y0: Float, y1: Float, escala: Float, aparte: Float = 0f, conLados: Boolean = false
+    ) {
         val planos = segmentosNs.filter { it.tipo == TipoSegmentoNs.PLANO }
         if (planos.none { it.altoCm > 0f }) return
         if (rangosTramoX.size < planos.size) return
 
         fun fmt(v: Float) = if (v % 1 == 0f) v.toInt().toString() else "%.1f".format(v).replace(",", ".")
         val flecha = 10f
-        val yFila = y1 + 78f
+        val yFila = y1 + 78f + aparte
 
         planos.forEachIndexed { i, seg ->
             val (xIni, xFin) = rangosTramoX[i]
@@ -3318,6 +3435,8 @@ class VistaDiseno @JvmOverloads constructor(
 
         // El salto de cada escalón, en su propia esquina: arriba si lo que baja es el dintel,
         // abajo si lo que sube es el alféizar. Un tramo recortado por los dos lados lleva las dos.
+        // Con las cotas de los lados del vano ya puestas, el salto está dicho ahí.
+        if (conLados) return
         fun arribaDe(seg: SegmentoNs) =
             if (seg.caidaCm > 0f) (y0 + seg.caidaCm * escala).coerceAtMost(y1) else y0
         fun abajoDe(seg: SegmentoNs) =
