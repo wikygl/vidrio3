@@ -115,4 +115,49 @@ class EsquinaLibreTest {
         val parantes = LadosLibres.parantesDesdeTexto(LadosLibres.parantesATexto(v.parantesDeLadosEnCm()))
         assertEquals(listOf(1, 0), parantes.map { it.size })
     }
+
+    /**
+     * El desarrollo dibujado como UNA figura: una L de 500 x 300 con dos líneas gruesas verticales
+     * (a 250 y a 400) y un puente en el trozo de la izquierda. Sin seleccionar nada, el botón la
+     * parte por las líneas; la primera arista se deja en 180 (no dobla: es un parante) y la
+     * segunda en 90. Salen dos lados: 300 x 300 con su parante a 150, y 200 x 200.
+     */
+    @Test
+    fun una_sola_figura_se_parte_por_sus_lineas_gruesas() {
+        val v = vista()
+        val a = v.agregarRectanguloParaPruebas(100f, 100f, 400f, 400f)
+        val b = v.agregarRectanguloParaPruebas(400f, 200f, 600f, 400f)
+        v.seleccionarParaPruebas(a, b)
+        assertTrue(v.weldSelected())
+        val corte1 = v.agregarLineaParaPruebas(250f, 110f, 250f, 390f)
+        val corte2 = v.agregarLineaParaPruebas(400f, 110f, 400f, 390f)
+        val puente = v.agregarLineaParaPruebas(110f, 300f, 240f, 300f)
+        v.seleccionarParaPruebas(corte1, corte2, puente)
+        assertTrue(v.aplicarEstiloASeleccion(2f, null))
+        v.seleccionarParaPruebas()
+
+        var marco: Int? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { marco = v.convertirSeleccionEnEsquina() }
+        assertNotNull("no se armó la esquina desde una sola figura", marco)
+        assertEquals("tenían que salir tres trozos", 3, v.cajasDeParedesParaPruebas().size)
+
+        v.anguloDeEsquinaParaPruebas(0, 180f)
+        v.anguloDeEsquinaParaPruebas(1, 90f)
+        val esquina = v.esquinaPrincipalEnCm()
+        assertNotNull(esquina)
+        assertEquals("la arista a 180 no dobla: son dos lados", 2, esquina!!.lados.size)
+        assertEquals(300f, px(v, esquina.lados[0].ancho), 2f)
+        assertEquals(300f, px(v, esquina.lados[0].alto), 2f)
+        assertEquals("el puente del lado 1", 100f, px(v, esquina.lados[0].puente), 3f)
+        assertEquals(200f, px(v, esquina.lados[1].ancho), 2f)
+        assertEquals(200f, px(v, esquina.lados[1].alto), 2f)
+        assertEquals(listOf("90"), esquina.angulos)
+
+        val parantes = v.parantesDeLadosEnCm()
+        assertEquals("la arista recta es un parante del lado 1", 1, parantes[0].size)
+        assertEquals(150f, px(v, parantes[0][0]), 2f)
+        assertTrue(parantes[1].isEmpty())
+        // Los dos trozos del lado 1 vuelven a ser un rectángulo: no hace falta contorno.
+        assertEquals(listOf(null, null), v.contornosDeLadosEnCm())
+    }
 }

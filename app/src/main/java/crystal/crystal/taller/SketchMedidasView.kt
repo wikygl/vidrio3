@@ -137,6 +137,8 @@ class SketchMedidasView @JvmOverloads constructor(
          * vidriero quiere partir esa pared. Viaja a Nova como reparto de la pared.
          */
         const val ESQUINA_PARANTE = "ESQUINA_PARANTE"
+        /** Marca de paso: la línea gruesa que estaba sobre la arista, que el marco reemplaza. */
+        const val ESQUINA_ARISTA_DIBUJADA = "ESQUINA_ARISTA_DIBUJADA"
 
         /**
          * El borde derecho de la banda que ocupa una pared curva en el desarrollo.
@@ -1732,24 +1734,39 @@ class SketchMedidasView @JvmOverloads constructor(
         p.x >= b.left - holgura && p.x <= b.right + holgura && p.y >= b.top - holgura && p.y <= b.bottom + holgura
 
     /**
-     * Arma la ventana de esquina con las figuras seleccionadas como paredes, de izquierda a
-     * derecha. Devuelve el índice del marco, o null (con su aviso) si no se pudo.
+     * Arma la ventana de esquina con lo que hay dibujado, de izquierda a derecha. Devuelve el
+     * índice del marco, o null (con su aviso) si no se pudo.
      *
-     * Las paredes se ponen pegadas y con el pie a la misma altura, que es como va el desarrollo;
-     * sus líneas gruesas de dentro van con ellas: la horizontal pasa a ser el puente de esa pared
-     * y las verticales, sus parantes. Los ángulos arrancan en 90 y se piden después, uno por
-     * arista, con el diálogo de siempre (grados, hacia afuera, o por medida sin transportador).
+     * Las paredes son las figuras seleccionadas, o todas las del apunte si no hay selección. Si
+     * la figura es UNA sola —el desarrollo dibujado entero—, se parte por sus líneas gruesas
+     * verticales: cada trozo es una pared y cada línea, una arista. Si no hay figuras, nada.
+     *
+     * Varias figuras se ponen pegadas y con el pie a la misma altura, que es como va el
+     * desarrollo; sus líneas gruesas de dentro van con ellas: la horizontal pasa a ser el puente
+     * de esa pared y las verticales, sus parantes. Los ángulos arrancan en 90 y se piden después,
+     * uno por arista, con el diálogo de siempre (grados, hacia afuera, o por medida sin
+     * transportador). Una arista a 180° no dobla: es un parante dentro de la misma pared, y así
+     * viaja a Nova.
      */
     fun convertirSeleccionEnEsquina(): Int? {
-        val paredes = selectedIndices
-            .mapNotNull { i -> elementos.getOrNull(i)?.takeIf { esParedDeEsquina(it) }?.let { i to boundsForElement(it) } }
-            .sortedBy { it.second.left }
-        if (paredes.size < 2) {
-            Toast.makeText(context, "Selecciona al menos dos figuras: las paredes, de izquierda a derecha", Toast.LENGTH_LONG).show()
-            return null
-        }
         if (elementos.indices.any { esMarcoEsquina(it) }) {
             Toast.makeText(context, "Ya hay una ventana de esquina en el apunte", Toast.LENGTH_SHORT).show()
+            return null
+        }
+        val candidatas = selectedIndices.filter { esParedDeEsquina(elementos.getOrNull(it) ?: return@filter false) }
+            .ifEmpty { elementos.indices.filter { esParedDeEsquina(elementos[it]) } }
+        if (candidatas.isEmpty()) {
+            Toast.makeText(context, "Dibuja primero las paredes de la ventana", Toast.LENGTH_LONG).show()
+            return null
+        }
+        val indices = if (candidatas.size == 1) partirFiguraPorLineasGruesas(candidatas.single()) else candidatas
+        val paredes = indices.map { it to boundsForElement(elementos[it]) }.sortedBy { it.second.left }
+        if (paredes.size < 2) {
+            Toast.makeText(
+                context,
+                "Hacen falta dos paredes: dos figuras, o una sola partida por una línea gruesa vertical",
+                Toast.LENGTH_LONG
+            ).show()
             return null
         }
         val holgura = cmToPx(3f)
@@ -1760,14 +1777,16 @@ class SketchMedidasView @JvmOverloads constructor(
                 esLineaGruesa(s) && s is Element.Shape && dentroDe(b, s.start, holgura) && dentroDe(b, s.end, holgura)
             }
         }
-        // Pegadas y con el pie común: cada pared se corre lo que haga falta, con sus líneas.
+        // Pegadas y con el pie común: cada pared se corre lo que haga falta, con sus líneas. Los
+        // trozos de una sola figura ya están en su sitio: partirla no la mueve.
         val pie = paredes.maxOf { it.second.bottom }
+        val moverAlPie = candidatas.size > 1
         var x = paredes.first().second.left
         val tramosPx = mutableListOf<Float>()
         val arribaY = mutableListOf<Float>()
         paredes.forEachIndexed { k, (i, b) ->
             val dx = x - b.left
-            val dy = pie - b.bottom
+            val dy = if (moverAlPie) pie - b.bottom else 0f
             if (abs(dx) > 0.01f || abs(dy) > 0.01f) {
                 translateElement(i, dx, dy)
                 lineasDe[k].forEach { translateElement(it, dx, dy) }
@@ -1779,7 +1798,8 @@ class SketchMedidasView @JvmOverloads constructor(
             if (k == 0) arribaY.add(ahora.top)
             else arribaY[arribaY.lastIndex] = minOf(arribaY.last(), ahora.top)
             arribaY.add(ahora.top)
-            // Sus líneas gruesas: la horizontal es el puente; las verticales, parantes.
+            // Sus líneas gruesas: la horizontal es el puente; las verticales de dentro, parantes;
+            // las que caen sobre el canto son la arista, que ya la pone el marco: sobran.
             var conPuente = false
             lineasDe[k].forEach { li ->
                 val s = elementos[li] as Element.Shape
@@ -1792,18 +1812,23 @@ class SketchMedidasView @JvmOverloads constructor(
                     }
                     vertical -> {
                         val xl = (s.start.x + s.end.x) / 2f
-                        // Sobre el canto de la pared no es un parante: es la arista o el marco.
                         val enCanto = abs(xl - ahora.left) < holgura || abs(xl - ahora.right) < holgura
-                        if (!enCanto) elementos[li] = crearShape(Tool.LINE, s.start, s.end, ESQUINA_PARANTE).conEstiloDe(s)
+                        elementos[li] =
+                            if (enCanto) crearShape(Tool.LINE, s.start, s.end, ESQUINA_ARISTA_DIBUJADA).conEstiloDe(s)
+                            else crearShape(Tool.LINE, s.start, s.end, ESQUINA_PARANTE).conEstiloDe(s)
                     }
                 }
             }
             x = ahora.right
         }
+        // Las líneas que marcaban las aristas ya no hacen falta: el marco pone las suyas.
+        val sobran = elementos.indices.filter { (elementos[it] as? Element.Shape)?.cotaHint == ESQUINA_ARISTA_DIBUJADA }
+        sobran.sortedDescending().forEach { elementos.removeAt(it) }
+        val paredesAhora = paredes.map { (i, _) -> i - sobran.count { it < i } }
         val anchoCm = pxToCm(tramosPx.sum())
         val altoCm = pxToCm(pie - (arribaY.minOrNull() ?: pie))
         val piezas = piezasDePlantillaEsquina(
-            left = paredes.first().second.left,
+            left = boundsForElement(elementos[paredesAhora.first()]).left,
             bottom = pie,
             tramosPx = tramosPx,
             arribaY = arribaY,
@@ -1825,6 +1850,45 @@ class SketchMedidasView @JvmOverloads constructor(
         registrarAccion()
         invalidate()
         return marcoIndex
+    }
+
+    /**
+     * Parte una figura por sus líneas gruesas verticales, de canto a canto, y devuelve los índices
+     * de los trozos (la figura entera si no tiene ninguna). Cada trozo es una figura compuesta con
+     * su contorno exacto, cortada por la recta de la línea: es como cortar con un rectángulo.
+     */
+    private fun partirFiguraPorLineasGruesas(indice: Int): List<Int> {
+        val figura = elementos.getOrNull(indice) ?: return listOf(indice)
+        val caja = boundsForElement(figura)
+        val holgura = cmToPx(3f)
+        val cortes = elementos.mapNotNull { e ->
+            val s = e as? Element.Shape ?: return@mapNotNull null
+            if (!esLineaGruesa(s)) return@mapNotNull null
+            if (abs(s.end.x - s.start.x) > abs(s.end.y - s.start.y) * 0.2f) return@mapNotNull null
+            val xl = (s.start.x + s.end.x) / 2f
+            if (xl <= caja.left + holgura || xl >= caja.right - holgura) return@mapNotNull null
+            if (!dentroDe(caja, s.start, holgura) || !dentroDe(caja, s.end, holgura)) return@mapNotNull null
+            xl
+        }.sorted()
+        if (cortes.isEmpty()) return listOf(indice)
+        val bordes = listOf(caja.left) + cortes + listOf(caja.right)
+        val original = pathForElement(figura)
+        val trozos = (0 until bordes.size - 1).mapNotNull { k ->
+            val recorte = Path(original).apply {
+                op(
+                    Path().apply {
+                        addRect(RectF(bordes[k], caja.top - 1f, bordes[k + 1], caja.bottom + 1f), Path.Direction.CW)
+                    },
+                    Path.Op.INTERSECT
+                )
+            }
+            val bounds = RectF().also { recorte.computeBounds(it, true) }
+            if (bounds.width() < 1f || bounds.height() < 1f) null else compositeFromPath(recorte)
+        }
+        if (trozos.size < 2) return listOf(indice)
+        elementos.removeAt(indice)
+        elementos.addAll(indice, trozos)
+        return (indice until indice + trozos.size).toList()
     }
 
     /** Las aristas del marco, para pedir sus ángulos una por una. */
@@ -1872,36 +1936,70 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.indices.firstOrNull { esMarcoEsquina(it) && (elementos[it] as Element.Shape).libre }
 
     /**
+     * Un lado de la esquina libre: los tramos que van entre dos aristas que doblan de verdad. Una
+     * arista a 180° no dobla —es un parante— y junta los tramos de los dos lados en una pared.
+     */
+    private data class LadoLibre(
+        val tramos: IntRange,
+        val caja: RectF,
+        val paredes: List<Int>,
+        /** Los parantes de dentro: las aristas a 180°, en px. */
+        val aristasRectas: List<Float>,
+        /** El ángulo con el que dobla al lado siguiente; null en el último. */
+        val grados: Float?
+    )
+
+    private fun ladosLibres(marcoIndex: Int): List<LadoLibre> {
+        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
+        val bordes = bordesDeTramos(marcoIndex)
+        if (bordes.size < 3) return emptyList()
+        val esquinas = esquinasDeVentana(marcoIndex)
+        val lados = mutableListOf<LadoLibre>()
+        var desde = 0
+        var rectas = mutableListOf<Float>()
+        for (tramo in 0 until bordes.size - 1) {
+            val ultimo = tramo == bordes.size - 2
+            val grados = if (ultimo) null else esquinas.getOrNull(tramo)?.grados ?: 90f
+            val sigueDeLargo = grados != null && abs(abs(grados) - 180f) < 0.5f
+            if (sigueDeLargo) {
+                rectas.add(bordes[tramo + 1])
+                continue
+            }
+            val paredes = (desde..tramo).mapNotNull { paredDeTramo(marcoIndex, it) }
+            val caja = paredes.map { boundsForElement(elementos[it]) }
+                .fold(null as RectF?) { acc, b -> acc?.apply { union(b) } ?: RectF(b) }
+                ?: RectF(bordes[desde], marco.rect.top, bordes[tramo + 1], marco.rect.bottom)
+            lados.add(LadoLibre(desde..tramo, caja, paredes, rectas, grados))
+            desde = tramo + 1
+            rectas = mutableListOf()
+        }
+        return lados
+    }
+
+    /**
      * Los lados de una esquina libre: cada pared con el ancho y el alto de su caja —la ventana
      * tapa el hueco entero—, su puente y el ángulo de su arista. Sin curvas: eso es de la plantilla.
      */
     private fun esquinaLibreEnCm(marcoIndex: Int): EsquinaMedida? {
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return null
-        val bordes = bordesDeTramos(marcoIndex)
-        if (bordes.size < 3) return null
+        val lados = ladosLibres(marcoIndex)
+        if (lados.size < 2) return null
         val pie = marco.rect.bottom
         val puentes = puentesDelMarco(marcoIndex).map { elementos[it] as Element.Shape }
-        val esquinas = esquinasDeVentana(marcoIndex)
-        val lados = mutableListOf<LadoEsquina>()
-        val angulos = mutableListOf<String>()
-        for (tramo in 0 until bordes.size - 1) {
-            val izq = bordes[tramo]
-            val der = bordes[tramo + 1]
-            val caja = paredDeTramo(marcoIndex, tramo)?.let { boundsForElement(elementos[it]) }
-                ?: RectF(izq, marco.rect.top, der, pie)
-            val puente = puentes.firstOrNull { it.rect.centerX() > izq - 0.5f && it.rect.centerX() < der + 0.5f }
-            lados.add(
-                LadoEsquina(
-                    anchoAbajo = pxToCm(caja.width()),
-                    anchoArriba = pxToCm(caja.width()),
-                    altoIzq = pxToCm(pie - caja.top),
-                    altoDer = pxToCm(pie - caja.top),
-                    puente = puente?.let { pxToCm(pie - it.start.y) } ?: 0f
-                )
+        val medidos = lados.map { lado ->
+            val puente = puentes.firstOrNull {
+                it.rect.centerX() > lado.caja.left - 0.5f && it.rect.centerX() < lado.caja.right + 0.5f
+            }
+            LadoEsquina(
+                anchoAbajo = pxToCm(lado.caja.width()),
+                anchoArriba = pxToCm(lado.caja.width()),
+                altoIzq = pxToCm(lado.caja.height()),
+                altoDer = pxToCm(lado.caja.height()),
+                puente = puente?.let { pxToCm(pie - it.start.y) } ?: 0f
             )
-            if (tramo < bordes.size - 2) angulos.add(formatCm(esquinas.getOrNull(tramo)?.grados ?: 90f))
         }
-        return if (lados.size >= 2) EsquinaMedida(lados, angulos) else null
+        val angulos = lados.dropLast(1).map { formatCm(it.grados ?: 90f) }
+        return EsquinaMedida(medidos, angulos)
     }
 
     /**
@@ -1911,21 +2009,14 @@ class SketchMedidasView @JvmOverloads constructor(
      */
     fun contornosDeLadosEnCm(): List<List<Pair<Float, Float>>?> {
         val marcoIndex = marcoLibre() ?: return emptyList()
-        val bordes = bordesDeTramos(marcoIndex)
-        return (0 until bordes.size - 1).map { tramo ->
-            val i = paredDeTramo(marcoIndex, tramo) ?: return@map null
-            val e = elementos[i]
-            val caja = boundsForElement(e)
-            val puntos = when (e) {
-                is Element.Composite -> e.contours.firstOrNull().orEmpty()
-                is Element.Shape -> when (e.tool) {
-                    Tool.TRIANGLE -> verticesTriangulo(e).toList()
-                    Tool.RECTANGLE -> listOf(e.topLeft, e.topRight, e.bottomRight, e.bottomLeft)
-                    else -> emptyList()
-                }
-                else -> emptyList()
-            }
+        return ladosLibres(marcoIndex).map { lado ->
+            if (lado.paredes.isEmpty()) return@map null
+            // Una pared partida por parantes vuelve a ser una: sus trozos se unen.
+            val union = Path()
+            lado.paredes.forEach { union.op(pathForElement(elementos[it]), Path.Op.UNION) }
+            val puntos = contoursFromPath(union).firstOrNull().orEmpty()
             if (puntos.size < 3) return@map null
+            val caja = lado.caja
             val contorno = puntos.map { pxToCm(it.x - caja.left) to pxToCm(it.y - caja.top) }
             // Un rectángulo de verdad no hace falta mandarlo: ya va con su ancho y su alto.
             val esCaja = contorno.size == 4 && contorno.all { (x, y) ->
@@ -1937,22 +2028,23 @@ class SketchMedidasView @JvmOverloads constructor(
     }
 
     /**
-     * Los parantes marcados en cada pared de la esquina libre: dónde está cada uno, en cm desde
-     * el canto izquierdo de esa pared, de izquierda a derecha. Vacío si no hay esquina libre.
+     * Los parantes de cada pared de la esquina libre: dónde está cada uno, en cm desde el canto
+     * izquierdo de esa pared, de izquierda a derecha. Son las líneas gruesas verticales de dentro
+     * de la pared y las aristas que no doblan (180°). Vacío si no hay esquina libre.
      */
     fun parantesDeLadosEnCm(): List<List<Float>> {
         val marcoIndex = marcoLibre() ?: return emptyList()
-        val bordes = bordesDeTramos(marcoIndex)
-        return (0 until bordes.size - 1).map { tramo ->
-            val izq = bordes[tramo]
-            val der = bordes[tramo + 1]
-            elementos.mapNotNull { e ->
+        return ladosLibres(marcoIndex).map { lado ->
+            val izq = lado.caja.left
+            val der = lado.caja.right
+            val marcados = elementos.mapNotNull { e ->
                 val s = e as? Element.Shape ?: return@mapNotNull null
                 if (s.cotaHint != ESQUINA_PARANTE) return@mapNotNull null
                 val xl = (s.start.x + s.end.x) / 2f
                 if (xl <= izq + cmToPx(2f) || xl >= der - cmToPx(2f)) return@mapNotNull null
-                pxToCm(xl - izq)
-            }.sorted()
+                xl
+            }
+            (marcados + lado.aristasRectas).map { pxToCm(it - izq) }.distinct().sorted()
         }
     }
 
