@@ -44,10 +44,13 @@ class EsquinaConSiluetaTest {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val intent = Intent(ctx, DisenoNovaActivity::class.java)
             .putExtra(DisenoNovaActivity.EXTRA_PAQUETE, enL)
+            // La calculadora manda la aleta también como mocheta lateral: por lados no debe pintarse.
+            .putExtra(DisenoNovaActivity.EXTRA_MOCHETA_LATERAL_CM, 64.5f)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         ActivityScenario.launch<DisenoNovaActivity>(intent).use { esc ->
             esperar()
             assertEquals("no se abrió por lados", 2, en(esc) { it.ladosParaPruebas() })
+            assertEquals("la aleta se pintaba como panel vacío al lado", 0f, en(esc) { it.mochetaLateralParaPruebas() }, 0.01f)
 
             // El primer lado, de frente, trae su silueta y la ve como su vano.
             val lado1 = DisenoNova.desdePaquete(en(esc) { it.paqueteParaPruebas() })!!

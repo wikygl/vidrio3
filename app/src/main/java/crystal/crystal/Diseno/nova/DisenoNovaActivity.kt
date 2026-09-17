@@ -2469,6 +2469,10 @@ class DisenoNovaActivity : AppCompatActivity() {
             return false
         }
         ladoActivo = 0
+        // La calculadora manda la aleta también como "mocheta lateral", que es como se dibujaba la
+        // L antes de partirla en lados. Editando lado a lado la aleta es otro lado: sin esto, el
+        // lado de frente salía con un panel vacío de su ancho pegado a la izquierda.
+        mochetaLateralCm = 0f
         cargarDesdePaquete(ladosEsquina[0].aPaquete())
         instalarChipLado()
         return true
@@ -2765,6 +2769,9 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     @androidx.annotation.VisibleForTesting
     fun contornoVanoParaPruebas(): List<Pair<Float, Float>> = binding.vistaDiseno.contornoVanoParaPruebas()
+
+    @androidx.annotation.VisibleForTesting
+    fun mochetaLateralParaPruebas(): Float = mochetaLateralCm
 
     /** El dibujo tal cual se está viendo, para poder mirarlo desde fuera del celular. */
     @androidx.annotation.VisibleForTesting

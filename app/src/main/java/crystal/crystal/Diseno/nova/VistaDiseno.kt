@@ -808,7 +808,7 @@ class VistaDiseno @JvmOverloads constructor(
             // con un solo tramo, esa silueta es la del vano entero.
             if (contornoVanoCm.isEmpty()) {
                 RE_CONTORNO_TRAMO.find(b.contenido)?.let { m ->
-                    contornoVanoCm = ContornoEnTramos.desdeEtiqueta(m.value)
+                    contornoVanoCm = siluetaAlAncho(ContornoEnTramos.desdeEtiqueta(m.value), b.ancho)
                 }
             }
             val tieneMedidas = RE_ALTO_TRAMO.containsMatchIn(b.contenido) ||
@@ -874,6 +874,7 @@ class VistaDiseno @JvmOverloads constructor(
             // `L<…>`: la silueta de la pared que arranca en este tramo, si no es un rectángulo.
             val silueta = RE_CONTORNO_TRAMO.find(contenido)
                 ?.let { ContornoEnTramos.desdeEtiqueta(it.value) }.orEmpty()
+                .let { siluetaAlAncho(it, bloque.ancho) }
             segs.add(
                 SegmentoNs(
                     bloque.tipo, bloque.ancho, franjas,
@@ -3391,6 +3392,19 @@ class VistaDiseno @JvmOverloads constructor(
      * cuatro lados ya están dichos con las dos cotas de siempre. El arco y el círculo tampoco,
      * que traen su propio contorno curvo.
      */
+    /**
+     * La silueta de una pared, ajustada al ancho del tramo que la lleva. Se mide en obra con el
+     * ancho real y el tramo puede venir con el ancho ÚTIL (descontado el esquinero): se estira o
+     * encoge a lo ancho lo que haga falta para que llene el tramo, y nada más.
+     */
+    private fun siluetaAlAncho(silueta: List<Pair<Float, Float>>, anchoTramo: Float): List<Pair<Float, Float>> {
+        if (silueta.size < 3 || anchoTramo <= 0f) return silueta
+        val anchoSilueta = silueta.maxOf { it.first }
+        if (anchoSilueta <= 0f || kotlin.math.abs(anchoSilueta - anchoTramo) < 0.05f) return silueta
+        val k = anchoTramo / anchoSilueta
+        return silueta.map { (x, y) -> x * k to y }
+    }
+
     private fun contornoConLados(): Boolean {
         // Una pared de la esquina con su propia silueta también lleva las cotas de sus lados.
         if (segmentosNs.any { it.contornoCm.size >= 3 && it.flechaCm <= 0f }) return true
