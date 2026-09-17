@@ -3457,6 +3457,10 @@ class NovaCorrediza : AppCompatActivity() {
         if (current.isNotEmpty()) result.add(current.toString())
         return result
     }
+    /** El paquete del diseño tal como sale para el editor, para probar la cadena entera. */
+    @androidx.annotation.VisibleForTesting
+    fun disenoSimbolicoParaPruebas(): String = disenoSimbolico()
+
     private fun disenoSimbolico(): String {
         val ancho = binding.etAncho.text.toString().toFloat()
         val alto = binding.etAlto.text.toString().toFloat()
@@ -4330,9 +4334,6 @@ class NovaCorrediza : AppCompatActivity() {
     private fun cargarEsquinaDeMedida(texto: String, contornosLados: String = "", parantesLados: String = ""): Boolean {
 
         val medida = EsquinaMedida.desdeTexto(texto) ?: return false
-        // Cada medida trae lo suyo: lo de la anterior no vale para esta.
-        siluetasDeLaMedida = LadosLibres.contornosDesdeTexto(contornosLados)
-        parantesDeLaMedida = LadosLibres.parantesDesdeTexto(parantesLados)
         val geo = medida.geometria ?: return false
         val dibujo = when (geo) {
             "nl" -> R.drawable.venl
@@ -4342,6 +4343,10 @@ class NovaCorrediza : AppCompatActivity() {
         }
         seleccionarDesdePanel(dibujo, geo)
         esquinaDeLaMedida = medida
+        // Lo que trajo además la esquina armada sobre figuras: DESPUÉS de elegir la geometría, que
+        // elegirla limpia el estado de la L y se llevaba esto por delante.
+        siluetasDeLaMedida = LadosLibres.contornosDesdeTexto(contornosLados)
+        parantesDeLaMedida = LadosLibres.parantesDesdeTexto(parantesLados)
         // Lo que traiga la medida SIEMBRA el diseño; la última palabra es de Nova. El reparto a
         // mano de la ventana anterior no tiene nada que decir sobre esta.
         NovaCalculos.repartoManual = null
