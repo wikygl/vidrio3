@@ -705,32 +705,52 @@ class MedidaActivity : AppCompatActivity() {
     private fun mostrarPerspectivaGenerada(paquete: String?) {
         if (paquete == null) {
             volumenGenerado?.visibility = View.GONE
+        } else {
+            val vista = volumenGenerado ?: crystal.crystal.Diseno.nova.VistaVolumenNova(this).also { nueva ->
+                val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(0, 0).apply {
+                    topToTop = binding.sketchMedidas.id
+                    bottomToBottom = binding.sketchMedidas.id
+                    startToStart = binding.sketchMedidas.id
+                    endToEnd = binding.sketchMedidas.id
+                }
+                binding.layoutPrincipal.addView(nueva, lp)
+                nueva.elevation = 2 * resources.displayMetrics.density
+                volumenGenerado = nueva
+            }
+            vista.mostrar(paquete)
+            vista.visibility = View.VISIBLE
+        }
+        refrescarChipGenerado(paquete != null)
+    }
+
+    /**
+     * El rótulo de lo generado en la vista de ahora: en la perspectiva, que se gira y que un toque
+     * pasa a dibujar a mano; en la planta, que un toque la convierte en líneas para editarla; en
+     * una lateral, dónde está el canto con la frontal. Sin nada generado, no se ve.
+     */
+    private fun refrescarChipGenerado(conPerspectiva: Boolean) {
+        val vista = binding.sketchMedidas.vistaActiva
+        val texto: String? = when {
+            vista == SketchMedidasView.Vista.PERSPECTIVA && conPerspectiva ->
+                "◰ perspectiva generada · arrastra para girar · toca aquí para dibujar a mano"
+            vista == SketchMedidasView.Vista.SUPERIOR && binding.sketchMedidas.enseniaAlgoGenerado() ->
+                "planta generada de las alzadas · toca aquí para editarla a mano"
+            (vista == SketchMedidasView.Vista.IZQUIERDA || vista == SketchMedidasView.Vista.DERECHA) &&
+                binding.sketchMedidas.enseniaAlgoGenerado() ->
+                "dibuja esta pared de frente: arranca en el canto con la frontal, en el cero"
+            else -> null
+        }
+        if (texto == null) {
             chipPerspectiva?.visibility = View.GONE
             return
         }
-        val vista = volumenGenerado ?: crystal.crystal.Diseno.nova.VistaVolumenNova(this).also { nueva ->
-            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(0, 0).apply {
-                topToTop = binding.sketchMedidas.id
-                bottomToBottom = binding.sketchMedidas.id
-                startToStart = binding.sketchMedidas.id
-                endToEnd = binding.sketchMedidas.id
-            }
-            binding.layoutPrincipal.addView(nueva, lp)
-            nueva.elevation = 2 * resources.displayMetrics.density
-            volumenGenerado = nueva
-            val dp = resources.displayMetrics.density
-            val chip = TextView(this).apply {
-                text = "◰ perspectiva generada · arrastra para girar · toca aquí para dibujar a mano"
-                textSize = 11f
-                setTextColor(Color.parseColor("#455A64"))
-                setBackgroundResource(R.drawable.bg_control_panel)
-                setPadding((10 * dp).toInt(), (6 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
-                elevation = 3 * dp
-                setOnClickListener {
-                    perspectivaAMano = true
-                    refrescarTiraDeVistas()
-                }
-            }
+        val dp = resources.displayMetrics.density
+        val chip = chipPerspectiva ?: TextView(this).apply {
+            textSize = 11f
+            setTextColor(Color.parseColor("#455A64"))
+            setBackgroundResource(R.drawable.bg_control_panel)
+            setPadding((10 * dp).toInt(), (6 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
+            elevation = 3 * dp
             val lpChip = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
                 androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
                 androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
@@ -740,12 +760,26 @@ class MedidaActivity : AppCompatActivity() {
                 endToEnd = binding.sketchMedidas.id
                 topMargin = (8 * dp).toInt()
             }
-            binding.layoutPrincipal.addView(chip, lpChip)
-            chipPerspectiva = chip
+            binding.layoutPrincipal.addView(this, lpChip)
+            chipPerspectiva = this
         }
-        vista.mostrar(paquete)
-        vista.visibility = View.VISIBLE
-        chipPerspectiva?.visibility = View.VISIBLE
+        chip.text = texto
+        chip.visibility = View.VISIBLE
+        chip.setOnClickListener {
+            when (binding.sketchMedidas.vistaActiva) {
+                SketchMedidasView.Vista.PERSPECTIVA -> {
+                    perspectivaAMano = true
+                    refrescarTiraDeVistas()
+                }
+                SketchMedidasView.Vista.SUPERIOR -> {
+                    if (binding.sketchMedidas.materializarPlantaGenerada()) {
+                        binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
+                        refrescarTiraDeVistas()
+                    }
+                }
+                else -> Unit
+            }
+        }
     }
 
     /** El mismo botón prende el modo y lo apaga; hay que mirar ANTES de cerrar los paneles. */

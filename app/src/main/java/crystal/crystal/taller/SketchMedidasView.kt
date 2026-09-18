@@ -531,6 +531,7 @@ class SketchMedidasView @JvmOverloads constructor(
         dibujarAgarreIman(canvas)
         dibujarCotaEnMovimiento(canvas)
         dibujarVerticeDePolilinea(canvas)
+        dibujarLoGeneradoDeLaVista(canvas)
         drawSelection(canvas)
         drawNodos(canvas)
         if (dibujando) {
@@ -5897,7 +5898,11 @@ class SketchMedidasView @JvmOverloads constructor(
             viewOffsetY = nueva.viewOffsetY
         } else {
             estadoPrevio = emptyList()
-            resetViewport()
+            // Una vista nueva arranca con el cero a la vista, abajo a la izquierda: ahí empieza todo
+            // (el canto con la frontal, la planta) y de ahí crece el dibujo.
+            viewScale = 1f
+            viewOffsetX = width * 0.2f
+            viewOffsetY = height * 0.55f
         }
         vistaActiva = v
         invalidate()
@@ -5967,7 +5972,37 @@ class SketchMedidasView @JvmOverloads constructor(
      * misma regla con la que la plantilla dibuja su planta. A menos de 5° de 90 es 90; casi recto
      * es 180: un parante, no una esquina.
      */
-    private fun paredesDeLaPlanta(): List<Pair<Float, Float?>>? {
+    private fun paredesDeLaPlanta(): List<Pair<Float, Float?>>? = plantaDibujada() ?: plantaVirtual()
+
+    /** ¿La planta está dibujada a mano en la vista superior? Si no, se genera de las alzadas. */
+    fun plantaEstaDibujada(): Boolean = plantaDibujada() != null
+
+    /**
+     * La planta que sale de las alzadas cuando nadie la dibujó: las paredes de la vista izquierda,
+     * las de la frontal y las de la derecha, en ese orden, cada una del ancho de su figura. Entre
+     * vista y vista doblan a 90 (el rincón: todo arranca en el mismo cero); dentro de una vista van
+     * seguidas, a 180. Null si no hay ninguna figura.
+     */
+    private fun plantaVirtual(): List<Pair<Float, Float?>>? {
+        val grupos = listOf(Vista.IZQUIERDA, Vista.FRONTAL, Vista.DERECHA)
+            .map { v -> figurasDeVista(v).map { pxToCm(boundsForElement(it.first).width()) } }
+            .filter { it.isNotEmpty() }
+        if (grupos.isEmpty()) return null
+        val paredes = mutableListOf<Pair<Float, Float?>>()
+        grupos.forEachIndexed { g, anchos ->
+            anchos.forEachIndexed { k, ancho ->
+                val ultimaDelGrupo = k == anchos.lastIndex
+                val ultima = ultimaDelGrupo && g == grupos.lastIndex
+                val grados: Float? = if (ultima) null else if (ultimaDelGrupo) 90f else 180f
+                paredes.add(ancho to grados)
+            }
+        }
+        // Desde fuera se recorre al revés y el rincón dobla hacia afuera.
+        return if (vistaInterior) paredes
+        else paredes.reversed().mapIndexed { i, (a, _) -> a to paredes.getOrNull(paredes.size - 2 - i)?.second?.let { -it } }
+    }
+
+    private fun plantaDibujada(): List<Pair<Float, Float?>>? {
         val lineas = elementosDeVista(Vista.SUPERIOR).mapNotNull { e ->
             val s = e as? Element.Shape ?: return@mapNotNull null
             if (s.tool != Tool.LINE && s.tool != Tool.ORTHO_LINE) return@mapNotNull null
@@ -6085,7 +6120,6 @@ class SketchMedidasView @JvmOverloads constructor(
      */
     private fun paredesDesdeVistas(): List<ParedDeVistas>? {
         val planta = paredesDeLaPlanta() ?: return null
-        if (planta.size < 2) return null
         val frontales = figurasDeVista(Vista.FRONTAL)
         val izquierdas = figurasDeVista(Vista.IZQUIERDA)
         val derechas = figurasDeVista(Vista.DERECHA)
@@ -6140,7 +6174,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 juntas.add(p)
             }
         }
-        return juntas.takeIf { it.size >= 2 }
+        return juntas.takeIf { it.isNotEmpty() }
     }
 
     /**
@@ -6198,11 +6232,95 @@ class SketchMedidasView @JvmOverloads constructor(
         return crystal.crystal.Diseno.nova.DisenoNova("apa", paredes.first().anchoCm, altoVentana, tramos).aPaquete()
     }
 
+    // ---- Lo generado que se enseña en cada vista mientras no se dibuje ahí ----
+
+    /**
+     * Los puntos de la planta generada, en píxeles del apunte, arrancando en (0, 0) —todo empieza
+     * en el mismo cero— y doblando en cada arista lo que diga la planta virtual, hacia abajo del
+     * dibujo en el rincón. Vacío si la planta ya está dibujada o no hay alzadas.
+     */
+    private fun recorridoDePlantaGenerada(): List<PointF> {
+        if (plantaDibujada() != null) return emptyList()
+        val paredes = plantaVirtual() ?: return emptyList()
+        val puntos = mutableListOf(PointF(0f, 0f))
+        var rumbo = 0.0
+        paredes.forEach { (largoCm, grados) ->
+            val p = puntos.last()
+            val largo = cmToPx(largoCm)
+            puntos.add(PointF(p.x + (cos(rumbo) * largo).toFloat(), p.y + (sin(rumbo) * largo).toFloat()))
+            if (grados != null) {
+                val giro = 180f - abs(grados)
+                rumbo += Math.toRadians((if (grados < 0f) -giro else giro).toDouble())
+            }
+        }
+        return puntos
+    }
+
+    /**
+     * La planta generada, a trazos y con sus largos, en la vista superior vacía: ya se ven las
+     * paredes que hay dibujadas en las alzadas. Y en una lateral vacía, el canto que comparte con
+     * la frontal, para arrancar ahí.
+     */
+    private fun dibujarLoGeneradoDeLaVista(canvas: Canvas) {
+        when (vistaActiva) {
+            Vista.SUPERIOR -> {
+                if (elementos.isNotEmpty()) return
+                val puntos = recorridoDePlantaGenerada()
+                if (puntos.size < 2) return
+                for (i in 0 until puntos.size - 1) {
+                    val a = puntos[i]
+                    val b = puntos[i + 1]
+                    canvas.drawLine(a.x, a.y, b.x, b.y, sombraProlongacion)
+                    val mx = (a.x + b.x) / 2f
+                    val my = (a.y + b.y) / 2f
+                    canvas.drawText(formatCm(pxToCm(distancia(a, b))), mx, my - ce(10f), cotaTextPaint)
+                }
+            }
+            Vista.IZQUIERDA, Vista.DERECHA -> {
+                if (elementos.isNotEmpty()) return
+                val frontal = figurasDeVista(Vista.FRONTAL).let { figs ->
+                    if (vistaActiva == Vista.DERECHA) figs.lastOrNull() else figs.firstOrNull()
+                } ?: return
+                val alto = cmToPx(altoEnElCanto(frontal.first, derecho = vistaActiva == Vista.DERECHA))
+                // El canto compartido, en el cero: la pared de esta vista arranca pegada a él.
+                val x = 0f
+                canvas.drawLine(x, 0f, x, -alto, sombraProlongacion)
+                canvas.drawText(
+                    "canto con la frontal · ${formatCm(pxToCm(alto))}", x + ce(8f), -alto / 2f, cotaTextPaint
+                )
+            }
+            else -> Unit
+        }
+    }
+
+    /**
+     * Convierte la planta generada en líneas de verdad de la vista superior, para poder editarla
+     * (mover una punta, cambiar un ángulo). Desde entonces manda lo dibujado.
+     */
+    fun materializarPlantaGenerada(): Boolean {
+        if (vistaActiva != Vista.SUPERIOR || elementos.isNotEmpty()) return false
+        val puntos = recorridoDePlantaGenerada()
+        if (puntos.size < 2) return false
+        for (i in 0 until puntos.size - 1) {
+            elementos.add(crearShape(Tool.ORTHO_LINE, puntos[i], puntos[i + 1]))
+        }
+        registrarAccion()
+        invalidate()
+        return true
+    }
+
+    /** ¿En la vista de ahora hay algo generado que se está enseñando en vez de dibujo? */
+    fun enseniaAlgoGenerado(): Boolean = when (vistaActiva) {
+        Vista.SUPERIOR -> elementos.isEmpty() && recorridoDePlantaGenerada().size >= 2
+        Vista.IZQUIERDA, Vista.DERECHA -> elementos.isEmpty() && figurasDeVista(Vista.FRONTAL).isNotEmpty()
+        else -> false
+    }
+
     /** ¿El apunte tiene una planta en la vista superior? Entonces la esquina sale de las vistas. */
-    fun esquinaSaleDeLasVistas(): Boolean = tieneVistas() && paredesDeLaPlanta()?.size?.let { it >= 2 } == true
+    fun esquinaSaleDeLasVistas(): Boolean = tieneVistas() && paredesDesdeVistas()?.size?.let { it >= 2 } == true
 
     private fun esquinaDesdeVistasEnCm(): EsquinaMedida? {
-        val paredes = paredesDesdeVistas() ?: return null
+        val paredes = paredesDesdeVistas()?.takeIf { it.size >= 2 } ?: return null
         val lados = paredes.map { LadoEsquina(it.anchoCm, it.anchoCm, it.altoCm, it.altoCm, it.puenteCm) }
         val angulos = paredes.dropLast(1).map { formatCm(it.grados ?: 90f) }
         return EsquinaMedida(lados, angulos)

@@ -126,4 +126,40 @@ class EsquinaDesdeVistasTest {
         val volumen = crystal.crystal.Diseno.nova.VistaVolumenNova(ApplicationProvider.getApplicationContext())
         assertTrue("el 3D no arma la ventana: $paquete", volumen.mostrar(paquete))
     }
+
+    /**
+     * Sin dibujar la planta: la frontal y la derecha ya arman la L a 90 —todo arranca en el mismo
+     * cero—, la perspectiva sale con las dos paredes y la planta generada se puede volver líneas.
+     */
+    @Test
+    fun la_frontal_y_la_derecha_arman_la_l_sin_planta() {
+        val v = vista()
+        v.agregarRectanguloParaPruebas(100f, 100f, 380f, 400f)
+        // Con solo la frontal hay perspectiva (una pared) pero no esquina.
+        assertNotNull(v.paqueteDeVistasParaVolumen())
+        assertTrue(!v.esquinaSaleDeLasVistas())
+        v.cambiarAVista(SketchMedidasView.Vista.DERECHA)
+        assertTrue("la lateral vacía enseña el canto con la frontal", v.enseniaAlgoGenerado())
+        v.agregarRectanguloParaPruebas(0f, -162f, 64.5f, 0f)
+        v.cambiarAVista(SketchMedidasView.Vista.FRONTAL)
+        assertTrue(v.esquinaSaleDeLasVistas())
+        val esquina = v.esquinaPrincipalEnCm()!!
+        assertEquals(2, esquina.lados.size)
+        assertEquals(280f, px(v, esquina.lados[0].ancho), 2f)
+        assertEquals(64.5f, px(v, esquina.lados[1].ancho), 2f)
+        assertEquals(162f, px(v, esquina.lados[1].alto), 2f)
+        assertEquals(listOf("90"), esquina.angulos)
+        val d = crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(v.paqueteDeVistasParaVolumen()!!)!!
+        assertEquals(2, d.tramos.size)
+        assertEquals("A<90>", d.tramos[1].pliegue)
+        // La planta generada, hecha líneas: 280 a la derecha y 64.5 hacia abajo (el rincón).
+        v.cambiarAVista(SketchMedidasView.Vista.SUPERIOR)
+        assertTrue(v.enseniaAlgoGenerado())
+        assertTrue(v.materializarPlantaGenerada())
+        val lineas = v.lineasParaPruebas()
+        assertEquals(2, lineas.size)
+        assertEquals(px(v, 280f / v.cmAPixelesParaPruebas(1f)), lineas[0][2], 2f)
+        assertTrue("la segunda baja hacia quien mira", lineas[1][3] > lineas[1][1])
+        assertTrue(v.plantaEstaDibujada())
+    }
 }
