@@ -311,6 +311,19 @@
                         android:contentDescription="Mover nodos"
                         android:src="@drawable/nodos" />
                 </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Polilinea" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaPolilinea"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Polilinea: lineas rectas encadenadas"
+                        android:src="@drawable/polilinea" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 
@@ -926,12 +939,12 @@
 
                 <TextView
                     style="@style/RotuloIconoMedida"
-                    android:text="V. esquina" />
+                    android:text="3D" />
 
                 <ImageButton
-                    android:id="@+id/btnEsquinaPanelMedida"
+                    android:id="@+id/btn3dPanelMedida"
                     style="@style/IconoMedida"
-                    android:contentDescription="Armar ventana de esquina con las figuras seleccionadas"
+                    android:contentDescription="Medidas 3D: vistas frontal, superior, laterales y perspectiva"
                     android:src="@drawable/esquina_libre" />
             </LinearLayout>
         </LinearLayout>
@@ -1206,6 +1219,41 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
+
+        <!--
+          Medidas 3D: la tira de vistas del apunte, como las ventanas de un programa de 3D. La
+          que está en el lienzo va resaltada; las demás enseñan su miniatura y se tocan para
+          pasar a ellas. Solo se ve con "Medidas 3D" puesto.
+        -->
+        <LinearLayout
+            android:id="@+id/panelVistasMedida"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:background="@drawable/bg_control_panel"
+            android:orientation="vertical"
+            android:paddingStart="4dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="3dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvAvisoPerspectiva"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:text="Está dibujando en perspectiva: el resultado puede no ser exacto"
+                android:textColor="#B71C1C"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/filaVistasMedida"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </LinearLayout>
 
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"

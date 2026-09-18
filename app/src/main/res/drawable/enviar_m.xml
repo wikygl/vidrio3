@@ -1,0 +1,29 @@
+<!--
+  Enviar, con el mismo formato que los demás iconos del apunte: el avión de papel en celeste dentro
+  del recuadro blanco de esquinas redondeadas.
+-->
+<vector
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:autoMirrored="true"
+    android:height="45dp"
+    android:viewportHeight="11.3"
+    android:viewportWidth="11.3"
+    android:width="45dp">
+
+    <path
+        android:fillColor="#FEFEFE"
+        android:fillType="evenOdd"
+        android:pathData="M0.67,0.06L10.63,0.06A0.61,0.61 0,0 1,11.24 0.67L11.24,10.63A0.61,0.61 0,0 1,10.63 11.24L0.67,11.24A0.61,0.61 0,0 1,0.06 10.63L0.06,0.67A0.61,0.61 0,0 1,0.67 0.06z"
+        android:strokeColor="#373435"
+        android:strokeWidth="0.12" />
+
+    <path
+        android:fillColor="#00AFEF"
+        android:fillType="evenOdd"
+        android:pathData="M2.20,3.05L9.20,5.65L2.20,8.25L3.30,5.65z" />
+
+    <path
+        android:fillColor="#00AFEF"
+        android:pathData="M3.30,5.47L6.90,5.47L6.90,5.83L3.30,5.83z" />
+
+</vector>

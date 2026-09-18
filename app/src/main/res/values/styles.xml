@@ -18,6 +18,38 @@
         <item name="android:windowCloseOnTouchOutside">false</item>
     </style>
 
+    <!--
+      Celda de los paneles del apunte de medidas: el rótulo encima y el icono debajo, como en la
+      barra de abajo. Los iconos sueltos y muy separados no se distinguían ni se acertaban.
+    -->
+    <style name="CeldaIconoMedida">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center_horizontal</item>
+        <item name="android:paddingStart">1dp</item>
+        <item name="android:paddingEnd">1dp</item>
+    </style>
+
+    <style name="RotuloIconoMedida">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:gravity">center_horizontal</item>
+        <item name="android:textSize">9sp</item>
+        <item name="android:textColor">#455A64</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <style name="IconoMedida" parent="Widget.AppCompat.ImageButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">42dp</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+        <item name="android:padding">2dp</item>
+        <item name="android:scaleType">centerInside</item>
+    </style>
+
     <style name="DisenoNova.ControlButton" parent="Widget.AppCompat.ImageButton">
         <item name="android:layout_width">48dp</item>
         <item name="android:layout_height">48dp</item>

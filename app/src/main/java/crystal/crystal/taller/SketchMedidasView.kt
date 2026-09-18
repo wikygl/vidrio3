@@ -530,6 +530,7 @@ class SketchMedidasView @JvmOverloads constructor(
         dibujarImanEscuadra(canvas)
         dibujarAgarreIman(canvas)
         dibujarCotaEnMovimiento(canvas)
+        dibujarVerticeDePolilinea(canvas)
         drawSelection(canvas)
         drawNodos(canvas)
         if (dibujando) {
@@ -2073,6 +2074,8 @@ class SketchMedidasView @JvmOverloads constructor(
      * y en las que no tienen figura. Vacío si el apunte no tiene esquina libre.
      */
     fun contornosDeLadosEnCm(): List<List<Pair<Float, Float>>?> {
+        if (esquinaSaleDeLasVistas()) return paredesDesdeVistas()?.map { it.contorno }.orEmpty()
+        vistaConLaEsquina()?.takeIf { it != vistaActiva }?.let { v -> return conVista(v) { contornosDeLadosEnCm() } }
         val marcoIndex = marcoLibre() ?: return emptyList()
         return ladosLibres(marcoIndex).map { lado ->
             if (lado.paredes.isEmpty()) return@map null
@@ -2098,6 +2101,8 @@ class SketchMedidasView @JvmOverloads constructor(
      * de la pared y las aristas que no doblan (180°). Vacío si no hay esquina libre.
      */
     fun parantesDeLadosEnCm(): List<List<Float>> {
+        if (esquinaSaleDeLasVistas()) return paredesDesdeVistas()?.map { it.parantesCm }.orEmpty()
+        vistaConLaEsquina()?.takeIf { it != vistaActiva }?.let { v -> return conVista(v) { parantesDeLadosEnCm() } }
         val marcoIndex = marcoLibre() ?: return emptyList()
         return ladosLibres(marcoIndex).map { lado ->
             val izq = lado.caja.left
@@ -5301,6 +5306,12 @@ class SketchMedidasView @JvmOverloads constructor(
     }
 
     fun clear() {
+        // El dibujo es la medida entera: se van todas las vistas, y el lienzo vuelve a la frontal.
+        otrasVistas.clear()
+        if (vistaActiva != Vista.FRONTAL) {
+            vistaActiva = Vista.FRONTAL
+            alCambiarVista?.invoke(Vista.FRONTAL)
+        }
         elementos.clear()
         registrarAccion()
         cotaHits.clear()
@@ -5494,6 +5505,11 @@ class SketchMedidasView @JvmOverloads constructor(
      * para que la calculadora avise de que ese trozo no entra en el cálculo.
      */
     fun esquinaPrincipalEnCm(): EsquinaMedida? {
+        // Con planta en la vista superior, la esquina sale de las vistas, sin plantilla.
+        if (esquinaSaleDeLasVistas()) return esquinaDesdeVistasEnCm()
+        // Sin planta pero con dibujo en perspectiva: la esquina se arma allí, con la lectura de
+        // siempre (avisada de que puede no ser exacta).
+        vistaConLaEsquina()?.takeIf { it != vistaActiva }?.let { v -> return conVista(v) { esquinaPrincipalEnCm() } }
         val marcoIndex = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return null
         val marco = elementos[marcoIndex] as Element.Shape
         // La esquina armada sobre figuras se lee de sus paredes, no del marco.
@@ -5809,12 +5825,361 @@ class SketchMedidasView @JvmOverloads constructor(
         invalidate()
     }
 
+    // ==================== VISTAS DEL APUNTE (MEDIDAS 3D) ====================
+    // El apunte de siempre es la vista FRONTAL. Con "Medidas 3D" se le suman la superior (la
+    // planta), las laterales y la perspectiva, como las ventanas de un programa de 3D: cada una es
+    // un dibujo aparte, con su historial y su encuadre, y de todas juntas sale la ventana de
+    // esquina. Solo una está en el lienzo; las demás guardan su estado y se cambian con la tira.
+
+    enum class Vista(val rotulo: String) {
+        FRONTAL("Frontal"), SUPERIOR("Superior"), IZQUIERDA("Izquierda"), DERECHA("Derecha"), PERSPECTIVA("Perspectiva")
+    }
+
+    private class EstadoDeVista(
+        val elementos: MutableList<Element>,
+        val historia: ArrayDeque<List<Element>>,
+        val futuro: ArrayDeque<List<Element>>,
+        val estadoPrevio: List<Element>,
+        val viewScale: Float,
+        val viewOffsetX: Float,
+        val viewOffsetY: Float
+    )
+
+    /** Las vistas que no están en el lienzo, con lo suyo guardado. */
+    private val otrasVistas = HashMap<Vista, EstadoDeVista>()
+
+    var vistaActiva: Vista = Vista.FRONTAL
+        private set
+
+    /**
+     * Desde dónde se mira la ventana: desde dentro (lo normal en el taller) o desde fuera. Decide
+     * qué pared es la de la izquierda y cuál la de la derecha al armar la esquina.
+     */
+    var vistaInterior: Boolean = true
+
+    /** Avisa a la pantalla cuando cambia la vista del lienzo. */
+    var alCambiarVista: ((Vista) -> Unit)? = null
+
+    /** ¿El apunte tiene algo dibujado fuera de la frontal? Entonces es un apunte con vistas. */
+    fun tieneVistas(): Boolean = Vista.values().any { it != Vista.FRONTAL && vistaTieneDibujo(it) }
+
+    fun vistaTieneDibujo(v: Vista): Boolean =
+        if (v == vistaActiva) elementos.isNotEmpty() else otrasVistas[v]?.elementos?.isNotEmpty() == true
+
+    /** Pone otra vista en el lienzo, guardando la de ahora con su historial y su encuadre. */
+    fun cambiarAVista(v: Vista) {
+        if (v == vistaActiva) return
+        cancelarCotaAEscuadra()
+        cancelarModoEdicion()
+        otrasVistas[vistaActiva] = EstadoDeVista(
+            elementos.toMutableList(), ArrayDeque(historia), ArrayDeque(futuro), estadoPrevio,
+            viewScale, viewOffsetX, viewOffsetY
+        )
+        val nueva = otrasVistas.remove(v)
+        elementos.clear()
+        historia.clear()
+        futuro.clear()
+        selectedIndices.clear()
+        cotaHits.clear()
+        trazoActual.reset()
+        dibujando = false
+        if (nueva != null) {
+            elementos.addAll(nueva.elementos)
+            historia.addAll(nueva.historia)
+            futuro.addAll(nueva.futuro)
+            estadoPrevio = nueva.estadoPrevio
+            viewScale = nueva.viewScale
+            viewOffsetX = nueva.viewOffsetX
+            viewOffsetY = nueva.viewOffsetY
+        } else {
+            estadoPrevio = emptyList()
+            resetViewport()
+        }
+        vistaActiva = v
+        invalidate()
+        alCambiarVista?.invoke(v)
+    }
+
+    /** Hace algo con otra vista puesta en el lienzo y vuelve a la de ahora, sin que se note. */
+    private fun <T> conVista(v: Vista, bloque: () -> T): T {
+        if (v == vistaActiva) return bloque()
+        val antes = vistaActiva
+        val aviso = alCambiarVista
+        alCambiarVista = null
+        cambiarAVista(v)
+        try {
+            return bloque()
+        } finally {
+            cambiarAVista(antes)
+            alCambiarVista = aviso
+        }
+    }
+
+    /** La miniatura de una vista, para la tira de vistas. Vacía si no tiene dibujo. */
+    fun miniaturaDeVista(v: Vista, ancho: Int, alto: Int): Bitmap? {
+        if (!vistaTieneDibujo(v)) return null
+        val grande = conVista(v) { exportBitmap() }
+        val k = minOf(ancho / grande.width.toFloat(), alto / grande.height.toFloat())
+        val w = (grande.width * k).toInt().coerceAtLeast(1)
+        val h = (grande.height * k).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(grande, w, h, true)
+    }
+
+    /** Lo que hay dibujado en una vista, como lo guarda el apunte. */
+    private fun elementosDeVista(v: Vista): List<Element> =
+        if (v == vistaActiva) elementos else otrasVistas[v]?.elementos.orEmpty()
+
+    /** Borra todas las vistas menos la frontal: el apunte vuelve a ser el de siempre. */
+    fun quitarVistas() {
+        if (vistaActiva != Vista.FRONTAL) cambiarAVista(Vista.FRONTAL)
+        otrasVistas.clear()
+        invalidate()
+    }
+
+    // ==================== LA ESQUINA QUE SALE DE LAS VISTAS ====================
+    // La planta (vista superior) dice cuántas paredes hay, cuánto mide cada una y cuánto dobla
+    // cada arista; la frontal y las laterales dicen la forma y el alto de cada pared. Con eso se
+    // arma la ventana de esquina sin convertir nada a mano: es lo que reemplaza al botón V. esquina.
+
+    /** Una pared leída de las vistas, con lo que hace falta mandar a Nova. */
+    private data class ParedDeVistas(
+        val anchoCm: Float,
+        val altoCm: Float,
+        val puenteCm: Float,
+        val contorno: List<Pair<Float, Float>>?,
+        val parantesCm: List<Float>,
+        /** Los grados con los que dobla a la siguiente; null en la última. */
+        val grados: Float?
+    )
+
+    /**
+     * La planta como paredes encadenadas: los largos en cm y el giro de cada arista, leídos de
+     * la vista superior. Las líneas se encadenan por sus puntas, empezando por la punta más a la
+     * izquierda; desde fuera se recorre al revés, y con eso el giro ya cambia de signo solo: el
+     * rincón de dentro es la esquina que abraza por fuera. Null si la superior no tiene polilínea.
+     *
+     * El giro: recorriendo la planta, positivo cuando la pared siguiente dobla hacia abajo del
+     * dibujo —hacia quien mira, el rincón— y negativo hacia arriba (abraza la esquina), que es la
+     * misma regla con la que la plantilla dibuja su planta. A menos de 5° de 90 es 90; casi recto
+     * es 180: un parante, no una esquina.
+     */
+    private fun paredesDeLaPlanta(): List<Pair<Float, Float?>>? {
+        val lineas = elementosDeVista(Vista.SUPERIOR).mapNotNull { e ->
+            val s = e as? Element.Shape ?: return@mapNotNull null
+            if (s.tool != Tool.LINE && s.tool != Tool.ORTHO_LINE) return@mapNotNull null
+            if (esCotaAEscuadra(s.cotaHint)) return@mapNotNull null
+            PointF(s.start.x, s.start.y) to PointF(s.end.x, s.end.y)
+        }
+        if (lineas.isEmpty()) return null
+        val cerca = snapThresholdPx()
+        // Se encadenan por las puntas, empezando por la línea que tiene una punta más a la izquierda.
+        val pendientes = lineas.toMutableList()
+        var actual = pendientes.minByOrNull { minOf(it.first.x, it.second.x) } ?: return null
+        pendientes.remove(actual)
+        if (actual.second.x < actual.first.x) actual = actual.second to actual.first
+        val recorrido = mutableListOf(actual.first, actual.second)
+        var seguir = true
+        while (seguir && pendientes.isNotEmpty()) {
+            val punta = recorrido.last()
+            val siguiente = pendientes.firstOrNull { distancia(it.first, punta) < cerca || distancia(it.second, punta) < cerca }
+            if (siguiente == null) { seguir = false; continue }
+            pendientes.remove(siguiente)
+            recorrido.add(if (distancia(siguiente.first, punta) < cerca) siguiente.second else siguiente.first)
+        }
+        if (recorrido.size < 2) return null
+        val orden = if (vistaInterior) recorrido else recorrido.reversed()
+        val paredes = mutableListOf<Pair<Float, Float?>>()
+        for (i in 0 until orden.size - 1) {
+            val a = orden[i]
+            val b = orden[i + 1]
+            val largo = pxToCm(distancia(a, b))
+            var grados: Float? = null
+            if (i + 2 < orden.size) {
+                val c = orden[i + 2]
+                val rumboAB = Math.toDegrees(kotlin.math.atan2((b.y - a.y).toDouble(), (b.x - a.x).toDouble()))
+                val rumboBC = Math.toDegrees(kotlin.math.atan2((c.y - b.y).toDouble(), (c.x - b.x).toDouble()))
+                var giro = (rumboBC - rumboAB).toFloat()
+                while (giro > 180f) giro -= 360f
+                while (giro < -180f) giro += 360f
+                val angulo = 180f - abs(giro)
+                grados = when {
+                    abs(giro) < 5f -> 180f
+                    abs(angulo - 90f) < 5f -> 90f
+                    else -> angulo
+                }
+                if (giro < 0f && grados < 180f) grados = -grados
+            }
+            paredes.add(largo to grados)
+        }
+        return paredes
+    }
+
+    /** Las figuras de una vista que pueden ser paredes, de izquierda a derecha, con sus líneas gruesas. */
+    private fun figurasDeVista(v: Vista): List<Pair<Element, List<Element.Shape>>> {
+        val de = elementosDeVista(v)
+        val holgura = cmToPx(3f)
+        return de.filter { esParedDeEsquina(it) }
+            .sortedBy { boundsForElement(it).left }
+            .map { fig ->
+                val b = boundsForElement(fig)
+                val lineas = de.mapNotNull { e ->
+                    val s = e as? Element.Shape ?: return@mapNotNull null
+                    if (!esLineaGruesa(s) || !dentroDe(b, s.start, holgura) || !dentroDe(b, s.end, holgura)) null else s
+                }
+                fig to lineas
+            }
+    }
+
+    /** Lo que una figura de una vista dice de su pared: medidas, puente, forma y parantes. */
+    private fun paredDeFigura(fig: Element, lineas: List<Element.Shape>, grados: Float?): ParedDeVistas {
+        val b = boundsForElement(fig)
+        val holgura = cmToPx(3f)
+        var puente = 0f
+        val parantes = mutableListOf<Float>()
+        lineas.forEach { s ->
+            val horizontal = abs(s.end.y - s.start.y) <= abs(s.end.x - s.start.x) * 0.2f
+            val vertical = abs(s.end.x - s.start.x) <= abs(s.end.y - s.start.y) * 0.2f
+            if (horizontal && puente <= 0f) puente = pxToCm(b.bottom - (s.start.y + s.end.y) / 2f)
+            if (vertical) {
+                val xl = (s.start.x + s.end.x) / 2f
+                if (abs(xl - b.left) >= holgura && abs(xl - b.right) >= holgura) parantes.add(pxToCm(xl - b.left))
+            }
+        }
+        val puntos = when (fig) {
+            is Element.Composite -> fig.contours.firstOrNull().orEmpty()
+            is Element.Shape -> when (fig.tool) {
+                Tool.TRIANGLE -> verticesTriangulo(fig).toList()
+                Tool.RECTANGLE -> listOf(fig.topLeft, fig.topRight, fig.bottomRight, fig.bottomLeft)
+                else -> emptyList()
+            }
+            else -> emptyList()
+        }
+        val contorno = puntos.map { pxToCm(it.x - b.left) to pxToCm(it.y - b.top) }.takeIf { c ->
+            c.size >= 3 && !(c.size == 4 && c.all { (x, y) ->
+                (abs(x) < 0.15f || abs(x - pxToCm(b.width())) < 0.15f) && (abs(y) < 0.15f || abs(y - pxToCm(b.height())) < 0.15f)
+            })
+        }
+        return ParedDeVistas(pxToCm(b.width()), pxToCm(b.height()), puente, contorno, parantes.sorted(), grados)
+    }
+
+    /** El alto de una figura en uno de sus cantos: lo que mide su contorno ahí; su caja si no se sabe. */
+    private fun altoEnElCanto(fig: Element, derecho: Boolean): Float {
+        val b = boundsForElement(fig)
+        val puntos = (fig as? Element.Composite)?.contours?.firstOrNull().orEmpty()
+        val x = if (derecho) b.right else b.left
+        val enElCanto = puntos.filter { abs(it.x - x) < cmToPx(1f) }
+        if (enElCanto.size >= 2) return pxToCm(enElCanto.maxOf { it.y } - enElCanto.minOf { it.y })
+        return pxToCm(b.height())
+    }
+
+    /**
+     * La ventana de esquina armada con las vistas: la planta manda las paredes y los ángulos; a
+     * cada pared se le busca su figura —en la frontal, por el ancho más parecido; en las
+     * laterales, la que queda a ese lado de la de frente— y la que no tiene figura es un
+     * rectángulo del largo de la planta por el alto del canto de la pared de al lado. Las aristas
+     * a 180° juntan paredes: son parantes. Null si la superior no tiene planta.
+     */
+    private fun paredesDesdeVistas(): List<ParedDeVistas>? {
+        val planta = paredesDeLaPlanta() ?: return null
+        if (planta.size < 2) return null
+        val frontales = figurasDeVista(Vista.FRONTAL)
+        val izquierdas = figurasDeVista(Vista.IZQUIERDA)
+        val derechas = figurasDeVista(Vista.DERECHA)
+        // A qué pared de la planta corresponde cada figura de la frontal: por el ancho más parecido,
+        // sin repetir. Las laterales van a los lados de la primera y la última de las frontales.
+        val asignada = arrayOfNulls<Pair<Element, List<Element.Shape>>>(planta.size)
+        val libres = planta.indices.toMutableList()
+        frontales.forEach { fig ->
+            val ancho = pxToCm(boundsForElement(fig.first).width())
+            val mejor = libres.minByOrNull { abs(planta[it].first - ancho) } ?: return@forEach
+            asignada[mejor] = fig
+            libres.remove(mejor)
+        }
+        val primeraFrontal = asignada.indexOfFirst { it != null }
+        val ultimaFrontal = asignada.indexOfLast { it != null }
+        if (primeraFrontal >= 0) {
+            izquierdas.reversed().forEachIndexed { k, fig -> val i = primeraFrontal - 1 - k; if (i >= 0 && asignada[i] == null) asignada[i] = fig }
+            derechas.forEachIndexed { k, fig -> val i = ultimaFrontal + 1 + k; if (i < planta.size && asignada[i] == null) asignada[i] = fig }
+        }
+        // Las paredes, con figura o inferidas de la de al lado.
+        val paredes = planta.indices.map { i ->
+            val (largo, grados) = planta[i]
+            val fig = asignada[i]
+            if (fig != null) {
+                val p = paredDeFigura(fig.first, fig.second, grados)
+                p.copy(anchoCm = if (abs(p.anchoCm - largo) > 1f) largo else p.anchoCm)
+            } else {
+                val vecinaIzq = (i - 1 downTo 0).firstNotNullOfOrNull { asignada[it] }
+                val vecinaDer = (i + 1 until planta.size).firstNotNullOfOrNull { asignada[it] }
+                val alto = when {
+                    vecinaIzq != null -> altoEnElCanto(vecinaIzq.first, derecho = true)
+                    vecinaDer != null -> altoEnElCanto(vecinaDer.first, derecho = false)
+                    else -> 0f
+                }
+                ParedDeVistas(largo, alto, 0f, null, emptyList(), grados)
+            }
+        }
+        // Las aristas que no doblan juntan sus dos paredes en una, con el parante en la unión.
+        val juntas = mutableListOf<ParedDeVistas>()
+        paredes.forEach { p ->
+            val anterior = juntas.lastOrNull()
+            if (anterior != null && anterior.grados != null && abs(abs(anterior.grados) - 180f) < 0.5f) {
+                juntas[juntas.lastIndex] = ParedDeVistas(
+                    anchoCm = anterior.anchoCm + p.anchoCm,
+                    altoCm = maxOf(anterior.altoCm, p.altoCm),
+                    puenteCm = if (anterior.puenteCm > 0f) anterior.puenteCm else p.puenteCm,
+                    contorno = null,
+                    parantesCm = anterior.parantesCm + listOf(anterior.anchoCm) + p.parantesCm.map { it + anterior.anchoCm },
+                    grados = p.grados
+                )
+            } else {
+                juntas.add(p)
+            }
+        }
+        return juntas.takeIf { it.size >= 2 }
+    }
+
+    /**
+     * En qué vista está la ventana de esquina armada (el marco), si la hay. Sin planta, si la
+     * perspectiva tiene figuras y todavía no está armada, se arma ahí con la lectura de siempre:
+     * es el camino avisado de "está dibujando en perspectiva".
+     */
+    private fun vistaConLaEsquina(): Vista? {
+        fun tieneMarco(v: Vista) = elementosDeVista(v).any { (it as? Element.Shape)?.cotaHint == ESQUINA_MARCO }
+        if (tieneMarco(Vista.FRONTAL)) return Vista.FRONTAL
+        if (tieneMarco(Vista.PERSPECTIVA)) return Vista.PERSPECTIVA
+        if (vistaTieneDibujo(Vista.PERSPECTIVA) && elementosDeVista(Vista.PERSPECTIVA).any { esParedDeEsquina(it) }) {
+            val armada = conVista(Vista.PERSPECTIVA) { convertirSeleccionEnEsquina() != null }
+            if (armada) return Vista.PERSPECTIVA
+        }
+        return null
+    }
+
+    /** ¿El apunte tiene una planta en la vista superior? Entonces la esquina sale de las vistas. */
+    fun esquinaSaleDeLasVistas(): Boolean = tieneVistas() && paredesDeLaPlanta()?.size?.let { it >= 2 } == true
+
+    private fun esquinaDesdeVistasEnCm(): EsquinaMedida? {
+        val paredes = paredesDesdeVistas() ?: return null
+        val lados = paredes.map { LadoEsquina(it.anchoCm, it.anchoCm, it.altoCm, it.altoCm, it.puenteCm) }
+        val angulos = paredes.dropLast(1).map { formatCm(it.grados ?: 90f) }
+        return EsquinaMedida(lados, angulos)
+    }
+
     fun exportEditableState(): String {
         val root = JSONObject()
+        // "elements" es SIEMPRE la frontal: es lo que leen los apuntes de antes de las vistas.
         val items = JSONArray()
-        elementos.forEach { element -> items.put(elementJson(element)) }
+        elementosDeVista(Vista.FRONTAL).forEach { element -> items.put(elementJson(element)) }
         root.put("version", 1)
         root.put("elements", items)
+        val vistas = JSONObject()
+        Vista.values().filter { it != Vista.FRONTAL && vistaTieneDibujo(it) }.forEach { v ->
+            val lista = JSONArray()
+            elementosDeVista(v).forEach { lista.put(elementJson(it)) }
+            vistas.put(v.name, lista)
+        }
+        if (vistas.length() > 0) root.put("vistas", vistas)
+        root.put("interior", vistaInterior)
         return root.toString()
     }
 
@@ -5826,6 +6191,20 @@ class SketchMedidasView @JvmOverloads constructor(
             for (i in 0 until items.length()) {
                 val obj = items.getJSONObject(i)
                 readElementJson(obj)?.let { cargados.add(it) }
+            }
+            normalizarDensidad(cargados)
+            // Las otras vistas del apunte, si las hay: se guardan aparte y la frontal va al lienzo.
+            otrasVistas.clear()
+            vistaActiva = Vista.FRONTAL
+            vistaInterior = root.optBoolean("interior", true)
+            root.optJSONObject("vistas")?.let { vistas ->
+                Vista.values().filter { it != Vista.FRONTAL }.forEach { v ->
+                    val lista = vistas.optJSONArray(v.name) ?: return@forEach
+                    val de = mutableListOf<Element>()
+                    for (i in 0 until lista.length()) readElementJson(lista.getJSONObject(i))?.let { de.add(it) }
+                    normalizarDensidad(de)
+                    if (de.isNotEmpty()) otrasVistas[v] = EstadoDeVista(de, ArrayDeque(), ArrayDeque(), emptyList(), 1f, 0f, 0f)
+                }
             }
             normalizarDensidad(cargados)
             elementos.clear()
@@ -8260,7 +8639,7 @@ class SketchMedidasView @JvmOverloads constructor(
     // operación y el arrastre sigue moviendo el lienzo. Se quedan puestos para encadenar varias
     // —recortar suele ser de a muchas— y los suelta Nulo, otra herramienta u otro panel.
 
-    enum class ModoEdicion { EXTENDER, RECORTAR, MOVER_IMAN, MOVER_COTA }
+    enum class ModoEdicion { EXTENDER, RECORTAR, MOVER_IMAN, MOVER_COTA, POLILINEA }
 
     private var modoEdicion: ModoEdicion? = null
     /** Dónde bajó el dedo, para distinguir el toque del arrastre. */
@@ -8285,6 +8664,7 @@ class SketchMedidasView @JvmOverloads constructor(
         if (modoEdicion == null) return
         modoEdicion = null
         agarreIman = null
+        polilineaUltimo = null
         indicesAgarre = emptyList()
         bajadaEdicion = null
         invalidate()
@@ -8299,6 +8679,9 @@ class SketchMedidasView @JvmOverloads constructor(
         ModoEdicion.MOVER_COTA ->
             if (cotaArrastrada != null) "Moviendo la cota · suelta donde quieras que quede"
             else "Cotas · mantén pulsada una cota para moverla; un toque corto cambia su estilo"
+        ModoEdicion.POLILINEA ->
+            if (polilineaUltimo == null) "Polilínea · toca donde empieza"
+            else "Polilínea · toca el siguiente punto; dos toques en el mismo sitio terminan"
         null -> ""
     }
 
@@ -8309,6 +8692,7 @@ class SketchMedidasView @JvmOverloads constructor(
             ModoEdicion.MOVER_IMAN -> moverImantadoEn(p)
             ModoEdicion.MOVER_COTA ->
                 Toast.makeText(context, "Toca o arrastra una cota", Toast.LENGTH_SHORT).show()
+            ModoEdicion.POLILINEA -> puntoDePolilineaEn(p)
             null -> Unit
         }
     }
@@ -8483,6 +8867,51 @@ class SketchMedidasView @JvmOverloads constructor(
         val s = e as? Element.Shape ?: return@mapNotNull null
         if (s.tool != Tool.LINE && s.tool != Tool.ORTHO_LINE) return@mapNotNull null
         listOf(s.start.x, s.start.y, s.end.x, s.end.y)
+    }
+
+    // ===== Polilínea: líneas rectas encadenadas, cada toque un vértice =====
+    // Es la herramienta de la planta: la pared, la esquina, la siguiente pared, sin tener que
+    // arrastrar cada línea hasta la punta de la anterior con el imán.
+
+    /** El último vértice puesto; null hasta el primer toque. */
+    private var polilineaUltimo: PointF? = null
+
+    /**
+     * Un toque más de la polilínea. El punto se imanta a las esquinas y puntas que haya cerca; si
+     * no, se endereza contra el vértice anterior (a 0° o 90° si va casi recto). Tocar otra vez
+     * sobre el último vértice termina la polilínea.
+     */
+    private fun puntoDePolilineaEn(p: PointF) {
+        val anterior = polilineaUltimo
+        if (anterior != null && distancia(p, anterior) < snapThresholdPx()) {
+            polilineaUltimo = null
+            invalidate()
+            return
+        }
+        val candidatos = elementos.filter { esGeometria(it) }.flatMap { puntosDeIman(it) }.map { it.x to it.y }
+        var punto = EdicionLineas.imantar(p.x to p.y, candidatos, snapThresholdPx())
+            ?.let { PointF(it.first, it.second) } ?: PointF(p.x, p.y)
+        var ortogonal = false
+        if (anterior != null) {
+            val dx = punto.x - anterior.x
+            val dy = punto.y - anterior.y
+            // Casi horizontal o casi vertical: se endereza, que es lo que se quería dibujar.
+            if (abs(dy) <= abs(dx) * 0.12f) { punto = PointF(punto.x, anterior.y); ortogonal = true }
+            else if (abs(dx) <= abs(dy) * 0.12f) { punto = PointF(anterior.x, punto.y); ortogonal = true }
+            if (distancia(punto, anterior) < 1f) return
+            elementos.add(crearShape(if (ortogonal) Tool.ORTHO_LINE else Tool.LINE, anterior, punto))
+            registrarAccion()
+        }
+        polilineaUltimo = punto
+        invalidate()
+    }
+
+    /** El último vértice de la polilínea, marcado mientras se sigue dibujando. */
+    private fun dibujarVerticeDePolilinea(canvas: Canvas) {
+        val p = polilineaUltimo ?: return
+        val r = ce(9f)
+        canvas.drawCircle(p.x, p.y, r, imanRelleno)
+        canvas.drawCircle(p.x, p.y, r, imanBorde)
     }
 
     /** El punto de agarre cogido, marcado mientras se espera el destino. */

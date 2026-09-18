@@ -21,6 +21,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.EditText
+import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -32,6 +33,7 @@ import kotlin.math.abs
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import crystal.crystal.MainActivity
+import crystal.crystal.R
 import crystal.crystal.databinding.ActivityMedidaBinding
 import crystal.crystal.red.ListChatActivity
 import crystal.crystal.red.interop.ChatInteropIntents
@@ -246,6 +248,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnFormaLinea.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.LINE) }
         binding.btnFormaLinea90.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.ORTHO_LINE) }
         binding.btnFormaNodos.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.NODO) }
+        binding.btnFormaPolilinea.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.POLILINEA) }
         binding.btnEngraBisagra.setOnClickListener { mostrarDialogoBisagra() }
         binding.btnEngraAdentro.setOnClickListener { insertarSimboloCentro("adentro") }
         binding.btnEngraAfuera.setOnClickListener { insertarSimboloCentro("afuera") }
@@ -286,7 +289,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnRecortarPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.RECORTAR) }
         binding.btnMoverImanPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.MOVER_IMAN) }
         binding.btnEstiloLineaPanelMedida.setOnClickListener { mostrarDialogoEstiloLinea() }
-        binding.btnEsquinaPanelMedida.setOnClickListener { armarEsquinaConLaSeleccion() }
+        binding.btn3dPanelMedida.setOnClickListener { alternarMedidas3d() }
         binding.btnTabFormasBasicas.setOnClickListener { seleccionarTabFormas(true) }
         binding.btnTabFormasRecurrentes.setOnClickListener { seleccionarTabFormas(false) }
         binding.btnPlantillaPuerta.setOnClickListener { insertarPuertaEstandar() }
@@ -521,16 +524,125 @@ class MedidaActivity : AppCompatActivity() {
             .show()
     }
 
-    /**
-     * Arma una ventana de esquina con las figuras seleccionadas como paredes (de izquierda a
-     * derecha) y pide el ángulo de cada arista, arrancando en 90.
-     */
-    private fun armarEsquinaConLaSeleccion() {
+    // ==================== MEDIDAS 3D: LAS VISTAS DEL APUNTE ====================
+    // El apunte de siempre es la frontal. Con el botón 3D aparece la tira de vistas —frontal,
+    // superior, izquierda, derecha y perspectiva— como las ventanas de un programa de 3D: la que
+    // está en el lienzo va resaltada, las demás enseñan su miniatura y se tocan para pasar a
+    // ellas. De todas juntas sale la ventana de esquina al enviarla.
+
+    private var modo3d = false
+    private val celdasDeVista = HashMap<SketchMedidasView.Vista, Pair<View, android.widget.ImageView>>()
+
+    private fun alternarMedidas3d() {
         ocultarPanelesFlotantes()
-        val marco = binding.sketchMedidas.convertirSeleccionEnEsquina() ?: return
-        productoActual = "Ventana"
-        actualizarPanelInformacion()
-        binding.sketchMedidas.pedirAngulosDeEsquina(marco)
+        if (modo3d && binding.sketchMedidas.tieneVistas()) {
+            AlertDialog.Builder(this)
+                .setTitle("Cerrar las vistas")
+                .setMessage("Las vistas superior, laterales y perspectiva se conservan guardadas. ¿Quitarlas del apunte?")
+                .setPositiveButton("Solo ocultar") { _, _ -> ponerModo3d(false) }
+                .setNegativeButton("Quitarlas") { _, _ ->
+                    binding.sketchMedidas.quitarVistas()
+                    ponerModo3d(false)
+                }
+                .setNeutralButton("Cancelar", null)
+                .show()
+            return
+        }
+        ponerModo3d(!modo3d)
+    }
+
+    private fun ponerModo3d(activo: Boolean) {
+        modo3d = activo
+        binding.panelVistasMedida.visibility = if (activo) View.VISIBLE else View.GONE
+        if (activo) {
+            if (binding.filaVistasMedida.childCount == 0) armarTiraDeVistas()
+            refrescarTiraDeVistas()
+        } else if (binding.sketchMedidas.vistaActiva != SketchMedidasView.Vista.FRONTAL) {
+            binding.sketchMedidas.cambiarAVista(SketchMedidasView.Vista.FRONTAL)
+        }
+    }
+
+    private fun armarTiraDeVistas() {
+        val dp = resources.displayMetrics.density
+        val fila = binding.filaVistasMedida
+        SketchMedidasView.Vista.values().forEach { v ->
+            val celda = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0)
+            }
+            val rotulo = TextView(this).apply {
+                text = v.rotulo
+                textSize = 9f
+                setTextColor(Color.parseColor("#455A64"))
+                maxLines = 1
+            }
+            val miniatura = android.widget.ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams((56 * dp).toInt(), (44 * dp).toInt())
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                setBackgroundResource(R.drawable.bg_control_panel)
+                contentDescription = "Vista ${v.rotulo}"
+            }
+            celda.addView(rotulo)
+            celda.addView(miniatura)
+            celda.setOnClickListener { irAVista(v) }
+            fila.addView(celda)
+            celdasDeVista[v] = celda to miniatura
+        }
+        // Desde dónde se mira: dentro (lo normal) o fuera. Decide qué pared es la izquierda.
+        val celdaVista = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val rotuloVista = TextView(this).apply {
+            text = "Se mira desde"
+            textSize = 9f
+            setTextColor(Color.parseColor("#455A64"))
+            maxLines = 1
+        }
+        val botonVista = Button(this).apply {
+            id = View.generateViewId()
+            textSize = 11f
+            isAllCaps = false
+            minHeight = 0
+            minimumHeight = 0
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (44 * dp).toInt())
+            setOnClickListener {
+                binding.sketchMedidas.vistaInterior = !binding.sketchMedidas.vistaInterior
+                refrescarTiraDeVistas()
+            }
+        }
+        celdaVista.addView(rotuloVista)
+        celdaVista.addView(botonVista)
+        fila.addView(celdaVista)
+        botonInteriorExterior = botonVista
+    }
+
+    private var botonInteriorExterior: Button? = null
+
+    private fun irAVista(v: SketchMedidasView.Vista) {
+        ocultarPanelesFlotantes()
+        binding.sketchMedidas.cambiarAVista(v)
+        binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
+        refrescarTiraDeVistas()
+    }
+
+    /** Las miniaturas al día y la vista del lienzo resaltada; el aviso si es la perspectiva. */
+    private fun refrescarTiraDeVistas() {
+        val activa = binding.sketchMedidas.vistaActiva
+        val dp = resources.displayMetrics.density
+        celdasDeVista.forEach { (v, celda) ->
+            val (contenedor, miniatura) = celda
+            val bmp = binding.sketchMedidas.miniaturaDeVista(v, (56 * dp).toInt(), (44 * dp).toInt())
+            miniatura.setImageBitmap(bmp)
+            contenedor.alpha = if (v == activa) 1f else 0.6f
+            miniatura.setBackgroundColor(if (v == activa) Color.parseColor("#B3E5FC") else Color.parseColor("#F7F4EC"))
+        }
+        binding.tvAvisoPerspectiva.visibility =
+            if (activa == SketchMedidasView.Vista.PERSPECTIVA) View.VISIBLE else View.GONE
+        botonInteriorExterior?.text = if (binding.sketchMedidas.vistaInterior) "Interior" else "Exterior"
     }
 
     /** El mismo botón prende el modo y lo apaga; hay que mirar ANTES de cerrar los paneles. */
@@ -2069,6 +2181,8 @@ class MedidaActivity : AppCompatActivity() {
             true
         }
         if (cargado) {
+            // Un apunte con vistas abre con su tira puesta.
+            if (binding.sketchMedidas.tieneVistas()) ponerModo3d(true)
             bocetoActualDesdeArchivo = nombreBoceto?.takeIf { it.isNotBlank() } ?: file.name
             binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
         }
@@ -2277,6 +2391,7 @@ class MedidaActivity : AppCompatActivity() {
         } finally {
             binding.sketchMedidas.clear()
             if (estadoActual != null) binding.sketchMedidas.loadEditableState(estadoActual)
+            if (modo3d) refrescarTiraDeVistas()
             binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
         }
         return resultado

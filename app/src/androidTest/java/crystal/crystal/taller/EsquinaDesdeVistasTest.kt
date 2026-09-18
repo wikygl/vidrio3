@@ -1,0 +1,112 @@
+package crystal.crystal.taller
+
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * Medidas 3D: la ventana de esquina que sale de las vistas. La planta (vista superior) da las
+ * paredes y los ángulos; la frontal da la forma de la pared de frente; la pared de al lado, sin
+ * vista lateral, es un rectángulo del largo de la planta por el alto del canto que la toca.
+ */
+@RunWith(AndroidJUnit4::class)
+class EsquinaDesdeVistasTest {
+
+    private fun vista(): SketchMedidasView {
+        val v = SketchMedidasView(ApplicationProvider.getApplicationContext())
+        v.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(1600, android.view.View.MeasureSpec.EXACTLY)
+        )
+        v.layout(0, 0, 1080, 1600)
+        return v
+    }
+
+    private fun px(v: SketchMedidasView, cm: Float) = v.cmAPixelesParaPruebas(cm)
+
+    /** Frontal: una L de 280 x 300 (300 x 300 más 80 x 200 abajo a la derecha) con un parante a 100. */
+    private fun armar(v: SketchMedidasView) {
+        val a = v.agregarRectanguloParaPruebas(100f, 100f, 300f, 400f)
+        val b = v.agregarRectanguloParaPruebas(300f, 200f, 380f, 400f)
+        v.seleccionarParaPruebas(a, b)
+        assertTrue(v.weldSelected())
+        val parante = v.agregarLineaParaPruebas(200f, 110f, 200f, 390f)
+        v.seleccionarParaPruebas(parante)
+        assertTrue(v.aplicarEstiloASeleccion(2f, null))
+        // Superior: la planta, 280 hacia la derecha y luego 64.5 hacia abajo (hacia quien mira: el rincón).
+        v.cambiarAVista(SketchMedidasView.Vista.SUPERIOR)
+        v.agregarLineaParaPruebas(100f, 500f, 380f, 500f)
+        v.agregarLineaParaPruebas(380f, 500f, 380f, 564.5f)
+        v.cambiarAVista(SketchMedidasView.Vista.FRONTAL)
+    }
+
+    @Test
+    fun la_planta_y_la_frontal_arman_la_l() {
+        val v = vista()
+        armar(v)
+        assertTrue("con planta, la esquina sale de las vistas", v.esquinaSaleDeLasVistas())
+        val esquina = v.esquinaPrincipalEnCm()
+        assertNotNull(esquina)
+        assertEquals(2, esquina!!.lados.size)
+        assertEquals(280f, px(v, esquina.lados[0].ancho), 2f)
+        assertEquals(300f, px(v, esquina.lados[0].alto), 2f)
+        assertEquals("la pared de al lado mide lo que la planta", 64.5f, px(v, esquina.lados[1].ancho), 2f)
+        assertEquals("y el alto del canto que la toca", 200f, px(v, esquina.lados[1].alto), 2f)
+        assertEquals(listOf("90"), esquina.angulos)
+        assertEquals("nl", esquina.geometria)
+
+        val contornos = v.contornosDeLadosEnCm()
+        assertEquals(6, contornos[0]!!.size)
+        assertNull(contornos[1])
+        val parantes = v.parantesDeLadosEnCm()
+        assertEquals(1, parantes[0].size)
+        assertEquals(100f, px(v, parantes[0][0]), 2f)
+        assertTrue(parantes[1].isEmpty())
+    }
+
+    @Test
+    fun desde_fuera_se_lee_al_reves_y_el_angulo_cambia_de_signo() {
+        val v = vista()
+        armar(v)
+        v.vistaInterior = false
+        val esquina = v.esquinaPrincipalEnCm()!!
+        assertEquals("desde fuera la primera pared es la de 64.5", 64.5f, px(v, esquina.lados[0].ancho), 2f)
+        assertEquals(listOf("-90"), esquina.angulos)
+    }
+
+    @Test
+    fun las_vistas_se_guardan_y_vuelven() {
+        val v = vista()
+        armar(v)
+        val json = v.exportEditableState()
+        assertTrue("las vistas no se guardan: $json", json.contains("\"vistas\""))
+        val otra = vista()
+        assertTrue(otra.loadEditableState(json))
+        assertTrue(otra.tieneVistas())
+        assertEquals(SketchMedidasView.Vista.FRONTAL, otra.vistaActiva)
+        assertTrue(otra.vistaTieneDibujo(SketchMedidasView.Vista.SUPERIOR))
+        assertEquals(2, otra.esquinaPrincipalEnCm()!!.lados.size)
+        // Limpiar se lleva todas las vistas.
+        otra.clear()
+        assertTrue(!otra.tieneVistas())
+    }
+
+    @Test
+    fun la_polilinea_encadena_lineas_rectas() {
+        val v = vista()
+        v.activarModoEdicion(SketchMedidasView.ModoEdicion.POLILINEA)
+        v.toqueDeEdicionParaPruebas(100f, 500f)
+        v.toqueDeEdicionParaPruebas(380f, 503f)   // casi horizontal: se endereza
+        v.toqueDeEdicionParaPruebas(377f, 600f)   // casi vertical: se endereza
+        v.toqueDeEdicionParaPruebas(377f, 600f)   // otra vez encima: termina
+        val lineas = v.lineasParaPruebas()
+        assertEquals(2, lineas.size)
+        assertEquals(listOf(100f, 500f, 380f, 500f), lineas[0])
+        assertEquals(listOf(380f, 500f, 380f, 600f), lineas[1])
+    }
+}
