@@ -717,10 +717,55 @@ class MedidaActivity : AppCompatActivity() {
                 nueva.elevation = 2 * resources.displayMetrics.density
                 volumenGenerado = nueva
             }
+            // Al ponerla al día no se le cambia el punto de vista al usuario: se conserva lo girado.
+            val giro = vista.giroGrados
+            val elevacion = vista.elevacionGrados
+            val yaMirada = vista.visibility == View.VISIBLE
             vista.mostrar(paquete)
+            if (yaMirada) {
+                vista.giroGrados = giro
+                vista.elevacionGrados = elevacion
+            }
             vista.visibility = View.VISIBLE
         }
         refrescarChipGenerado(paquete != null)
+        refrescarChipProyeccion(paquete != null)
+    }
+
+    /** Isométrica o perspectiva, a elegir sobre la misma vista generada. */
+    private var chipProyeccion: TextView? = null
+
+    private fun refrescarChipProyeccion(visible: Boolean) {
+        val volumen = volumenGenerado
+        if (!visible || volumen == null) {
+            chipProyeccion?.visibility = View.GONE
+            return
+        }
+        val dp = resources.displayMetrics.density
+        val chip = chipProyeccion ?: TextView(this).apply {
+            textSize = 11f
+            setTextColor(Color.parseColor("#0D47A1"))
+            setBackgroundResource(R.drawable.bg_control_panel)
+            setPadding((10 * dp).toInt(), (6 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
+            elevation = 3 * dp
+            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomToBottom = binding.sketchMedidas.id
+                endToEnd = binding.sketchMedidas.id
+                bottomMargin = (8 * dp).toInt()
+                rightMargin = (8 * dp).toInt()
+            }
+            binding.layoutPrincipal.addView(this, lp)
+            chipProyeccion = this
+            setOnClickListener {
+                volumenGenerado?.let { v -> v.perspectiva = !v.perspectiva }
+                refrescarChipProyeccion(true)
+            }
+        }
+        chip.text = if (volumen.perspectiva) "◉ perspectiva · pellizca para acercar" else "▱ isométrica · toca para perspectiva"
+        chip.visibility = View.VISIBLE
     }
 
     /**

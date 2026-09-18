@@ -100,19 +100,67 @@ class VistaVolumenNova @JvmOverloads constructor(
     fun carasCurvasParaPruebas(): Int = volumen?.caras?.count { it.esCurva } ?: 0
 
     // Girar la ventana arrastrando: es lo que salva al isométrico de su pega, que desde un solo
-    // sitio siempre hay una pared que se ve de canto.
+    // sitio siempre hay una pared que se ve de canto. A lo ancho gira sobre el suelo; a lo alto
+    // sube o baja la mirada (la elevación). Con dos dedos, en perspectiva, se acerca o aleja el ojo.
     private var xAnterior = 0f
+    private var yAnterior = 0f
+    private var separacionAnterior = 0f
+
+    /** Cuánto se mira desde arriba: 30° es la isométrica de siempre; 0 de frente, 90 la planta. */
+    var elevacionGrados: Float = VolumenDelDiseno.ELEVACION_POR_DEFECTO
+
+    /**
+     * Perspectiva de verdad (con punto de vista) en vez de la axonometría. Se mira desde
+     * [distanciaCm] del centro de la ventana; más cerca, más se juntan las paralelas.
+     */
+    var perspectiva: Boolean = false
+        set(value) { field = value; invalidate() }
+    var distanciaCm: Float = 600f
+
+    private fun separacion(event: android.view.MotionEvent): Float {
+        if (event.pointerCount < 2) return 0f
+        val dx = event.getX(0) - event.getX(1)
+        val dy = event.getY(0) - event.getY(1)
+        return kotlin.math.hypot(dx, dy)
+    }
 
     @android.annotation.SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
         when (event.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
                 xAnterior = event.x
+                yAnterior = event.y
+                return true
+            }
+            android.view.MotionEvent.ACTION_POINTER_DOWN -> {
+                separacionAnterior = separacion(event)
                 return true
             }
             android.view.MotionEvent.ACTION_MOVE -> {
+                if (event.pointerCount >= 2) {
+                    // Pellizco: en perspectiva acerca o aleja el ojo; en isométrica no hay ojo.
+                    val ahora = separacion(event)
+                    if (perspectiva && separacionAnterior > 1f && ahora > 1f) {
+                        distanciaCm = (distanciaCm * separacionAnterior / ahora).coerceIn(150f, 5000f)
+                        invalidate()
+                    }
+                    separacionAnterior = ahora
+                    xAnterior = event.x
+                    yAnterior = event.y
+                    return true
+                }
                 giroGrados += (event.x - xAnterior) * 0.4f
+                elevacionGrados = (elevacionGrados + (event.y - yAnterior) * 0.3f).coerceIn(0f, 89f)
                 xAnterior = event.x
+                yAnterior = event.y
+                invalidate()
+                return true
+            }
+            android.view.MotionEvent.ACTION_POINTER_UP -> {
+                // Al soltar un dedo, el que queda sigue girando desde donde está.
+                val queda = if (event.actionIndex == 0) 1 else 0
+                xAnterior = event.getX(queda)
+                yAnterior = event.getY(queda)
                 return true
             }
         }
@@ -129,9 +177,11 @@ class VistaVolumenNova @JvmOverloads constructor(
         }
 
         // Todo proyectado primero, para saber cuánto ocupa y meterlo en la pantalla.
-        val caras = v.deLejosACerca(giroGrados)
+        val caras = v.deLejosACerca(giroGrados, elevacionGrados)
+        val centro = v.centro()
+        val distancia = if (perspectiva) distanciaCm else 0f
         val puntos = caras.flatMap { cara ->
-            cara.esquinas.map { VolumenDelDiseno.proyectar(it, giroGrados) }
+            cara.esquinas.map { VolumenDelDiseno.proyectar(it, giroGrados, elevacionGrados, distancia, centro) }
         }
         val minX = puntos.minOf { it.x }
         val maxX = puntos.maxOf { it.x }
@@ -146,7 +196,7 @@ class VistaVolumenNova @JvmOverloads constructor(
         val dy = margen - minY * escala + ((height - margen * 2) - (maxY - minY) * escala) / 2f
 
         fun aPapel(p: Punto3D): PuntoPlano {
-            val q = VolumenDelDiseno.proyectar(p, giroGrados)
+            val q = VolumenDelDiseno.proyectar(p, giroGrados, elevacionGrados, distancia, centro)
             return PuntoPlano(q.x * escala + dx, q.y * escala + dy)
         }
 

@@ -48,14 +48,31 @@ data class VolumenDelDiseno(val caras: List<CaraDelVolumen>) {
      * Es el método del pintor, que para una ventana —una cinta de paredes, sin nada cerrado— basta
      * y sobra: lo de atrás se tapa solo cuando se le pinta lo de delante encima.
      */
-    fun deLejosACerca(giroGrados: Float = GIRO_POR_DEFECTO): List<CaraDelVolumen> =
+    fun deLejosACerca(
+        giroGrados: Float = GIRO_POR_DEFECTO,
+        elevacionGrados: Float = ELEVACION_POR_DEFECTO
+    ): List<CaraDelVolumen> =
         caras.sortedByDescending { cara ->
-            cara.esquinas.map { profundidad(it, giroGrados) }.average()
+            cara.esquinas.map { profundidad(it, giroGrados, elevacionGrados) }.average()
         }
+
+    /** El centro del volumen: desde donde se mide la distancia del ojo en perspectiva. */
+    fun centro(): Punto3D {
+        val puntos = caras.flatMap { it.esquinas }
+        if (puntos.isEmpty()) return Punto3D(0f, 0f, 0f)
+        return Punto3D(
+            puntos.map { it.x }.average().toFloat(),
+            puntos.map { it.y }.average().toFloat(),
+            puntos.map { it.z }.average().toFloat()
+        )
+    }
 
     companion object {
         /** Desde dónde se mira por defecto: girada un poco, para que se vean dos caras a la vez. */
         const val GIRO_POR_DEFECTO = 25f
+
+        /** Cuánto se mira desde arriba por defecto: la isométrica de siempre, con el suelo a 30°. */
+        const val ELEVACION_POR_DEFECTO = 30f
 
         /** En cuántos trozos se parte una pared curva para dibujarla. */
         const val TROZOS_DE_CURVA = 10
@@ -127,34 +144,60 @@ data class VolumenDelDiseno(val caras: List<CaraDelVolumen>) {
         }
 
         /**
-         * Del espacio al papel, en isométrico.
+         * Del espacio al papel.
          *
-         * Sin punto de fuga: lo que está lejos se dibuja igual de grande que lo que está cerca, y
-         * lo que da la profundidad es la inclinación. Para un plano de taller es lo que conviene
-         * —las medidas se pueden leer— y además quita de en medio el problema de hoy, que la
-         * perspectiva falseada no distingue un ángulo de otro.
+         * Por defecto es la isométrica de siempre: sin punto de fuga, lo que está lejos se dibuja
+         * igual de grande que lo que está cerca, el suelo inclinado 30° y la vertical vertical.
+         * Para un plano de taller es lo que conviene —las medidas se pueden leer— y quita de en
+         * medio el problema de la perspectiva falseada, que no distingue un ángulo de otro.
          *
-         * [giroGrados] hace girar la ventana sobre el suelo, para poder mirarla desde otro lado.
+         * [giroGrados] hace girar la ventana sobre el suelo, para mirarla desde otro lado;
+         * [elevacionGrados] dice cuánto se mira desde arriba (0 = de frente, 90 = la planta). Con
+         * [distanciaCm] mayor que cero pasa a ser perspectiva de verdad: el ojo a esa distancia
+         * del [centro] del volumen, con las paralelas juntándose y lo lejano más chico. Ahí las
+         * medidas ya no se leen del dibujo, pero se ve como en obra.
          */
-        fun proyectar(punto: Punto3D, giroGrados: Float = GIRO_POR_DEFECTO): PuntoPlano {
+        fun proyectar(
+            punto: Punto3D,
+            giroGrados: Float = GIRO_POR_DEFECTO,
+            elevacionGrados: Float = ELEVACION_POR_DEFECTO,
+            distanciaCm: Float = 0f,
+            centro: Punto3D = Punto3D(0f, 0f, 0f)
+        ): PuntoPlano {
             val g = Math.toRadians(giroGrados.toDouble())
+            val e = Math.toRadians(elevacionGrados.toDouble().coerceIn(0.0, 89.9))
             val xr = punto.x * cos(g) - punto.y * sin(g)
             val yr = punto.x * sin(g) + punto.y * cos(g)
-            val seno30 = 0.5
             val coseno30 = 0.8660254
-            return PuntoPlano(
-                x = ((xr - yr) * coseno30).toFloat(),
-                // La z va hacia arriba y el papel crece hacia abajo, así que resta.
-                y = ((xr + yr) * seno30).toFloat() - punto.z
-            )
+            // El papel: a lo ancho la diagonal del suelo; a lo alto, el suelo escorzado por la
+            // elevación y la vertical entera. Con 30° es exactamente la isométrica de antes.
+            val x = (xr - yr) * coseno30
+            val y = (xr + yr) * sin(e) - punto.z * cos(e) / coseno30
+            if (distanciaCm <= 0f) return PuntoPlano(x.toFloat(), y.toFloat())
+            // Perspectiva: lo que se aleja del ojo se achica. El ojo está a [distanciaCm] del
+            // centro, mirando por la dirección de la vista; lo que cae más atrás se divide más.
+            val cxr = centro.x * cos(g) - centro.y * sin(g)
+            val cyr = centro.x * sin(g) + centro.y * cos(g)
+            val cx = (cxr - cyr) * coseno30
+            val cy = (cxr + cyr) * sin(e) - centro.z * cos(e) / coseno30
+            val fondo = profundidad(punto, giroGrados, elevacionGrados) - profundidad(centro, giroGrados, elevacionGrados)
+            val k = distanciaCm / (distanciaCm + fondo).coerceAtLeast(distanciaCm * 0.1)
+            return PuntoPlano((cx + (x - cx) * k).toFloat(), (cy + (y - cy) * k).toFloat())
         }
 
         /** Lo lejos que cae un punto mirando desde donde se mira: cuanto más, más al fondo. */
-        fun profundidad(punto: Punto3D, giroGrados: Float = GIRO_POR_DEFECTO): Double {
+        fun profundidad(
+            punto: Punto3D,
+            giroGrados: Float = GIRO_POR_DEFECTO,
+            elevacionGrados: Float = ELEVACION_POR_DEFECTO
+        ): Double {
             val g = Math.toRadians(giroGrados.toDouble())
+            val e = Math.toRadians(elevacionGrados.toDouble().coerceIn(0.0, 89.9))
             val xr = punto.x * cos(g) - punto.y * sin(g)
             val yr = punto.x * sin(g) + punto.y * cos(g)
-            return xr + yr
+            // Hacia el fondo va la diagonal del suelo, aplastada por la elevación, y hacia abajo
+            // la vertical: mirando desde arriba, lo alto queda más cerca del ojo.
+            return (xr + yr) * cos(e) - punto.z * sin(e)
         }
     }
 }

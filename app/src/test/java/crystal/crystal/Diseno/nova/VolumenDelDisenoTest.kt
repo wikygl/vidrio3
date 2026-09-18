@@ -179,4 +179,29 @@ class VolumenDelDisenoTest {
             profundidades.sortedDescending(), profundidades
         )
     }
+
+    /**
+     * La mirada se puede subir y bajar, y la perspectiva de verdad achica lo que se aleja del ojo.
+     * Con los valores por defecto sigue siendo la isométrica de siempre (lo prueban las de arriba).
+     */
+    @Test
+    fun la_elevacion_y_la_perspectiva() {
+        // Mirando desde arriba del todo (90°) la altura no se ve: es la planta.
+        val suelo = VolumenDelDiseno.proyectar(Punto3D(0f, 0f, 0f), 0f, 90f)
+        val alto = VolumenDelDiseno.proyectar(Punto3D(0f, 0f, 160f), 0f, 90f)
+        assertEquals(suelo.y, alto.y, 0.5f)
+        // De frente (0°) el suelo no ocupa nada en vertical: dos puntos del suelo a la misma altura.
+        val cerca = VolumenDelDiseno.proyectar(Punto3D(0f, 0f, 0f), 0f, 0f)
+        val lejos = VolumenDelDiseno.proyectar(Punto3D(100f, 100f, 0f), 0f, 0f)
+        assertEquals(cerca.y, lejos.y, 0.01f)
+        // En perspectiva, lo que está detrás del centro se acerca al centro: se ve más chico.
+        val centro = Punto3D(0f, 0f, 0f)
+        val atras = Punto3D(200f, 200f, 0f)
+        val paralela = VolumenDelDiseno.proyectar(atras, 0f, 30f)
+        val conOjo = VolumenDelDiseno.proyectar(atras, 0f, 30f, distanciaCm = 500f, centro = centro)
+        assertTrue("lo de atrás tenía que achicarse", kotlin.math.abs(conOjo.y) < kotlin.math.abs(paralela.y))
+        val delante = Punto3D(-200f, -200f, 0f)
+        val delanteConOjo = VolumenDelDiseno.proyectar(delante, 0f, 30f, distanciaCm = 500f, centro = centro)
+        assertTrue("lo de delante tenía que agrandarse", kotlin.math.abs(delanteConOjo.y) > kotlin.math.abs(VolumenDelDiseno.proyectar(delante, 0f, 30f).y))
+    }
 }
