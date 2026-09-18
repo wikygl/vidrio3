@@ -1777,14 +1777,19 @@ class SketchMedidasView @JvmOverloads constructor(
                 esLineaGruesa(s) && s is Element.Shape && dentroDe(b, s.start, holgura) && dentroDe(b, s.end, holgura)
             }
         }
+        // La pared dibujada en perspectiva —el paralelogramo con el que casi todo el mundo dibuja
+        // la pared de al lado de una L— se endereza: pasa a ser el rectángulo de sus medidas
+        // reales, con sus líneas de dentro. Es la excepción a "cada pared de frente".
+        paredes.forEachIndexed { k, (i, _) -> enderezarParedEnPerspectiva(i, lineasDe[k]) }
+        val paredesDerechas = paredes.map { (i, _) -> i to boundsForElement(elementos[i]) }
         // Pegadas y con el pie común: cada pared se corre lo que haga falta, con sus líneas. Los
         // trozos de una sola figura ya están en su sitio: partirla no la mueve.
-        val pie = paredes.maxOf { it.second.bottom }
+        val pie = paredesDerechas.maxOf { it.second.bottom }
         val moverAlPie = candidatas.size > 1
-        var x = paredes.first().second.left
+        var x = paredesDerechas.first().second.left
         val tramosPx = mutableListOf<Float>()
         val arribaY = mutableListOf<Float>()
-        paredes.forEachIndexed { k, (i, b) ->
+        paredesDerechas.forEachIndexed { k, (i, b) ->
             val dx = x - b.left
             val dy = if (moverAlPie) pie - b.bottom else 0f
             if (abs(dx) > 0.01f || abs(dy) > 0.01f) {
@@ -1850,6 +1855,66 @@ class SketchMedidasView @JvmOverloads constructor(
         registrarAccion()
         invalidate()
         return marcoIndex
+    }
+
+    /**
+     * El paralelogramo en perspectiva de una pared: sus dos cantos verticales y lo que suben (o
+     * bajan) sus lados de arriba y de abajo entre un canto y otro. Null si la figura no es eso.
+     *
+     * Es como casi todo el mundo dibuja la pared de al lado de una L: de canto, con el dintel y el
+     * alféizar en diagonal. Los cantos son el alto de verdad; la diagonal, el ancho de verdad.
+     */
+    private data class Perspectiva(val x1: Float, val x2: Float, val subida: Float, val yPieIzq: Float, val alto: Float)
+
+    private fun perspectivaDe(puntos: List<PointF>): Perspectiva? {
+        // Sin repetidos ni puntos en línea: el paralelogramo tiene cuatro esquinas.
+        val limpios = mutableListOf<PointF>()
+        puntos.forEach { p -> if (limpios.none { distancia(it, p) < 1f }) limpios.add(PointF(p.x, p.y)) }
+        if (limpios.size != 4) return null
+        val holgura = cmToPx(1f)
+        val x1 = limpios.minOf { it.x }
+        val x2 = limpios.maxOf { it.x }
+        if (x2 - x1 < cmToPx(2f)) return null
+        val izq = limpios.filter { abs(it.x - x1) < holgura }
+        val der = limpios.filter { abs(it.x - x2) < holgura }
+        if (izq.size != 2 || der.size != 2) return null
+        val altoIzq = abs(izq[0].y - izq[1].y)
+        val altoDer = abs(der[0].y - der[1].y)
+        if (altoIzq < cmToPx(2f) || abs(altoIzq - altoDer) > cmToPx(1f)) return null
+        val subida = izq.maxOf { it.y } - der.maxOf { it.y }
+        // Sin subida no está en perspectiva: es un rectángulo y se queda como está.
+        if (abs(subida) < cmToPx(1f)) return null
+        return Perspectiva(x1, x2, subida, izq.maxOf { it.y }, altoIzq)
+    }
+
+    /**
+     * Endereza una pared dibujada en perspectiva: el paralelogramo pasa a ser el rectángulo de sus
+     * medidas reales (el canto por alto, la diagonal por ancho), apoyado donde apoyaba su canto
+     * izquierdo, y sus líneas de dentro se enderezan con él. Una pared que no está en perspectiva
+     * no se toca.
+     */
+    private fun enderezarParedEnPerspectiva(indice: Int, lineas: List<Int>) {
+        val e = elementos.getOrNull(indice) ?: return
+        val puntos = when (e) {
+            is Element.Composite -> e.contours.firstOrNull().orEmpty()
+            is Element.Shape -> if (e.tool == Tool.RECTANGLE) listOf(e.topLeft, e.topRight, e.bottomRight, e.bottomLeft) else emptyList()
+            else -> emptyList()
+        }
+        val p = perspectivaDe(puntos) ?: return
+        val anchoCaja = p.x2 - p.x1
+        val anchoReal = hypot(anchoCaja, p.subida)
+        val k = anchoReal / anchoCaja
+        // Quitar la subida en proporción a lo que se ha avanzado, y estirar el ancho a lo real.
+        fun derecho(q: PointF): PointF {
+            val avance = (q.x - p.x1) / anchoCaja
+            return PointF(p.x1 + (q.x - p.x1) * k, q.y + p.subida * avance)
+        }
+        val rect = RectF(p.x1, p.yPieIzq - p.alto, p.x1 + anchoReal, p.yPieIzq)
+        elementos[indice] = crearShape(Tool.RECTANGLE, PointF(rect.left, rect.top), PointF(rect.right, rect.bottom))
+        lineas.forEach { li ->
+            val s = elementos[li] as? Element.Shape ?: return@forEach
+            elementos[li] = crearShape(s.tool, derecho(s.start), derecho(s.end), s.cotaHint).conEstiloDe(s)
+        }
     }
 
     /**

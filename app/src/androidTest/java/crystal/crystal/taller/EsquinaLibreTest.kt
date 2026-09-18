@@ -1,5 +1,6 @@
 package crystal.crystal.taller
 
+import android.graphics.PointF
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -159,5 +160,39 @@ class EsquinaLibreTest {
         assertTrue(parantes[1].isEmpty())
         // Los dos trozos del lado 1 vuelven a ser un rectángulo: no hace falta contorno.
         assertEquals(listOf(null, null), v.contornosDeLadosEnCm())
+    }
+
+    /**
+     * La pared de al lado dibujada en perspectiva, como la dibuja casi todo el mundo: un
+     * paralelogramo de 150 de caja que sube 80 entre canto y canto (la diagonal mide 170) y 300
+     * de alto, con su puente también en diagonal. Al convertir se endereza: pasa a ser el
+     * rectángulo de 170 x 300 pegado a la primera pared, y el puente queda horizontal.
+     */
+    @Test
+    fun la_pared_en_perspectiva_se_endereza_a_sus_medidas_reales() {
+        val v = vista()
+        v.agregarRectanguloParaPruebas(100f, 100f, 500f, 400f)
+        // El paralelogramo: cantos en x = 500 y x = 650, el de la derecha 80 más arriba.
+        val lado = v.agregarCuadrilateroParaPruebas(
+            PointF(500f, 100f), PointF(650f, 20f), PointF(650f, 320f), PointF(500f, 400f)
+        )
+        // Su puente, en la misma perspectiva: a 100 del pie, de canto a canto.
+        val puente = v.agregarLineaParaPruebas(505f, 297f, 645f, 222f)
+        v.seleccionarParaPruebas(puente)
+        assertTrue(v.aplicarEstiloASeleccion(2f, null))
+        v.seleccionarParaPruebas(0, lado)
+        var marco: Int? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { marco = v.convertirSeleccionEnEsquina() }
+        assertNotNull(marco)
+
+        val esquina = v.esquinaPrincipalEnCm()!!
+        assertEquals(2, esquina.lados.size)
+        assertEquals("el ancho real es la diagonal", 170f, px(v, esquina.lados[1].ancho), 2f)
+        assertEquals("el alto real es el canto", 300f, px(v, esquina.lados[1].alto), 2f)
+        assertEquals("el puente enderezado, a 100 del pie", 100f, px(v, esquina.lados[1].puente), 4f)
+        assertNull("enderezada es un rectángulo: sin contorno", v.contornosDeLadosEnCm()[1])
+        val caja = v.cajasDeParedesParaPruebas()[1]
+        assertEquals("pegada a la primera pared", 500f, caja.left, 1f)
+        assertEquals("con el pie común", 400f, caja.bottom, 1f)
     }
 }
