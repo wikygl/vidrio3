@@ -109,4 +109,21 @@ class EsquinaDesdeVistasTest {
         assertEquals(listOf(100f, 500f, 380f, 500f), lineas[0])
         assertEquals(listOf(380f, 500f, 380f, 600f), lineas[1])
     }
+
+    /** La perspectiva generada: la ventana de las vistas sale como paquete y el 3D la arma. */
+    @Test
+    fun la_perspectiva_se_genera_de_las_vistas() {
+        val v = vista()
+        armar(v)
+        val paquete = v.paqueteDeVistasParaVolumen()
+        assertNotNull("sin paquete no hay perspectiva", paquete)
+        val d = crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(paquete!!)!!
+        assertEquals(2, d.tramos.size)
+        assertEquals("A<90>", d.tramos[1].pliegue)
+        assertEquals("la pared de frente va con su forma", 6, d.tramos[0].contorno.size)
+        assertEquals("y con su parante", listOf(0), d.tramos[0].sistema!!.parantes)
+        assertTrue("la de al lado cuelga del dintel", d.tramos[1].caida > 0f)
+        val volumen = crystal.crystal.Diseno.nova.VistaVolumenNova(ApplicationProvider.getApplicationContext())
+        assertTrue("el 3D no arma la ventana: $paquete", volumen.mostrar(paquete))
+    }
 }

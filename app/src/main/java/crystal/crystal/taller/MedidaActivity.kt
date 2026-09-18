@@ -290,6 +290,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnMoverImanPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.MOVER_IMAN) }
         binding.btnEstiloLineaPanelMedida.setOnClickListener { mostrarDialogoEstiloLinea() }
         binding.btn3dPanelMedida.setOnClickListener { alternarMedidas3d() }
+        binding.sketchMedidas.alCambiarDibujo = { refrescarPerspectivaGenerada() }
         binding.btnTabFormasBasicas.setOnClickListener { seleccionarTabFormas(true) }
         binding.btnTabFormasRecurrentes.setOnClickListener { seleccionarTabFormas(false) }
         binding.btnPlantillaPuerta.setOnClickListener { insertarPuertaEstandar() }
@@ -633,16 +634,118 @@ class MedidaActivity : AppCompatActivity() {
     private fun refrescarTiraDeVistas() {
         val activa = binding.sketchMedidas.vistaActiva
         val dp = resources.displayMetrics.density
+        val generada = perspectivaGenerada()
         celdasDeVista.forEach { (v, celda) ->
             val (contenedor, miniatura) = celda
-            val bmp = binding.sketchMedidas.miniaturaDeVista(v, (56 * dp).toInt(), (44 * dp).toInt())
+            val bmp = if (v == SketchMedidasView.Vista.PERSPECTIVA && generada != null) {
+                bitmapDelVolumen(generada, (56 * dp).toInt(), (44 * dp).toInt())
+            } else {
+                binding.sketchMedidas.miniaturaDeVista(v, (56 * dp).toInt(), (44 * dp).toInt())
+            }
             miniatura.setImageBitmap(bmp)
             contenedor.alpha = if (v == activa) 1f else 0.6f
             miniatura.setBackgroundColor(if (v == activa) Color.parseColor("#B3E5FC") else Color.parseColor("#F7F4EC"))
         }
-        binding.tvAvisoPerspectiva.visibility =
-            if (activa == SketchMedidasView.Vista.PERSPECTIVA) View.VISIBLE else View.GONE
+        val enPerspectiva = activa == SketchMedidasView.Vista.PERSPECTIVA
+        binding.tvAvisoPerspectiva.visibility = if (enPerspectiva && generada == null) View.VISIBLE else View.GONE
         botonInteriorExterior?.text = if (binding.sketchMedidas.vistaInterior) "Interior" else "Exterior"
+        mostrarPerspectivaGenerada(if (enPerspectiva) generada else null)
+    }
+
+    /**
+     * Solo lo que depende del dibujo que acaba de cambiar: la perspectiva generada (superpuesta
+     * y en su miniatura). Las demás miniaturas se rehacen al cambiar de vista, que es caro.
+     */
+    private var refrescoPendiente = false
+    private fun refrescarPerspectivaGenerada() {
+        if (!modo3d || refrescoPendiente) return
+        refrescoPendiente = true
+        binding.sketchMedidas.post {
+            refrescoPendiente = false
+            val generada = perspectivaGenerada()
+            val dp = resources.displayMetrics.density
+            celdasDeVista[SketchMedidasView.Vista.PERSPECTIVA]?.second?.setImageBitmap(
+                if (generada != null) bitmapDelVolumen(generada, (56 * dp).toInt(), (44 * dp).toInt())
+                else binding.sketchMedidas.miniaturaDeVista(SketchMedidasView.Vista.PERSPECTIVA, (56 * dp).toInt(), (44 * dp).toInt())
+            )
+            val enPerspectiva = binding.sketchMedidas.vistaActiva == SketchMedidasView.Vista.PERSPECTIVA
+            mostrarPerspectivaGenerada(if (enPerspectiva) generada else null)
+        }
+    }
+
+    // ---- La perspectiva generada: la ventana que va saliendo de las vistas, en 3D ----
+    // Mientras la vista Perspectiva no tenga dibujo a mano, enseña la ventana que sale de la
+    // planta y las alzadas, y se va poniendo al día con cada trazo. Así se ve lo que se está
+    // haciendo. Quien quiera dibujarla a mano toca "dibujar a mano" y la generada se quita.
+
+    private var volumenGenerado: crystal.crystal.Diseno.nova.VistaVolumenNova? = null
+    private var chipPerspectiva: TextView? = null
+    private var perspectivaAMano = false
+
+    /** El paquete de la ventana que sale de las vistas, si hay planta y la perspectiva está vacía. */
+    private fun perspectivaGenerada(): String? {
+        if (perspectivaAMano) return null
+        if (binding.sketchMedidas.vistaTieneDibujo(SketchMedidasView.Vista.PERSPECTIVA)) return null
+        return binding.sketchMedidas.paqueteDeVistasParaVolumen()
+    }
+
+    private fun bitmapDelVolumen(paquete: String, ancho: Int, alto: Int): android.graphics.Bitmap? {
+        val v = crystal.crystal.Diseno.nova.VistaVolumenNova(this)
+        if (!v.mostrar(paquete)) return null
+        v.measure(
+            View.MeasureSpec.makeMeasureSpec(ancho * 4, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(alto * 4, View.MeasureSpec.EXACTLY)
+        )
+        v.layout(0, 0, ancho * 4, alto * 4)
+        val grande = android.graphics.Bitmap.createBitmap(ancho * 4, alto * 4, android.graphics.Bitmap.Config.ARGB_8888)
+        v.draw(android.graphics.Canvas(grande))
+        return android.graphics.Bitmap.createScaledBitmap(grande, ancho, alto, true)
+    }
+
+    private fun mostrarPerspectivaGenerada(paquete: String?) {
+        if (paquete == null) {
+            volumenGenerado?.visibility = View.GONE
+            chipPerspectiva?.visibility = View.GONE
+            return
+        }
+        val vista = volumenGenerado ?: crystal.crystal.Diseno.nova.VistaVolumenNova(this).also { nueva ->
+            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(0, 0).apply {
+                topToTop = binding.sketchMedidas.id
+                bottomToBottom = binding.sketchMedidas.id
+                startToStart = binding.sketchMedidas.id
+                endToEnd = binding.sketchMedidas.id
+            }
+            binding.layoutPrincipal.addView(nueva, lp)
+            nueva.elevation = 2 * resources.displayMetrics.density
+            volumenGenerado = nueva
+            val dp = resources.displayMetrics.density
+            val chip = TextView(this).apply {
+                text = "◰ perspectiva generada · arrastra para girar · toca aquí para dibujar a mano"
+                textSize = 11f
+                setTextColor(Color.parseColor("#455A64"))
+                setBackgroundResource(R.drawable.bg_control_panel)
+                setPadding((10 * dp).toInt(), (6 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
+                elevation = 3 * dp
+                setOnClickListener {
+                    perspectivaAMano = true
+                    refrescarTiraDeVistas()
+                }
+            }
+            val lpChip = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topToTop = binding.sketchMedidas.id
+                startToStart = binding.sketchMedidas.id
+                endToEnd = binding.sketchMedidas.id
+                topMargin = (8 * dp).toInt()
+            }
+            binding.layoutPrincipal.addView(chip, lpChip)
+            chipPerspectiva = chip
+        }
+        vista.mostrar(paquete)
+        vista.visibility = View.VISIBLE
+        chipPerspectiva?.visibility = View.VISIBLE
     }
 
     /** El mismo botón prende el modo y lo apaga; hay que mirar ANTES de cerrar los paneles. */

@@ -5271,7 +5271,11 @@ class SketchMedidasView @JvmOverloads constructor(
         while (historia.size > maxHistorial) historia.removeFirst()
         estadoPrevio = snapshot()
         futuro.clear()
+        alCambiarDibujo?.invoke()
     }
+
+    /** Avisa a la pantalla cada vez que el dibujo cambia de verdad (cada acción del historial). */
+    var alCambiarDibujo: (() -> Unit)? = null
 
     private fun restaurar(snap: List<Element>) {
         elementos.clear()
@@ -6153,6 +6157,45 @@ class SketchMedidasView @JvmOverloads constructor(
             if (armada) return Vista.PERSPECTIVA
         }
         return null
+    }
+
+    /**
+     * La ventana que sale de las vistas, como paquete de diseño, para dibujarla en perspectiva
+     * mientras se va midiendo: cada pared con su alto, su forma, su puente y sus parantes, y las
+     * aristas con su ángulo. Null si todavía no hay planta o la planta no tiene dos paredes.
+     */
+    fun paqueteDeVistasParaVolumen(): String? {
+        val paredes = paredesDesdeVistas() ?: return null
+        val altoVentana = paredes.maxOf { it.altoCm }.coerceAtLeast(1f)
+        val tramos = paredes.mapIndexed { i, p ->
+            // Los parantes parten la franja de sistema en trozos; sin parantes, un fijo entero.
+            val cortes = p.parantesCm.filter { it > 0.5f && it < p.anchoCm - 0.5f }.sorted()
+            val anchos = (listOf(0f) + cortes + listOf(p.anchoCm)).zipWithNext { a, b -> b - a }
+            val modulos = anchos.map { crystal.crystal.Diseno.nova.NovaModulo('f', it) }
+            val sistema = crystal.crystal.Diseno.nova.NovaFranja(
+                esSistema = true,
+                alto = if (p.puenteCm > 0f) p.puenteCm else 0f,
+                modulos = modulos,
+                parantes = cortes.indices.toList()
+            )
+            val franjas = if (p.puenteCm > 0f && p.altoCm - p.puenteCm > 0.5f) {
+                // De abajo arriba, como las escribe la calculadora: el sistema y encima la mocheta.
+                listOf(
+                    sistema,
+                    crystal.crystal.Diseno.nova.NovaFranja(false, p.altoCm - p.puenteCm, listOf(crystal.crystal.Diseno.nova.NovaModulo('f')))
+                )
+            } else listOf(sistema)
+            val grados = paredes.getOrNull(i - 1)?.grados
+            crystal.crystal.Diseno.nova.NovaTramo(
+                ancho = p.anchoCm,
+                franjas = franjas,
+                alto = if (abs(p.altoCm - altoVentana) < 0.05f) 0f else p.altoCm,
+                caida = if (abs(p.altoCm - altoVentana) < 0.05f) 0f else altoVentana - p.altoCm,
+                pliegue = if (i == 0 || grados == null) null else "A<${formatCm(grados)}>",
+                contorno = p.contorno.orEmpty()
+            )
+        }
+        return crystal.crystal.Diseno.nova.DisenoNova("apa", paredes.first().anchoCm, altoVentana, tramos).aPaquete()
     }
 
     /** ¿El apunte tiene una planta en la vista superior? Entonces la esquina sale de las vistas. */
