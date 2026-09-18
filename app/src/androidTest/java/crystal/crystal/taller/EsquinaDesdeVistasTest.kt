@@ -162,4 +162,16 @@ class EsquinaDesdeVistasTest {
         assertTrue("la segunda baja hacia quien mira", lineas[1][3] > lineas[1][1])
         assertTrue(v.plantaEstaDibujada())
     }
+
+    /** Solo la derecha dibujada: esa pared va con su alto de verdad, no como una raya. */
+    @Test
+    fun solo_la_derecha_ya_es_una_pared_con_su_alto() {
+        val v = vista()
+        v.cambiarAVista(SketchMedidasView.Vista.DERECHA)
+        v.agregarRectanguloParaPruebas(0f, -162f, 64.5f, 0f)
+        val d = crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(v.paqueteDeVistasParaVolumen()!!)!!
+        assertEquals(1, d.tramos.size)
+        assertEquals(64.5f, px(v, d.tramos[0].ancho), 2f)
+        assertEquals("la pared tiene que medir su alto", 162f, px(v, d.alto), 2f)
+    }
 }

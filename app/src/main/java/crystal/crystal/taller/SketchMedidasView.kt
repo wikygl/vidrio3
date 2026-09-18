@@ -6133,11 +6133,22 @@ class SketchMedidasView @JvmOverloads constructor(
             asignada[mejor] = fig
             libres.remove(mejor)
         }
-        val primeraFrontal = asignada.indexOfFirst { it != null }
-        val ultimaFrontal = asignada.indexOfLast { it != null }
-        if (primeraFrontal >= 0) {
-            izquierdas.reversed().forEachIndexed { k, fig -> val i = primeraFrontal - 1 - k; if (i >= 0 && asignada[i] == null) asignada[i] = fig }
-            derechas.forEachIndexed { k, fig -> val i = ultimaFrontal + 1 + k; if (i < planta.size && asignada[i] == null) asignada[i] = fig }
+        // Sin planta dibujada, las paredes SON las figuras, en su orden: no hay nada que casar.
+        if (plantaDibujada() == null) {
+            val enOrden = izquierdas + frontales + derechas
+            val ordenadas = if (vistaInterior) enOrden else enOrden.reversed()
+            ordenadas.forEachIndexed { i, fig -> if (i < planta.size) asignada[i] = fig }
+        } else {
+            val primeraFrontal = asignada.indexOfFirst { it != null }
+            val ultimaFrontal = asignada.indexOfLast { it != null }
+            if (primeraFrontal >= 0) {
+                izquierdas.reversed().forEachIndexed { k, fig -> val i = primeraFrontal - 1 - k; if (i >= 0 && asignada[i] == null) asignada[i] = fig }
+                derechas.forEachIndexed { k, fig -> val i = ultimaFrontal + 1 + k; if (i < planta.size && asignada[i] == null) asignada[i] = fig }
+            } else {
+                // Sin frontal: las de la izquierda van a las primeras paredes y las de la derecha a las últimas.
+                izquierdas.forEachIndexed { k, fig -> if (k < planta.size && asignada[k] == null) asignada[k] = fig }
+                derechas.reversed().forEachIndexed { k, fig -> val i = planta.size - 1 - k; if (i >= 0 && asignada[i] == null) asignada[i] = fig }
+            }
         }
         // Las paredes, con figura o inferidas de la de al lado.
         val paredes = planta.indices.map { i ->
