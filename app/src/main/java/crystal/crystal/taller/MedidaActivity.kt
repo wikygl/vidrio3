@@ -711,7 +711,7 @@ class MedidaActivity : AppCompatActivity() {
             val dp = resources.displayMetrics.density
             celdasDeVista[SketchMedidasView.Vista.PERSPECTIVA]?.second?.setImageBitmap(bitmapDelRopero(ropero, (56 * dp).toInt(), (44 * dp).toInt()))
         }
-        if (ropero == null || !enPerspectiva || binding.sketchMedidas.vistaTieneDibujo(SketchMedidasView.Vista.PERSPECTIVA)) {
+        if (ropero == null || !enPerspectiva || perspectivaAMano || binding.sketchMedidas.vistaTieneDibujo(SketchMedidasView.Vista.PERSPECTIVA)) {
             roperoGenerado?.visibility = View.GONE
             return
         }
@@ -734,6 +734,8 @@ class MedidaActivity : AppCompatActivity() {
         vista.mostrarPuertas = ropero.verPuertas
         vista.visibility = View.VISIBLE
         vista.bringToFront()
+        refrescarChipGenerado(false)
+        chipPerspectiva?.bringToFront()
     }
 
     private fun bitmapDelRopero(ropero: crystal.crystal.taller.melamina.Ropero, ancho: Int, alto: Int): android.graphics.Bitmap {
@@ -870,6 +872,8 @@ class MedidaActivity : AppCompatActivity() {
     private fun refrescarChipGenerado(conPerspectiva: Boolean) {
         val vista = binding.sketchMedidas.vistaActiva
         val texto: String? = when {
+            vista == SketchMedidasView.Vista.PERSPECTIVA && roperoGenerado?.visibility == View.VISIBLE ->
+                "◰ ropero en 3D · toca el mueble para ver puertas o interior · toca aquí para dibujar a mano"
             vista == SketchMedidasView.Vista.PERSPECTIVA && conPerspectiva ->
                 "◰ perspectiva generada · arrastra para girar · toca una pared lateral para cambiarla de lado · pellizca para acercar · toca aquí para dibujar a mano"
             vista == SketchMedidasView.Vista.SUPERIOR && binding.sketchMedidas.enseniaAlgoGenerado() ->
