@@ -9029,6 +9029,15 @@ class SketchMedidasView @JvmOverloads constructor(
         if (cotaPendiente != null) longPressRunnable.run() else cogerCotaRunnable.run()
     }
 
+    /** Rehace la figura recurrente más grande con lo que tiene anotado, como el toque largo en una cota. */
+    @androidx.annotation.VisibleForTesting
+    fun rehacerConLoAnotadoParaPruebas(): Boolean {
+        val c = compositePrincipal() ?: return false
+        if (!usaMedidasPrimero(c) || c.declarados.isEmpty()) return false
+        reconstruirDesdeDeclarados(c)
+        return true
+    }
+
     /** Un punto del apunte, en píxeles de pantalla, para fabricar toques. */
     @androidx.annotation.VisibleForTesting
     fun aPantallaParaPruebas(x: Float, y: Float): PointF = PointF(mundoAPantallaX(x), mundoAPantallaY(y))
@@ -9891,7 +9900,20 @@ class SketchMedidasView @JvmOverloads constructor(
 
     /** Todas las medidas anotadas: desde aquí, tocar una sola cota rehace la forma entera. */
     private fun medidasCompletas(c: Element.Composite): Boolean =
-        usaMedidasPrimero(c) && c.declarados.size >= totalLados(c)
+        usaMedidasPrimero(c) && medidasQueFaltan(c) == 0
+
+    /**
+     * Cuántas medidas faltan por escribir para poder rehacer la forma. En el trapecio (F3) son
+     * tres —las dos paralelas y la vertical—: la diagonal sale de ellas y no hace falta medirla.
+     * Con la diagonal como cuarta obligatoria, escribiendo las tres rectas la figura se quedaba con
+     * las proporciones de la plantilla y los rótulos decían otra cosa: en el 3D se veía distinta.
+     */
+    private fun medidasQueFaltan(c: Element.Composite): Int {
+        if (c.template == TEMPLATE_F3 && c.rotationDeg == 0f) {
+            return listOf(0, 2, 3).count { c.declarados[ladoKey(0, it)] == null }
+        }
+        return (totalLados(c) - c.declarados.size).coerceAtLeast(0)
+    }
 
     /**
      * Anota la medida de un lado. Mientras falte alguna, la figura NO se toca: se guarda y la cota
@@ -9903,7 +9925,7 @@ class SketchMedidasView @JvmOverloads constructor(
         // El signo aquí no significa nada: la dirección de cada lado la pone el propio contorno.
         c.declarados[ladoKey(contourIndex, sideIndex)] = abs(valueCm).coerceAtLeast(0.1f)
         if (!medidasCompletas(c)) {
-            val faltan = totalLados(c) - c.declarados.size
+            val faltan = medidasQueFaltan(c)
             val cuenta = if (faltan == 1) "Falta 1 medida" else "Faltan $faltan medidas"
             // La primera vez se explica el atajo: hay apuntes en los que no se miden todos los
             // lados y el usuario necesita poder rehacer la forma con lo que tenga.
@@ -9941,8 +9963,7 @@ class SketchMedidasView @JvmOverloads constructor(
         val sospechosos = mutableListOf<EjeIncoherente>()
         // El trapecio se rehace con sus medidas rectas (ver abajo); el resto, recorriendo el
         // contorno. Rotado o reflejado no vale el atajo: rehacerlo lo devolvería a la horizontal.
-        val porPlantilla = c.template == TEMPLATE_F3 && c.rotationDeg == 0f && !c.reflejado &&
-            reconstruirF3Declarado(c)
+        val porPlantilla = c.template == TEMPLATE_F3 && c.rotationDeg == 0f && reconstruirF3Declarado(c)
         if (!porPlantilla) c.contours.forEachIndexed { ci, contour ->
             val n = contour.size
             if (n < 3) return@forEachIndexed
@@ -10088,16 +10109,31 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun reconstruirF3Declarado(c: Element.Composite): Boolean {
         val contour = c.contours.firstOrNull()?.takeIf { it.size == 4 } ?: return false
         val minSize = cmToPx(0.1f)
-        val superior = c.declarados[ladoKey(0, 0)]?.let { cmToPx(it) } ?: return false
-        val inferior = c.declarados[ladoKey(0, 2)]?.let { cmToPx(it) } ?: return false
+        val lado0 = c.declarados[ladoKey(0, 0)]?.let { cmToPx(it) } ?: return false
+        val lado2 = c.declarados[ladoKey(0, 2)]?.let { cmToPx(it) } ?: return false
         val vertical = c.declarados[ladoKey(0, 3)]?.let { cmToPx(it) } ?: return false
-        val nuevo = contourRecurrenteF3(
-            left = contour.minOf { it.x },
-            top = contour.minOf { it.y },
-            topW = superior.coerceAtLeast(minSize),
-            bottomW = inferior.coerceAtLeast(minSize),
-            totalH = vertical.coerceAtLeast(minSize)
-        )
+        val top = contour.minOf { it.y }
+        val nuevo = if (!c.reflejado) {
+            contourRecurrenteF3(
+                left = contour.minOf { it.x },
+                top = top,
+                topW = lado0.coerceAtLeast(minSize),
+                bottomW = lado2.coerceAtLeast(minSize),
+                totalH = vertical.coerceAtLeast(minSize)
+            )
+        } else {
+            // Reflejado (espejo: se voltea y se invierte el orden), el lado 0 es el de ABAJO, el 2
+            // el de arriba y el 3 sigue siendo la vertical, ahora a la derecha. Se rehace con esa
+            // misma vuelta, apoyado en su canto derecho, para que cada cota siga en su lado.
+            val right = contour.maxOf { it.x }
+            val bottom = top + vertical.coerceAtLeast(minSize)
+            mutableListOf(
+                PointF(right, bottom),
+                PointF(right - lado0.coerceAtLeast(minSize), bottom),
+                PointF(right - lado2.coerceAtLeast(minSize), top),
+                PointF(right, top)
+            )
+        }
         contour.clear()
         contour.addAll(nuevo)
         return true
