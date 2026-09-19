@@ -325,6 +325,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnPlantillaVentanaEsquina.setOnClickListener { insertarVentanaEsquinaEstandar() }
         binding.btnPlantillaVentanaCurva.setOnClickListener { insertarVentanaCurvaEstandar() }
         binding.btnPlantillaRopero.setOnClickListener { insertarRoperoEstandar() }
+        binding.btnPlantillaRopero.setOnLongClickListener { mostrarDialogoRopero(); true }
         binding.btnPlantillaMampara.setOnClickListener { insertarMamparaEstandar() }
         binding.btnPlantillaMampara.setOnLongClickListener {
             mostrarDialogoPlantilla("Mampara", incluyeBisagra = false, incluyeApertura = false, incluyeVista = true, hojasPorDefecto = 2)
@@ -1107,12 +1108,54 @@ class MedidaActivity : AppCompatActivity() {
      * tocando sus cotas y sus rótulos en el dibujo (el hueco, los cuerpos, lo que lleva cada uno,
      * las puertas), y en la vista Perspectiva del 3D se ve el mueble en volumen.
      */
-    private fun insertarRoperoEstandar() {
+    private fun insertarRoperoEstandar(ropero: crystal.crystal.taller.melamina.Ropero = crystal.crystal.taller.melamina.Ropero()) {
         ocultarPanelesFlotantes()
-        binding.sketchMedidas.insertarPlantillaRopero()
+        binding.sketchMedidas.insertarPlantillaRopero(ropero)
         productoActual = "Ropero"
         actualizarPanelInformacion()
         refrescarPerspectivaGenerada()
+    }
+
+    /** La pulsación larga en Ropero: el hueco, los cuerpos y las puertas de una vez, como en las demás plantillas. */
+    private fun mostrarDialogoRopero() {
+        val dp = resources.displayMetrics.density
+        fun campo(rotulo: String, valor: String) = android.widget.EditText(this).apply {
+            hint = rotulo
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(valor)
+            setSelectAllOnFocus(true)
+        }
+        val etAncho = campo("Ancho del hueco (cm)", "240")
+        val etAlto = campo("Alto (cm)", "240")
+        val etFondo = campo("Fondo (cm)", "60")
+        val etCuerpos = campo("Cuerpos", "2")
+        val etMaletero = campo("Maletero (cm, 0 = sin)", "0")
+        val tipos = crystal.crystal.taller.melamina.TipoPuertas.values()
+        val spPuertas = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(this@MedidaActivity, android.R.layout.simple_spinner_dropdown_item, tipos.map { it.etiqueta })
+            setSelection(tipos.indexOf(crystal.crystal.taller.melamina.TipoPuertas.BATIENTES))
+        }
+        val caja = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((20 * dp).toInt(), (8 * dp).toInt(), (20 * dp).toInt(), 0)
+            addView(etAncho); addView(etAlto); addView(etFondo); addView(etCuerpos); addView(etMaletero)
+            addView(TextView(this@MedidaActivity).apply { text = "Puertas"; textSize = 12f })
+            addView(spPuertas)
+        }
+        fun num(et: android.widget.EditText, porDefecto: Float) = et.text.toString().replace(",", ".").toFloatOrNull() ?: porDefecto
+        AlertDialog.Builder(this)
+            .setTitle("Ropero de melamina")
+            .setView(caja)
+            .setPositiveButton("Insertar") { _, _ ->
+                val ropero = crystal.crystal.taller.melamina.Ropero(
+                    anchoCm = num(etAncho, 240f), altoCm = num(etAlto, 240f), fondoCm = num(etFondo, 60f),
+                    maleteroCm = num(etMaletero, 0f).coerceIn(0f, 120f),
+                    puertas = tipos[spPuertas.selectedItemPosition.coerceIn(0, tipos.lastIndex)]
+                ).conCuerposIguales(num(etCuerpos, 2f).toInt().coerceIn(1, 8))
+                insertarRoperoEstandar(ropero)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun mostrarDialogoPlantilla(
