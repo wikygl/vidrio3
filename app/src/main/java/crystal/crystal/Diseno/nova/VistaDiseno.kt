@@ -865,7 +865,7 @@ class VistaDiseno @JvmOverloads constructor(
             // antes de leer las franjas, que si no el parser se encuentra un tag que no es suyo.
             val flecha = RE_CURVA_TRAMO.find(bloque.contenido)
                 ?.groupValues?.get(1)?.replace(",", ".")?.toFloatOrNull() ?: 0f
-            val contenido = if (flecha > 0f) RE_CURVA_TRAMO.replace(bloque.contenido, "")
+            val contenido = if (flecha != 0f) RE_CURVA_TRAMO.replace(bloque.contenido, "")
             else bloque.contenido
             val franjas = parsearFranjasDesdeModeloCompleto(contenido)
             // `H<106.2>` dentro del tramo: su alto propio, el de la ventana escalonada.
@@ -4208,7 +4208,7 @@ class VistaDiseno @JvmOverloads constructor(
          * Es SOLO de ese tramo, al revés que `U<>`, que curva la ventana entera: una pared curva
          * de una esquina es un paño más entre paños rectos.
          */
-        private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*([\d.,]+)\s*>""")
+        private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*(-?[\d.,]+)\s*>""")
         /** La silueta de la pared de un tramo: `L<x/y|x/y|…>` (la silueta del Lado). */
         private val RE_CONTORNO_TRAMO = Regex("""[lL]\s*<[^>]*>""")
         /** El contorno del vano: `V<x/y|x/y|…>`, en centímetros. */

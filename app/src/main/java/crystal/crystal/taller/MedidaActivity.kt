@@ -247,6 +247,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnFormaTexto.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.TEXT) }
         binding.btnFormaLinea.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.LINE) }
         binding.btnFormaLinea90.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.ORTHO_LINE) }
+        binding.btnFormaArco.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.ARCO) }
         binding.btnFormaNodos.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.NODO) }
         binding.btnFormaPolilinea.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.POLILINEA) }
         binding.btnEngraBisagra.setOnClickListener { mostrarDialogoBisagra() }
@@ -1373,6 +1374,7 @@ class MedidaActivity : AppCompatActivity() {
             SketchMedidasView.Tool.TEXT -> "Texto"
             SketchMedidasView.Tool.LINE -> "Linea"
             SketchMedidasView.Tool.ORTHO_LINE -> "Linea 90"
+            SketchMedidasView.Tool.ARCO -> "Arco"
             SketchMedidasView.Tool.MAGNET_PEN -> "Lapiz iman"
             SketchMedidasView.Tool.NODO -> "Nodos"
         }
@@ -1389,6 +1391,7 @@ class MedidaActivity : AppCompatActivity() {
             binding.btnFormaTexto to (tool == SketchMedidasView.Tool.TEXT),
             binding.btnFormaLinea to (tool == SketchMedidasView.Tool.LINE),
             binding.btnFormaLinea90 to (tool == SketchMedidasView.Tool.ORTHO_LINE),
+            binding.btnFormaArco to (tool == SketchMedidasView.Tool.ARCO),
             binding.btnFormaNodos to (tool == SketchMedidasView.Tool.NODO)
         )
         estados.forEach { (view, activo) ->
@@ -1405,6 +1408,7 @@ class MedidaActivity : AppCompatActivity() {
             SketchMedidasView.Tool.TEXT,
             SketchMedidasView.Tool.LINE,
             SketchMedidasView.Tool.ORTHO_LINE,
+            SketchMedidasView.Tool.ARCO,
             SketchMedidasView.Tool.MAGNET_PEN,
             SketchMedidasView.Tool.NODO
         )

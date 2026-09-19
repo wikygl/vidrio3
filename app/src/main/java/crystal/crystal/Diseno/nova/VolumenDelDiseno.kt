@@ -119,9 +119,10 @@ data class VolumenDelDiseno(val caras: List<CaraDelVolumen>) {
          */
         private fun puntosDelArco(pared: ParedEnPlanta, trozos: Int): List<PuntoPlanta> {
             val n = trozos.coerceAtLeast(1)
-            val arco = ArcoEsquina.deDesarrolloYFlecha(pared.anchoCm, pared.flechaCm)
+            val arco = ArcoEsquina.deDesarrolloYFlecha(pared.anchoCm, kotlin.math.abs(pared.flechaCm))
                 ?: return listOf(pared.desde, pared.hasta)
-            val giro = Math.toRadians(arco.anguloGrados.toDouble())
+            // El signo de la panza es el del giro: en menos, la curva dobla al otro lado.
+            val giro = Math.toRadians(arco.anguloGrados.toDouble()) * (if (pared.flechaCm < 0f) -1.0 else 1.0)
             val rumboCuerda = atan2(
                 (pared.hasta.y - pared.desde.y).toDouble(),
                 (pared.hasta.x - pared.desde.x).toDouble()
@@ -129,7 +130,7 @@ data class VolumenDelDiseno(val caras: List<CaraDelVolumen>) {
             var rumbo = rumboCuerda - giro / 2.0
             val paso = giro / n
             // Cada trocito del arco es una cuerda de su mismo radio: 2·R·sen(paso/2).
-            val cuerdita = 2.0 * arco.radio * sin(paso / 2.0)
+            val cuerdita = 2.0 * arco.radio * sin(kotlin.math.abs(paso) / 2.0)
             val puntos = mutableListOf(pared.desde)
             var x = pared.desde.x
             var y = pared.desde.y

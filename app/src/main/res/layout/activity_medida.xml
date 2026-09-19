@@ -303,6 +303,19 @@
 
                     <TextView
                         style="@style/RotuloIconoMedida"
+                        android:text="Arco" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaArco"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Arco por cuerda, flecha y desarrollo"
+                        android:src="@drawable/arco" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
                         android:text="Nodos" />
 
                     <ImageButton

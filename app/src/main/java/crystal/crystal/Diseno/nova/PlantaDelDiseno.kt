@@ -27,7 +27,7 @@ data class ParedEnPlanta(
     val flechaCm: Float,
     val giroGrados: Float
 ) {
-    val esCurva: Boolean get() = flechaCm > 0f
+    val esCurva: Boolean get() = flechaCm != 0f
 
     /** De punta a punta por el suelo: el ancho en una pared recta, la cuerda en una curva. */
     val cuerdaCm: Float
@@ -108,15 +108,16 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
                 // La panza de este tramo: la suya, o la que le toca si la ventana entera es una
                 // curva sola —la calculadora curva escribe UNA panza para toda la ventana, no una
                 // por tramo, y sin esto sus tramos salían rectos y el volumen se veía plano—.
-                val flecha = if (tramo.flecha > 0f) tramo.flecha
+                val flecha = if (tramo.flecha != 0f) tramo.flecha
                 else radioEntero?.let { r -> panzaDeUnTrozo(tramo.ancho, r) } ?: 0f
 
-                if (flecha > 0f) {
+                if (flecha != 0f) {
                     // La curva: de su desarrollo y su panza sale cuánto gira y cuánta cuerda tiene.
                     // La cuerda sale a mitad de camino del giro —esa es la dirección de punta a
-                    // punta de un arco—, y al final el rumbo queda girado el arco entero.
-                    val arco = ArcoEsquina.deDesarrolloYFlecha(tramo.ancho, flecha)
-                    val angulo = arco?.anguloGrados ?: 0f
+                    // punta de un arco—, y al final el rumbo queda girado el arco entero. La panza
+                    // en menos es la curva que dobla al otro lado (se mete hacia quien mira).
+                    val arco = ArcoEsquina.deDesarrolloYFlecha(tramo.ancho, abs(flecha))
+                    val angulo = (arco?.anguloGrados ?: 0f) * (if (flecha < 0f) -1f else 1f)
                     val cuerda = arco?.cuerda ?: tramo.ancho
                     val mitad = Math.toRadians((angulo / 2f).toDouble())
                     x += (cos(rumbo + mitad) * cuerda).toFloat()
@@ -154,7 +155,7 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
          * y de esa panza sale el radio, y de ahí lo que curva cada trozo.
          */
         private fun radioDeLaVentanaCurva(diseno: DisenoNova, panzaDeLaVentana: Float): Float? {
-            if (diseno.tramos.any { it.flecha > 0f }) return null
+            if (diseno.tramos.any { it.flecha != 0f }) return null
             val flecha = if (panzaDeLaVentana > 0f) panzaDeLaVentana
             else diseno.etiquetas
                 .firstOrNull { it.trim().startsWith("U<", ignoreCase = true) }

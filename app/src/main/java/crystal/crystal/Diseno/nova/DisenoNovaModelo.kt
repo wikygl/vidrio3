@@ -374,8 +374,8 @@ data class DisenoNova(
     private fun abreLado(indice: Int): Boolean {
         if (indice == 0) return true
         val tramo = tramos.getOrNull(indice) ?: return false
-        return tramo.pliegue != null || tramo.flecha > 0f ||
-            (tramos.getOrNull(indice - 1)?.flecha ?: 0f) > 0f
+        return tramo.pliegue != null || tramo.flecha != 0f ||
+            (tramos.getOrNull(indice - 1)?.flecha ?: 0f) != 0f
     }
 
 
@@ -542,7 +542,7 @@ data class DisenoNova(
             // parante, que es justo lo que se está quitando. Y si alguna era curva, lo sigue
             // siendo la pared unida.
             pliegue = a.pliegue,
-            flecha = if (a.flecha > 0f) a.flecha else b.flecha,
+            flecha = if (a.flecha != 0f) a.flecha else b.flecha,
             contorno = if (a.contorno.isNotEmpty()) a.contorno else b.contorno
         )
         nuevos.removeAt(indice + 1)
@@ -825,7 +825,7 @@ data class DisenoNova(
             else -> "D<${df(tramo.caida)}>;"
         }
         // Y su panza, si es la pared curva de una esquina.
-        val cabezaCurva = if (tramo.flecha > 0f) "Q<${df(tramo.flecha)}>;" else ""
+        val cabezaCurva = if (tramo.flecha != 0f) "Q<${df(tramo.flecha)}>;" else ""
         // Y la silueta de su pared, si no es un rectángulo. Con `|` y `/` como el `V<>`: ni `;`
         // ni `,`, que son los separadores de los otros parsers.
         val cabezaContorno = if (tramo.contorno.size >= 3) {
@@ -863,7 +863,7 @@ data class DisenoNova(
         /** Lo que arranca un trozo nuevo: la cabeza de un tramo o un tag suelto. */
         private val RE_ARRANQUE = Regex("""^(?:t[a-z]?<|[auo]<)""", RegexOption.IGNORE_CASE)
         /** La panza de un tramo curvo: `Q<29.3>`, esté como tag de cabecera o pegada al sistema. */
-        private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*([\d.,]+)\s*>""")
+        private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*(-?[\d.,]+)\s*>""")
         /** La silueta de la pared que arranca en un tramo: `L<x/y|x/y|…>` (la silueta del Lado). */
         private val RE_CONTORNO_TRAMO = Regex("""^[lL]\s*<[^>]*>""")
 

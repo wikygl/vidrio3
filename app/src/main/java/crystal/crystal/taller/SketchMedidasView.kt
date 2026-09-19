@@ -190,7 +190,13 @@ class SketchMedidasView @JvmOverloads constructor(
          * Mueve una esquina suelta en vez de la figura entera, y une el nodo que se suelta encima
          * de otro. Es la forma de rematar a mano lo que el lápiz magnético dejó casi bien.
          */
-        NODO
+        NODO,
+        /**
+         * Arco por su cuerda: se arrastra de punta a punta y se le escriben dos de sus tres
+         * medidas (desarrollo, flecha, cuerda), más su altura para el 3D. Es la pared curva de la
+         * planta; ver [ArcoDibujado] y [pedirDatosDeArco].
+         */
+        ARCO
     }
 
     private enum class Axis {
@@ -221,7 +227,9 @@ class SketchMedidasView @JvmOverloads constructor(
         ESQUINA_TRAMO_ARRIBA,
 
         /** De la esquina de un corte al lado de enfrente, a escuadra. Empuja esa arista. */
-        A_ESCUADRA
+        A_ESCUADRA,
+        /** El rótulo de un arco: tocarlo abre sus tres medidas y su altura. */
+        ARCO
     }
 
     /**
@@ -296,7 +304,13 @@ class SketchMedidasView @JvmOverloads constructor(
              * rehace con todas sus medidas, la escuadra no mueve nada al escribirla: se anota aquí
              * y entra en la reconstrucción como una medida más ([CierrePoligono.Escuadra]).
              */
-            var medidaEscrita: Float? = null
+            var medidaEscrita: Float? = null,
+            /**
+             * Solo en el arco ([Tool.ARCO]): su flecha en cm, con signo (ver [ArcoDibujado]), y la
+             * altura de esa pared curva para el 3D (0 = la de la pared de al lado).
+             */
+            var flechaCm: Float = 0f,
+            var alturaCm: Float = 0f
         ) : Element()
         data class Group(val children: MutableList<Element>) : Element()
         data class TextLabel(
@@ -755,7 +769,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     return true
                 }
                 parent?.requestDisallowInterceptTouchEvent(true)
-                val inicio = if (herramienta == Tool.LINE || herramienta == Tool.ORTHO_LINE) {
+                val inicio = if (herramienta == Tool.LINE || herramienta == Tool.ORTHO_LINE || herramienta == Tool.ARCO) {
                     snapLibre(p) ?: p
                 } else {
                     p
@@ -797,6 +811,8 @@ class SketchMedidasView @JvmOverloads constructor(
                     } else crearElemento(p.x, p.y)?.let {
                         elementos.add(it)
                         registrarAccion()
+                        // El arco se termina con sus medidas: la cuerda dibujada es a ojo.
+                        if ((it as? Element.Shape)?.tool == Tool.ARCO) pedirDatosDeArco(elementos.lastIndex)
                     }
                     trazoActual.reset()
                     dibujando = false
@@ -3018,6 +3034,8 @@ class SketchMedidasView @JvmOverloads constructor(
             // Del círculo se corta su contorno: el desarrollo de la circunferencia.
             Tool.CIRCLE -> listOf(LadoMedido(shape.diameterCm * Math.PI.toFloat(), nombre))
             Tool.LINE, Tool.ORTHO_LINE -> listOf(LadoMedido(shape.lengthCm, nombre))
+            // Del arco se corta su desarrollo.
+            Tool.ARCO -> listOf(LadoMedido(medidasDelArco(shape)?.desarrollo ?: shape.lengthCm, nombre))
             Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> emptyList()
         }
     }
@@ -3040,6 +3058,7 @@ class SketchMedidasView @JvmOverloads constructor(
             Tool.TRIANGLE -> "Triang $figura"
             Tool.CIRCLE -> "Circulo $figura"
             Tool.LINE, Tool.ORTHO_LINE -> "Linea $figura"
+            Tool.ARCO -> "Arco $figura"
             else -> "Figura $figura"
         }
     }
@@ -3587,7 +3606,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     Nodo(index, izq) { x, y -> fijarVerticesTriangulo(shape, punta, der, PointF(x, y)) }
                 )
             }
-            Tool.LINE, Tool.ORTHO_LINE -> listOf(nodoEsquina(shape.start), nodoEsquina(shape.end))
+            Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO -> listOf(nodoEsquina(shape.start), nodoEsquina(shape.end))
             else -> emptyList()
         }
     }
@@ -5262,7 +5281,7 @@ class SketchMedidasView @JvmOverloads constructor(
             PointF(e.bottomRight.x, e.bottomRight.y), PointF(e.bottomLeft.x, e.bottomLeft.y),
             e.topCm, e.rightCm, e.bottomCm, e.leftCm, e.cotaHint, e.largoFijado,
             e.grosor, e.trazo, e.ajustesCotas.mapValues { it.value.copy() }.toMutableMap(), e.libre,
-            e.medidaEscrita
+            e.medidaEscrita, e.flechaCm, e.alturaCm
         )
         is Element.Group -> Element.Group(e.children.map { copyElement(it) }.toMutableList())
         is Element.TextLabel -> Element.TextLabel(e.text, e.x, e.y, e.textSize, e.titulo, e.movida, e.rol)
@@ -5770,7 +5789,7 @@ class SketchMedidasView @JvmOverloads constructor(
                         if (element.widthCm > 0.5f && ancho > 1f) muestras += ancho / element.widthCm
                         if (element.heightCm > 0.5f && alto > 1f) muestras += alto / element.heightCm
                     }
-                    Tool.LINE, Tool.ORTHO_LINE -> {
+                    Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO -> {
                         val largo = distancia(element.start, element.end)
                         if (element.lengthCm > 0.5f && largo > 1f) muestras += largo / element.lengthCm
                     }
@@ -5840,7 +5859,7 @@ class SketchMedidasView @JvmOverloads constructor(
                         horizontal = maxOf(horizontal, element.widthCm)
                         vertical = maxOf(vertical, element.heightCm)
                     }
-                    Tool.LINE, Tool.ORTHO_LINE -> {
+                    Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO -> {
                         // Una línea suma a lo ancho o a lo alto según hacia dónde corre.
                         if (abs(element.end.x - element.start.x) >= abs(element.end.y - element.start.y)) {
                             horizontal = maxOf(horizontal, element.lengthCm)
@@ -6006,8 +6025,26 @@ class SketchMedidasView @JvmOverloads constructor(
         /** Los grados con los que dobla a la siguiente; null en la última. */
         val grados: Float?,
         /** De qué vista salió su figura, cuando la planta se generó de las alzadas. */
-        val vista: Vista? = null
+        val vista: Vista? = null,
+        /** Su panza si es curva, con signo (ver [ArcoDibujado]); 0 = recta. El ancho es entonces el desarrollo. */
+        val flechaCm: Float = 0f
     )
+
+    /**
+     * Una pared de la planta: su largo (el desarrollo, si es curva), cómo dobla a la siguiente
+     * (null en la última), su panza con signo y la altura que se le escribió (0 = no se sabe).
+     */
+    private data class TramoDePlanta(
+        val largoCm: Float,
+        val grados: Float?,
+        val flechaCm: Float = 0f,
+        val alturaCm: Float = 0f
+    )
+
+    /** Un trozo de la planta dibujada, orientado como se recorre; al revés, la panza cambia de signo. */
+    private data class SegmentoDePlanta(val a: PointF, val b: PointF, val flechaCm: Float, val alturaCm: Float) {
+        fun alReves() = SegmentoDePlanta(b, a, -flechaCm, alturaCm)
+    }
 
     /**
      * La planta como paredes encadenadas: los largos en cm y el giro de cada arista, leídos de
@@ -6020,7 +6057,7 @@ class SketchMedidasView @JvmOverloads constructor(
      * misma regla con la que la plantilla dibuja su planta. A menos de 5° de 90 es 90; casi recto
      * es 180: un parante, no una esquina.
      */
-    private fun paredesDeLaPlanta(): List<Pair<Float, Float?>>? = plantaDibujada() ?: plantaVirtual()
+    private fun paredesDeLaPlanta(): List<TramoDePlanta>? = plantaDibujada() ?: plantaVirtual()
 
     /** ¿La planta está dibujada a mano en la vista superior? Si no, se genera de las alzadas. */
     fun plantaEstaDibujada(): Boolean = plantaDibujada() != null
@@ -6031,12 +6068,12 @@ class SketchMedidasView @JvmOverloads constructor(
      * vista y vista doblan a 90 (el rincón: todo arranca en el mismo cero); dentro de una vista van
      * seguidas, a 180. Null si no hay ninguna figura.
      */
-    private fun plantaVirtual(): List<Pair<Float, Float?>>? {
+    private fun plantaVirtual(): List<TramoDePlanta>? {
         val grupos = listOf(Vista.IZQUIERDA, Vista.FRONTAL, Vista.DERECHA)
             .map { v -> v to figurasDeVista(v).map { pxToCm(boundsForElement(it.first).width()) } }
             .filter { it.second.isNotEmpty() }
         if (grupos.isEmpty()) return null
-        val paredes = mutableListOf<Pair<Float, Float?>>()
+        val paredes = mutableListOf<TramoDePlanta>()
         grupos.forEachIndexed { g, (vista, anchos) ->
             // El doblez entre dos vistas es de la lateral que interviene: la izquierda con la
             // frontal es el de la izquierda; la frontal con la derecha, el de la derecha.
@@ -6046,49 +6083,57 @@ class SketchMedidasView @JvmOverloads constructor(
                 val ultimaDelGrupo = k == anchos.lastIndex
                 val ultima = ultimaDelGrupo && g == grupos.lastIndex
                 val grados: Float? = if (ultima) null else if (ultimaDelGrupo) doblez else 180f
-                paredes.add(ancho to grados)
+                paredes.add(TramoDePlanta(ancho, grados))
             }
         }
         // Desde fuera se recorre al revés y el rincón dobla hacia afuera.
         return if (vistaInterior) paredes
-        else paredes.reversed().mapIndexed { i, (a, _) -> a to paredes.getOrNull(paredes.size - 2 - i)?.second?.let { -it } }
+        else paredes.reversed().mapIndexed { i, p -> p.copy(grados = paredes.getOrNull(paredes.size - 2 - i)?.grados?.let { -it }) }
     }
 
-    private fun plantaDibujada(): List<Pair<Float, Float?>>? {
-        val lineas = elementosDeVista(Vista.SUPERIOR).mapNotNull { e ->
+    private fun plantaDibujada(): List<TramoDePlanta>? {
+        val trozos = elementosDeVista(Vista.SUPERIOR).mapNotNull { e ->
             val s = e as? Element.Shape ?: return@mapNotNull null
-            if (s.tool != Tool.LINE && s.tool != Tool.ORTHO_LINE) return@mapNotNull null
+            if (s.tool != Tool.LINE && s.tool != Tool.ORTHO_LINE && s.tool != Tool.ARCO) return@mapNotNull null
             if (esCotaAEscuadra(s.cotaHint)) return@mapNotNull null
-            PointF(s.start.x, s.start.y) to PointF(s.end.x, s.end.y)
+            val esArco = s.tool == Tool.ARCO
+            SegmentoDePlanta(
+                PointF(s.start.x, s.start.y), PointF(s.end.x, s.end.y),
+                if (esArco) s.flechaCm else 0f, if (esArco) s.alturaCm else 0f
+            )
         }
-        if (lineas.isEmpty()) return null
+        if (trozos.isEmpty()) return null
         val cerca = snapThresholdPx()
-        // Se encadenan por las puntas, empezando por la línea que tiene una punta más a la izquierda.
-        val pendientes = lineas.toMutableList()
-        var actual = pendientes.minByOrNull { minOf(it.first.x, it.second.x) } ?: return null
+        // Se encadenan por las puntas, empezando por el trozo que tiene una punta más a la izquierda.
+        val pendientes = trozos.toMutableList()
+        var actual = pendientes.minByOrNull { minOf(it.a.x, it.b.x) } ?: return null
         pendientes.remove(actual)
-        if (actual.second.x < actual.first.x) actual = actual.second to actual.first
-        val recorrido = mutableListOf(actual.first, actual.second)
+        if (actual.b.x < actual.a.x) actual = actual.alReves()
+        val recorrido = mutableListOf(actual)
         var seguir = true
         while (seguir && pendientes.isNotEmpty()) {
-            val punta = recorrido.last()
-            val siguiente = pendientes.firstOrNull { distancia(it.first, punta) < cerca || distancia(it.second, punta) < cerca }
+            val punta = recorrido.last().b
+            val siguiente = pendientes.firstOrNull { distancia(it.a, punta) < cerca || distancia(it.b, punta) < cerca }
             if (siguiente == null) { seguir = false; continue }
             pendientes.remove(siguiente)
-            recorrido.add(if (distancia(siguiente.first, punta) < cerca) siguiente.second else siguiente.first)
+            recorrido.add(if (distancia(siguiente.a, punta) < cerca) siguiente else siguiente.alReves())
         }
-        if (recorrido.size < 2) return null
-        val orden = if (vistaInterior) recorrido else recorrido.reversed()
-        val paredes = mutableListOf<Pair<Float, Float?>>()
-        for (i in 0 until orden.size - 1) {
-            val a = orden[i]
-            val b = orden[i + 1]
-            val largo = pxToCm(distancia(a, b))
+        // Desde fuera se recorre al revés, y cada trozo con él: la panza del arco cambia de signo.
+        val orden = if (vistaInterior) recorrido else recorrido.reversed().map { it.alReves() }
+        // El rumbo con el que un trozo entra y sale: el de la recta, o las tangentes del arco.
+        fun arco(t: SegmentoDePlanta) = ArcoDibujado(t.a.x, t.a.y, t.b.x, t.b.y, cmToPx(t.flechaCm))
+        fun rumboEntrada(t: SegmentoDePlanta) = if (t.flechaCm != 0f) arco(t).rumboEntrada else arco(t).rumboCuerda
+        fun rumboSalida(t: SegmentoDePlanta) = if (t.flechaCm != 0f) arco(t).rumboSalida else arco(t).rumboCuerda
+        val paredes = mutableListOf<TramoDePlanta>()
+        for (i in orden.indices) {
+            val t = orden[i]
+            val cuerdaCm = pxToCm(distancia(t.a, t.b))
+            // La curva se corta por su desarrollo, no por su cuerda.
+            val largo = if (t.flechaCm != 0f) ArcoEsquina.deCuerdaYFlecha(cuerdaCm, abs(t.flechaCm))?.desarrollo ?: cuerdaCm else cuerdaCm
             var grados: Float? = null
-            if (i + 2 < orden.size) {
-                val c = orden[i + 2]
-                val rumboAB = Math.toDegrees(kotlin.math.atan2((b.y - a.y).toDouble(), (b.x - a.x).toDouble()))
-                val rumboBC = Math.toDegrees(kotlin.math.atan2((c.y - b.y).toDouble(), (c.x - b.x).toDouble()))
+            if (i + 1 < orden.size) {
+                val rumboAB = Math.toDegrees(rumboSalida(t))
+                val rumboBC = Math.toDegrees(rumboEntrada(orden[i + 1]))
                 var giro = (rumboBC - rumboAB).toFloat()
                 while (giro > 180f) giro -= 360f
                 while (giro < -180f) giro += 360f
@@ -6100,7 +6145,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 }
                 if (giro < 0f && grados < 180f) grados = -grados
             }
-            paredes.add(largo to grados)
+            paredes.add(TramoDePlanta(largo, grados, t.flechaCm, t.alturaCm))
         }
         return paredes
     }
@@ -6179,10 +6224,12 @@ class SketchMedidasView @JvmOverloads constructor(
         // sin repetir. Las laterales van a los lados de la primera y la última de las frontales.
         val asignada = arrayOfNulls<Pair<Element, List<Element.Shape>>>(planta.size)
         val vistaDe = arrayOfNulls<Vista>(planta.size)
-        val libres = planta.indices.toMutableList()
+        // Las paredes curvas no salen de ninguna alzada: se dibujan en la planta con su altura.
+        fun libre(i: Int) = asignada[i] == null && planta[i].flechaCm == 0f
+        val libres = planta.indices.filter { planta[it].flechaCm == 0f }.toMutableList()
         frontales.forEach { fig ->
             val ancho = pxToCm(boundsForElement(fig.first).width())
-            val mejor = libres.minByOrNull { abs(planta[it].first - ancho) } ?: return@forEach
+            val mejor = libres.minByOrNull { abs(planta[it].largoCm - ancho) } ?: return@forEach
             asignada[mejor] = fig
             libres.remove(mejor)
         }
@@ -6196,17 +6243,18 @@ class SketchMedidasView @JvmOverloads constructor(
             val primeraFrontal = asignada.indexOfFirst { it != null }
             val ultimaFrontal = asignada.indexOfLast { it != null }
             if (primeraFrontal >= 0) {
-                izquierdas.reversed().forEachIndexed { k, fig -> val i = primeraFrontal - 1 - k; if (i >= 0 && asignada[i] == null) asignada[i] = fig }
-                derechas.forEachIndexed { k, fig -> val i = ultimaFrontal + 1 + k; if (i < planta.size && asignada[i] == null) asignada[i] = fig }
+                izquierdas.reversed().forEachIndexed { k, fig -> val i = primeraFrontal - 1 - k; if (i >= 0 && libre(i)) asignada[i] = fig }
+                derechas.forEachIndexed { k, fig -> val i = ultimaFrontal + 1 + k; if (i < planta.size && libre(i)) asignada[i] = fig }
             } else {
                 // Sin frontal: las de la izquierda van a las primeras paredes y las de la derecha a las últimas.
-                izquierdas.forEachIndexed { k, fig -> if (k < planta.size && asignada[k] == null) asignada[k] = fig }
-                derechas.reversed().forEachIndexed { k, fig -> val i = planta.size - 1 - k; if (i >= 0 && asignada[i] == null) asignada[i] = fig }
+                izquierdas.forEachIndexed { k, fig -> if (k < planta.size && libre(k)) asignada[k] = fig }
+                derechas.reversed().forEachIndexed { k, fig -> val i = planta.size - 1 - k; if (i >= 0 && libre(i)) asignada[i] = fig }
             }
         }
         // Las paredes, con figura o inferidas de la de al lado.
         val paredes = planta.indices.map { i ->
-            val (largo, grados) = planta[i]
+            val largo = planta[i].largoCm
+            val grados = planta[i].grados
             val fig = asignada[i]
             if (fig != null) {
                 val p = paredDeFigura(fig.first, fig.second, grados)
@@ -6214,19 +6262,23 @@ class SketchMedidasView @JvmOverloads constructor(
             } else {
                 val vecinaIzq = (i - 1 downTo 0).firstNotNullOfOrNull { asignada[it] }
                 val vecinaDer = (i + 1 until planta.size).firstNotNullOfOrNull { asignada[it] }
+                // La altura escrita en el arco manda; si no, la del canto de la pared de al lado.
                 val alto = when {
+                    planta[i].alturaCm > 0f -> planta[i].alturaCm
                     vecinaIzq != null -> altoEnElCanto(vecinaIzq.first, derecho = true)
                     vecinaDer != null -> altoEnElCanto(vecinaDer.first, derecho = false)
                     else -> 0f
                 }
-                ParedDeVistas(largo, alto, 0f, null, emptyList(), grados)
+                ParedDeVistas(largo, alto, 0f, null, emptyList(), grados, flechaCm = planta[i].flechaCm)
             }
         }
         // Las aristas que no doblan juntan sus dos paredes en una, con el parante en la unión.
+        // Una curva no se junta con nadie: sale tangente y eso no es un parante.
         val juntas = mutableListOf<ParedDeVistas>()
         paredes.forEach { p ->
             val anterior = juntas.lastOrNull()
-            if (anterior != null && anterior.grados != null && abs(abs(anterior.grados) - 180f) < 0.5f) {
+            if (anterior != null && anterior.grados != null && abs(abs(anterior.grados) - 180f) < 0.5f &&
+                anterior.flechaCm == 0f && p.flechaCm == 0f) {
                 juntas[juntas.lastIndex] = ParedDeVistas(
                     anchoCm = anterior.anchoCm + p.anchoCm,
                     altoCm = maxOf(anterior.altoCm, p.altoCm),
@@ -6308,6 +6360,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 alto = if (abs(p.altoCm - altoVentana) < 0.05f) 0f else p.altoCm,
                 caida = if (abs(p.altoCm - altoVentana) < 0.05f) 0f else altoVentana - p.altoCm,
                 pliegue = if (i == 0 || grados == null) null else "A<${formatCm(grados)}>",
+                flecha = p.flechaCm,
                 contorno = p.contorno.orEmpty()
             )
         }
@@ -6584,7 +6637,11 @@ class SketchMedidasView @JvmOverloads constructor(
                 .put("trazo", element.trazo)
                 .put("ajustesCotas", ajustesCotasJson(element.ajustesCotas))
                 .put("libre", element.libre)
-                .apply { element.medidaEscrita?.let { put("medidaEscrita", it) } }
+                .apply {
+                    element.medidaEscrita?.let { put("medidaEscrita", it) }
+                    if (element.flechaCm != 0f) put("flechaCm", element.flechaCm)
+                    if (element.alturaCm != 0f) put("alturaCm", element.alturaCm)
+                }
             is Element.Group -> JSONObject()
                 .put("type", "group")
                 .put("children", JSONArray().apply {
@@ -6677,6 +6734,8 @@ class SketchMedidasView @JvmOverloads constructor(
                     leerAjustesCotas(obj, ajustesCotas)
                     libre = obj.optBoolean("libre", false)
                     medidaEscrita = if (obj.has("medidaEscrita")) obj.optDouble("medidaEscrita").toFloat() else null
+                    flechaCm = obj.optDouble("flechaCm", 0.0).toFloat()
+                    alturaCm = obj.optDouble("alturaCm", 0.0).toFloat()
                 }
             }
             "group" -> {
@@ -7001,7 +7060,10 @@ class SketchMedidasView @JvmOverloads constructor(
             rightCm = heightCm,
             bottomCm = widthCm,
             leftCm = heightCm
-        )
+        ).apply {
+            // El arco nace con una panza de muestra hacia arriba del papel; el diálogo la ajusta.
+            if (tool == Tool.ARCO) flechaCm = lengthCm * 0.25f
+        }
     }
 
     private fun drawElement(canvas: Canvas, index: Int, element: Element, collectHits: Boolean) {
@@ -7891,7 +7953,9 @@ class SketchMedidasView @JvmOverloads constructor(
                 trazo = element.trazo,
                 ajustesCotas = element.ajustesCotas.mapValues { it.value.copy() }.toMutableMap(),
                 libre = element.libre,
-                medidaEscrita = element.medidaEscrita
+                medidaEscrita = element.medidaEscrita,
+                flechaCm = element.flechaCm,
+                alturaCm = element.alturaCm
             )
             is Element.Group -> Element.Group(element.children.map { cloneElement(it) }.toMutableList())
         }
@@ -8081,9 +8145,143 @@ class SketchMedidasView @JvmOverloads constructor(
                     moveTo(shape.start.x, shape.start.y)
                     lineTo(shape.end.x, shape.end.y)
                 }
+                Tool.ARCO -> {
+                    val puntos = arcoDe(shape).puntos()
+                    moveTo(puntos[0].first, puntos[0].second)
+                    puntos.drop(1).forEach { (px, py) -> lineTo(px, py) }
+                }
                 Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> Unit
             }
         }
+    }
+
+    /** El arco de esa figura, en píxeles del apunte (la flecha se guarda en cm). */
+    private fun arcoDe(shape: Element.Shape): ArcoDibujado =
+        ArcoDibujado(shape.start.x, shape.start.y, shape.end.x, shape.end.y, cmToPx(shape.flechaCm))
+
+    /** Las tres medidas del arco en cm, o null si es recta. */
+    private fun medidasDelArco(shape: Element.Shape): ArcoEsquina? =
+        ArcoEsquina.deCuerdaYFlecha(shape.lengthCm, abs(shape.flechaCm))
+
+    /**
+     * Las cotas del arco: un rótulo en la panza con desarrollo, cuerda y flecha (y la altura si
+     * se dio), y la cuerda a trazos para ver de dónde a dónde va. Tocar el rótulo abre el diálogo.
+     */
+    private fun drawCotasArco(canvas: Canvas, index: Int, shape: Element.Shape, collectHits: Boolean) {
+        canvas.drawLine(shape.start.x, shape.start.y, shape.end.x, shape.end.y, sombraProlongacion)
+        val arco = arcoDe(shape)
+        val medidas = medidasDelArco(shape)
+        val (ax, ay) = arco.apice()
+        val c = arco.cuerda.coerceAtLeast(1f)
+        // El rótulo se aparta de la panza hacia afuera, por la normal de la cuerda.
+        val nx = (shape.end.y - shape.start.y) / c * arco.signo
+        val ny = -(shape.end.x - shape.start.x) / c * arco.signo
+        val texto = buildString {
+            append(MARCA_CURVA).append(' ').append(formatCm(medidas?.desarrollo ?: shape.lengthCm))
+            append("  c ").append(formatCm(shape.lengthCm))
+            append("  f ").append(formatCm(abs(shape.flechaCm)))
+            if (shape.alturaCm > 0f) append("  h ").append(formatCm(shape.alturaCm))
+        }
+        drawCotaTextFija(canvas, index, CotaType.ARCO, ax + nx * ce(26f), ay + ny * ce(26f), 0f, collectHits, texto)
+    }
+
+    /**
+     * El diálogo del arco: desarrollo, flecha y cuerda —se escriben dos, la tercera sale sola—,
+     * la altura de la pared para el 3D y hacia qué lado cae la panza. Al aceptar, la cuerda
+     * dibujada se ajusta a la medida y el arco se rehace con lo escrito.
+     */
+    private fun pedirDatosDeArco(index: Int) {
+        val shape = elementos.getOrNull(index) as? Element.Shape ?: return
+        if (shape.tool != Tool.ARCO) return
+        val dp = resources.displayMetrics.density
+        val actual = medidasDelArco(shape)
+        val editados = mutableSetOf<String>()
+        fun campo(clave: String, rotulo: String, valor: Float?): EditText = EditText(context).apply {
+            hint = rotulo
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            if (valor != null && valor > 0f) setText(formatCm(valor))
+            setSelectAllOnFocus(true)
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) { editados.add(clave) }
+                override fun afterTextChanged(s: android.text.Editable?) = Unit
+            })
+        }
+        val eDesarrollo = campo("d", "Desarrollo (cm)", actual?.desarrollo)
+        val eFlecha = campo("f", "Flecha (cm)", abs(shape.flechaCm))
+        val eCuerda = campo("c", "Cuerda (cm)", shape.lengthCm)
+        val eAltura = campo("h", "Altura de la pared (cm), para el 3D", shape.alturaCm.takeIf { it > 0f })
+        // Hacia dónde cae la panza, dicho en el papel: abajo (hacia quien mira) o arriba (afuera)
+        // si la cuerda va a lo ancho; a la derecha o a la izquierda si va a lo alto.
+        val dx = shape.end.x - shape.start.x
+        val dy = shape.end.y - shape.start.y
+        val aLoAncho = abs(dx) >= abs(dy)
+        val (wx, wy) = if (aLoAncho) 0f to 1f else 1f to 0f
+        val c = arcoDe(shape).cuerda.coerceAtLeast(1f)
+        val ladoDelPositivo = (dy / c) * wx + (-dx / c) * wy   // > 0: la flecha positiva cae hacia w
+        val (apx, apy) = arcoDe(shape).apice()
+        val caeHaciaW = ((apx - (shape.start.x + shape.end.x) / 2f) * wx + (apy - (shape.start.y + shape.end.y) / 2f) * wy) > 0f
+        val lado = android.widget.CheckBox(context).apply {
+            text = if (aLoAncho) "Panza hacia abajo del papel (hacia quien mira)" else "Panza hacia la derecha del papel"
+            isChecked = caeHaciaW
+        }
+        val nota = TextView(context).apply {
+            text = "Escribe dos de las tres medidas; la tercera sale sola."
+            textSize = 12f
+        }
+        val caja = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * dp).toInt(), (8 * dp).toInt(), (20 * dp).toInt(), 0)
+            addView(nota); addView(eDesarrollo); addView(eFlecha); addView(eCuerda); addView(eAltura); addView(lado)
+        }
+        fun leer(e: EditText): Float? = e.text?.toString()?.replace(",", ".")?.toFloatOrNull()?.takeIf { it > 0f }
+        runCatching {
+            AlertDialog.Builder(context)
+                .setTitle("Arco")
+                .setView(caja)
+                .setPositiveButton("Aceptar") { _, _ ->
+                    val d = leer(eDesarrollo)
+                    val f = leer(eFlecha)
+                    val cu = leer(eCuerda)
+                    // Mandan las dos que se escribieron; si se escribió una sola, se conserva la
+                    // flecha (o la cuerda, si lo escrito fue la flecha). Sin tocar nada, queda igual.
+                    val nuevo: ArcoEsquina? = when {
+                        "d" in editados && "f" in editados && d != null && f != null -> ArcoEsquina.deDesarrolloYFlecha(d, f)
+                        "d" in editados && "c" in editados && d != null && cu != null -> ArcoEsquina.deDesarrolloYCuerda(d, cu)
+                        "c" in editados && "f" in editados && cu != null && f != null -> ArcoEsquina.deCuerdaYFlecha(cu, f)
+                        "d" in editados && d != null -> if (f != null) ArcoEsquina.deDesarrolloYFlecha(d, f) else cu?.let { ArcoEsquina.deDesarrolloYCuerda(d, it) }
+                        "c" in editados && cu != null -> if (f != null) ArcoEsquina.deCuerdaYFlecha(cu, f) else d?.let { ArcoEsquina.deDesarrolloYCuerda(it, cu) }
+                        "f" in editados && f != null -> if (cu != null) ArcoEsquina.deCuerdaYFlecha(cu, f) else d?.let { ArcoEsquina.deDesarrolloYFlecha(it, f) }
+                        else -> actual
+                    }
+                    if (nuevo == null) {
+                        Toast.makeText(context, "Esas medidas no hacen un arco: revísalas", Toast.LENGTH_LONG).show()
+                        return@setPositiveButton
+                    }
+                    val signo = if (lado.isChecked == (ladoDelPositivo > 0f)) 1f else -1f
+                    aplicarArco(shape, nuevo, signo, leer(eAltura) ?: 0f)
+                    registrarAccion()
+                    invalidate()
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
+    }
+
+    /** Rehace el arco con sus medidas: la cuerda dibujada se estira a la medida, desde su punta A. */
+    private fun aplicarArco(shape: Element.Shape, arco: ArcoEsquina, signo: Float, alturaCm: Float) {
+        val dx = shape.end.x - shape.start.x
+        val dy = shape.end.y - shape.start.y
+        val largo = hypot(dx, dy).coerceAtLeast(0.01f)
+        val nuevoPx = cmToPx(arco.cuerda)
+        shape.end.set(shape.start.x + dx / largo * nuevoPx, shape.start.y + dy / largo * nuevoPx)
+        shape.lengthCm = arco.cuerda
+        shape.flechaCm = arco.flecha * signo
+        shape.alturaCm = alturaCm
+        val rect = rectFrom(shape.start, shape.end.x, shape.end.y)
+        shape.rect.set(rect)
+        shape.widthCm = pxToCm(rect.width())
+        shape.heightCm = pxToCm(rect.height())
     }
 
     private fun drawCotas(canvas: Canvas, index: Int, shape: Element.Shape, collectHits: Boolean) {
@@ -8162,6 +8360,7 @@ class SketchMedidasView @JvmOverloads constructor(
             Tool.CIRCLE -> {
                 drawHorizontalCota(canvas, index, CotaType.DIAMETER, shape.rect.left, shape.rect.right, shape.rect.centerY(), shape.diameterCm, collectHits)
             }
+            Tool.ARCO -> drawCotasArco(canvas, index, shape, collectHits)
             Tool.LINE, Tool.ORTHO_LINE -> {
                 if (shape.cotaHint == "GRADA_TOTAL_COTA") {
                     drawCotaTotalGraderia(canvas, index, shape, collectHits)
@@ -8300,9 +8499,10 @@ class SketchMedidasView @JvmOverloads constructor(
         cx: Float,
         cy: Float,
         value: Float,
-        collectHits: Boolean
+        collectHits: Boolean,
+        texto: String? = null
     ) {
-        val text = formatCm(value)
+        val text = texto ?: formatCm(value)
         val widthText = cotaTextPaint.measureText(text)
         val fontMetrics = cotaTextPaint.fontMetrics
         val padH = ce(4f * resources.displayMetrics.density)
@@ -9089,6 +9289,16 @@ class SketchMedidasView @JvmOverloads constructor(
         return elementos.lastIndex
     }
 
+    /** Pone un arco por su cuerda (px) con su flecha y su altura en cm, como el de la herramienta. */
+    @androidx.annotation.VisibleForTesting
+    fun agregarArcoParaPruebas(x1: Float, y1: Float, x2: Float, y2: Float, flechaCm: Float, alturaCm: Float = 0f): Int {
+        elementos.add(crearShape(Tool.ARCO, PointF(x1, y1), PointF(x2, y2)).apply {
+            this.flechaCm = flechaCm
+            this.alturaCm = alturaCm
+        })
+        return elementos.lastIndex
+    }
+
     @androidx.annotation.VisibleForTesting
     fun toqueDeEdicionParaPruebas(x: Float, y: Float) = toqueDeEdicion(PointF(x, y))
 
@@ -9778,6 +9988,10 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun editarCota(hit: CotaHit) {
         val element = elementos.getOrNull(hit.elementIndex) ?: return
+        if (hit.type == CotaType.ARCO) {
+            pedirDatosDeArco(hit.elementIndex)
+            return
+        }
         val actual = when (hit.type) {
             CotaType.WIDTH -> when (element) {
                 // En el triángulo la cota es la BASE, no el ancho de la caja: girado, no son lo
@@ -9859,6 +10073,8 @@ class SketchMedidasView @JvmOverloads constructor(
                 val (_, medida) = medidaDeLaCotaAEscuadra(hit.elementIndex) ?: return
                 pxToCm(medida.distanciaCm)
             }
+            // El arco abre su propio diálogo antes de llegar aquí.
+            CotaType.ARCO -> return
             CotaType.PUERTA_HOJA_IZQ, CotaType.PUERTA_HOJA_DER -> {
                 val division = element as? Element.Shape ?: return
                 val marco = (elementos.getOrNull(marcoDePieza(hit.elementIndex) ?: -1) as? Element.Shape) ?: return
@@ -10568,6 +10784,7 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.A_ESCUADRA -> {
                 aplicarCotaAEscuadra(elementIndex ?: return, abs(valueCm))
             }
+            CotaType.ARCO -> Unit
             CotaType.COMPOSITE_SIDE,
             CotaType.F5_DESARROLLO,
             CotaType.F5_FLECHA,
@@ -11001,7 +11218,7 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.ESQUINA_TRAMO_ARRIBA,
             // La cota a escuadra no es del composite: es una línea suelta que lo mide, y se aplica
             // por su propio camino.
-            CotaType.A_ESCUADRA -> Unit
+            CotaType.A_ESCUADRA, CotaType.ARCO -> Unit
         }
     }
 
@@ -12246,7 +12463,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 trazoActual.reset()
                 trazoActual.addOval(rectFrom(startPoint, x, y), Path.Direction.CW)
             }
-            Tool.LINE, Tool.ORTHO_LINE -> {
+            Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO -> {
                 val endPoint = puntoFinalHerramienta(x, y)
                 trazoActual.reset()
                 trazoActual.moveTo(startPoint.x, startPoint.y)
@@ -12427,7 +12644,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 Tool.RECTANGLE -> listOf(element.topLeft, element.topRight, element.bottomRight, element.bottomLeft)
                 Tool.TRIANGLE -> verticesTriangulo(element).toList()
                 Tool.CIRCLE -> puntosBounds(element.rect)
-                Tool.LINE, Tool.ORTHO_LINE -> listOf(element.start, element.end)
+                Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO -> listOf(element.start, element.end)
                 Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> puntosBounds(boundsForElement(element))
             }
         }.map { PointF(it.x, it.y) }
@@ -12473,6 +12690,10 @@ class SketchMedidasView @JvmOverloads constructor(
                     Tool.LINE, Tool.ORTHO_LINE -> {
                         segmentos += element.start to element.end
                     }
+                    Tool.ARCO -> {
+                        arcoDe(element).puntos().zipWithNext { a, b -> PointF(a.first, a.second) to PointF(b.first, b.second) }
+                            .forEach { segmentos += it }
+                    }
                     Tool.CIRCLE -> {
                         segmentos += segmentosOvalo(element.rect)
                     }
@@ -12505,6 +12726,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     listOf(top to right, right to left, left to top)
                 }
                 Tool.LINE, Tool.ORTHO_LINE -> listOf(element.start to element.end)
+                Tool.ARCO -> arcoDe(element).puntos().zipWithNext { a, b -> PointF(a.first, a.second) to PointF(b.first, b.second) }
                 Tool.CIRCLE -> segmentosOvalo(element.rect)
                 Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> emptyList()
             }
