@@ -1,282 +1,723 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F7F4EC"
-    android:orientation="vertical"
     tools:context=".taller.melamina.RoperoActivity">
 
-    <TextView
-        android:id="@+id/tvTitulo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@drawable/corner2"
-        android:backgroundTint="@color/color"
-        android:gravity="center"
-        android:padding="6dp"
-        android:text="Ropero empotrado · melamina"
-        android:textColor="@color/blanco"
-        android:textStyle="bold" />
-
-    <ScrollView
-        android:layout_width="match_parent"
+    <LinearLayout
+        android:id="@+id/layout2"
+        android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true">
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp">
+            android:layout_height="500dp"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
 
-            <!-- El hueco -->
+            <!-- LEFT PANEL: Inputs -->
             <LinearLayout
+                android:id="@+id/lyPanelIzquierdo"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:layout_height="match_parent"
+                android:layout_marginStart="9dp"
+                android:layout_marginTop="9dp"
+                android:layout_marginEnd="4.5dp"
+                android:layout_weight="1"
+                android:background="@drawable/corner"
+                android:orientation="vertical"
+                tools:ignore="NestedWeights">
 
-                <TextView style="@style/RotuloRopero" android:text="Ancho del hueco (cm)" />
-                <TextView style="@style/RotuloRopero" android:text="Alto (cm)" />
-                <TextView style="@style/RotuloRopero" android:text="Fondo (cm)" />
+                <TextView
+                    android:id="@+id/tvTitulo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/corner2"
+                    android:backgroundTint="@color/color"
+                    android:gravity="center"
+                    android:text="Ropero Melamina"
+                    android:textColor="@color/blanco"
+                    tools:ignore="TextContrastCheck" />
+
+                <!-- La ficha: el ropero dibujado. Tocar un cuerpo abre lo que lleva. -->
+                <LinearLayout
+                    android:id="@+id/fichaT_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="150dp"
+                    android:background="@drawable/cornere"
+                    android:baselineAligned="false">
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+
+                        <crystal.crystal.taller.melamina.VistaRopero
+                            android:id="@+id/vistaRopero"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_marginStart="4dp"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginEnd="4dp"
+                            android:layout_marginBottom="4dp"
+                            app:layout_constraintBottom_toBottomOf="parent"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent" />
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+                </LinearLayout>
+
+                <!-- Cómo mirarlo: el interior, con las puertas, o en 3D. -->
+                <RadioGroup
+                    android:id="@+id/rgVista"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:orientation="horizontal">
+
+                    <RadioButton
+                        android:id="@+id/rbInterior"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="Interior"
+                        android:textSize="11sp"
+                        tools:ignore="TouchTargetSizeCheck" />
+
+                    <RadioButton
+                        android:id="@+id/rbPuertas"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="Puertas"
+                        android:textSize="11sp"
+                        tools:ignore="TouchTargetSizeCheck" />
+
+                    <RadioButton
+                        android:id="@+id/rb3d"
+                        android:layout_width="0dp"
+                        android:layout_weight="0.7"
+                        android:layout_height="wrap_content"
+                        android:text="3D"
+                        android:textSize="11sp"
+                        tools:ignore="TouchTargetSizeCheck" />
+                </RadioGroup>
+
+                <TextView
+                    android:id="@+id/tvMedidas"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="@string/medidas_y_cantidad"
+                    android:textColor="@color/color"
+                    tools:ignore="TextContrastCheck" />
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:fadingEdge="horizontal"
+                    tools:ignore="UselessParent">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <!-- Ancho del hueco -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Ancho"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAncho"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Alto -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Alto"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAlto"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Fondo -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Fondo"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etFondo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:text="60"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <!-- Cuerpos -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Cuerpos"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etCuerpos"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number"
+                                android:text="2"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <!-- Zócalo -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Zócalo"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etZocalo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:text="10"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <!-- Maletero -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Maletero"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etMaletero"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:hint="0 = sin"
+                                android:inputType="numberDecimal"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Puertas -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Puertas"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spPuertas"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                tools:ignore="TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Espesor -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Melamina"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spEspesor"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                tools:ignore="TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Fondo de nordex -->
+                        <CheckBox
+                            android:id="@+id/cbFondo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:checked="true"
+                            android:text="Fondo de nordex 3 mm"
+                            android:textSize="12sp"
+                            tools:ignore="TouchTargetSizeCheck" />
+
+                    </LinearLayout>
+                </ScrollView>
+
             </LinearLayout>
 
+            <!-- RIGHT PANEL: Results -->
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:layout_height="match_parent"
+                android:layout_weight="0.81"
+                android:orientation="vertical">
 
-                <EditText
-                    android:id="@+id/etAncho"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Ancho (cm)"
-                    android:importantForAutofill="no"
-                    android:inputType="numberDecimal"
-                    android:text="240" />
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_marginTop="9dp"
+                    android:layout_marginEnd="9dp">
 
-                <EditText
-                    android:id="@+id/etAlto"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Alto (cm)"
-                    android:importantForAutofill="no"
-                    android:inputType="numberDecimal"
-                    android:text="240" />
+                    <LinearLayout
+                        android:id="@+id/linearLayout21"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="0.25"
+                        android:background="@drawable/corner"
+                        android:orientation="vertical"
+                        android:paddingBottom="4.5dp"
+                        app:layout_constraintBottom_toTopOf="@+id/tvProyectoActivo"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent"
+                        tools:ignore="NestedWeights">
 
-                <EditText
-                    android:id="@+id/etFondo"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Fondo (cm)"
-                    android:importantForAutofill="no"
-                    android:inputType="numberDecimal"
-                    android:text="60" />
+                        <TextView
+                            android:id="@+id/textView28"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/corner2"
+                            android:backgroundTint="@color/color"
+                            android:gravity="center"
+                            android:text="@string/referencias_y_c_lculos"
+                            android:textColor="@color/blanco"
+                            tools:ignore="TextContrastCheck" />
+
+                        <ScrollView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical">
+
+                                <!-- Referencias -->
+                                <LinearLayout
+                                    android:id="@+id/lyReferencias"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/cornere"
+                                    android:orientation="vertical">
+
+                                    <TextView
+                                        android:id="@+id/tvReferencias"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:layout_weight="1"
+                                        android:gravity="start"
+                                        android:text="@string/referencias"
+                                        android:visibility="gone"
+                                        tools:ignore="InefficientWeight" />
+
+                                    <TextView
+                                        android:id="@+id/txReferencias"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:layout_weight="1"
+                                        android:gravity="start"
+                                        android:paddingTop="1dp"
+                                        android:paddingBottom="1dp"
+                                        tools:ignore="InefficientWeight" />
+                                </LinearLayout>
+
+                                <TextView
+                                    android:id="@+id/textView33"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="center"
+                                    android:text="@string/c_lculos"
+                                    android:textColor="@color/color"
+                                    tools:ignore="TextContrastCheck" />
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="vertical"
+                                    tools:ignore="ExtraText">
+
+                                    <!-- Melamina: las piezas, medida = cantidad -->
+                                    <LinearLayout
+                                        android:id="@+id/lyMelamina"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvMelamina"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Melamina 18 mm" />
+
+                                        <TextView
+                                            android:id="@+id/txMelamina"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Nordex -->
+                                    <LinearLayout
+                                        android:id="@+id/lyNordex"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/blanco"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvNordex"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Nordex 3 mm" />
+
+                                        <TextView
+                                            android:id="@+id/txNordex"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Tapacanto -->
+                                    <LinearLayout
+                                        android:id="@+id/lyTapacanto"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/sombra"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvTapacanto"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Tapacanto 22 mm" />
+
+                                        <TextView
+                                            android:id="@+id/txTapacanto"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Tubo colgador -->
+                                    <LinearLayout
+                                        android:id="@+id/lyTubo"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/blanco"
+                                        android:orientation="horizontal"
+                                        android:visibility="gone">
+
+                                        <TextView
+                                            android:id="@+id/tvTubo"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Tubo colgador" />
+
+                                        <TextView
+                                            android:id="@+id/txTubo"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Riel corredizo -->
+                                    <LinearLayout
+                                        android:id="@+id/lyRiel"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/sombra"
+                                        android:orientation="horizontal"
+                                        android:visibility="gone">
+
+                                        <TextView
+                                            android:id="@+id/tvRiel"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Riel corredizo" />
+
+                                        <TextView
+                                            android:id="@+id/txRiel"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Accesorios -->
+                                    <LinearLayout
+                                        android:id="@+id/lyAccesorios"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/blanco"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvAccesorios"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Accesorios melamina" />
+
+                                        <TextView
+                                            android:id="@+id/txAccesorios"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Lista de corte, pieza por pieza: solo para leer, no se archiva -->
+                                    <TextView
+                                        android:id="@+id/tvCorte"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:gravity="center"
+                                        android:text="Lista de corte"
+                                        android:textColor="@color/color"
+                                        tools:ignore="TextContrastCheck" />
+
+                                    <TextView
+                                        android:id="@+id/txCorte"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:textSize="12sp" />
+
+                                </LinearLayout>
+
+                            </LinearLayout>
+                        </ScrollView>
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvProyectoActivo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="#F5F5F5"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:padding="7dp"
+                        android:text="⚠️ Sin proyecto activo"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        app:layout_constraintBottom_toTopOf="@+id/linearLayout20"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent" />
+
+                    <LinearLayout
+                        android:id="@+id/linearLayout20"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom|end"
+                        android:layout_weight="0.8"
+                        android:orientation="vertical"
+                        app:layout_constraintBottom_toBottomOf="parent">
+
+                        <!-- Las piezas al optimizador de planchas, y la lista por mensaje. -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btPlanchas"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/verde"
+                                android:text="Planchas"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/btCompartir"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/azul"
+                                android:text="Compartir"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btArchivar"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/naranja"
+                                android:text="@string/archivar"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/btCalcular"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/rosa"
+                                android:text="@string/calcular"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
             </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <TextView style="@style/RotuloRopero" android:text="Zócalo (cm)" />
-                <TextView style="@style/RotuloRopero" android:text="Maletero (cm, 0 = sin)" />
-                <TextView style="@style/RotuloRopero" android:text="Cuerpos" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <EditText
-                    android:id="@+id/etZocalo"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Zócalo (cm)"
-                    android:importantForAutofill="no"
-                    android:inputType="numberDecimal"
-                    android:text="10" />
-
-                <EditText
-                    android:id="@+id/etMaletero"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Maletero (cm, 0 = no)"
-                    android:importantForAutofill="no"
-                    android:inputType="numberDecimal"
-                    android:text="0" />
-
-                <EditText
-                    android:id="@+id/etCuerpos"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="Cuerpos"
-                    android:importantForAutofill="no"
-                    android:inputType="number"
-                    android:text="2" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <Spinner
-                    android:id="@+id/spPuertas"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1.2" />
-
-                <Spinner
-                    android:id="@+id/spEspesor"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="0.9" />
-
-                <CheckBox
-                    android:id="@+id/cbFondo"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:checked="true"
-                    android:text="Fondo nordex"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingTop="4dp"
-                android:text="Toca un cuerpo en el dibujo para elegir qué lleva (colgador, entrepaños, cajones) y su ancho."
-                android:textColor="#6D5A45"
-                android:textSize="11sp" />
-
-            <crystal.crystal.taller.melamina.VistaRopero
-                android:id="@+id/vistaRopero"
-                android:layout_width="match_parent"
-                android:layout_height="300dp"
-                android:layout_marginTop="4dp"
-                android:background="#FFFDF8" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btPuertas"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Ver puertas"
-                    android:textAllCaps="false"
-                    android:textSize="12sp" />
-
-                <Button
-                    android:id="@+id/bt3d"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Ver en 3D"
-                    android:textAllCaps="false"
-                    android:textSize="12sp" />
-
-                <Button
-                    android:id="@+id/btCalcular"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Calcular"
-                    android:textAllCaps="false"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvReferenciasTitulo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingTop="6dp"
-                android:text="Referencias"
-                android:textColor="@android:color/black"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/txReferencias"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="#333333"
-                android:textSize="12sp" />
-
-            <!-- Las listas de material se arman aquí, una por una: título y líneas "medida = cantidad". -->
-            <LinearLayout
-                android:id="@+id/lyMateriales"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-
-            <TextView
-                android:id="@+id/tvCorteTitulo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingTop="6dp"
-                android:text="Lista de corte"
-                android:textColor="@android:color/black"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/txCorte"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:textColor="#333333"
-                android:textSize="11sp" />
         </LinearLayout>
-    </ScrollView>
 
-    <TextView
-        android:id="@+id/tvProyectoActivo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:textSize="11sp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="4dp">
-
-        <Button
-            android:id="@+id/btArchivar"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:id="@+id/linearLayout2"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Archivar"
-            android:textAllCaps="false" />
+            android:orientation="vertical" />
 
-        <Button
-            android:id="@+id/btOptimizar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Planchas"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btCompartir"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Compartir"
-            android:textAllCaps="false" />
     </LinearLayout>
-</LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -54,6 +54,8 @@ class EnrutadorPresupuesto(private val activity: AppCompatActivity) {
             "pivot" to PivotAl::class.java,
             "reja" to RejasActivity::class.java,
             "rejas" to RejasActivity::class.java,
+            "ropero" to crystal.crystal.taller.melamina.RoperoActivity::class.java,
+            "closet" to crystal.crystal.taller.melamina.RoperoActivity::class.java,
         )
 
         // Nombres legibles de las calculadoras. En el companion para poder ofrecerlos sin instanciar
@@ -72,6 +74,7 @@ class EnrutadorPresupuesto(private val activity: AppCompatActivity) {
             "Puerta Ducha" to PDuchaActivity::class.java,
             "Rejas" to RejasActivity::class.java,
             "Division Baño" to DivisionBanoActivity::class.java,
+            "Ropero Melamina" to crystal.crystal.taller.melamina.RoperoActivity::class.java,
         )
 
         val NOMBRES_CALCULADORAS: List<String> = CALCULADORAS_DISPONIBLES.map { it.first }

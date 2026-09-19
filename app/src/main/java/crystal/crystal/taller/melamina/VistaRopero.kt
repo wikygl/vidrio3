@@ -142,7 +142,10 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         // El rótulo de cada cuerpo va en el zócalo, que ahí no tapa nada.
         cx = e
         r.cuerpos.forEach { c ->
-            canvas.drawText(c.tipo.etiqueta, x(cx + c.anchoCm / 2f), y(r.zocaloCm / 2f) + 4f * dp, pRotulo)
+            // Solo si cabe: en la ficha chica los rótulos se pisaban unos con otros.
+            if (pRotulo.measureText(c.tipo.etiqueta) < (c.anchoCm - 4f) * escala) {
+                canvas.drawText(c.tipo.etiqueta, x(cx + c.anchoCm / 2f), y(r.zocaloCm / 2f) + 4f * dp, pRotulo)
+            }
             cx += c.anchoCm + e
         }
         if (mostrarPuertas) dibujarPuertas(canvas)
