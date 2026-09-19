@@ -196,7 +196,9 @@ class SketchMedidasView @JvmOverloads constructor(
          * medidas (desarrollo, flecha, cuerda), más su altura para el 3D. Es la pared curva de la
          * planta; ver [ArcoDibujado] y [pedirDatosDeArco].
          */
-        ARCO
+        ARCO,
+        /** El mismo arco con la cuerda a escuadra (horizontal o vertical), como [ORTHO_LINE]. La figura que deja es un [ARCO]. */
+        ARCO_90
     }
 
     private enum class Axis {
@@ -556,6 +558,7 @@ class SketchMedidasView @JvmOverloads constructor(
         drawNodos(canvas)
         if (dibujando) {
             canvas.drawPath(trazoActual, if (herramienta == Tool.FREEHAND) paint else previewPaint)
+            dibujarMarcaDeIman(canvas)
         }
         canvas.restore()
         dibujarAvisoEscuadra(canvas)
@@ -769,8 +772,8 @@ class SketchMedidasView @JvmOverloads constructor(
                     return true
                 }
                 parent?.requestDisallowInterceptTouchEvent(true)
-                val inicio = if (herramienta == Tool.LINE || herramienta == Tool.ORTHO_LINE || herramienta == Tool.ARCO) {
-                    snapLibre(p) ?: p
+                val inicio = if (herramienta in setOf(Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO, Tool.ARCO_90)) {
+                    imanCompleto(p, null)?.punto ?: p
                 } else {
                     p
                 }
@@ -790,6 +793,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 }
                 currentPoint = p
                 actualizarTrazo(p.x, p.y)
+                if (herramienta !in setOf(Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO, Tool.ARCO_90)) imanActual = null
                 invalidate()
                 return true
             }
@@ -816,6 +820,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     }
                     trazoActual.reset()
                     dibujando = false
+                    imanActual = null
                     invalidate()
                 }
                 parent?.requestDisallowInterceptTouchEvent(false)
@@ -3036,7 +3041,7 @@ class SketchMedidasView @JvmOverloads constructor(
             Tool.LINE, Tool.ORTHO_LINE -> listOf(LadoMedido(shape.lengthCm, nombre))
             // Del arco se corta su desarrollo.
             Tool.ARCO -> listOf(LadoMedido(medidasDelArco(shape)?.desarrollo ?: shape.lengthCm, nombre))
-            Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> emptyList()
+            Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> emptyList()
         }
     }
 
@@ -5206,6 +5211,44 @@ class SketchMedidasView @JvmOverloads constructor(
         return true
     }
 
+    // ===== Copiar, cortar y pegar =====
+    // El portapapeles vive fuera de las vistas: lo que se copia en la frontal se pega en la
+    // planta. Se guardan copias, así que borrar el original después no toca lo copiado.
+    private val portapapeles = mutableListOf<Element>()
+    private var portapapelesDeVista: Vista? = null
+
+    fun copiarSeleccion(): Boolean {
+        if (selectedIndices.isEmpty()) return false
+        portapapeles.clear()
+        selectedIndices.sorted().mapNotNull { elementos.getOrNull(it) }.forEach { portapapeles.add(copyElement(it)) }
+        portapapelesDeVista = vistaActiva
+        return portapapeles.isNotEmpty()
+    }
+
+    fun cortarSeleccion(): Boolean = copiarSeleccion() && deleteSelected()
+
+    fun hayAlgoCopiado(): Boolean = portapapeles.isNotEmpty()
+
+    /**
+     * Pega lo copiado y lo deja seleccionado, para moverlo. En otra vista cae donde estaba (las
+     * vistas comparten el papel); en la misma, un poco desplazado para que no tape al original, y
+     * cada pegada siguiente otro poco más.
+     */
+    fun pegar(): Boolean {
+        if (portapapeles.isEmpty()) return false
+        val enLaMisma = portapapelesDeVista == vistaActiva
+        val desplazamiento = if (enLaMisma) ce(28f) else 0f
+        val nuevos = portapapeles.map { copyElement(it).also { copia -> translateElement(copia, desplazamiento, desplazamiento) } }
+        if (enLaMisma) portapapeles.forEach { translateElement(it, desplazamiento, desplazamiento) }
+        val desde = elementos.size
+        elementos.addAll(nuevos)
+        selectedIndices.clear()
+        selectedIndices.addAll(desde until elementos.size)
+        registrarAccion()
+        invalidate()
+        return true
+    }
+
     fun deleteSelected(): Boolean {
         if (selectedIndices.isEmpty()) return false
         selectedIndices.sortedDescending().forEach { index ->
@@ -5793,7 +5836,7 @@ class SketchMedidasView @JvmOverloads constructor(
                         val largo = distancia(element.start, element.end)
                         if (element.lengthCm > 0.5f && largo > 1f) muestras += largo / element.lengthCm
                     }
-                    Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> Unit
+                    Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> Unit
                 }
                 else -> Unit
             }
@@ -5867,7 +5910,7 @@ class SketchMedidasView @JvmOverloads constructor(
                             vertical = maxOf(vertical, element.lengthCm)
                         }
                     }
-                    Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> Unit
+                    Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> Unit
                 }
                 else -> Unit
             }
@@ -6124,28 +6167,42 @@ class SketchMedidasView @JvmOverloads constructor(
         fun arco(t: SegmentoDePlanta) = ArcoDibujado(t.a.x, t.a.y, t.b.x, t.b.y, cmToPx(t.flechaCm))
         fun rumboEntrada(t: SegmentoDePlanta) = if (t.flechaCm != 0f) arco(t).rumboEntrada else arco(t).rumboCuerda
         fun rumboSalida(t: SegmentoDePlanta) = if (t.flechaCm != 0f) arco(t).rumboSalida else arco(t).rumboCuerda
+        // El giro en cada unión: de cómo sale un trozo a cómo entra el siguiente.
+        fun giroEn(i: Int): Float? {
+            if (i < 0 || i + 1 >= orden.size) return null
+            var giro = (Math.toDegrees(rumboEntrada(orden[i + 1])) - Math.toDegrees(rumboSalida(orden[i]))).toFloat()
+            while (giro > 180f) giro -= 360f
+            while (giro < -180f) giro += 360f
+            return giro
+        }
+        // A menos de 5° de recto es recto (180) y a menos de 5° de la escuadra es 90; el menos
+        // dice que dobla hacia arriba del papel (abraza la esquina).
+        fun gradosDe(giro: Float): Float {
+            val angulo = 180f - abs(giro)
+            val grados = when {
+                abs(giro) < 5f -> 180f
+                abs(angulo - 90f) < 5f -> 90f
+                else -> angulo
+            }
+            return if (giro < 0f && grados < 180f) -grados else grados
+        }
         val paredes = mutableListOf<TramoDePlanta>()
         for (i in orden.indices) {
             val t = orden[i]
             val cuerdaCm = pxToCm(distancia(t.a, t.b))
             // La curva se corta por su desarrollo, no por su cuerda.
             val largo = if (t.flechaCm != 0f) ArcoEsquina.deCuerdaYFlecha(cuerdaCm, abs(t.flechaCm))?.desarrollo ?: cuerdaCm else cuerdaCm
-            var grados: Float? = null
-            if (i + 1 < orden.size) {
-                val rumboAB = Math.toDegrees(rumboSalida(t))
-                val rumboBC = Math.toDegrees(rumboEntrada(orden[i + 1]))
-                var giro = (rumboBC - rumboAB).toFloat()
-                while (giro > 180f) giro -= 360f
-                while (giro < -180f) giro += 360f
-                val angulo = 180f - abs(giro)
-                grados = when {
-                    abs(giro) < 5f -> 180f
-                    abs(angulo - 90f) < 5f -> 90f
-                    else -> angulo
-                }
-                if (giro < 0f && grados < 180f) grados = -grados
+            var giro = giroEn(i)
+            if (giro != null && t.flechaCm != 0f) {
+                // Detrás de un arco el paquete lleva la esquina ENTERA: lo que dobló al entrar,
+                // lo que dobla el arco y lo que dobla al salir, de la pared de antes a la de
+                // después (ver PlantaDelDiseno). Entre dos rectas alineadas sale 180.
+                var total = (giroEn(i - 1) ?: 0f) + arco(t).giroGrados + giro
+                while (total > 180f) total -= 360f
+                while (total < -180f) total += 360f
+                giro = total
             }
-            paredes.add(TramoDePlanta(largo, grados, t.flechaCm, t.alturaCm))
+            paredes.add(TramoDePlanta(largo, giro?.let { gradosDe(it) }, t.flechaCm, t.alturaCm))
         }
         return paredes
     }
@@ -7044,7 +7101,8 @@ class SketchMedidasView @JvmOverloads constructor(
             return crearRectanguloConEsquinaRedondeada(rect, rectangleRoundedCorner ?: 0, rectangleRoundedRadiusCm)
         }
         return Element.Shape(
-            tool = herramienta,
+            // El arco a escuadra es solo una manera de trazar la cuerda: la figura es un arco.
+            tool = if (herramienta == Tool.ARCO_90) Tool.ARCO else herramienta,
             rect = rect,
             start = PointF(startPoint.x, startPoint.y),
             end = PointF(endPoint.x, endPoint.y),
@@ -8150,7 +8208,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     moveTo(puntos[0].first, puntos[0].second)
                     puntos.drop(1).forEach { (px, py) -> lineTo(px, py) }
                 }
-                Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> Unit
+                Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> Unit
             }
         }
     }
@@ -8414,7 +8472,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     drawCotaText(canvas, index, CotaType.LENGTH, labelX, labelY, shape.lengthCm, collectHits)
                 }
             }
-            Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> Unit
+            Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> Unit
         }
     }
 
@@ -12463,7 +12521,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 trazoActual.reset()
                 trazoActual.addOval(rectFrom(startPoint, x, y), Path.Direction.CW)
             }
-            Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO -> {
+            Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO, Tool.ARCO_90 -> {
                 val endPoint = puntoFinalHerramienta(x, y)
                 trazoActual.reset()
                 trazoActual.moveTo(startPoint.x, startPoint.y)
@@ -12491,17 +12549,105 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun puntoFinalHerramienta(x: Float, y: Float): PointF {
         return when (herramienta) {
-            Tool.LINE -> snapLibre(PointF(x, y)) ?: PointF(x, y)
-            Tool.ORTHO_LINE -> {
+            Tool.LINE, Tool.ARCO -> {
+                val iman = imanCompleto(PointF(x, y), startPoint)
+                imanActual = iman
+                iman?.punto ?: PointF(x, y)
+            }
+            Tool.ORTHO_LINE, Tool.ARCO_90 -> {
                 val axis = if (abs(x - startPoint.x) >= abs(y - startPoint.y)) Axis.HORIZONTAL else Axis.VERTICAL
                 val ortho = when (axis) {
                     Axis.HORIZONTAL -> PointF(x, startPoint.y)
                     Axis.VERTICAL -> PointF(startPoint.x, y)
                 }
-                snapOrtogonal(ortho, axis) ?: ortho
+                val imantado = snapOrtogonal(ortho, axis)
+                imanActual = imantado?.let { Iman(it, TipoIman.BORDE) }
+                imantado ?: ortho
             }
             Tool.TEXT, Tool.SELECT -> PointF(x, y)
             else -> PointF(x, y)
+        }
+    }
+
+    // ===== El imán completo: punta, medio, perpendicular, borde =====
+    // Es el imán de AutoCAD en pequeño: al trazar una línea o la cuerda de un arco, el dedo se
+    // pega a lo que hay dibujado, y no a cualquier sitio del borde: primero a una esquina o
+    // punta, después al punto medio de un lado (o al centro de la figura), después al pie de la
+    // perpendicular desde donde arrancó el trazo, y si no hay nada de eso, al borde mismo. Sin
+    // esto la cuerda del arco caía donde caía y la pared salía torcida un par de grados.
+
+    enum class TipoIman { PUNTO, MEDIO, PERPENDICULAR, BORDE }
+
+    data class Iman(val punto: PointF, val tipo: TipoIman)
+
+    /** Dónde está pegado el dedo ahora mismo, para dibujar su marca mientras se traza. */
+    private var imanActual: Iman? = null
+
+    private fun imanCompleto(p: PointF, desde: PointF?, excluir: Set<Int> = emptySet()): Iman? {
+        val radio = snapThresholdPx()
+        val segmentos = segmentosExistentes(excluir)
+        if (segmentos.isEmpty()) return null
+        // 1) Puntas y esquinas.
+        var mejor: PointF? = null
+        var mejorDist = radio
+        segmentos.forEach { (a, b) ->
+            listOf(a, b).forEach { q -> val d = distancia(p, q); if (d < mejorDist) { mejorDist = d; mejor = q } }
+        }
+        mejor?.let { return Iman(PointF(it.x, it.y), TipoIman.PUNTO) }
+        // 2) Puntos medios de los lados y centros de las figuras cerradas.
+        mejorDist = radio
+        segmentos.forEach { (a, b) ->
+            val m = PointF((a.x + b.x) / 2f, (a.y + b.y) / 2f)
+            val d = distancia(p, m)
+            if (d < mejorDist) { mejorDist = d; mejor = m }
+        }
+        elementos.withIndex().forEach { (i, e) ->
+            if (i in excluir || !esGeometria(e)) return@forEach
+            val s = e as? Element.Shape
+            if (s != null && s.tool != Tool.RECTANGLE && s.tool != Tool.CIRCLE && s.tool != Tool.TRIANGLE) return@forEach
+            val b = boundsForElement(e)
+            val c = PointF(b.centerX(), b.centerY())
+            val d = distancia(p, c)
+            if (d < mejorDist) { mejorDist = d; mejor = c }
+        }
+        mejor?.let { return Iman(it, TipoIman.MEDIO) }
+        // 3) El pie de la perpendicular desde donde arrancó el trazo, si cae dentro del lado.
+        if (desde != null) {
+            mejorDist = radio
+            segmentos.forEach { (a, b) ->
+                val vx = b.x - a.x
+                val vy = b.y - a.y
+                val l2 = vx * vx + vy * vy
+                if (l2 < 1f) return@forEach
+                val t = ((desde.x - a.x) * vx + (desde.y - a.y) * vy) / l2
+                if (t < 0.02f || t > 0.98f) return@forEach
+                val pie = PointF(a.x + vx * t, a.y + vy * t)
+                val d = distancia(p, pie)
+                if (d < mejorDist) { mejorDist = d; mejor = pie }
+            }
+            mejor?.let { return Iman(it, TipoIman.PERPENDICULAR) }
+        }
+        // 4) El borde, donde caiga.
+        return snapLibre(p)?.let { Iman(it, TipoIman.BORDE) }
+    }
+
+    /** La marca del imán en la punta del trazo: cuadrado en una punta, triángulo en un medio, escuadra en la perpendicular, círculo en el borde. */
+    private fun dibujarMarcaDeIman(canvas: Canvas) {
+        if (!dibujando) return
+        val iman = imanActual ?: return
+        val p = iman.punto
+        val r = ce(9f)
+        when (iman.tipo) {
+            TipoIman.PUNTO -> canvas.drawRect(p.x - r, p.y - r, p.x + r, p.y + r, imanBorde)
+            TipoIman.MEDIO -> canvas.drawPath(Path().apply {
+                moveTo(p.x, p.y - r); lineTo(p.x + r, p.y + r); lineTo(p.x - r, p.y + r); close()
+            }, imanBorde)
+            TipoIman.PERPENDICULAR -> {
+                canvas.drawLine(p.x - r, p.y - r, p.x - r, p.y + r, imanBorde)
+                canvas.drawLine(p.x - r, p.y + r, p.x + r, p.y + r, imanBorde)
+                canvas.drawRect(p.x - r, p.y + r * 0.2f, p.x - r * 0.2f, p.y + r, imanBorde)
+            }
+            TipoIman.BORDE -> canvas.drawCircle(p.x, p.y, r, imanBorde)
         }
     }
 
@@ -12645,7 +12791,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 Tool.TRIANGLE -> verticesTriangulo(element).toList()
                 Tool.CIRCLE -> puntosBounds(element.rect)
                 Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO -> listOf(element.start, element.end)
-                Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> puntosBounds(boundsForElement(element))
+                Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> puntosBounds(boundsForElement(element))
             }
         }.map { PointF(it.x, it.y) }
     }
@@ -12697,7 +12843,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     Tool.CIRCLE -> {
                         segmentos += segmentosOvalo(element.rect)
                     }
-                    Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> Unit
+                    Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> Unit
                 }
             }
         }
@@ -12728,7 +12874,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 Tool.LINE, Tool.ORTHO_LINE -> listOf(element.start to element.end)
                 Tool.ARCO -> arcoDe(element).puntos().zipWithNext { a, b -> PointF(a.first, a.second) to PointF(b.first, b.second) }
                 Tool.CIRCLE -> segmentosOvalo(element.rect)
-                Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO -> emptyList()
+                Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> emptyList()
             }
         }
     }

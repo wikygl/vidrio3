@@ -199,4 +199,33 @@ class PlantaDelDisenoTest {
             planta.paredes[1].giroGrados > planta.paredes[0].giroGrados + 5f
         )
     }
+
+    /**
+     * Una panza entre dos rectas alineadas: recta, arco (cuerda 120, flecha 30 → 139.1 de
+     * desarrollo, 106° de giro) y recta. El arco entra doblando 53° y el pliegue de detrás dice
+     * `A<180>`: la esquina entera es recta, así que la última pared vuelve a la línea de la
+     * primera, en vez de seguir la tangente del arco.
+     */
+    @Test
+    fun tras_el_arco_el_pliegue_es_la_esquina_entera_y_la_pared_vuelve_a_la_linea() {
+        val planta = PlantaDelDiseno.de(
+            ventana(tramo(47f), tramo(139.1f, pliegue = "A<-126.9>", flecha = 30f), tramo(45.8f, pliegue = "A<180>"))
+        )
+        val ultima = planta.paredes[2]
+        assertEquals("la última pared no quedó a ras", 0f, ultima.desde.y, 0.6f)
+        assertEquals("la última pared no siguió recta", 0f, ultima.hasta.y, 0.6f)
+        assertEquals(47f + 120f + 45.8f, ultima.hasta.x, 1f)
+        // La panza positiva queda hacia arriba del papel (-y): el arco dobla a la derecha.
+        assertTrue("el arco no dobló", planta.paredes[1].giroGrados > 100f)
+    }
+
+    /** La esquina redondeada de la calculadora sigue igual: `A<90>` tras el cuarto de círculo no dobla dos veces. */
+    @Test
+    fun la_esquina_redondeada_de_la_calculadora_no_dobla_dos_veces() {
+        val planta = PlantaDelDiseno.de(ventana(tramo(150f), tramo(157.1f, flecha = 29.3f), tramo(120f, pliegue = "A<90>")))
+        val ultima = planta.paredes[2]
+        // Tras girar 90 el arco, la última pared va hacia +y y nada más.
+        assertEquals(ultima.desde.x, ultima.hasta.x, 0.6f)
+        assertEquals(120f, ultima.hasta.y - ultima.desde.y, 0.6f)
+    }
 }

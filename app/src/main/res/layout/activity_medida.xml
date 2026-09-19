@@ -239,13 +239,6 @@
                         android:contentDescription="Texto"
                         android:src="@drawable/texto" />
                 </LinearLayout>
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:orientation="horizontal">
 
                 <LinearLayout style="@style/CeldaIconoMedida">
 
@@ -272,6 +265,15 @@
                         android:contentDescription="Lapiz magnetico"
                         android:src="@drawable/lapiz_iman" />
                 </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:orientation="horizontal">
+
+
 
                 <LinearLayout style="@style/CeldaIconoMedida">
 
@@ -310,6 +312,19 @@
                         style="@style/IconoMedida"
                         android:contentDescription="Arco por cuerda, flecha y desarrollo"
                         android:src="@drawable/arco" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/CeldaIconoMedida">
+
+                    <TextView
+                        style="@style/RotuloIconoMedida"
+                        android:text="Arco 90" />
+
+                    <ImageButton
+                        android:id="@+id/btnFormaArco90"
+                        style="@style/IconoMedida"
+                        android:contentDescription="Arco con la cuerda a escuadra"
+                        android:src="@drawable/arco90" />
                 </LinearLayout>
 
                 <LinearLayout style="@style/CeldaIconoMedida">
@@ -960,6 +975,58 @@
                     android:contentDescription="Medidas 3D: vistas frontal, superior, laterales y perspectiva"
                     android:src="@drawable/esquina_libre" />
             </LinearLayout>
+        </LinearLayout>
+
+        <!-- Copiar, cortar y pegar la selección, también de una vista a otra. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal">
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Copiar" />
+
+                <ImageButton
+                    android:id="@+id/btnCopiarPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Copiar la selección"
+                    android:src="@drawable/copiar" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Cortar" />
+
+                <ImageButton
+                    android:id="@+id/btnCortarPortapapelesPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Cortar la selección al portapapeles"
+                    android:src="@drawable/tijeras" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Pegar" />
+
+                <ImageButton
+                    android:id="@+id/btnPegarPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Pegar lo copiado en esta vista"
+                    android:src="@drawable/pegar" />
+            </LinearLayout>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="2" />
         </LinearLayout>
     </LinearLayout>
 

@@ -66,10 +66,13 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
          * En cada pliegue la ventana gira lo que le FALTA al ángulo para seguir recta: `A<180>` no
          * dobla, `A<90>` dobla en escuadra. El signo dice hacia dónde —en menos, hacia afuera—.
          *
-         * Una pared curva gira ella sola, a lo largo de su arco, así que el pliegue que viene
-         * DETRÁS de una curva no cuenta: está en el paquete para que el dibujo sepa que el paño
-         * siguiente va en perspectiva, pero el giro ya lo hizo la curva. Contándolo otra vez, la
-         * ventana doblaba el doble en cada esquina redondeada.
+         * Una pared curva gira ella sola, a lo largo de su arco. El pliegue que viene DETRÁS de
+         * una curva es el ángulo de la esquina ENTERA —de la pared de antes de la curva a la de
+         * después—, que es como lo escribe la calculadora curva (`A<90>` tras el cuarto de círculo).
+         * La curva ya giró lo suyo, así que aquí solo se termina de girar lo que falte: nada en la
+         * esquina redondeada de siempre (contándolo otra vez doblaba el doble), y lo que diga la
+         * planta cuando el arco va entre dos paredes que no le salen tangentes: `A<180>` detrás
+         * de una panza entre dos rectas alineadas devuelve la pared a la línea.
          */
         /**
          * La panza de toda la ventana, buscada en el paquete tal cual.
@@ -93,13 +96,18 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
             var y = 0f
             var rumbo = 0.0                       // radianes; 0 = hacia la derecha
             var veniaDeCurva = false
+            var rumboAntesDeCurva = 0.0
             val radioEntero = radioDeLaVentanaCurva(diseno, panzaDeLaVentana)
 
             diseno.tramos.forEachIndexed { i, tramo ->
+                val rumboPrevio = rumbo
                 val grados = tramo.pliegue?.let { gradosDePliegue(it) }
-                if (grados != null && !veniaDeCurva) {
+                if (grados != null) {
                     val giro = 180f - abs(grados)
-                    rumbo += Math.toRadians((if (grados < 0f) -giro else giro).toDouble())
+                    val giroConSigno = Math.toRadians((if (grados < 0f) -giro else giro).toDouble())
+                    // Tras una curva el pliegue es la esquina entera desde la pared de antes de
+                    // la curva: se pone el rumbo ahí, gire la curva lo que haya girado.
+                    rumbo = if (veniaDeCurva) rumboAntesDeCurva + giroConSigno else rumbo + giroConSigno
                 }
                 val alto = if (tramo.alto > 0f) tramo.alto else diseno.alto
                 val desde = PuntoPlanta(x, y)
@@ -125,6 +133,7 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
                     rumbo += Math.toRadians(angulo.toDouble())
                     giroDeLaPared = angulo
                     veniaDeCurva = true
+                    rumboAntesDeCurva = rumboPrevio
                 } else {
                     x += (cos(rumbo) * tramo.ancho).toFloat()
                     y += (sin(rumbo) * tramo.ancho).toFloat()

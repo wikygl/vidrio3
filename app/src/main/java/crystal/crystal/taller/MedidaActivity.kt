@@ -248,6 +248,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnFormaLinea.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.LINE) }
         binding.btnFormaLinea90.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.ORTHO_LINE) }
         binding.btnFormaArco.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.ARCO) }
+        binding.btnFormaArco90.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.ARCO_90) }
         binding.btnFormaNodos.setOnClickListener { seleccionarHerramientaDesdePanel(SketchMedidasView.Tool.NODO) }
         binding.btnFormaPolilinea.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.POLILINEA) }
         binding.btnEngraBisagra.setOnClickListener { mostrarDialogoBisagra() }
@@ -289,6 +290,23 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnExtenderPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.EXTENDER) }
         binding.btnRecortarPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.RECORTAR) }
         binding.btnMoverImanPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.MOVER_IMAN) }
+        // Copiar, cortar y pegar: entre vistas también (lo dibujado por error en la frontal se
+        // corta y se pega en la planta, sin volverlo a dibujar).
+        binding.btnCopiarPanelMedida.setOnClickListener {
+            if (binding.sketchMedidas.copiarSeleccion()) mostrar("Copiado. Ve a la vista donde va y toca Pegar")
+            else mostrar("Selecciona primero qué copiar (Selec)")
+        }
+        binding.btnCortarPortapapelesPanelMedida.setOnClickListener {
+            if (binding.sketchMedidas.cortarSeleccion()) mostrar("Cortado. Ve a la vista donde va y toca Pegar")
+            else mostrar("Selecciona primero qué cortar (Selec)")
+        }
+        binding.btnPegarPanelMedida.setOnClickListener {
+            if (binding.sketchMedidas.pegar()) {
+                ocultarPanelesFlotantes()
+                seleccionarHerramienta(SketchMedidasView.Tool.SELECT)
+                mostrar("Pegado y seleccionado: arrástralo a su sitio")
+            } else mostrar("No hay nada copiado")
+        }
         binding.btnEstiloLineaPanelMedida.setOnClickListener { mostrarDialogoEstiloLinea() }
         binding.btn3dPanelMedida.setOnClickListener { alternarMedidas3d() }
         binding.sketchMedidas.alCambiarDibujo = { refrescarPerspectivaGenerada() }
@@ -1375,6 +1393,7 @@ class MedidaActivity : AppCompatActivity() {
             SketchMedidasView.Tool.LINE -> "Linea"
             SketchMedidasView.Tool.ORTHO_LINE -> "Linea 90"
             SketchMedidasView.Tool.ARCO -> "Arco"
+            SketchMedidasView.Tool.ARCO_90 -> "Arco 90"
             SketchMedidasView.Tool.MAGNET_PEN -> "Lapiz iman"
             SketchMedidasView.Tool.NODO -> "Nodos"
         }
@@ -1392,6 +1411,7 @@ class MedidaActivity : AppCompatActivity() {
             binding.btnFormaLinea to (tool == SketchMedidasView.Tool.LINE),
             binding.btnFormaLinea90 to (tool == SketchMedidasView.Tool.ORTHO_LINE),
             binding.btnFormaArco to (tool == SketchMedidasView.Tool.ARCO),
+            binding.btnFormaArco90 to (tool == SketchMedidasView.Tool.ARCO_90),
             binding.btnFormaNodos to (tool == SketchMedidasView.Tool.NODO)
         )
         estados.forEach { (view, activo) ->
@@ -1409,6 +1429,7 @@ class MedidaActivity : AppCompatActivity() {
             SketchMedidasView.Tool.LINE,
             SketchMedidasView.Tool.ORTHO_LINE,
             SketchMedidasView.Tool.ARCO,
+            SketchMedidasView.Tool.ARCO_90,
             SketchMedidasView.Tool.MAGNET_PEN,
             SketchMedidasView.Tool.NODO
         )
