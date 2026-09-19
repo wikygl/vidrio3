@@ -9947,11 +9947,13 @@ class SketchMedidasView @JvmOverloads constructor(
     /**
      * Rehace la forma con TODAS las medidas anotadas a la vez.
      *
-     * Se recorre el contorno con la dirección que ya tiene cada lado y el largo que se anotó. Las
-     * medidas tomadas a mano casi nunca cierran el polígono exacto, así que el error de cierre se
-     * reparte entre los lados de cada eje en proporción a su largo: los lados rectos siguen rectos
-     * y la figura no se tuerce. Después las cotas vuelven a decir lo escrito, aunque el cierre haya
-     * movido un milímetro: en el taller manda la medida, no el dibujo.
+     * Se recorre el contorno con el largo que se anotó en cada lado. Los rectos (horizontales y
+     * verticales) llevan la dirección exacta; los inclinados no —su ángulo es el del dedo—, así
+     * que si los hay se calcula hacia dónde van para que las medidas cierren ([CierrePoligono]).
+     * Sin inclinados, las medidas tomadas a mano casi nunca cierran el polígono exacto y el error
+     * de cierre se reparte entre los lados de cada eje en proporción a su largo: los lados rectos
+     * siguen rectos y la figura no se tuerce. Después las cotas vuelven a decir lo escrito, aunque
+     * el cierre haya movido un milímetro: en el taller manda la medida, no el dibujo.
      */
     private fun reconstruirDesdeDeclarados(c: Element.Composite) {
         // Copia de lo escrito: al final se vuelve a poner, porque refreshCompositeSides relee las
@@ -9981,16 +9983,32 @@ class SketchMedidasView @JvmOverloads constructor(
                 val anotado = c.declarados[ladoKey(ci, i)]
                 largo[i] = if (anotado != null) cmToPx(anotado).coerceAtLeast(cmToPx(0.1f)) else d
             }
-            var errorX = 0f
-            var errorY = 0f
-            for (i in 0 until n) {
-                errorX += dirX[i] * largo[i]
-                errorY += dirY[i] * largo[i]
+            val cierre = CierrePoligono.resolver(dirX, dirY, largo, tolerancia = cmToPx(1f))
+            if (cierre != null) {
+                // Hay inclinados: los rectos se quedan como están y son los inclinados los que
+                // cierran, con la dirección calculada (ver CierrePoligono). El incoherente, si lo
+                // hay, es el inclinado cuyo largo escrito no es el que cierra.
+                for (i in 0 until n) {
+                    dirX[i] = cierre.dirX[i]
+                    dirY[i] = cierre.dirY[i]
+                    largo[i] = cierre.largo[i]
+                }
+                val lados = cierre.incoherentes
+                    .filter { c.declarados.containsKey(ladoKey(ci, it.lado)) }
+                    .map { LadoSospechoso(ladoKey(ci, it.lado), pxToCm(it.escrito), pxToCm(it.correcto)) }
+                if (lados.isNotEmpty()) sospechosos.add(EjeIncoherente(lados))
+            } else {
+                var errorX = 0f
+                var errorY = 0f
+                for (i in 0 until n) {
+                    errorX += dirX[i] * largo[i]
+                    errorY += dirY[i] * largo[i]
+                }
+                ladoSospechoso(c, ci, dirX, largo, dibujado, errorX)?.let { sospechosos.add(it) }
+                ladoSospechoso(c, ci, dirY, largo, dibujado, errorY)?.let { sospechosos.add(it) }
+                repartirCierre(dirX, largo, errorX)
+                repartirCierre(dirY, largo, errorY)
             }
-            ladoSospechoso(c, ci, dirX, largo, dibujado, errorX)?.let { sospechosos.add(it) }
-            ladoSospechoso(c, ci, dirY, largo, dibujado, errorY)?.let { sospechosos.add(it) }
-            repartirCierre(dirX, largo, errorX)
-            repartirCierre(dirY, largo, errorY)
             var x = contour[0].x
             var y = contour[0].y
             for (i in 0 until n) {
