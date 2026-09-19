@@ -126,6 +126,65 @@ class CierrePoligonoTest {
         assertTrue(r.incoherentes.isEmpty())
     }
 
+    // P5 con sus dos medidas de apoyo: ancho total 150 (de C a la recta de EA) y alto total 160
+    // (de D a la recta de AB). Con ellas la forma queda determinada: C en (150, 40), D en (60, 160).
+    private val apoyoP5 = listOf(
+        CierrePoligono.Escuadra(nodo = 2, lado = 4, distancia = 150f),
+        CierrePoligono.Escuadra(nodo = 3, lado = 0, distancia = 160f)
+    )
+
+    private fun vertices(r: CierrePoligono.Resultado): List<Pair<Float, Float>> {
+        var x = 0f
+        var y = 0f
+        return r.largo.indices.map { i ->
+            val p = x to y
+            x += r.dirX[i] * r.largo[i]
+            y += r.dirY[i] * r.largo[i]
+            p
+        }
+    }
+
+    @Test
+    fun con_las_cotas_de_apoyo_tres_inclinados_quedan_exactos() {
+        val r = CierrePoligono.resolver(p5.dirX, p5.dirY, floatArrayOf(120f, 50f, 150f, 100f, 80f), 1f, apoyoP5)!!
+        cierra(r)
+        val v = vertices(r)
+        assertEquals(150f, v[2].first, 0.05f)
+        assertEquals(40f, v[2].second, 0.05f)
+        assertEquals(60f, v[3].first, 0.05f)
+        assertEquals(160f, v[3].second, 0.05f)
+        assertEquals(50f, r.largo[1], 0.05f)
+        assertEquals(150f, r.largo[2], 0.05f)
+        assertEquals(100f, r.largo[3], 0.05f)
+        assertTrue(r.incoherentes.isEmpty())
+        assertTrue(r.escuadrasIncoherentes.isEmpty())
+    }
+
+    @Test
+    fun una_cota_de_apoyo_mal_escrita_se_senala_con_lo_que_sale() {
+        val apoyo = listOf(apoyoP5[0], CierrePoligono.Escuadra(3, 0, 170f))
+        val r = CierrePoligono.resolver(p5.dirX, p5.dirY, floatArrayOf(120f, 50f, 150f, 100f, 80f), 1f, apoyo)!!
+        cierra(r)
+        // Algo tiene que ceder y se dice qué: la escuadra mal escrita está entre lo señalado
+        // (el reparto del error puede salpicar a alguna otra medida, pero nunca callarse).
+        val mal = r.escuadrasIncoherentes.firstOrNull { it.lado == 1 }
+        assertNotNull("la escuadra de 170 no se señaló: " + r.escuadrasIncoherentes + " " + r.incoherentes, mal)
+        assertEquals(170f, mal!!.escrito, 0f)
+        assertTrue("lo que sale tiene que acercarse a 160", mal.correcto in 155f..168f)
+    }
+
+    @Test
+    fun con_apoyo_un_solo_inclinado_sigue_saliendo_exacto() {
+        // P2 con el alto total 210.5 medido de E (esquina del chaflán) a la recta de abajo: 130.
+        val apoyo = listOf(CierrePoligono.Escuadra(nodo = 4, lado = 0, distancia = 130f))
+        val r = CierrePoligono.resolver(p2.dirX, p2.dirY, floatArrayOf(240.5f, 90f, 90f, 50f, 80.5f, 120.5f, 210.5f), 1f, apoyo)!!
+        cierra(r)
+        direccion(r, 3, -0.6f, 0.8f)
+        assertEquals(50f, r.largo[3], 0.05f)
+        assertTrue(r.incoherentes.isEmpty())
+        assertTrue(r.escuadrasIncoherentes.isEmpty())
+    }
+
     @Test
     fun rectangulo_girado_los_lados_opuestos_van_y_vuelven_por_la_misma_recta() {
         val c = 0.8660254f

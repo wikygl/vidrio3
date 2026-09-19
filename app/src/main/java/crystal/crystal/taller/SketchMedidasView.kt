@@ -290,7 +290,13 @@ class SketchMedidasView @JvmOverloads constructor(
              * Marco de esquina armado SOBRE figuras dibujadas a mano: las paredes son esas figuras
              * (con su forma y sus cotas) y el marco es solo el desarrollo que las abraza, a trazos.
              */
-            var libre: Boolean = false
+            var libre: Boolean = false,
+            /**
+             * Solo en las cotas a escuadra: la medida que el usuario escribió. En una forma que se
+             * rehace con todas sus medidas, la escuadra no mueve nada al escribirla: se anota aquí
+             * y entra en la reconstrucción como una medida más ([CierrePoligono.Escuadra]).
+             */
+            var medidaEscrita: Float? = null
         ) : Element()
         data class Group(val children: MutableList<Element>) : Element()
         data class TextLabel(
@@ -5255,7 +5261,8 @@ class SketchMedidasView @JvmOverloads constructor(
             PointF(e.topLeft.x, e.topLeft.y), PointF(e.topRight.x, e.topRight.y),
             PointF(e.bottomRight.x, e.bottomRight.y), PointF(e.bottomLeft.x, e.bottomLeft.y),
             e.topCm, e.rightCm, e.bottomCm, e.leftCm, e.cotaHint, e.largoFijado,
-            e.grosor, e.trazo, e.ajustesCotas.mapValues { it.value.copy() }.toMutableMap(), e.libre
+            e.grosor, e.trazo, e.ajustesCotas.mapValues { it.value.copy() }.toMutableMap(), e.libre,
+            e.medidaEscrita
         )
         is Element.Group -> Element.Group(e.children.map { copyElement(it) }.toMutableList())
         is Element.TextLabel -> Element.TextLabel(e.text, e.x, e.y, e.textSize, e.titulo, e.movida, e.rol)
@@ -5379,11 +5386,43 @@ class SketchMedidasView @JvmOverloads constructor(
         return pxToCm(medida.distanciaCm)
     }
 
-    /** Escribe otra medida en la primera cota a escuadra, como al editarla en la pantalla. */
+    /** Escribe otra medida en la cota a escuadra número [cual] (la primera si no se dice), como al editarla. */
     @androidx.annotation.VisibleForTesting
-    fun escribirEscuadraParaPruebas(valueCm: Float) {
-        val i = cotasAEscuadra().firstOrNull() ?: return
+    fun escribirEscuadraParaPruebas(valueCm: Float, cual: Int = 0) {
+        val i = cotasAEscuadra().getOrNull(cual) ?: return
         aplicarCotaAEscuadra(i, valueCm)
+    }
+
+    /**
+     * Pone un polígono libre —como el que deja el lápiz imán— por sus esquinas en cm, con la
+     * primera esquina de la caja en (izq, arriba) px. Devuelve su índice.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun agregarPoligonoLibreParaPruebas(izq: Float, arriba: Float, vararg esquinasCm: Pair<Float, Float>): Int {
+        val vertices = esquinasCm.map { PointF(izq + cmToPx(it.first), arriba + cmToPx(it.second)) }.toMutableList()
+        val contours = mutableListOf(vertices)
+        val bounds = RectF(
+            vertices.minOf { it.x }, vertices.minOf { it.y }, vertices.maxOf { it.x }, vertices.maxOf { it.y }
+        )
+        elementos.add(
+            Element.Composite(
+                path = pathFromContours(contours),
+                widthCm = pxToCm(bounds.width()),
+                heightCm = pxToCm(bounds.height()),
+                contours = contours,
+                sideCms = sideCmsForContours(contours),
+                template = TEMPLATE_LIBRE
+            )
+        )
+        return elementos.lastIndex
+    }
+
+    /** Anota la medida de un lado de la figura principal, como al escribirla en su cota. */
+    @androidx.annotation.VisibleForTesting
+    fun anotarLadoParaPruebas(lado: Int, valueCm: Float) {
+        val c = compositePrincipal() ?: return
+        val hit = CotaHit(elementos.indexOf(c), CotaType.COMPOSITE_SIDE, RectF(), contourIndex = 0, sideIndex = lado)
+        anotarMedidaLado(c, hit, valueCm)
     }
 
     /** El contorno de la figura recortada, en cm, con el origen en su esquina de arriba. */
@@ -6508,6 +6547,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 .put("trazo", element.trazo)
                 .put("ajustesCotas", ajustesCotasJson(element.ajustesCotas))
                 .put("libre", element.libre)
+                .apply { element.medidaEscrita?.let { put("medidaEscrita", it) } }
             is Element.Group -> JSONObject()
                 .put("type", "group")
                 .put("children", JSONArray().apply {
@@ -6599,6 +6639,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     trazo = obj.optString("trazo", EstiloDeLinea.CONTINUO)
                     leerAjustesCotas(obj, ajustesCotas)
                     libre = obj.optBoolean("libre", false)
+                    medidaEscrita = if (obj.has("medidaEscrita")) obj.optDouble("medidaEscrita").toFloat() else null
                 }
             }
             "group" -> {
@@ -7812,7 +7853,8 @@ class SketchMedidasView @JvmOverloads constructor(
                 grosor = element.grosor,
                 trazo = element.trazo,
                 ajustesCotas = element.ajustesCotas.mapValues { it.value.copy() }.toMutableMap(),
-                libre = element.libre
+                libre = element.libre,
+                medidaEscrita = element.medidaEscrita
             )
             is Element.Group -> Element.Group(element.children.map { cloneElement(it) }.toMutableList())
         }
@@ -9199,7 +9241,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 canvas, i, CotaType.A_ESCUADRA,
                 PointF(linea.start.x, linea.start.y),
                 PointF(linea.end.x, linea.end.y),
-                centro, pxToCm(medida.distanciaCm), collectHits
+                centro, linea.medidaEscrita ?: pxToCm(medida.distanciaCm), collectHits
             )
         }
     }
@@ -9208,6 +9250,23 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun aplicarCotaAEscuadra(index: Int, valueCm: Float) {
         if (valueCm <= 0f) return
         val (composite, medida) = medidaDeLaCotaAEscuadra(index) ?: return
+        // En una forma que se rehace con todas sus medidas y tiene lados inclinados, la escuadra
+        // no empuja la esquina: es una medida de apoyo más, y son los inclinados los que se
+        // acomodan para cumplirla. Se anota y, con los lados completos, se rehace la forma.
+        val linea = elementos.getOrNull(index) as? Element.Shape
+        if (linea != null && medida.ladoOpuesto >= 0 && usaMedidasPrimero(composite) && tieneInclinados(composite)) {
+            linea.medidaEscrita = valueCm
+            if (medidasCompletas(composite)) {
+                reconstruirDesdeDeclarados(composite)
+            } else {
+                val faltan = medidasQueFaltan(composite)
+                val cuenta = if (faltan == 1) "Falta 1 medida" else "Faltan $faltan medidas"
+                Toast.makeText(context, "Anotada. $cuenta de lados para rehacer la forma.", Toast.LENGTH_SHORT).show()
+            }
+            registrarAccion()
+            invalidate()
+            return
+        }
         val contorno = contornoDelComposite(composite) ?: return
         val movido = CotaAEscuadra.conDistancia(contorno, medida, cmToPx(valueCm))
         val puntos = composite.contours.firstOrNull() ?: return
@@ -9835,7 +9894,7 @@ class SketchMedidasView @JvmOverloads constructor(
         // sobra: el gesto pasa a servir para rehacerla YA con lo que se lleve anotado, sin esperar
         // a tenerlas todas (los lados sin medida conservan la que tienen en el dibujo).
         if (usaMedidasPrimero(el)) {
-            if (el.declarados.isEmpty()) {
+            if (el.declarados.isEmpty() && escuadrasEscritas(el).isEmpty()) {
                 Toast.makeText(context, "Escribe primero alguna medida.", Toast.LENGTH_SHORT).show()
                 return
             }
@@ -9966,6 +10025,9 @@ class SketchMedidasView @JvmOverloads constructor(
         // El trapecio se rehace con sus medidas rectas (ver abajo); el resto, recorriendo el
         // contorno. Rotado o reflejado no vale el atajo: rehacerlo lo devolvería a la horizontal.
         val porPlantilla = c.template == TEMPLATE_F3 && c.rotationDeg == 0f && reconstruirF3Declarado(c)
+        // Las cotas a escuadra escritas sobre esta forma: entran como medidas de apoyo, y al
+        // terminar se vuelven a colocar sobre su esquina, que se habrá movido.
+        val escuadras = if (porPlantilla) emptyList() else escuadrasEscritas(c)
         if (!porPlantilla) c.contours.forEachIndexed { ci, contour ->
             val n = contour.size
             if (n < 3) return@forEachIndexed
@@ -9983,7 +10045,11 @@ class SketchMedidasView @JvmOverloads constructor(
                 val anotado = c.declarados[ladoKey(ci, i)]
                 largo[i] = if (anotado != null) cmToPx(anotado).coerceAtLeast(cmToPx(0.1f)) else d
             }
-            val cierre = CierrePoligono.resolver(dirX, dirY, largo, tolerancia = cmToPx(1f))
+            val apoyo = if (ci == 0) escuadras.map { (_, m, escrita) ->
+                CierrePoligono.Escuadra(m.nodo, m.ladoOpuesto, cmToPx(escrita))
+            } else emptyList()
+            val declarado = BooleanArray(n) { c.declarados.containsKey(ladoKey(ci, it)) }
+            val cierre = CierrePoligono.resolver(dirX, dirY, largo, cmToPx(1f), apoyo, declarado)
             if (cierre != null) {
                 // Hay inclinados: los rectos se quedan como están y son los inclinados los que
                 // cierran, con la dirección calculada (ver CierrePoligono). El incoherente, si lo
@@ -9997,6 +10063,10 @@ class SketchMedidasView @JvmOverloads constructor(
                     .filter { c.declarados.containsKey(ladoKey(ci, it.lado)) }
                     .map { LadoSospechoso(ladoKey(ci, it.lado), pxToCm(it.escrito), pxToCm(it.correcto)) }
                 if (lados.isNotEmpty()) sospechosos.add(EjeIncoherente(lados))
+                val apoyoMal = cierre.escuadrasIncoherentes.map {
+                    LadoSospechoso(0L, pxToCm(it.escrito), pxToCm(it.correcto), escuadra = escuadras[it.lado].first)
+                }
+                if (apoyoMal.isNotEmpty()) sospechosos.add(EjeIncoherente(apoyoMal))
             } else {
                 var errorX = 0f
                 var errorY = 0f
@@ -10028,9 +10098,12 @@ class SketchMedidasView @JvmOverloads constructor(
             c.path.transform(m)
             transformCompositePoints(c, m)
         }
+        recolocarEscuadras(c, escuadras)
         refreshCompositeSides(c)
         c.declarados.clear()
         c.declarados.putAll(anotadas)
+        // Igual que los lados: la escuadra sigue diciendo lo escrito, aunque el ajuste haya cedido.
+        escuadras.forEach { (i, _, escrita) -> (elementos.getOrNull(i) as? Element.Shape)?.medidaEscrita = escrita }
         anotadas.forEach { (clave, valor) ->
             val ci = (clave / 100000L).toInt()
             val si = (clave % 100000L).toInt()
@@ -10050,7 +10123,13 @@ class SketchMedidasView @JvmOverloads constructor(
      * Los lados escritos de un eje que no dejan cerrar la forma, cada uno con la medida que sí
      * cerraría. Uno solo cuando se distingue cuál es; varios cuando no se puede saber.
      */
-    private data class LadoSospechoso(val clave: Long, val escritoCm: Float, val correctoCm: Float)
+    private data class LadoSospechoso(
+        val clave: Long,
+        val escritoCm: Float,
+        val correctoCm: Float,
+        /** Si es una cota a escuadra, el índice de su línea en el apunte; null si es un lado. */
+        val escuadra: Int? = null
+    )
     private data class EjeIncoherente(val lados: List<LadoSospechoso>)
 
     /**
@@ -10095,16 +10174,28 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun preguntarPorLadoIncoherente(c: Element.Composite, ejes: List<EjeIncoherente>) {
         val texto = ejes.joinToString("\n\n") { eje ->
             val unico = eje.lados.singleOrNull()
-            if (unico != null) {
+            if (unico != null && unico.escuadra != null) {
+                "La cota a escuadra de ${formatCm(unico.escritoCm)} no cuadra con los lados: " +
+                    "con ellos sale ${formatCm(unico.correctoCm)}."
+            } else if (unico != null) {
                 "El lado de ${formatCm(unico.escritoCm)} es incoherente con los demás: " +
                     "para cerrar tendría que medir ${formatCm(unico.correctoCm)}."
+            } else if (eje.lados.all { it.escuadra != null }) {
+                "Las cotas a escuadra de ${eje.lados.joinToString(", ") { formatCm(it.escritoCm) }} no " +
+                    "cuadran con los lados; vuelve a revisar esas medidas."
             } else {
                 "Los lados de ${eje.lados.joinToString(", ") { formatCm(it.escritoCm) }} no son " +
                     "coherentes entre sí; vuelve a revisar esas medidas."
             }
         }
         val regenerar = {
-            ejes.forEach { eje -> eje.lados.forEach { c.declarados[it.clave] = it.correctoCm } }
+            ejes.forEach { eje ->
+                eje.lados.forEach {
+                    val linea = it.escuadra?.let { i -> elementos.getOrNull(i) as? Element.Shape }
+                    if (linea != null) linea.medidaEscrita = it.correctoCm
+                    else c.declarados[it.clave] = it.correctoCm
+                }
+            }
             reconstruirDesdeDeclarados(c)
             registrarAccion()
             invalidate()
@@ -10116,6 +10207,53 @@ class SketchMedidasView @JvmOverloads constructor(
                 .setNegativeButton("Conservar lo escrito", null)
                 .show()
         }.onFailure { Toast.makeText(context, texto, Toast.LENGTH_LONG).show() }
+    }
+
+    /**
+     * Las cotas a escuadra de esta forma que tienen medida escrita: índice de la línea, lo que
+     * mide hoy (con su esquina y su lado de enfrente) y lo escrito en cm. Solo las que llegan a un
+     * lado de la propia forma: contra una línea suelta no atan nada, porque la línea no se mueve
+     * con la figura.
+     */
+    private fun escuadrasEscritas(c: Element.Composite): List<Triple<Int, MedidaAEscuadra, Float>> =
+        cotasAEscuadra().mapNotNull { i ->
+            val escrita = (elementos[i] as Element.Shape).medidaEscrita ?: return@mapNotNull null
+            val (composite, medida) = medidaDeLaCotaAEscuadra(i) ?: return@mapNotNull null
+            if (composite !== c || medida.ladoOpuesto < 0) null else Triple(i, medida, escrita)
+        }
+
+    /** ¿Tiene esta forma algún lado que no corra por un eje? Son los que una escuadra puede mover. */
+    private fun tieneInclinados(c: Element.Composite): Boolean {
+        val contour = c.contours.firstOrNull() ?: return false
+        return contour.indices.any { i ->
+            val a = contour[i]
+            val b = contour[(i + 1) % contour.size]
+            val d = distancia(a, b).coerceAtLeast(0.01f)
+            !CierrePoligono.esRecto((b.x - a.x) / d, (b.y - a.y) / d)
+        }
+    }
+
+    /**
+     * Rehecha la forma, cada cota a escuadra vuelve a su esquina y al pie sobre la recta de su
+     * lado. Se hace a mano, con la esquina y el lado que tenía, porque buscarla por cercanía
+     * después de un cambio grande podía cogerse a otra esquina.
+     */
+    private fun recolocarEscuadras(c: Element.Composite, escuadras: List<Triple<Int, MedidaAEscuadra, Float>>) {
+        val contour = c.contours.firstOrNull() ?: return
+        val n = contour.size
+        escuadras.forEach { (i, m, _) ->
+            val linea = elementos.getOrNull(i) as? Element.Shape ?: return@forEach
+            if (m.nodo !in 0 until n || m.ladoOpuesto !in 0 until n) return@forEach
+            val p = contour[m.nodo]
+            val a = contour[m.ladoOpuesto]
+            val b = contour[(m.ladoOpuesto + 1) % n]
+            val vx = b.x - a.x
+            val vy = b.y - a.y
+            val l2 = (vx * vx + vy * vy).coerceAtLeast(0.01f)
+            val t = ((p.x - a.x) * vx + (p.y - a.y) * vy) / l2
+            linea.start.set(p.x, p.y)
+            linea.end.set(a.x + vx * t, a.y + vy * t)
+        }
     }
 
     /**
@@ -11973,6 +12111,12 @@ class SketchMedidasView @JvmOverloads constructor(
 
     /** Toma como anotadas las medidas que hoy tiene el dibujo. */
     private fun sincronizarDeclarados(c: Element.Composite) {
+        cotasAEscuadra().forEach { i ->
+            val linea = elementos[i] as Element.Shape
+            if (linea.medidaEscrita == null) return@forEach
+            val (composite, medida) = medidaDeLaCotaAEscuadra(i) ?: return@forEach
+            if (composite === c) linea.medidaEscrita = pxToCm(medida.distanciaCm)
+        }
         c.declarados.clear()
         c.contours.forEachIndexed { ci, cont ->
             cont.indices.forEach { si ->
