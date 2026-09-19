@@ -22,6 +22,7 @@ import crystal.crystal.casilla.ProyectoManager
 import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityRoperoBinding
 import crystal.crystal.optimizadores.planchas.OptimizacionPlanchasActivity
+import crystal.crystal.taller.ColaCalculadoras
 import crystal.crystal.taller.ControladorColaMedidas
 import crystal.crystal.taller.ModoMasivoHelper
 import org.json.JSONArray
@@ -85,6 +86,20 @@ class RoperoActivity : AppCompatActivity() {
             formato = ::df1
         )
         controladorCola.inicializar()
+        cargarRoperoDeLaMedida()
+    }
+
+    /**
+     * La medida que llega de MedidaActivity puede traer el ropero entero (diseñado en el apunte con
+     * su plantilla): se toma tal cual y se calcula, en vez de quedarse con el ancho y el alto.
+     */
+    private fun cargarRoperoDeLaMedida() {
+        if (!ColaCalculadoras.desdeMedidas(this)) return
+        val json = ColaCalculadoras.cola(this).getOrNull(ColaCalculadoras.indice(this))?.disenoRopero
+        val deLaMedida = Ropero.desdeJson(json) ?: return
+        ropero = deLaMedida
+        volcarEnPantalla()
+        calcular()
     }
 
     // ==================== OBTENER VALORES ====================

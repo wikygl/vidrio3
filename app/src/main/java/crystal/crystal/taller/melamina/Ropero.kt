@@ -27,7 +27,9 @@ data class Ropero(
     /** Fondo de nordex (3 mm) clavado atrás. Empotrado a veces se deja la pared. */
     val conFondo: Boolean = true,
     /** Alto del frente de cada cajón. */
-    val altoCajonCm: Float = 20f
+    val altoCajonCm: Float = 20f,
+    /** Cómo se quiere ver en el apunte: con las puertas puestas o el interior. No cambia el cálculo. */
+    val verPuertas: Boolean = false
 ) {
     val espesorCm: Float get() = espesorMm / 10f
     val fondoNordexCm: Float get() = if (conFondo) 0.3f else 0f
@@ -76,16 +78,17 @@ data class Ropero(
     fun conCuerpo(indice: Int, cuerpo: Cuerpo): Ropero =
         if (indice !in cuerpos.indices) this else copy(cuerpos = cuerpos.mapIndexed { i, c -> if (i == indice) cuerpo.copy(anchoCm = c.anchoCm) else c })
 
-    /** Las medidas del hueco cambiadas: los cuerpos se reparten de nuevo a lo ancho. */
+    /** Las medidas del hueco cambiadas: si cambió el ancho, los cuerpos se reparten de nuevo. */
     fun conHueco(ancho: Float, alto: Float, fondo: Float): Ropero {
         val base = copy(anchoCm = ancho.coerceAtLeast(30f), altoCm = alto.coerceAtLeast(30f), fondoCm = fondo.coerceAtLeast(20f))
-        return base.conCuerposIguales(cuerpos.size.coerceAtLeast(1))
+        return if (kotlin.math.abs(base.anchoCm - anchoCm) > 0.01f) base.conCuerposIguales(cuerpos.size.coerceAtLeast(1)) else base
     }
 
     fun aJson(): String = JSONObject().apply {
         put("ancho", anchoCm); put("alto", altoCm); put("fondo", fondoCm)
         put("espesor", espesorMm); put("zocalo", zocaloCm); put("maletero", maleteroCm)
         put("puertas", puertas.name); put("conFondo", conFondo); put("altoCajon", altoCajonCm)
+        put("verPuertas", verPuertas)
         put("cuerpos", JSONArray().apply { cuerpos.forEach { put(it.aJson()) } })
     }.toString()
 
@@ -108,7 +111,8 @@ data class Ropero(
                 cuerpos = cuerpos.ifEmpty { Ropero().cuerpos },
                 puertas = runCatching { TipoPuertas.valueOf(o.optString("puertas", "BATIENTES")) }.getOrDefault(TipoPuertas.BATIENTES),
                 conFondo = o.optBoolean("conFondo", true),
-                altoCajonCm = o.optDouble("altoCajon", 20.0).toFloat()
+                altoCajonCm = o.optDouble("altoCajon", 20.0).toFloat(),
+                verPuertas = o.optBoolean("verPuertas", false)
             )
         }.getOrNull()
     }

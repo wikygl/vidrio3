@@ -324,6 +324,7 @@ class MedidaActivity : AppCompatActivity() {
         }
         binding.btnPlantillaVentanaEsquina.setOnClickListener { insertarVentanaEsquinaEstandar() }
         binding.btnPlantillaVentanaCurva.setOnClickListener { insertarVentanaCurvaEstandar() }
+        binding.btnPlantillaRopero.setOnClickListener { insertarRoperoEstandar() }
         binding.btnPlantillaMampara.setOnClickListener { insertarMamparaEstandar() }
         binding.btnPlantillaMampara.setOnLongClickListener {
             mostrarDialogoPlantilla("Mampara", incluyeBisagra = false, incluyeApertura = false, incluyeVista = true, hojasPorDefecto = 2)
@@ -669,6 +670,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.tvAvisoPerspectiva.visibility = if (enPerspectiva && generada == null) View.VISIBLE else View.GONE
         botonInteriorExterior?.text = if (binding.sketchMedidas.vistaInterior) "Interior" else "Exterior"
         mostrarPerspectivaGenerada(if (enPerspectiva) generada else null)
+        refrescarPerspectivaRopero(enPerspectiva)
     }
 
     /**
@@ -689,7 +691,63 @@ class MedidaActivity : AppCompatActivity() {
             )
             val enPerspectiva = binding.sketchMedidas.vistaActiva == SketchMedidasView.Vista.PERSPECTIVA
             mostrarPerspectivaGenerada(if (enPerspectiva) generada else null)
+            refrescarPerspectivaRopero(enPerspectiva)
         }
+    }
+
+    // ---- El ropero de melamina en perspectiva: su 3D oblicuo sobre la vista Perspectiva ----
+
+    private var roperoGenerado: crystal.crystal.taller.melamina.VistaRopero? = null
+
+    /**
+     * Si el apunte tiene un ropero (su plantilla en la frontal) y se está en la vista Perspectiva,
+     * se enseña en 3D encima del lienzo, con sus puertas o su interior según se dejó en la
+     * frontal; la miniatura de la pestaña también. Sin ropero, o en otra vista, se quita.
+     */
+    private fun refrescarPerspectivaRopero(enPerspectiva: Boolean) {
+        val ropero = binding.sketchMedidas.roperoDelDibujo()
+        if (ropero != null) {
+            val dp = resources.displayMetrics.density
+            celdasDeVista[SketchMedidasView.Vista.PERSPECTIVA]?.second?.setImageBitmap(bitmapDelRopero(ropero, (56 * dp).toInt(), (44 * dp).toInt()))
+        }
+        if (ropero == null || !enPerspectiva || binding.sketchMedidas.vistaTieneDibujo(SketchMedidasView.Vista.PERSPECTIVA)) {
+            roperoGenerado?.visibility = View.GONE
+            return
+        }
+        val vista = roperoGenerado ?: crystal.crystal.taller.melamina.VistaRopero(this).also { nueva ->
+            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(0, 0).apply {
+                topToTop = binding.sketchMedidas.id
+                bottomToBottom = binding.sketchMedidas.id
+                startToStart = binding.sketchMedidas.id
+                endToEnd = binding.sketchMedidas.id
+            }
+            binding.layoutPrincipal.addView(nueva, lp)
+            nueva.elevation = 2 * resources.displayMetrics.density
+            nueva.setBackgroundColor(android.graphics.Color.parseColor("#F7F4EC"))
+            nueva.en3d = true
+            // Tocar el mueble en 3D alterna puertas e interior, que es lo que se quiere comparar.
+            nueva.alTocarCuerpo = { nueva.mostrarPuertas = !nueva.mostrarPuertas }
+            roperoGenerado = nueva
+        }
+        vista.ropero = ropero
+        vista.mostrarPuertas = ropero.verPuertas
+        vista.visibility = View.VISIBLE
+        vista.bringToFront()
+    }
+
+    private fun bitmapDelRopero(ropero: crystal.crystal.taller.melamina.Ropero, ancho: Int, alto: Int): android.graphics.Bitmap {
+        val v = crystal.crystal.taller.melamina.VistaRopero(this)
+        v.ropero = ropero
+        v.en3d = true
+        v.mostrarPuertas = ropero.verPuertas
+        v.measure(
+            View.MeasureSpec.makeMeasureSpec(ancho * 4, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(alto * 4, View.MeasureSpec.EXACTLY)
+        )
+        v.layout(0, 0, ancho * 4, alto * 4)
+        val grande = android.graphics.Bitmap.createBitmap(ancho * 4, alto * 4, android.graphics.Bitmap.Config.ARGB_8888)
+        v.draw(android.graphics.Canvas(grande))
+        return android.graphics.Bitmap.createScaledBitmap(grande, ancho, alto, true)
     }
 
     // ---- La perspectiva generada: la ventana que va saliendo de las vistas, en 3D ----
@@ -1042,6 +1100,19 @@ class MedidaActivity : AppCompatActivity() {
         binding.sketchMedidas.insertarPlantillaMampara()
         productoActual = "Mampara"
         actualizarPanelInformacion()
+    }
+
+    /**
+     * El ropero de melamina, de un toque: 240 x 240 x 60 con dos cuerpos. Después todo se edita
+     * tocando sus cotas y sus rótulos en el dibujo (el hueco, los cuerpos, lo que lleva cada uno,
+     * las puertas), y en la vista Perspectiva del 3D se ve el mueble en volumen.
+     */
+    private fun insertarRoperoEstandar() {
+        ocultarPanelesFlotantes()
+        binding.sketchMedidas.insertarPlantillaRopero()
+        productoActual = "Ropero"
+        actualizarPanelInformacion()
+        refrescarPerspectivaGenerada()
     }
 
     private fun mostrarDialogoPlantilla(
@@ -2607,7 +2678,9 @@ class MedidaActivity : AppCompatActivity() {
                         // Y si esa esquina se armó sobre figuras dibujadas a mano, la forma de cada
                         // pared y sus parantes, que el ancho y el alto no cuentan.
                         contornosLados = LadosLibres.contornosATexto(binding.sketchMedidas.contornosDeLadosEnCm()),
-                        parantesLados = LadosLibres.parantesATexto(binding.sketchMedidas.parantesDeLadosEnCm())
+                        parantesLados = LadosLibres.parantesATexto(binding.sketchMedidas.parantesDeLadosEnCm()),
+                        // Y el ropero de melamina entero, si la medida es un ropero.
+                        disenoRopero = binding.sketchMedidas.roperoDelDibujo()?.aJson().orEmpty()
                     )
                 )
             }

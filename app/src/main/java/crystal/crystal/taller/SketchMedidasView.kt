@@ -76,6 +76,13 @@ class SketchMedidasView @JvmOverloads constructor(
 
         /** La mampara se toma como la ventana; solo cambian las medidas y que no lleva alfeizar. */
         const val MAMPARA_MARCO = "MAMPARA_MARCO"
+        /**
+         * El ropero de melamina puesto desde su plantilla: un rectángulo del hueco que lleva el
+         * ropero entero en [Element.Shape.paquete] (JSON de [crystal.crystal.taller.melamina.Ropero])
+         * y se pinta con [crystal.crystal.taller.melamina.RoperoDibujo]. Sus cotas escriben en el
+         * ropero, no en el rectángulo.
+         */
+        const val ROPERO_MARCO = "ROPERO_MARCO"
 
         /**
          * Cota de alto tomada por dentro del vano. En un vano ancho el alto del centro no es el de
@@ -231,7 +238,17 @@ class SketchMedidasView @JvmOverloads constructor(
         /** De la esquina de un corte al lado de enfrente, a escuadra. Empuja esa arista. */
         A_ESCUADRA,
         /** El rótulo de un arco: tocarlo abre sus tres medidas y su altura. */
-        ARCO
+        ARCO,
+        /** Las cotas del ropero de melamina: escriben en el ropero del marco, no en el rectángulo. */
+        ROPERO_ANCHO, ROPERO_ALTO, ROPERO_FONDO, ROPERO_ZOCALO, ROPERO_MALETERO,
+        /** El ancho de un cuerpo (sideIndex = cuerpo). */
+        ROPERO_CUERPO,
+        /** Cuántos cuerpos. */
+        ROPERO_CUERPOS,
+        /** El rótulo de lo que lleva un cuerpo (sideIndex = cuerpo): abre su diálogo. */
+        ROPERO_TIPO,
+        /** El rótulo de las puertas: cada toque pasa a la siguiente opción, y las enseña o las quita. */
+        ROPERO_PUERTAS
     }
 
     /**
@@ -312,7 +329,9 @@ class SketchMedidasView @JvmOverloads constructor(
              * altura de esa pared curva para el 3D (0 = la de la pared de al lado).
              */
             var flechaCm: Float = 0f,
-            var alturaCm: Float = 0f
+            var alturaCm: Float = 0f,
+            /** El diseño que lleva dentro una plantilla que no cabe en cotas (el ropero), como JSON. */
+            var paquete: String? = null
         ) : Element()
         data class Group(val children: MutableList<Element>) : Element()
         data class TextLabel(
@@ -3054,6 +3073,7 @@ class SketchMedidasView @JvmOverloads constructor(
         PUERTA_MARCO -> "Puerta"
         VENTANA_MARCO -> "Ventana"
         MAMPARA_MARCO -> "Mampara"
+        ROPERO_MARCO -> "Ropero"
         ESQUINA_MARCO -> "V. esquina"
         PUERTA_PUENTE -> "Puente"
         PUERTA_DIVISION -> "Division"
@@ -3075,6 +3095,7 @@ class SketchMedidasView @JvmOverloads constructor(
             VENTANA_MARCO in hints -> "Ventana"
             MAMPARA_MARCO in hints -> "Mampara"
             ESQUINA_MARCO in hints -> "Ventana"
+            ROPERO_MARCO in hints -> "Ropero"
             else -> null
         }
     }
@@ -5324,7 +5345,7 @@ class SketchMedidasView @JvmOverloads constructor(
             PointF(e.bottomRight.x, e.bottomRight.y), PointF(e.bottomLeft.x, e.bottomLeft.y),
             e.topCm, e.rightCm, e.bottomCm, e.leftCm, e.cotaHint, e.largoFijado,
             e.grosor, e.trazo, e.ajustesCotas.mapValues { it.value.copy() }.toMutableMap(), e.libre,
-            e.medidaEscrita, e.flechaCm, e.alturaCm
+            e.medidaEscrita, e.flechaCm, e.alturaCm, e.paquete
         )
         is Element.Group -> Element.Group(e.children.map { copyElement(it) }.toMutableList())
         is Element.TextLabel -> Element.TextLabel(e.text, e.x, e.y, e.textSize, e.titulo, e.movida, e.rol)
@@ -6710,6 +6731,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     element.medidaEscrita?.let { put("medidaEscrita", it) }
                     if (element.flechaCm != 0f) put("flechaCm", element.flechaCm)
                     if (element.alturaCm != 0f) put("alturaCm", element.alturaCm)
+                    element.paquete?.let { put("paquete", it) }
                 }
             is Element.Group -> JSONObject()
                 .put("type", "group")
@@ -6805,6 +6827,7 @@ class SketchMedidasView @JvmOverloads constructor(
                     medidaEscrita = if (obj.has("medidaEscrita")) obj.optDouble("medidaEscrita").toFloat() else null
                     flechaCm = obj.optDouble("flechaCm", 0.0).toFloat()
                     alturaCm = obj.optDouble("alturaCm", 0.0).toFloat()
+                    paquete = obj.optString("paquete").takeIf { it.isNotBlank() && it != "null" }
                 }
             }
             "group" -> {
@@ -7155,6 +7178,11 @@ class SketchMedidasView @JvmOverloads constructor(
                 drawCompositeCotas(canvas, index, element, collectHits)
             }
             is Element.Shape -> {
+                // El ropero se pinta entero desde su diseño, y sus cotas escriben en él.
+                if (element.cotaHint == ROPERO_MARCO) {
+                    dibujarRopero(canvas, index, element, collectHits)
+                    return
+                }
                 // La cota de alto interior no es trazo: solo su número. El marco de la ventana se
                 // dibuja quebrado por las alturas que se hayan escrito dentro de él.
                 val shapePath = when {
@@ -8025,7 +8053,8 @@ class SketchMedidasView @JvmOverloads constructor(
                 libre = element.libre,
                 medidaEscrita = element.medidaEscrita,
                 flechaCm = element.flechaCm,
-                alturaCm = element.alturaCm
+                alturaCm = element.alturaCm,
+                paquete = element.paquete
             )
             is Element.Group -> Element.Group(element.children.map { cloneElement(it) }.toMutableList())
         }
@@ -8570,7 +8599,8 @@ class SketchMedidasView @JvmOverloads constructor(
         cy: Float,
         value: Float,
         collectHits: Boolean,
-        texto: String? = null
+        texto: String? = null,
+        sideIndex: Int? = null
     ) {
         val text = texto ?: formatCm(value)
         val widthText = cotaTextPaint.measureText(text)
@@ -8589,7 +8619,7 @@ class SketchMedidasView @JvmOverloads constructor(
         canvas.drawRoundRect(hit, ce(6f), ce(6f), cotaBgPaint)
         canvas.drawText(text, drawCx, drawCy, cotaTextPaint)
         cotaTextRects.add(RectF(hit))
-        if (collectHits) cotaHits.add(CotaHit(index, type, hit))
+        if (collectHits) cotaHits.add(CotaHit(index, type, hit, sideIndex = sideIndex))
     }
 
     private fun drawCompositeCotas(canvas: Canvas, index: Int, composite: Element.Composite, collectHits: Boolean) {
@@ -9380,6 +9410,25 @@ class SketchMedidasView @JvmOverloads constructor(
         return cotaHits.map { it.type.name to RectF(it.rect) }
     }
 
+    /** Escribe una cota del ropero de la plantilla (por su nombre de CotaType), como al tocarla. */
+    @androidx.annotation.VisibleForTesting
+    fun escribirCotaDeRoperoParaPruebas(tipo: String, valorCm: Float, cuerpo: Int? = null): Boolean {
+        val index = elementos.indexOfFirst { (it as? Element.Shape)?.cotaHint == ROPERO_MARCO }
+        if (index < 0) return false
+        val hit = CotaHit(index, CotaType.valueOf(tipo), RectF(), sideIndex = cuerpo)
+        aplicarNuevaCota(elementos[index], hit, valorCm)
+        return true
+    }
+
+    /** Un toque más en el rótulo de puertas del ropero, para las pruebas. */
+    @androidx.annotation.VisibleForTesting
+    fun ciclarPuertasDeRoperoParaPruebas(): Boolean {
+        val index = elementos.indexOfFirst { (it as? Element.Shape)?.cotaHint == ROPERO_MARCO }
+        if (index < 0) return false
+        ciclarPuertasDeRopero(index)
+        return true
+    }
+
     /** Hace de toque largo: coge la cota que está bajo el dedo sin esperar los 320 ms. */
     @androidx.annotation.VisibleForTesting
     fun cogerCotaAhoraParaPruebas() {
@@ -10062,6 +10111,14 @@ class SketchMedidasView @JvmOverloads constructor(
             pedirDatosDeArco(hit.elementIndex)
             return
         }
+        if (hit.type == CotaType.ROPERO_TIPO) {
+            pedirCuerpoDeRopero(hit.elementIndex, hit.sideIndex ?: return)
+            return
+        }
+        if (hit.type == CotaType.ROPERO_PUERTAS) {
+            ciclarPuertasDeRopero(hit.elementIndex)
+            return
+        }
         val actual = when (hit.type) {
             CotaType.WIDTH -> when (element) {
                 // En el triángulo la cota es la BASE, no el ancho de la caja: girado, no son lo
@@ -10145,6 +10202,14 @@ class SketchMedidasView @JvmOverloads constructor(
             }
             // El arco abre su propio diálogo antes de llegar aquí.
             CotaType.ARCO -> return
+            CotaType.ROPERO_ANCHO -> roperoDe(element as? Element.Shape ?: return).anchoCm
+            CotaType.ROPERO_ALTO -> roperoDe(element as? Element.Shape ?: return).altoCm
+            CotaType.ROPERO_FONDO -> roperoDe(element as? Element.Shape ?: return).fondoCm
+            CotaType.ROPERO_ZOCALO -> roperoDe(element as? Element.Shape ?: return).zocaloCm
+            CotaType.ROPERO_MALETERO -> roperoDe(element as? Element.Shape ?: return).maleteroCm
+            CotaType.ROPERO_CUERPO -> roperoDe(element as? Element.Shape ?: return).cuerpos.getOrNull(hit.sideIndex ?: return)?.anchoCm ?: return
+            CotaType.ROPERO_CUERPOS -> roperoDe(element as? Element.Shape ?: return).cuerpos.size.toFloat()
+            CotaType.ROPERO_TIPO, CotaType.ROPERO_PUERTAS -> return
             CotaType.PUERTA_HOJA_IZQ, CotaType.PUERTA_HOJA_DER -> {
                 val division = element as? Element.Shape ?: return
                 val marco = (elementos.getOrNull(marcoDePieza(hit.elementIndex) ?: -1) as? Element.Shape) ?: return
@@ -10579,6 +10644,199 @@ class SketchMedidasView @JvmOverloads constructor(
         }
     }
 
+    // ===================== Ropero de melamina (plantilla) =====================
+    // El ropero es un rectángulo del hueco que lleva el diseño entero en su paquete. Se pinta con
+    // el mismo pintor que la calculadora y se edita por cotas: el hueco, el zócalo, el maletero,
+    // el ancho de cada cuerpo, cuántos cuerpos, qué lleva cada uno y las puertas. Al mandarlo a
+    // la calculadora viaja tal cual (ver roperoDelDibujo).
+
+    private val pintorRopero by lazy { crystal.crystal.taller.melamina.RoperoDibujo(resources.displayMetrics.density) }
+
+    private fun roperoDe(shape: Element.Shape): crystal.crystal.taller.melamina.Ropero =
+        crystal.crystal.taller.melamina.Ropero.desdeJson(shape.paquete) ?: crystal.crystal.taller.melamina.Ropero()
+
+    /** Guarda el ropero en su marco y ajusta el rectángulo al hueco (desde su esquina de arriba a la izquierda). */
+    private fun guardarRopero(shape: Element.Shape, ropero: crystal.crystal.taller.melamina.Ropero) {
+        shape.paquete = ropero.aJson()
+        val left = shape.rect.left
+        val top = shape.rect.top
+        val right = left + cmToPx(ropero.anchoCm)
+        val bottom = top + cmToPx(ropero.altoCm)
+        shape.rect.set(left, top, right, bottom)
+        shape.start.set(left, top)
+        shape.end.set(right, bottom)
+        shape.topLeft.set(left, top); shape.topRight.set(right, top)
+        shape.bottomRight.set(right, bottom); shape.bottomLeft.set(left, bottom)
+        shape.widthCm = ropero.anchoCm; shape.heightCm = ropero.altoCm
+        shape.topCm = ropero.anchoCm; shape.bottomCm = ropero.anchoCm
+        shape.leftCm = ropero.altoCm; shape.rightCm = ropero.altoCm
+    }
+
+    /** Pone el ropero de la plantilla en medio del lienzo, con el diseño de fábrica (o el que se pase). */
+    fun insertarPlantillaRopero(ropero: crystal.crystal.taller.melamina.Ropero = crystal.crystal.taller.melamina.Ropero()) {
+        val center = screenToWorld(width * 0.5f, height * 0.5f)
+        val left = center.x - cmToPx(ropero.anchoCm) / 2f
+        val top = center.y - cmToPx(ropero.altoCm) / 2f
+        val marco = crearShape(
+            Tool.RECTANGLE, PointF(left, top),
+            PointF(left + cmToPx(ropero.anchoCm), top + cmToPx(ropero.altoCm)), ROPERO_MARCO
+        )
+        guardarRopero(marco, ropero)
+        elementos.add(marco)
+        selectedIndices.clear()
+        registrarAccion()
+        fitContentInView()
+        invalidate()
+    }
+
+    /** El ropero del apunte (el de la frontal), o null si no hay plantilla de ropero. */
+    fun roperoDelDibujo(): crystal.crystal.taller.melamina.Ropero? =
+        elementosDeVista(Vista.FRONTAL).filterIsInstance<Element.Shape>()
+            .firstOrNull { it.cotaHint == ROPERO_MARCO }?.let { roperoDe(it) }
+
+    private fun dibujarRopero(canvas: Canvas, index: Int, shape: Element.Shape, collectHits: Boolean) {
+        val r = roperoDe(shape)
+        val rect = shape.rect
+        val escala = rect.width() / r.anchoCm.coerceAtLeast(1f)
+        pintorRopero.pRotulo.textSize = ce(30f)
+        pintorRopero.dibujar(
+            canvas, r, rect.left, rect.bottom, escala,
+            mostrarPuertas = r.verPuertas, en3d = false, cuerpoResaltado = -1, conRotulos = false
+        )
+        if (index in selectedIndices) canvas.drawRect(rect, selectionPaint)
+        drawCotasRopero(canvas, index, shape, r, collectHits)
+    }
+
+    /**
+     * Las cotas del ropero, todas editables: el ancho arriba, el alto a la izquierda, el fondo y
+     * el maletero a la derecha, el zócalo abajo a la izquierda, un ancho por cuerpo debajo y, en el
+     * zócalo, el rótulo de lo que lleva cada cuerpo; encima del marco, cuántos cuerpos y las puertas.
+     */
+    private fun drawCotasRopero(canvas: Canvas, index: Int, shape: Element.Shape, r: crystal.crystal.taller.melamina.Ropero, collectHits: Boolean) {
+        val rect = shape.rect
+        val escala = rect.width() / r.anchoCm.coerceAtLeast(1f)
+        fun x(cm: Float) = rect.left + cm * escala
+        fun y(cm: Float) = rect.bottom - cm * escala
+        drawHorizontalCota(canvas, index, CotaType.ROPERO_ANCHO, rect.left, rect.right, rect.top, r.anchoCm, collectHits, preferOutsideAbove = true)
+        drawVerticalCota(canvas, index, CotaType.ROPERO_ALTO, rect.left, rect.top, rect.bottom, r.altoCm, collectHits, preferOutsideRight = false)
+        if (r.zocaloCm > 0f) {
+            drawVerticalCota(canvas, index, CotaType.ROPERO_ZOCALO, rect.right, y(r.zocaloCm), rect.bottom, r.zocaloCm, collectHits, preferOutsideRight = true)
+        }
+        // El maletero, a la derecha arriba; con 0 igual se enseña, para poder ponerlo.
+        val topeMaletero = if (r.maleteroCm > 0f) y(r.altoCm - r.espesorCm - r.maleteroCm) else rect.top + ce(40f)
+        drawVerticalCota(canvas, index, CotaType.ROPERO_MALETERO, rect.right, rect.top, topeMaletero, r.maleteroCm, collectHits, preferOutsideRight = true)
+        // Cada cuerpo, debajo del zócalo, y su rótulo dentro del zócalo.
+        val yCuerpos = rect.bottom + ce(30f)
+        var cx = r.espesorCm
+        r.cuerpos.forEachIndexed { i, c ->
+            val a = x(cx)
+            val b = x(cx + c.anchoCm)
+            canvas.drawLine(a, yCuerpos, b, yCuerpos, cotaLinePaint)
+            canvas.drawLine(a, yCuerpos - ce(8f), a, yCuerpos + ce(8f), cotaLinePaint)
+            canvas.drawLine(b, yCuerpos - ce(8f), b, yCuerpos + ce(8f), cotaLinePaint)
+            drawCotaText(canvas, index, CotaType.ROPERO_CUERPO, (a + b) / 2f, yCuerpos + ce(22f), c.anchoCm, collectHits, sideIndex = i)
+            drawCotaTextFija(canvas, index, CotaType.ROPERO_TIPO, (a + b) / 2f, y(r.zocaloCm / 2f), 0f, collectHits, texto = c.tipo.etiqueta, sideIndex = i)
+            cx += c.anchoCm + r.espesorCm
+        }
+        // Encima del marco: el título con el hueco, cuántos cuerpos, el fondo y las puertas.
+        val yArriba = rect.top - ce(70f)
+        drawCotaTextFija(canvas, index, CotaType.ROPERO_CUERPOS, rect.left + rect.width() * 0.2f, yArriba, 0f, collectHits, texto = "${r.cuerpos.size} cuerpos")
+        drawCotaTextFija(canvas, index, CotaType.ROPERO_FONDO, rect.centerX(), yArriba, 0f, collectHits, texto = "fondo ${formatCm(r.fondoCm)}")
+        val puertas = r.puertas.etiqueta.lowercase() + if (r.puertas != crystal.crystal.taller.melamina.TipoPuertas.SIN) (if (r.verPuertas) " ●" else " ○") else ""
+        drawCotaTextFija(canvas, index, CotaType.ROPERO_PUERTAS, rect.left + rect.width() * 0.8f, yArriba, 0f, collectHits, texto = puertas)
+        canvas.drawText("ROPERO MELAMINA  ${formatCm(r.anchoCm)} x ${formatCm(r.altoCm)} x ${formatCm(r.fondoCm)}", rect.centerX(), rect.top - ce(110f), tituloPaintCentrado)
+    }
+
+    private val tituloPaintCentrado by lazy { Paint(cotaTextPaint).apply { textAlign = Paint.Align.CENTER; textSize = cotaTextPaint.textSize * 1.1f } }
+
+    /** Escribe una cota del ropero: el hueco reparte los cuerpos de nuevo; lo demás va a lo suyo. */
+    private fun aplicarCotaDeRopero(shape: Element.Shape, hit: CotaHit, valueCm: Float) {
+        val r = roperoDe(shape)
+        val v = abs(valueCm)
+        val nuevo = when (hit.type) {
+            // Solo el ancho reparte los cuerpos de nuevo; el alto y el fondo no los tocan.
+            CotaType.ROPERO_ANCHO -> r.conHueco(v, r.altoCm, r.fondoCm)
+            CotaType.ROPERO_ALTO -> r.copy(altoCm = v.coerceAtLeast(30f))
+            CotaType.ROPERO_FONDO -> r.copy(fondoCm = v.coerceAtLeast(20f))
+            CotaType.ROPERO_ZOCALO -> r.copy(zocaloCm = v.coerceIn(0f, 30f))
+            CotaType.ROPERO_MALETERO -> r.copy(maleteroCm = v.coerceIn(0f, 120f))
+            CotaType.ROPERO_CUERPO -> r.conAnchoDeCuerpo(hit.sideIndex ?: return, v)
+            CotaType.ROPERO_CUERPOS -> r.conCuerposIguales(v.toInt().coerceIn(1, 8))
+            else -> return
+        }
+        guardarRopero(shape, nuevo)
+        invalidate()
+    }
+
+    /** Qué lleva un cuerpo: el mismo diálogo que en la calculadora. */
+    private fun pedirCuerpoDeRopero(index: Int, cuerpo: Int) {
+        val shape = elementos.getOrNull(index) as? Element.Shape ?: return
+        val r = roperoDe(shape)
+        val c = r.cuerpos.getOrNull(cuerpo) ?: return
+        val dp = resources.displayMetrics.density
+        val tipos = crystal.crystal.taller.melamina.TipoCuerpo.values()
+        val spTipo = android.widget.Spinner(context).apply {
+            adapter = android.widget.ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, tipos.map { it.etiqueta })
+            setSelection(tipos.indexOf(c.tipo))
+        }
+        fun campo(rotulo: String, valor: String) = EditText(context).apply {
+            hint = rotulo
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(valor)
+            setSelectAllOnFocus(true)
+        }
+        val etEntrepanos = campo("Entrepaños", c.entrepanos.toString())
+        val etCajones = campo("Cajones", c.cajones.toString())
+        val etAltoCajon = campo("Alto de cada cajón (cm)", formatCm(r.altoCajonCm))
+        val caja = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * dp).toInt(), (8 * dp).toInt(), (20 * dp).toInt(), 0)
+            addView(TextView(context).apply { text = "Qué lleva"; textSize = 12f })
+            addView(spTipo); addView(etEntrepanos); addView(etCajones); addView(etAltoCajon)
+        }
+        runCatching {
+            AlertDialog.Builder(context)
+                .setTitle("Cuerpo ${cuerpo + 1}")
+                .setView(caja)
+                .setPositiveButton("Aceptar") { _, _ ->
+                    val nuevoCuerpo = crystal.crystal.taller.melamina.Cuerpo(
+                        anchoCm = c.anchoCm,
+                        tipo = tipos[spTipo.selectedItemPosition.coerceIn(0, tipos.lastIndex)],
+                        entrepanos = etEntrepanos.text.toString().toIntOrNull() ?: 0,
+                        cajones = etCajones.text.toString().toIntOrNull() ?: 0
+                    )
+                    val altoCajon = (etAltoCajon.text.toString().replace(",", ".").toFloatOrNull() ?: r.altoCajonCm).coerceIn(8f, 60f)
+                    guardarRopero(shape, r.conCuerpo(cuerpo, nuevoCuerpo).copy(altoCajonCm = altoCajon))
+                    registrarAccion()
+                    invalidate()
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
+    }
+
+    /**
+     * Cada toque en el rótulo de puertas avanza: batientes (interior) → batientes (a la vista) →
+     * corredizas (interior) → corredizas (a la vista) → sin puertas → batientes (interior).
+     */
+    private fun ciclarPuertasDeRopero(index: Int) {
+        val shape = elementos.getOrNull(index) as? Element.Shape ?: return
+        val r = roperoDe(shape)
+        val sin = crystal.crystal.taller.melamina.TipoPuertas.SIN
+        val batientes = crystal.crystal.taller.melamina.TipoPuertas.BATIENTES
+        val corredizas = crystal.crystal.taller.melamina.TipoPuertas.CORREDIZAS
+        val nuevo = when {
+            r.puertas == sin -> r.copy(puertas = batientes, verPuertas = false)
+            r.puertas == batientes && !r.verPuertas -> r.copy(verPuertas = true)
+            r.puertas == batientes -> r.copy(puertas = corredizas, verPuertas = false)
+            r.puertas == corredizas && !r.verPuertas -> r.copy(verPuertas = true)
+            else -> r.copy(puertas = sin, verPuertas = false)
+        }
+        guardarRopero(shape, nuevo)
+        registrarAccion()
+        invalidate()
+    }
+
     /**
      * F3 (trapecio) es la única plantilla con un lado en diagonal. El recorrido general respeta la
      * inclinación que ese lado ya tenía, y con medidas nuevas eso deja un error de cierre que se
@@ -10646,6 +10904,10 @@ class SketchMedidasView @JvmOverloads constructor(
     }
 
     private fun aplicarNuevaCota(element: Element, hit: CotaHit, valueCm: Float) {
+        if ((element as? Element.Shape)?.cotaHint == ROPERO_MARCO) {
+            aplicarCotaDeRopero(element, hit, valueCm)
+            return
+        }
         when (element) {
             is Element.Shape -> {
                 val esMarco = element.cotaHint in MARCOS_PLANTILLA
@@ -10855,6 +11117,9 @@ class SketchMedidasView @JvmOverloads constructor(
                 aplicarCotaAEscuadra(elementIndex ?: return, abs(valueCm))
             }
             CotaType.ARCO -> Unit
+            CotaType.ROPERO_ANCHO, CotaType.ROPERO_ALTO, CotaType.ROPERO_FONDO, CotaType.ROPERO_ZOCALO,
+            CotaType.ROPERO_MALETERO, CotaType.ROPERO_CUERPO, CotaType.ROPERO_CUERPOS,
+            CotaType.ROPERO_TIPO, CotaType.ROPERO_PUERTAS -> Unit
             CotaType.COMPOSITE_SIDE,
             CotaType.F5_DESARROLLO,
             CotaType.F5_FLECHA,
@@ -11288,7 +11553,10 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.ESQUINA_TRAMO_ARRIBA,
             // La cota a escuadra no es del composite: es una línea suelta que lo mide, y se aplica
             // por su propio camino.
-            CotaType.A_ESCUADRA, CotaType.ARCO -> Unit
+            CotaType.A_ESCUADRA, CotaType.ARCO,
+            CotaType.ROPERO_ANCHO, CotaType.ROPERO_ALTO, CotaType.ROPERO_FONDO, CotaType.ROPERO_ZOCALO,
+            CotaType.ROPERO_MALETERO, CotaType.ROPERO_CUERPO, CotaType.ROPERO_CUERPOS,
+            CotaType.ROPERO_TIPO, CotaType.ROPERO_PUERTAS -> Unit
         }
     }
 

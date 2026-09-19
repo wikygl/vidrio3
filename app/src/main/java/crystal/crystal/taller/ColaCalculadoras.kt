@@ -58,6 +58,12 @@ object ColaCalculadoras {
          */
         val contornosLados: String = "",
         val parantesLados: String = "",
+        /**
+         * El ropero de melamina diseñado en el apunte, como JSON de [crystal.crystal.taller.melamina.Ropero].
+         * Vacío en las demás medidas. Va aquí porque un ropero no cabe en un ancho y un alto: la
+         * calculadora necesita sus cuerpos y lo que lleva cada uno para armarlo igual.
+         */
+        val disenoRopero: String = "",
         val estado: EstadoCola = EstadoCola.PENDIENTE
 
     ) : java.io.Serializable

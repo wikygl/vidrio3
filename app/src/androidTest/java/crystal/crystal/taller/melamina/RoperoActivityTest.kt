@@ -45,6 +45,8 @@ class RoperoActivityTest {
     fun calcular_arma_las_filas_de_material() {
         ActivityScenario.launch<RoperoActivity>(intent()).use { esc ->
             esc.onActivity { a ->
+                // La pantalla abre con el último ropero que se armó: se piden batientes a propósito.
+                a.findViewById<android.widget.Spinner>(R.id.spPuertas).setSelection(TipoPuertas.values().indexOf(TipoPuertas.BATIENTES))
                 a.findViewById<Button>(R.id.btCalcular).performClick()
                 val referencias = a.findViewById<TextView>(R.id.txReferencias).text.toString()
                 assertTrue("sin referencias: $referencias", referencias.contains("Ropero empotrado"))

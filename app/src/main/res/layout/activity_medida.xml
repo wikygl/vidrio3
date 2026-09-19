@@ -1172,11 +1172,20 @@
                 android:textAllCaps="false"
                 android:textSize="11sp" />
 
+            <Button
+                android:id="@+id/btnPlantillaRopero"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:text="Ropero"
+                android:textAllCaps="false"
+                android:textSize="11sp" />
 
             <Space
                 android:layout_width="0dp"
                 android:layout_height="1dp"
-                android:layout_weight="2" />
+                android:layout_weight="1" />
         </LinearLayout>
     </LinearLayout>
 
