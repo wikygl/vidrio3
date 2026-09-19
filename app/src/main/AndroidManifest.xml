@@ -138,6 +138,12 @@
             android:name=".ocr.OcrActivity"
             android:exported="false" />
         <activity
+            android:name=".taller.melamina.RoperoActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustPan"
+            tools:ignore="LockedOrientationActivity" />
+        <activity
             android:name=".taller.DivisionBanoActivity"
             android:exported="false"
             android:screenOrientation="portrait"

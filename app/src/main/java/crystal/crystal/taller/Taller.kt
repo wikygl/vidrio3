@@ -603,6 +603,7 @@ class Taller : AppCompatActivity() {
             DialogosProyecto.mostrarDialogoGestionAvanzada(this, callbackProyecto())
         }
         binding.btDivisionBano.setOnClickListener { lanzarCalculadora(DivisionBanoActivity::class.java) }
+        binding.btRopero.setOnClickListener { lanzarCalculadora(crystal.crystal.taller.melamina.RoperoActivity::class.java) }
         binding.btBaranda.setOnClickListener { lanzarCalculadora(BarandaActivity::class.java) }
     }
 
