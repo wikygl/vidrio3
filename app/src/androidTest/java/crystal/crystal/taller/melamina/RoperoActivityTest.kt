@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Button
 import android.widget.EditText
-import android.widget.RadioButton
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -75,10 +74,10 @@ class RoperoActivityTest {
                 assertEquals(3, vista.ropero.cuerpos.size)
                 // 300 - 3.6 - 2 * 1.8 = 292.8 entre tres: 97.6 cada uno.
                 assertEquals(97.6f, vista.ropero.cuerpos[0].anchoCm, 0.05f)
-                // Las puertas y el 3D se eligen con los botones de la ficha.
-                a.findViewById<RadioButton>(R.id.rbPuertas).performClick()
+                // El botón de la ficha va pasando: interior → puertas → 3D.
+                a.findViewById<Button>(R.id.btVista).performClick()
                 assertTrue(vista.mostrarPuertas)
-                a.findViewById<RadioButton>(R.id.rb3d).performClick()
+                a.findViewById<Button>(R.id.btVista).performClick()
                 assertTrue(vista.en3d && !vista.mostrarPuertas)
             }
         }

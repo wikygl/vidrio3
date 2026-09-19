@@ -155,9 +155,14 @@ class RoperoActivity : AppCompatActivity() {
 
     private fun configurarDibujo() {
         binding.vistaRopero.alTocarCuerpo = { i -> editarCuerpo(i) }
-        binding.rgVista.setOnCheckedChangeListener { _, id ->
-            binding.vistaRopero.mostrarPuertas = id == binding.rbPuertas.id
-            binding.vistaRopero.en3d = id == binding.rb3d.id
+        // Un solo botón que va pasando: interior → puertas → 3D → interior.
+        binding.btVista.setOnClickListener {
+            val v = binding.vistaRopero
+            when {
+                !v.mostrarPuertas && !v.en3d -> { v.mostrarPuertas = true; binding.btVista.text = "Ver: puertas" }
+                v.mostrarPuertas -> { v.mostrarPuertas = false; v.en3d = true; binding.btVista.text = "Ver: 3D" }
+                else -> { v.en3d = false; binding.btVista.text = "Ver: interior" }
+            }
         }
     }
 
@@ -180,7 +185,7 @@ class RoperoActivity : AppCompatActivity() {
             setSelectAllOnFocus(true)
         }
         val etAnchoCuerpo = campo("Ancho interior del cuerpo (cm)", df1(c.anchoCm), true)
-        val etEntrepanos = campo("Entrepaños", c.entrepanos.toString(), false)
+        val etEntrepanos = campo("Casilleros (repisas)", c.entrepanos.toString(), false)
         val etCajones = campo("Cajones", c.cajones.toString(), false)
         val etAltoCajon = campo("Alto de cada cajón (cm)", df1(ropero.altoCajonCm), true)
         val caja = LinearLayout(this).apply {

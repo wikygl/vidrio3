@@ -18,18 +18,33 @@ import android.graphics.RectF
  */
 class RoperoDibujo(private val dp: Float) {
 
-    val pTablero = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#D9B98C"); style = Paint.Style.FILL }
-    private val pTableroLado = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#C4A473"); style = Paint.Style.FILL }
-    private val pTableroTecho = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#E8CDA4"); style = Paint.Style.FILL }
-    val pInterior = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F5EBDD"); style = Paint.Style.FILL }
-    private val pBorde = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#5A4632"); style = Paint.Style.STROKE; strokeWidth = 1.5f * dp }
-    private val pLinea = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#5A4632"); style = Paint.Style.STROKE; strokeWidth = 1f * dp }
-    private val pTubo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#7A7A7A"); style = Paint.Style.STROKE; strokeWidth = 3f * dp; strokeCap = Paint.Cap.ROUND }
-    private val pGancho = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#9A9A9A"); style = Paint.Style.STROKE; strokeWidth = 1.2f * dp }
-    val pPuerta = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#CFAE7F"); style = Paint.Style.FILL }
-    private val pPuertaCorrediza = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#B8D9B8"); style = Paint.Style.FILL; alpha = 225 }
-    private val pTirador = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#333333"); style = Paint.Style.FILL }
-    val pRotulo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#6D5A45"); textSize = 10f * dp; textAlign = Paint.Align.CENTER }
+    companion object {
+        // El plano de taller de siempre: fondo blanco, tableros gris oscuro, cajones gris, casilleros
+        // en blanco. Contrasta con cualquier fondo y se distingue cada cosa de un vistazo.
+        const val COLOR_TABLERO = "#5E5E5E"
+        const val COLOR_TABLERO_LADO = "#474747"
+        const val COLOR_TABLERO_TECHO = "#7A7A7A"
+        const val COLOR_INTERIOR = "#FFFFFF"
+        const val COLOR_CAJON = "#9A9A9A"
+        const val COLOR_PUERTA = "#C9C9C9"
+        const val COLOR_RIEL = "#D6D6D6"
+        /** Más fino que esto un tablero no se ve: en la ficha chica el espesor real cae bajo el píxel. */
+        const val GROSOR_MINIMO_DP = 2.5f
+    }
+
+    val pTablero = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_TABLERO); style = Paint.Style.FILL }
+    private val pTableroLado = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_TABLERO_LADO); style = Paint.Style.FILL }
+    private val pTableroTecho = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_TABLERO_TECHO); style = Paint.Style.FILL }
+    val pInterior = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_INTERIOR); style = Paint.Style.FILL }
+    private val pBorde = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#3A3A3A"); style = Paint.Style.STROKE; strokeWidth = 1.2f * dp }
+    private val pLinea = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#4A4A4A"); style = Paint.Style.STROKE; strokeWidth = 1f * dp }
+    private val pRiel = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_RIEL); style = Paint.Style.FILL }
+    private val pGancho = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#8A8A8A"); style = Paint.Style.STROKE; strokeWidth = 1.3f * dp; strokeCap = Paint.Cap.ROUND }
+    val pCajon = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_CAJON); style = Paint.Style.FILL }
+    val pPuerta = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_PUERTA); style = Paint.Style.FILL }
+    private val pPuertaCorrediza = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#BDBDBD"); style = Paint.Style.FILL; alpha = 230 }
+    private val pTirador = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#3A3A3A"); style = Paint.Style.FILL }
+    val pRotulo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F2F2F2"); textSize = 10f * dp; textAlign = Paint.Align.CENTER }
     private val pSeleccion = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1E88E5"); style = Paint.Style.STROKE; strokeWidth = 2.5f * dp }
 
     /** Profundidad en el papel del 3D oblicuo: por cada cm de fondo, cuánto se corre y cuánto sube. */
@@ -82,8 +97,11 @@ class RoperoDibujo(private val dp: Float) {
         canvas.drawPath(techo, pBorde)
     }
 
+    /** El espesor con el que se PINTA el tablero: el real, pero nunca más fino que un trazo visible. */
+    private fun espesorVisible(r: Ropero): Float = maxOf(r.espesorCm, GROSOR_MINIMO_DP * dp / escala)
+
     private fun dibujarFrente(canvas: Canvas, r: Ropero, mostrarPuertas: Boolean, cuerpoResaltado: Int, conRotulos: Boolean) {
-        val e = r.espesorCm
+        val e = espesorVisible(r)
         // El hueco interior, claro, y encima el armazón.
         canvas.drawRect(x(0f), y(r.altoCm), x(r.anchoCm), y(0f), pInterior)
         canvas.drawRect(x(e), y(r.zocaloCm), x(r.anchoCm - e), y(0f), pTablero)
@@ -124,7 +142,7 @@ class RoperoDibujo(private val dp: Float) {
     }
 
     private fun dibujarCuerpo(canvas: Canvas, r: Ropero, c: Cuerpo, izqC: Float, derC: Float, pisoY: Float, techoY: Float) {
-        val e = r.espesorCm
+        val e = espesorVisible(r)
         var topeBajo = techoY
         if (r.maleteroCm > 0f) {
             val repisaY = techoY - r.maleteroCm
@@ -136,26 +154,29 @@ class RoperoDibujo(private val dp: Float) {
         var baseY = pisoY
         for (k in 0 until c.cajonesEfectivos) {
             val arriba = baseY + r.altoCajonCm
-            val rect = RectF(x(izqC + 0.4f), y(arriba - 0.4f), x(derC - 0.4f), y(baseY + 0.2f))
-            canvas.drawRect(rect, pPuerta)
+            // El frente gris, un poco metido, con el tirador pegado al canto derecho, como en el plano.
+            val rect = RectF(x(izqC + 1.5f), y(arriba - 1f), x(derC - 1.5f), y(baseY + 1f))
+            canvas.drawRect(rect, pCajon)
             canvas.drawRect(rect, pLinea)
-            canvas.drawRect(x(centroX - 6f), y(baseY + r.altoCajonCm / 2f + 0.8f), x(centroX + 6f), y(baseY + r.altoCajonCm / 2f - 0.8f), pTirador)
+            val medio = baseY + r.altoCajonCm / 2f
+            canvas.drawRect(x(derC - 3f), y(medio + 2.5f), x(derC - 1.5f), y(medio - 2.5f), pTirador)
             baseY = arriba
         }
-        // El colgador: el tubo a 6 cm del tope, con unos ganchos.
+        // El colgador: el riel claro a 6 cm del tope y los ganchos colgados, como en el plano.
         if (c.llevaTubo) {
-            val tuboY = topeBajo - 6f
-            canvas.drawLine(x(izqC + 2f), y(tuboY), x(derC - 2f), y(tuboY), pTubo)
+            val rielY = topeBajo - 6f
+            canvas.drawRect(x(izqC + 1f), y(rielY + 1.5f), x(derC - 1f), y(rielY - 1.5f), pRiel)
             val largo = derC - izqC
-            val ganchos = (largo / 12f).toInt().coerceIn(1, 8)
+            val ganchos = (largo / 10f).toInt().coerceIn(1, 12)
             for (g in 0 until ganchos) {
                 val gx = izqC + largo * (g + 0.5f) / ganchos
-                canvas.drawLine(x(gx), y(tuboY), x(gx), y(tuboY - 4f), pGancho)
-                canvas.drawLine(x(gx - 9f), y(tuboY - 9f), x(gx), y(tuboY - 4f), pGancho)
-                canvas.drawLine(x(gx), y(tuboY - 4f), x(gx + 9f), y(tuboY - 9f), pGancho)
-                canvas.drawLine(x(gx - 9f), y(tuboY - 9f), x(gx - 7f), y(tuboY - 40f), pGancho)
-                canvas.drawLine(x(gx + 9f), y(tuboY - 9f), x(gx + 7f), y(tuboY - 40f), pGancho)
-                canvas.drawLine(x(gx - 7f), y(tuboY - 40f), x(gx + 7f), y(tuboY - 40f), pGancho)
+                // El gancho: el ojo sobre el riel, el cuello, y la percha como un trazo en punta.
+                val ojo = RectF(x(gx - 2f), y(rielY + 3.5f), x(gx + 2f), y(rielY - 0.5f))
+                canvas.drawArc(ojo, 200f, 260f, false, pGancho)
+                canvas.drawLine(x(gx), y(rielY - 0.5f), x(gx), y(rielY - 4f), pGancho)
+                canvas.drawLine(x(gx - 4f), y(rielY - 6f), x(gx + 4f), y(rielY - 6f), pGancho)
+                canvas.drawLine(x(gx - 4f), y(rielY - 6f), x(gx), y(rielY - 4f), pGancho)
+                canvas.drawLine(x(gx + 4f), y(rielY - 6f), x(gx), y(rielY - 4f), pGancho)
             }
         }
         // Entrepaños: repartidos en lo que queda. En el colgador van abajo, debajo de la ropa
@@ -216,8 +237,8 @@ class RoperoDibujo(private val dp: Float) {
                     val px0 = e + h * (ancho - 5f)
                     val rect = RectF(x(px0), y(y1), x(px0 + ancho), y(y0))
                     // Las hojas alternas van un tono más oscuro: se ve cuál corre por delante.
-                    pPuertaCorrediza.color = if (h % 2 == 0) Color.parseColor("#B8D9B8") else Color.parseColor("#9FC79F")
-                    pPuertaCorrediza.alpha = 225
+                    pPuertaCorrediza.color = if (h % 2 == 0) Color.parseColor("#C9C9C9") else Color.parseColor("#ADADAD")
+                    pPuertaCorrediza.alpha = 235
                     canvas.drawRect(rect, pPuertaCorrediza)
                     canvas.drawRect(rect, pLinea)
                     val tx = if (h % 2 == 0) px0 + ancho - 5f else px0 + 5f

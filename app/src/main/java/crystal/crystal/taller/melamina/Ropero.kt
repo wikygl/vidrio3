@@ -119,10 +119,11 @@ data class Ropero(
 }
 
 enum class TipoCuerpo(val etiqueta: String) {
-    COLGAR("Colgador"),
-    ENTREPANOS("Entrepaños"),
+    COLGAR("Colgadores"),
+    /** Repisas: los casilleros del plano. */
+    ENTREPANOS("Casilleros"),
     CAJONES("Cajones"),
-    /** Colgador arriba y cajones abajo, con entrepaños entre medio si se piden. */
+    /** Colgador arriba y cajones abajo, con casilleros entre medio si se piden. */
     MIXTO("Colgador + cajones")
 }
 

@@ -46,8 +46,8 @@ class VistaRoperoTest {
     @Test
     fun se_dibuja_el_armazon_y_el_interior() {
         val bmp = pintar(vista(ropero))
-        val tablero = cuantosDe(bmp, Color.parseColor("#D9B98C"))
-        val interior = cuantosDe(bmp, Color.parseColor("#F5EBDD"))
+        val tablero = cuantosDe(bmp, Color.parseColor(RoperoDibujo.COLOR_TABLERO))
+        val interior = cuantosDe(bmp, Color.parseColor(RoperoDibujo.COLOR_INTERIOR))
         assertTrue("no se ve el tablero: $tablero", tablero > 200)
         assertTrue("no se ve el interior: $interior", interior > 2000)
     }
@@ -55,12 +55,12 @@ class VistaRoperoTest {
     @Test
     fun con_puertas_el_interior_queda_tapado() {
         val v = vista(ropero)
-        val sinPuertas = cuantosDe(pintar(v), Color.parseColor("#F5EBDD"))
+        val sinPuertas = cuantosDe(pintar(v), Color.parseColor(RoperoDibujo.COLOR_INTERIOR))
         v.mostrarPuertas = true
         val bmp = pintar(v)
-        val conPuertas = cuantosDe(bmp, Color.parseColor("#F5EBDD"))
+        val conPuertas = cuantosDe(bmp, Color.parseColor(RoperoDibujo.COLOR_INTERIOR))
         assertTrue("las puertas no taparon nada: $sinPuertas -> $conPuertas", conPuertas < sinPuertas / 3)
-        assertTrue("no se ven las puertas", cuantosDe(bmp, Color.parseColor("#CFAE7F")) > 1000)
+        assertTrue("no se ven las puertas", cuantosDe(bmp, Color.parseColor(RoperoDibujo.COLOR_PUERTA)) > 1000)
     }
 
     @Test
@@ -68,8 +68,8 @@ class VistaRoperoTest {
         val v = vista(ropero)
         v.en3d = true
         val bmp = pintar(v)
-        assertTrue("no se ve el costado", cuantosDe(bmp, Color.parseColor("#C4A473")) > 100)
-        assertTrue("no se ve el techo", cuantosDe(bmp, Color.parseColor("#E8CDA4")) > 100)
+        assertTrue("no se ve el costado", cuantosDe(bmp, Color.parseColor(RoperoDibujo.COLOR_TABLERO_LADO)) > 100)
+        assertTrue("no se ve el techo", cuantosDe(bmp, Color.parseColor(RoperoDibujo.COLOR_TABLERO_TECHO)) > 100)
     }
 
     @Test

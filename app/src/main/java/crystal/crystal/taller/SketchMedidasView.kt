@@ -10785,7 +10785,7 @@ class SketchMedidasView @JvmOverloads constructor(
             setText(valor)
             setSelectAllOnFocus(true)
         }
-        val etEntrepanos = campo("Entrepaños", c.entrepanos.toString())
+        val etEntrepanos = campo("Casilleros (repisas)", c.entrepanos.toString())
         val etCajones = campo("Cajones", c.cajones.toString())
         val etAltoCajon = campo("Alto de cada cajón (cm)", formatCm(r.altoCajonCm))
         val caja = LinearLayout(context).apply {

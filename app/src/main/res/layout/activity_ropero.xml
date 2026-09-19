@@ -74,42 +74,19 @@
                     </androidx.constraintlayout.widget.ConstraintLayout>
                 </LinearLayout>
 
-                <!-- Cómo mirarlo: el interior, con las puertas, o en 3D. -->
-                <RadioGroup
-                    android:id="@+id/rgVista"
+                <!-- Cómo mirarlo: cada toque pasa de interior a puertas y a 3D. -->
+                <Button
+                    android:id="@+id/btVista"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="32dp"
                     android:layout_marginStart="6dp"
-                    android:orientation="horizontal">
-
-                    <RadioButton
-                        android:id="@+id/rbInterior"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:checked="true"
-                        android:text="Interior"
-                        android:textSize="11sp"
-                        tools:ignore="TouchTargetSizeCheck" />
-
-                    <RadioButton
-                        android:id="@+id/rbPuertas"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:text="Puertas"
-                        android:textSize="11sp"
-                        tools:ignore="TouchTargetSizeCheck" />
-
-                    <RadioButton
-                        android:id="@+id/rb3d"
-                        android:layout_width="0dp"
-                        android:layout_weight="0.7"
-                        android:layout_height="wrap_content"
-                        android:text="3D"
-                        android:textSize="11sp"
-                        tools:ignore="TouchTargetSizeCheck" />
-                </RadioGroup>
+                    android:layout_marginEnd="6dp"
+                    android:backgroundTint="@color/color"
+                    android:text="Ver: interior"
+                    android:textAllCaps="false"
+                    android:textColor="@color/blanco"
+                    android:textSize="11sp"
+                    tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
 
                 <TextView
                     android:id="@+id/tvMedidas"
