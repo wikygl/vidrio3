@@ -74,19 +74,53 @@
                     </androidx.constraintlayout.widget.ConstraintLayout>
                 </LinearLayout>
 
-                <!-- Cómo mirarlo: cada toque pasa de interior a puertas y a 3D. -->
-                <Button
-                    android:id="@+id/btVista"
+                <!-- Cómo mirarlo: el interior, con las puertas, o en 3D. -->
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="32dp"
-                    android:layout_marginStart="6dp"
-                    android:layout_marginEnd="6dp"
-                    android:backgroundTint="@color/color"
-                    android:text="Ver: interior"
-                    android:textAllCaps="false"
-                    android:textColor="@color/blanco"
-                    android:textSize="11sp"
-                    tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btVerInterior"
+                        android:layout_width="0dp"
+                        android:layout_height="30dp"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/color"
+                        android:padding="0dp"
+                        android:text="Interior"
+                        android:textAllCaps="false"
+                        android:textColor="@color/blanco"
+                        android:textSize="10sp"
+                        tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                    <Button
+                        android:id="@+id/btVerPuertas"
+                        android:layout_width="0dp"
+                        android:layout_height="30dp"
+                        android:layout_marginStart="3dp"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/color"
+                        android:padding="0dp"
+                        android:text="Puertas"
+                        android:textAllCaps="false"
+                        android:textColor="@color/blanco"
+                        android:textSize="10sp"
+                        tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                    <Button
+                        android:id="@+id/btVer3d"
+                        android:layout_width="0dp"
+                        android:layout_height="30dp"
+                        android:layout_marginStart="3dp"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/color"
+                        android:padding="0dp"
+                        android:text="3D"
+                        android:textAllCaps="false"
+                        android:textColor="@color/blanco"
+                        android:textSize="10sp"
+                        tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvMedidas"

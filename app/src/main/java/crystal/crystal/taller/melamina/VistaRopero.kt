@@ -85,7 +85,9 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
             canvas.drawLine(x(cx), yB, x(cx + c.anchoCm), yB, pCota)
             canvas.drawLine(x(cx), yB - 4 * dp, x(cx), yB + 4 * dp, pCota)
             canvas.drawLine(x(cx + c.anchoCm), yB - 4 * dp, x(cx + c.anchoCm), yB + 4 * dp, pCota)
-            canvas.drawText(fmt(c.anchoCm), x(cx + c.anchoCm / 2f), yB + 11 * dp, pTexto)
+            // El número solo si cabe en su tramo: en la ficha chica se pisaban unos con otros.
+            val texto = fmt(c.anchoCm)
+            if (pTexto.measureText(texto) < c.anchoCm * escala - 2 * dp) canvas.drawText(texto, x(cx + c.anchoCm / 2f), yB + 11 * dp, pTexto)
             cx += c.anchoCm + r.espesorCm
         }
     }

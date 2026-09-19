@@ -128,8 +128,12 @@ class RoperoActivity : AppCompatActivity() {
         conFondo = binding.cbFondo.isChecked
     )
 
+    /** Mientras se vuelcan las casillas no hay que redibujar a medio camino. */
+    private var cargando = false
+
     /** Las casillas a partir del ropero: al abrir, y al volver de la cola de medidas. */
     private fun volcarEnPantalla() {
+        cargando = true
         binding.etAncho.setText(df1(ropero.anchoCm))
         binding.etAlto.setText(df1(ropero.altoCm))
         binding.etFondo.setText(df1(ropero.fondoCm))
@@ -140,6 +144,35 @@ class RoperoActivity : AppCompatActivity() {
         binding.spEspesor.setSelection(if (ropero.espesorMm <= 15) 1 else 0)
         binding.cbFondo.isChecked = ropero.conFondo
         binding.vistaRopero.ropero = ropero
+        cargando = false
+    }
+
+    /**
+     * Rehace el ropero con lo que hay en las casillas y lo redibuja; si las casillas están a
+     * medias (vacías, en cero) se deja como está, sin avisos: es lo que pasa mientras se escribe.
+     */
+    private fun redibujarDesdeCasillas() {
+        val nuevo = roperoDesdeCasillas() ?: return
+        ropero = nuevo
+        binding.vistaRopero.ropero = ropero
+    }
+
+    /** El ropero que dicen las casillas, o null si todavía no dicen un hueco válido. */
+    private fun roperoDesdeCasillas(): Ropero? {
+        val entrada = leerEntradaCalculo()
+        if (entrada.ancho < 30f || entrada.alto < 30f || entrada.fondo < 20f || entrada.cuerpos <= 0) return null
+        var nuevo = ropero.copy(
+            zocaloCm = entrada.zocalo.coerceIn(0f, 30f),
+            maleteroCm = entrada.maletero.coerceIn(0f, 120f),
+            puertas = entrada.puertas,
+            espesorMm = entrada.espesorMm,
+            conFondo = entrada.conFondo
+        )
+        val huecoCambio = entrada.ancho != nuevo.anchoCm || entrada.alto != nuevo.altoCm ||
+            entrada.fondo != nuevo.fondoCm || entrada.espesorMm != ropero.espesorMm
+        if (huecoCambio) nuevo = nuevo.conHueco(entrada.ancho, entrada.alto, entrada.fondo)
+        if (entrada.cuerpos != nuevo.cuerpos.size) nuevo = nuevo.conCuerposIguales(entrada.cuerpos)
+        return nuevo
     }
 
     private fun refrescarProyectoActivoUI() {
@@ -155,15 +188,24 @@ class RoperoActivity : AppCompatActivity() {
 
     private fun configurarDibujo() {
         binding.vistaRopero.alTocarCuerpo = { i -> editarCuerpo(i) }
-        // Un solo botón que va pasando: interior → puertas → 3D → interior.
-        binding.btVista.setOnClickListener {
-            val v = binding.vistaRopero
-            when {
-                !v.mostrarPuertas && !v.en3d -> { v.mostrarPuertas = true; binding.btVista.text = "Ver: puertas" }
-                v.mostrarPuertas -> { v.mostrarPuertas = false; v.en3d = true; binding.btVista.text = "Ver: 3D" }
-                else -> { v.en3d = false; binding.btVista.text = "Ver: interior" }
-            }
+        binding.btVerInterior.setOnClickListener { binding.vistaRopero.mostrarPuertas = false; binding.vistaRopero.en3d = false }
+        binding.btVerPuertas.setOnClickListener { binding.vistaRopero.mostrarPuertas = true; binding.vistaRopero.en3d = false }
+        binding.btVer3d.setOnClickListener { binding.vistaRopero.mostrarPuertas = false; binding.vistaRopero.en3d = true }
+        // El dibujo sigue a las casillas: al cambiar el hueco, los cuerpos, el zócalo, el maletero
+        // o las puertas se rehace solo, sin esperar a Calcular (que es el que saca los materiales).
+        val alEscribir = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun afterTextChanged(s: android.text.Editable?) { if (!cargando) redibujarDesdeCasillas() }
         }
+        listOf(binding.etAncho, binding.etAlto, binding.etFondo, binding.etCuerpos, binding.etZocalo, binding.etMaletero).forEach { it.addTextChangedListener(alEscribir) }
+        val alElegir = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) { if (!cargando) redibujarDesdeCasillas() }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        }
+        binding.spPuertas.onItemSelectedListener = alElegir
+        binding.spEspesor.onItemSelectedListener = alElegir
+        binding.cbFondo.setOnCheckedChangeListener { _, _ -> if (!cargando) redibujarDesdeCasillas() }
     }
 
     /**
@@ -237,22 +279,11 @@ class RoperoActivity : AppCompatActivity() {
      * cuerpos, los cuerpos se reparten de nuevo; si no, se respeta lo que se tocó en el dibujo.
      */
     private fun calcular(): Boolean {
-        val entrada = leerEntradaCalculo()
-        if (entrada.ancho <= 0 || entrada.alto <= 0 || entrada.fondo <= 0 || entrada.cuerpos <= 0) {
+        val nuevo = roperoDesdeCasillas()
+        if (nuevo == null) {
             Toast.makeText(this, "Ingrese datos válidos", Toast.LENGTH_SHORT).show()
             return false
         }
-        var nuevo = ropero.copy(
-            zocaloCm = entrada.zocalo.coerceIn(0f, 30f),
-            maleteroCm = entrada.maletero.coerceIn(0f, 120f),
-            puertas = entrada.puertas,
-            espesorMm = entrada.espesorMm,
-            conFondo = entrada.conFondo
-        )
-        val huecoCambio = entrada.ancho != nuevo.anchoCm || entrada.alto != nuevo.altoCm ||
-            entrada.fondo != nuevo.fondoCm || entrada.espesorMm != ropero.espesorMm
-        if (huecoCambio) nuevo = nuevo.conHueco(entrada.ancho, entrada.alto, entrada.fondo)
-        if (entrada.cuerpos != nuevo.cuerpos.size) nuevo = nuevo.conCuerposIguales(entrada.cuerpos)
         ropero = nuevo
         binding.vistaRopero.ropero = ropero
 

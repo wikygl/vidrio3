@@ -74,11 +74,15 @@ class RoperoActivityTest {
                 assertEquals(3, vista.ropero.cuerpos.size)
                 // 300 - 3.6 - 2 * 1.8 = 292.8 entre tres: 97.6 cada uno.
                 assertEquals(97.6f, vista.ropero.cuerpos[0].anchoCm, 0.05f)
-                // El botón de la ficha va pasando: interior → puertas → 3D.
-                a.findViewById<Button>(R.id.btVista).performClick()
+                // Las vistas de la ficha: puertas y 3D con sus botones.
+                a.findViewById<Button>(R.id.btVerPuertas).performClick()
                 assertTrue(vista.mostrarPuertas)
-                a.findViewById<Button>(R.id.btVista).performClick()
+                a.findViewById<Button>(R.id.btVer3d).performClick()
                 assertTrue(vista.en3d && !vista.mostrarPuertas)
+                // Y el dibujo sigue a las casillas sin Calcular: cambiar el ancho reparte los cuerpos.
+                a.findViewById<EditText>(R.id.etAncho).setText("360")
+                assertEquals(360f, vista.ropero.anchoCm, 0.01f)
+                assertEquals(117.6f, vista.ropero.cuerpos[0].anchoCm, 0.05f)
             }
         }
     }

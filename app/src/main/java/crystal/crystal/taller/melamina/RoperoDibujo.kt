@@ -100,15 +100,27 @@ class RoperoDibujo(private val dp: Float) {
     /** El espesor con el que se PINTA el tablero: el real, pero nunca más fino que un trazo visible. */
     private fun espesorVisible(r: Ropero): Float = maxOf(r.espesorCm, GROSOR_MINIMO_DP * dp / escala)
 
+    /**
+     * Un tablero pintado con su grueso visible, centrado en el tablero real: si el real es más
+     * fino que un trazo, se engorda hacia los dos lados sin mover nada de sitio.
+     */
+    private fun tablero(canvas: Canvas, r: Ropero, x0: Float, x1: Float, y0: Float, y1: Float) {
+        val extra = (espesorVisible(r) - r.espesorCm) / 2f
+        val horizontal = (x1 - x0) > (y1 - y0)
+        if (horizontal) canvas.drawRect(x(x0), y(y1 + extra), x(x1), y(y0 - extra), pTablero)
+        else canvas.drawRect(x(x0 - extra), y(y1), x(x1 + extra), y(y0), pTablero)
+    }
+
     private fun dibujarFrente(canvas: Canvas, r: Ropero, mostrarPuertas: Boolean, cuerpoResaltado: Int, conRotulos: Boolean) {
-        val e = espesorVisible(r)
+        // Las posiciones van SIEMPRE con el espesor real: los cuerpos suman el ancho del hueco.
+        val e = r.espesorCm
         // El hueco interior, claro, y encima el armazón.
         canvas.drawRect(x(0f), y(r.altoCm), x(r.anchoCm), y(0f), pInterior)
         canvas.drawRect(x(e), y(r.zocaloCm), x(r.anchoCm - e), y(0f), pTablero)
-        canvas.drawRect(x(e), y(r.zocaloCm + e), x(r.anchoCm - e), y(r.zocaloCm), pTablero)
-        canvas.drawRect(x(e), y(r.altoCm), x(r.anchoCm - e), y(r.altoCm - e), pTablero)
-        canvas.drawRect(x(0f), y(r.altoCm), x(e), y(0f), pTablero)
-        canvas.drawRect(x(r.anchoCm - e), y(r.altoCm), x(r.anchoCm), y(0f), pTablero)
+        tablero(canvas, r, e, r.anchoCm - e, r.zocaloCm, r.zocaloCm + e)
+        tablero(canvas, r, e, r.anchoCm - e, r.altoCm - e, r.altoCm)
+        tablero(canvas, r, 0f, e, 0f, r.altoCm)
+        tablero(canvas, r, r.anchoCm - e, r.anchoCm, 0f, r.altoCm)
 
         val pisoY = r.zocaloCm + e            // cara de arriba del piso
         val techoY = r.altoCm - e             // cara de abajo del techo
@@ -124,7 +136,7 @@ class RoperoDibujo(private val dp: Float) {
             if (i == cuerpoResaltado) {
                 canvas.drawRect(x(izqC) + dp, y(techoY) + dp, x(derC) - dp, y(pisoY) - dp, pSeleccion)
             }
-            if (i < r.cuerpos.size - 1) canvas.drawRect(x(derC), y(techoY), x(derC + e), y(pisoY), pTablero)
+            if (i < r.cuerpos.size - 1) tablero(canvas, r, derC, derC + e, pisoY, techoY)
             cx = derC + e
         }
         if (conRotulos) {
@@ -142,11 +154,11 @@ class RoperoDibujo(private val dp: Float) {
     }
 
     private fun dibujarCuerpo(canvas: Canvas, r: Ropero, c: Cuerpo, izqC: Float, derC: Float, pisoY: Float, techoY: Float) {
-        val e = espesorVisible(r)
+        val e = r.espesorCm
         var topeBajo = techoY
         if (r.maleteroCm > 0f) {
             val repisaY = techoY - r.maleteroCm
-            canvas.drawRect(x(izqC), y(repisaY), x(derC), y(repisaY - e), pTablero)
+            tablero(canvas, r, izqC, derC, repisaY - e, repisaY)
             topeBajo = repisaY - e
         }
         val centroX = (izqC + derC) / 2f
@@ -186,14 +198,14 @@ class RoperoDibujo(private val dp: Float) {
             if (c.tipo == TipoCuerpo.COLGAR) {
                 for (k in 0 until entrepanos) {
                     val ey = baseY + 30f * (k + 1)
-                    if (ey < topeBajo - 6f - 45f) canvas.drawRect(x(izqC), y(ey + e), x(derC), y(ey), pTablero)
+                    if (ey < topeBajo - 6f - 45f) tablero(canvas, r, izqC, derC, ey, ey + e)
                 }
             } else {
                 val hasta = if (c.llevaTubo) topeBajo - 6f - 45f else topeBajo
                 val paso = (hasta - baseY) / (entrepanos + 1)
                 for (k in 1..entrepanos) {
                     val ey = baseY + paso * k
-                    canvas.drawRect(x(izqC), y(ey + e), x(derC), y(ey), pTablero)
+                    tablero(canvas, r, izqC, derC, ey, ey + e)
                 }
             }
         }

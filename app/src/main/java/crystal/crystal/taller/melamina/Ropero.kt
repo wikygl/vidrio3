@@ -56,7 +56,7 @@ data class Ropero(
     fun conCuerposIguales(cantidad: Int): Ropero {
         val n = cantidad.coerceIn(1, 8)
         val anchoCada = anchoDeCuerpoIgual(n)
-        val nuevos = (0 until n).map { i -> (cuerpos.getOrNull(i) ?: if (i % 2 == 0) Cuerpo(tipo = TipoCuerpo.COLGAR, entrepanos = 1) else Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 4)).copy(anchoCm = anchoCada) }
+        val nuevos = (0 until n).map { i -> (cuerpos.getOrNull(i) ?: if (i % 2 == 0) Cuerpo(tipo = TipoCuerpo.COLGAR) else Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 4)).copy(anchoCm = anchoCada) }
         return copy(cuerpos = nuevos)
     }
 
