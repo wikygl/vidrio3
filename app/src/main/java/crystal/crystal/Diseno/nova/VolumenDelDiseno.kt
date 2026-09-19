@@ -195,9 +195,11 @@ data class VolumenDelDiseno(val caras: List<CaraDelVolumen>) {
             val e = Math.toRadians(elevacionGrados.toDouble().coerceIn(0.0, 89.9))
             val xr = punto.x * cos(g) - punto.y * sin(g)
             val yr = punto.x * sin(g) + punto.y * cos(g)
-            // Hacia el fondo va la diagonal del suelo, aplastada por la elevación, y hacia abajo
-            // la vertical: mirando desde arriba, lo alto queda más cerca del ojo.
-            return (xr + yr) * cos(e) - punto.z * sin(e)
+            // Se mira desde arriba, así que el suelo que cae más ABAJO en el papel es el que
+            // tenemos más cerca: la diagonal (x + y) crece hacia quien mira, aplastada por la
+            // elevación, y hacia el fondo va al revés. Y lo alto queda más cerca del ojo. Con el
+            // signo cambiado, en perspectiva la pared del rincón se alejaba en vez de acercarse.
+            return -(xr + yr) * cos(e) - punto.z * sin(e)
         }
     }
 }

@@ -41,8 +41,10 @@ data class ParedEnPlanta(
  * convierte en una cara. Aquí no hay dibujo ni pantalla, solo centímetros, para poder comprobarla
  * en frío.
  *
- * Arranca en el origen yendo hacia la derecha (+x) y se hunde hacia +y, que es como se mira una
- * planta puesta debajo de su alzada.
+ * Arranca en el origen yendo hacia la derecha (+x), y +y viene HACIA quien mira: es la planta
+ * puesta debajo de su alzada, con lo de abajo del papel más cerca. Así un pliegue positivo
+ * —`A<90>`, el rincón— trae la pared siguiente hacia el observador, que es lo que se ve desde
+ * dentro; en menos, la pared se va hacia afuera.
  */
 data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
 

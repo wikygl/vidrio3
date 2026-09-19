@@ -5901,6 +5901,13 @@ class SketchMedidasView @JvmOverloads constructor(
      */
     var vistaInterior: Boolean = true
 
+    /**
+     * Paredes laterales que doblan al otro lado del que les toca por [vistaInterior]: la de la
+     * vista izquierda o la de la derecha. Es lo que se cambia tocando la pared en la perspectiva
+     * generada, para una ventana que en un lado hace rincón y en el otro abraza la esquina.
+     */
+    val plieguesInvertidos = mutableSetOf<Vista>()
+
     /** Avisa a la pantalla cuando cambia la vista del lienzo. */
     var alCambiarVista: ((Vista) -> Unit)? = null
 
@@ -5997,7 +6004,9 @@ class SketchMedidasView @JvmOverloads constructor(
         val contorno: List<Pair<Float, Float>>?,
         val parantesCm: List<Float>,
         /** Los grados con los que dobla a la siguiente; null en la última. */
-        val grados: Float?
+        val grados: Float?,
+        /** De qué vista salió su figura, cuando la planta se generó de las alzadas. */
+        val vista: Vista? = null
     )
 
     /**
@@ -6024,15 +6033,19 @@ class SketchMedidasView @JvmOverloads constructor(
      */
     private fun plantaVirtual(): List<Pair<Float, Float?>>? {
         val grupos = listOf(Vista.IZQUIERDA, Vista.FRONTAL, Vista.DERECHA)
-            .map { v -> figurasDeVista(v).map { pxToCm(boundsForElement(it.first).width()) } }
-            .filter { it.isNotEmpty() }
+            .map { v -> v to figurasDeVista(v).map { pxToCm(boundsForElement(it.first).width()) } }
+            .filter { it.second.isNotEmpty() }
         if (grupos.isEmpty()) return null
         val paredes = mutableListOf<Pair<Float, Float?>>()
-        grupos.forEachIndexed { g, anchos ->
+        grupos.forEachIndexed { g, (vista, anchos) ->
+            // El doblez entre dos vistas es de la lateral que interviene: la izquierda con la
+            // frontal es el de la izquierda; la frontal con la derecha, el de la derecha.
+            val lateral = if (vista == Vista.IZQUIERDA) Vista.IZQUIERDA else Vista.DERECHA
+            val doblez = if (lateral in plieguesInvertidos) -90f else 90f
             anchos.forEachIndexed { k, ancho ->
                 val ultimaDelGrupo = k == anchos.lastIndex
                 val ultima = ultimaDelGrupo && g == grupos.lastIndex
-                val grados: Float? = if (ultima) null else if (ultimaDelGrupo) 90f else 180f
+                val grados: Float? = if (ultima) null else if (ultimaDelGrupo) doblez else 180f
                 paredes.add(ancho to grados)
             }
         }
@@ -6165,6 +6178,7 @@ class SketchMedidasView @JvmOverloads constructor(
         // A qué pared de la planta corresponde cada figura de la frontal: por el ancho más parecido,
         // sin repetir. Las laterales van a los lados de la primera y la última de las frontales.
         val asignada = arrayOfNulls<Pair<Element, List<Element.Shape>>>(planta.size)
+        val vistaDe = arrayOfNulls<Vista>(planta.size)
         val libres = planta.indices.toMutableList()
         frontales.forEach { fig ->
             val ancho = pxToCm(boundsForElement(fig.first).width())
@@ -6174,9 +6188,10 @@ class SketchMedidasView @JvmOverloads constructor(
         }
         // Sin planta dibujada, las paredes SON las figuras, en su orden: no hay nada que casar.
         if (plantaDibujada() == null) {
-            val enOrden = izquierdas + frontales + derechas
+            val enOrden = izquierdas.map { it to Vista.IZQUIERDA } +
+                frontales.map { it to Vista.FRONTAL } + derechas.map { it to Vista.DERECHA }
             val ordenadas = if (vistaInterior) enOrden else enOrden.reversed()
-            ordenadas.forEachIndexed { i, fig -> if (i < planta.size) asignada[i] = fig }
+            ordenadas.forEachIndexed { i, (fig, v) -> if (i < planta.size) { asignada[i] = fig; vistaDe[i] = v } }
         } else {
             val primeraFrontal = asignada.indexOfFirst { it != null }
             val ultimaFrontal = asignada.indexOfLast { it != null }
@@ -6195,7 +6210,7 @@ class SketchMedidasView @JvmOverloads constructor(
             val fig = asignada[i]
             if (fig != null) {
                 val p = paredDeFigura(fig.first, fig.second, grados)
-                p.copy(anchoCm = if (abs(p.anchoCm - largo) > 1f) largo else p.anchoCm)
+                p.copy(anchoCm = if (abs(p.anchoCm - largo) > 1f) largo else p.anchoCm, vista = vistaDe[i])
             } else {
                 val vecinaIzq = (i - 1 downTo 0).firstNotNullOfOrNull { asignada[it] }
                 val vecinaDer = (i + 1 until planta.size).firstNotNullOfOrNull { asignada[it] }
@@ -6218,13 +6233,30 @@ class SketchMedidasView @JvmOverloads constructor(
                     puenteCm = if (anterior.puenteCm > 0f) anterior.puenteCm else p.puenteCm,
                     contorno = null,
                     parantesCm = anterior.parantesCm + listOf(anterior.anchoCm) + p.parantesCm.map { it + anterior.anchoCm },
-                    grados = p.grados
+                    grados = p.grados,
+                    vista = anterior.vista ?: p.vista
                 )
             } else {
                 juntas.add(p)
             }
         }
         return juntas.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * Cambia de lado la pared [indiceTramo] de la perspectiva generada: si venía hacia quien mira
+     * (rincón) pasa a irse hacia afuera, y al revés. Solo las laterales de una planta generada:
+     * la frontal no tiene lado que cambiar, y con la planta dibujada a mano el doblez es el del
+     * dibujo. Devuelve el motivo si no se pudo, null si se cambió.
+     */
+    fun invertirPliegueDelTramo(indiceTramo: Int): String? {
+        if (plantaDibujada() != null) return "La planta está dibujada: el doblez se cambia ahí, en la vista superior"
+        val vista = paredesDesdeVistas()?.getOrNull(indiceTramo)?.vista
+            ?: return "Toca la pared lateral que quieres cambiar de lado"
+        if (vista == Vista.FRONTAL) return "La frontal no cambia de lado: toca la pared lateral"
+        if (!plieguesInvertidos.remove(vista)) plieguesInvertidos.add(vista)
+        invalidate()
+        return null
     }
 
     /**
@@ -6391,6 +6423,7 @@ class SketchMedidasView @JvmOverloads constructor(
         }
         if (vistas.length() > 0) root.put("vistas", vistas)
         root.put("interior", vistaInterior)
+        if (plieguesInvertidos.isNotEmpty()) root.put("plieguesInvertidos", JSONArray(plieguesInvertidos.map { it.name }))
         return root.toString()
     }
 
@@ -6408,6 +6441,10 @@ class SketchMedidasView @JvmOverloads constructor(
             otrasVistas.clear()
             vistaActiva = Vista.FRONTAL
             vistaInterior = root.optBoolean("interior", true)
+            plieguesInvertidos.clear()
+            root.optJSONArray("plieguesInvertidos")?.let { lista ->
+                for (i in 0 until lista.length()) runCatching { Vista.valueOf(lista.getString(i)) }.getOrNull()?.let { plieguesInvertidos.add(it) }
+            }
             root.optJSONObject("vistas")?.let { vistas ->
                 Vista.values().filter { it != Vista.FRONTAL }.forEach { v ->
                     val lista = vistas.optJSONArray(v.name) ?: return@forEach

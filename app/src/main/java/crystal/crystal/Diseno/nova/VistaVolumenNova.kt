@@ -106,6 +106,36 @@ class VistaVolumenNova @JvmOverloads constructor(
     private var yAnterior = 0f
     private var separacionAnterior = 0f
 
+    // Un toque sin arrastre sobre una pared la elige: quien nos usa decide qué hacer con ella
+    // (en Medidas 3D, cambiarla de lado de la esquina). Se distingue del giro por el recorrido
+    // del dedo, y con dos dedos nunca es toque.
+    private var xInicio = 0f
+    private var yInicio = 0f
+    private var movido = false
+    private var conDosDedos = false
+
+    /** Avisa con el índice del tramo (pared) que se tocó sin arrastrar. */
+    var alTocarPared: ((Int) -> Unit)? = null
+
+    /** Cada cara tal como quedó en el papel en el último dibujo, de la más lejana a la más cercana. */
+    private val carasEnPapel = mutableListOf<Pair<Int, List<PuntoPlano>>>()
+
+    /** La pared bajo el dedo, la más cercana de las que lo tapan; null si tocó fuera. */
+    private fun paredEn(x: Float, y: Float): Int? =
+        carasEnPapel.asReversed().firstOrNull { (_, poligono) -> dentro(x, y, poligono) }?.first
+
+    private fun dentro(x: Float, y: Float, poligono: List<PuntoPlano>): Boolean {
+        var dentro = false
+        var j = poligono.lastIndex
+        for (i in poligono.indices) {
+            val a = poligono[i]
+            val b = poligono[j]
+            if ((a.y > y) != (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) dentro = !dentro
+            j = i
+        }
+        return dentro
+    }
+
     /** Cuánto se mira desde arriba: 30° es la isométrica de siempre; 0 de frente, 90 la planta. */
     var elevacionGrados: Float = VolumenDelDiseno.ELEVACION_POR_DEFECTO
 
@@ -130,10 +160,21 @@ class VistaVolumenNova @JvmOverloads constructor(
             android.view.MotionEvent.ACTION_DOWN -> {
                 xAnterior = event.x
                 yAnterior = event.y
+                xInicio = event.x
+                yInicio = event.y
+                movido = false
+                conDosDedos = false
                 return true
             }
             android.view.MotionEvent.ACTION_POINTER_DOWN -> {
                 separacionAnterior = separacion(event)
+                conDosDedos = true
+                return true
+            }
+            android.view.MotionEvent.ACTION_UP -> {
+                if (!movido && !conDosDedos) {
+                    paredEn(event.x, event.y)?.let { alTocarPared?.invoke(it) }
+                }
                 return true
             }
             android.view.MotionEvent.ACTION_MOVE -> {
@@ -149,6 +190,8 @@ class VistaVolumenNova @JvmOverloads constructor(
                     yAnterior = event.y
                     return true
                 }
+                if (!movido && kotlin.math.hypot(event.x - xInicio, event.y - yInicio) > 12f * resources.displayMetrics.density) movido = true
+                if (!movido) return true
                 giroGrados += (event.x - xAnterior) * 0.4f
                 elevacionGrados = (elevacionGrados + (event.y - yAnterior) * 0.3f).coerceIn(0f, 89f)
                 xAnterior = event.x
@@ -210,8 +253,13 @@ class VistaVolumenNova @JvmOverloads constructor(
         }
         canvas.drawPath(suelo, pSuelo)
 
-        // Y las caras, de la más lejana a la más cercana: lo de atrás se tapa solo.
-        caras.forEach { cara -> dibujarCara(canvas, cara, d, ::aPapel) }
+        // Y las caras, de la más lejana a la más cercana: lo de atrás se tapa solo. Se guarda
+        // dónde quedó cada una para saber cuál se toca.
+        carasEnPapel.clear()
+        caras.forEach { cara ->
+            carasEnPapel.add(cara.indiceTramo to cara.esquinas.map(::aPapel))
+            dibujarCara(canvas, cara, d, ::aPapel)
+        }
     }
 
     /**

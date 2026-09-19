@@ -54,15 +54,15 @@ class VolumenDelDisenoTest {
         assertEquals("la pared baja no se quedó con su alto", 100f, v.caras[1].arribaIzq.z, 0.01f)
     }
 
-    /** En L, la segunda cara está en otro plano: se hunde hacia el fondo. */
+    /** En L, la segunda cara está en otro plano: con el rincón (A<90>) viene hacia quien mira (+y). */
     @Test
-    fun en_l_la_segunda_cara_se_va_al_fondo() {
+    fun en_l_la_segunda_cara_viene_hacia_quien_mira() {
         val v = volumen(tramo(150f), tramo(120f, pliegue = "A<90>"))
         assertEquals(2, v.caras.size)
         val segunda = v.caras[1]
         assertEquals("no arranca donde acaba la primera", 150f, segunda.abajoIzq.x, 0.5f)
         assertEquals("la primera pared no está a ras", 0f, v.caras[0].abajoDer.y, 0.01f)
-        assertEquals("la segunda no se fue al fondo", 120f, segunda.abajoDer.y, 0.5f)
+        assertEquals("la segunda no vino hacia quien mira", 120f, segunda.abajoDer.y, 0.5f)
         assertEquals("la segunda no quedó perpendicular", segunda.abajoIzq.x, segunda.abajoDer.x, 0.5f)
     }
 
@@ -194,13 +194,14 @@ class VolumenDelDisenoTest {
         val cerca = VolumenDelDiseno.proyectar(Punto3D(0f, 0f, 0f), 0f, 0f)
         val lejos = VolumenDelDiseno.proyectar(Punto3D(100f, 100f, 0f), 0f, 0f)
         assertEquals(cerca.y, lejos.y, 0.01f)
-        // En perspectiva, lo que está detrás del centro se acerca al centro: se ve más chico.
+        // En perspectiva, lo que está detrás del centro se acerca al centro: se ve más chico. Se
+        // mira desde arriba, así que atrás es hacia -(x + y): lo que en el papel queda más arriba.
         val centro = Punto3D(0f, 0f, 0f)
-        val atras = Punto3D(200f, 200f, 0f)
+        val atras = Punto3D(-200f, -200f, 0f)
         val paralela = VolumenDelDiseno.proyectar(atras, 0f, 30f)
         val conOjo = VolumenDelDiseno.proyectar(atras, 0f, 30f, distanciaCm = 500f, centro = centro)
         assertTrue("lo de atrás tenía que achicarse", kotlin.math.abs(conOjo.y) < kotlin.math.abs(paralela.y))
-        val delante = Punto3D(-200f, -200f, 0f)
+        val delante = Punto3D(200f, 200f, 0f)
         val delanteConOjo = VolumenDelDiseno.proyectar(delante, 0f, 30f, distanciaCm = 500f, centro = centro)
         assertTrue("lo de delante tenía que agrandarse", kotlin.math.abs(delanteConOjo.y) > kotlin.math.abs(VolumenDelDiseno.proyectar(delante, 0f, 30f).y))
     }

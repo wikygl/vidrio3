@@ -715,6 +715,16 @@ class MedidaActivity : AppCompatActivity() {
                 }
                 binding.layoutPrincipal.addView(nueva, lp)
                 nueva.elevation = 2 * resources.displayMetrics.density
+                // Tocar una pared la cambia de lado de la esquina: hacia quien mira o hacia afuera.
+                nueva.alTocarPared = { tramo ->
+                    val motivo = binding.sketchMedidas.invertirPliegueDelTramo(tramo)
+                    if (motivo != null) {
+                        android.widget.Toast.makeText(this, motivo, android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        refrescarPerspectivaGenerada()
+                        android.widget.Toast.makeText(this, "Pared cambiada de lado", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
                 volumenGenerado = nueva
             }
             // Al ponerla al día no se le cambia el punto de vista al usuario: se conserva lo girado.
@@ -777,7 +787,7 @@ class MedidaActivity : AppCompatActivity() {
         val vista = binding.sketchMedidas.vistaActiva
         val texto: String? = when {
             vista == SketchMedidasView.Vista.PERSPECTIVA && conPerspectiva ->
-                "◰ perspectiva generada · arrastra para girar · toca aquí para dibujar a mano"
+                "◰ perspectiva generada · arrastra para girar · toca una pared lateral para cambiarla de lado · toca aquí para dibujar a mano"
             vista == SketchMedidasView.Vista.SUPERIOR && binding.sketchMedidas.enseniaAlgoGenerado() ->
                 "planta generada de las alzadas · toca aquí para editarla a mano"
             (vista == SketchMedidasView.Vista.IZQUIERDA || vista == SketchMedidasView.Vista.DERECHA) &&
