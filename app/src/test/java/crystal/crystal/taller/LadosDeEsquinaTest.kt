@@ -101,4 +101,25 @@ class LadosDeEsquinaTest {
         assertNull(EsquinaMedida.desdeTexto("   "))
         assertNull(EsquinaMedida.desdeTexto("150,150@90"))
     }
+
+    /**
+     * Una S: dos arcos seguidos con la panza a lados contrarios. Los dos son curvos —el signo
+     * no le quita a nadie la curva—, la ventana es curva (`ncu`) y el signo sobrevive al texto.
+     */
+    @Test
+    fun la_s_son_dos_arcos_curvos_con_signos_contrarios_y_el_signo_viaja() {
+        val s = EsquinaMedida(
+            listOf(
+                LadoEsquina(185.5f, 185.5f, 120f, 120f, 0f, flecha = 40f),
+                LadoEsquina(139.1f, 139.1f, 120f, 120f, 0f, flecha = -30f)
+            ),
+            listOf("180")
+        )
+        assertTrue(s.lados.all { it.esCurva })
+        assertEquals("ncu", s.geometria)
+        val vuelta = EsquinaMedida.desdeTexto(EsquinaMedida.aTexto(s))!!
+        assertEquals(40f, vuelta.lados[0].flecha, 0.05f)
+        assertEquals(-30f, vuelta.lados[1].flecha, 0.05f)
+        assertTrue(vuelta.lados[1].esCurva)
+    }
 }

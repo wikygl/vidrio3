@@ -20,10 +20,13 @@ data class LadoEsquina(
      * Una curva no suele ser un lado —es la esquina, y va entre dos paredes—, pero cuando la
      * pared a la que sustituye mide cero la curva ocupa su sitio: la ventana empieza (o acaba) en
      * ella y entonces sí es una pared más, con su desarrollo por ancho.
+     *
+     * Lleva signo: en más la panza va hacia afuera (la ventana curva de siempre); en menos se mete
+     * hacia quien mira. Una S son dos arcos seguidos con signos contrarios.
      */
     val flecha: Float = 0f
 ) {
-    val esCurva: Boolean get() = flecha > 0f
+    val esCurva: Boolean get() = flecha != 0f
 
     val ancho: Float get() = maxOf(anchoAbajo, anchoArriba)
     val alto: Float get() = maxOf(altoIzq, altoDer)

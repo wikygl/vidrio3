@@ -3086,6 +3086,8 @@ class NovaCorrediza : AppCompatActivity() {
             anchoReal = anchoReal,
             altoReal = altoReal
         )
+        // Con varios arcos, las referencias van arco por arco: la curva equivalente no dice nada.
+        arcosDeLaMedida()?.let { binding.txReferencias.text = "$referenciasBase\n${resumenDeVariosArcos(it)}"; return }
         val geometria = geometriaCurva(ancho, divisiones)
         binding.txReferencias.text = if (geometria != null) {
             "$referenciasBase\n${resumenGeometriaCurva(geometria)}"
@@ -3557,6 +3559,8 @@ class NovaCorrediza : AppCompatActivity() {
             }
         }
         if (texto == "ncu") {
+            // Varios arcos medidos (una S): cada uno su tramo con su panza. Ver disenoDeVariosArcos.
+            arcosDeLaMedida()?.let { return disenoDeVariosArcos(it, alto, altoHoja, hoja, divisManual, mochetaInferior) }
             // Arco de la curva (ver arcoCurvo). El tag U<...> aplica la flecha al dibujo.
             val arco = arcoCurvo(ancho)
             val divisionesCurvas = NovaCalculos.divisiones(arco, divisManual)
@@ -4372,10 +4376,14 @@ class NovaCorrediza : AppCompatActivity() {
             // desarrollo de la ventana entera, la calculadora rehacía el arco desde esa cuerda y
             // se quedaba con un arco solo, que es de donde salían los 89 en vez de los 180.
             val desarrollo = medida.lados.sumOf { it.ancho.toDouble() }.toFloat()
-            val giroTotal = medida.lados.sumOf { lado ->
+            // Cada arco gira con el signo de su panza: en una S los dos giros se restan y la
+            // curva equivalente es casi recta, que es lo que es para los materiales (se cortan
+            // por el desarrollo). El dibujo con sus dos panzas sale aparte, arco por arco.
+            val giroTotal = kotlin.math.abs(medida.lados.sumOf { lado ->
+                val signo = if (lado.flecha < 0f) -1.0 else 1.0
                 (crystal.crystal.taller.ArcoEsquina
-                    .deDesarrolloYFlecha(lado.ancho, lado.flecha)?.anguloGrados ?: 0f).toDouble()
-            }
+                    .deDesarrolloYFlecha(lado.ancho, kotlin.math.abs(lado.flecha))?.anguloGrados ?: 0f).toDouble() * signo
+            })
             binding.etAncho.setText(df1(desarrollo))
             binding.etAlto.setText(df1(primera.alto))
             binding.etHoja.setText(df1(primera.puente))
@@ -4448,8 +4456,51 @@ class NovaCorrediza : AppCompatActivity() {
      */
     private fun conPanzaDelLado(indice: Int, tramos: String): String {
         val flecha = esquinaDeLaMedida?.lados?.getOrNull(indice)?.flecha ?: 0f
-        return if (flecha > 0f) conTagEnElSistema(tramos, "Q<${df1(flecha)}>") else tramos
+        return if (flecha != 0f) conTagEnElSistema(tramos, "Q<${df1(flecha)}>") else tramos
     }
+
+    /**
+     * Los arcos de la medida cuando la ventana curva trae más de uno (una S, dos panzas seguidas);
+     * null si la curva es de un arco o no vino del apunte.
+     */
+    private fun arcosDeLaMedida(): List<crystal.crystal.taller.LadoEsquina>? =
+        esquinaDeLaMedida?.lados?.takeIf { l -> l.size >= 2 && l.all { it.esCurva } }
+
+    /**
+     * El diseño de una ventana curva de varios arcos: cada arco es un tramo con su desarrollo y
+     * su panza con signo (`Q<-30>` se mete hacia quien mira), sin pliegue entre ellos porque salen
+     * tangentes. Los módulos se reparten entre los arcos a lo que le toca a cada uno por su
+     * desarrollo, con la unión de los arcos como parante; los materiales siguen saliendo del
+     * desarrollo entero, que es lo que se corta.
+     */
+    private fun disenoDeVariosArcos(
+        arcos: List<crystal.crystal.taller.LadoEsquina>,
+        alto: Float,
+        altoHoja: Float,
+        hoja: Float,
+        divisManual: Int,
+        mochetaInferior: Float
+    ): String {
+        val desarrollo = arcos.sumOf { it.ancho.toDouble() }.toFloat()
+        val divisTotal = NovaCalculos.divisiones(desarrollo, divisManual)
+        val reparto = repartoSegunLosArcos(arcos.map { it.ancho }, divisTotal) ?: arcos.map { 1 }
+        val partes = arcos.mapIndexed { i, arco ->
+            val tramos = NovaUIHelper.generarTramosConsolidado(
+                arco.ancho, alto, altoHoja, reparto[i],
+                NovaCalculos.siNoMoch(alto, hoja), textoModelo, mochetaInferior, modeloRemate
+            )
+            conTagEnElSistema(tramos, "Q<${df1(arco.flecha)}>")
+        }
+        return "{nova,${tipoPaquete()},[${df1(desarrollo)},${df1(alto)}:${partes.joinToString(" ")}]}"
+    }
+
+    /** Las medidas de cada arco de la curva de varios arcos, para las referencias. */
+    private fun resumenDeVariosArcos(arcos: List<crystal.crystal.taller.LadoEsquina>): String =
+        arcos.mapIndexed { i, arco ->
+            val a = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(arco.ancho, kotlin.math.abs(arco.flecha))
+            val lado = if (arco.flecha < 0f) "hacia adentro" else "hacia afuera"
+            "Arco ${i + 1} -> Desarrollo: ${df1(arco.ancho)}; Cuerda: ${df1(a?.cuerda ?: arco.ancho)}; Flecha: ${df1(kotlin.math.abs(arco.flecha))} ($lado)"
+        }.joinToString("\n")
 
     private fun tramoDeCurva(curva: CurvaEsquina, altoRef: Float, puenteRef: Float): String {
 

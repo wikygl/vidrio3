@@ -228,4 +228,26 @@ class PlantaDelDisenoTest {
         assertEquals(ultima.desde.x, ultima.hasta.x, 0.6f)
         assertEquals(120f, ultima.hasta.y - ultima.desde.y, 0.6f)
     }
+
+    /**
+     * Una S: dos arcos seguidos, sin pliegue entre ellos, con la panza a lados contrarios
+     * (`Q<40>` y `Q<-30>`). Giran lo mismo en sentidos opuestos, así que sus cuerdas quedan
+     * alineadas y la ventana acaba mirando como empezó.
+     */
+    @Test
+    fun la_s_dobla_a_un_lado_y_al_otro_y_acaba_como_empezo() {
+        val planta = PlantaDelDiseno.de(ventana(tramo(185.5f, flecha = 40f), tramo(139.1f, flecha = -30f)))
+        assertEquals(2, planta.paredes.size)
+        val a = planta.paredes[0]
+        val b = planta.paredes[1]
+        assertEquals(106.3f, a.giroGrados, 0.3f)
+        assertEquals(-106.3f, b.giroGrados, 0.3f)
+        // Las dos cuerdas van por la misma recta, a 53° del arranque.
+        val rumboA = Math.toDegrees(kotlin.math.atan2((a.hasta.y - a.desde.y).toDouble(), (a.hasta.x - a.desde.x).toDouble()))
+        val rumboB = Math.toDegrees(kotlin.math.atan2((b.hasta.y - b.desde.y).toDouble(), (b.hasta.x - b.desde.x).toDouble()))
+        assertEquals(53.1, rumboA, 0.3)
+        assertEquals(rumboA, rumboB, 0.3)
+        assertEquals(160f, hypot(a.hasta.x - a.desde.x, a.hasta.y - a.desde.y), 0.5f)
+        assertEquals(120f, hypot(b.hasta.x - b.desde.x, b.hasta.y - b.desde.y), 0.5f)
+    }
 }

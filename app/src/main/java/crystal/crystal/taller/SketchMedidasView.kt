@@ -5398,7 +5398,8 @@ class SketchMedidasView @JvmOverloads constructor(
 
     fun hasContent(): Boolean = elementos.isNotEmpty() || fondo != null
 
-    fun hasDrawing(): Boolean = elementos.isNotEmpty()
+    /** ¿Hay algo dibujado en alguna vista? Un apunte con solo planta también es una medida. */
+    fun hasDrawing(): Boolean = elementos.isNotEmpty() || otrasVistas.values.any { it.elementos.isNotEmpty() }
 
 
 
@@ -5776,6 +5777,15 @@ class SketchMedidasView @JvmOverloads constructor(
      * para apuntes sin figuras acotadas, como los que solo tienen trazo libre o una imagen de fondo.
      */
     fun medidaPrincipal(): MedidaPrincipal? {
+        // Con vistas, la medida es la de la ventana armada: su desarrollo entero por su alto mayor.
+        // Es lo que se archiva y lo que se corta, y no depende de en qué vista se esté mirando.
+        if (tieneVistas()) {
+            paredesDesdeVistas()?.takeIf { it.isNotEmpty() }?.let { paredes ->
+                val ancho = paredes.sumOf { it.anchoCm.toDouble() }.toFloat()
+                val alto = paredes.maxOf { it.altoCm }
+                if (ancho > 0f && alto > 0f) return MedidaPrincipal(ancho, alto)
+            }
+        }
         medidaPrincipalEnCm()?.let { return it }
 
         val segmentos = segmentosExistentes()
@@ -6513,7 +6523,9 @@ class SketchMedidasView @JvmOverloads constructor(
 
     private fun esquinaDesdeVistasEnCm(): EsquinaMedida? {
         val paredes = paredesDesdeVistas()?.takeIf { it.size >= 2 } ?: return null
-        val lados = paredes.map { LadoEsquina(it.anchoCm, it.anchoCm, it.altoCm, it.altoCm, it.puenteCm) }
+        // La pared curva va con su panza (con signo): la calculadora la necesita para saber que
+        // ese lado es un arco, y en una S, hacia dónde va cada uno.
+        val lados = paredes.map { LadoEsquina(it.anchoCm, it.anchoCm, it.altoCm, it.altoCm, it.puenteCm, flecha = it.flechaCm) }
         val angulos = paredes.dropLast(1).map { formatCm(it.grados ?: 90f) }
         return EsquinaMedida(lados, angulos)
     }
