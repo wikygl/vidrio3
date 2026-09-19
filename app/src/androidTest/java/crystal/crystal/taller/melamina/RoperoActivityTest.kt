@@ -54,4 +54,20 @@ class RoperoActivityTest {
             }
         }
     }
+
+    /** Deja una captura de la pantalla entera en la carpeta de archivos de la app, para mirarla desde la PC. */
+    @Test
+    fun guarda_captura_de_la_pantalla() {
+        ActivityScenario.launch<RoperoActivity>(intent()).use { esc ->
+            Thread.sleep(800)
+            esc.onActivity { a ->
+                val raiz = a.window.decorView
+                if (raiz.width == 0 || raiz.height == 0) return@onActivity
+                val bmp = android.graphics.Bitmap.createBitmap(raiz.width, raiz.height, android.graphics.Bitmap.Config.ARGB_8888)
+                raiz.draw(android.graphics.Canvas(bmp))
+                val dir = a.getExternalFilesDir(null) ?: return@onActivity
+                java.io.FileOutputStream(java.io.File(dir, "ropero_pantalla.png")).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, it) }
+            }
+        }
+    }
 }

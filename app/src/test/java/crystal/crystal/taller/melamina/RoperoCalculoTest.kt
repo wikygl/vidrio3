@@ -123,6 +123,21 @@ class RoperoCalculoTest {
     }
 
     @Test
+    fun el_techo_de_mas_de_244_se_parte_en_el_centro_de_una_division() {
+        // 300 de ancho, tres cuerpos de 97.6: cortes posibles en 98.5 y 197.9 (interior 296.4).
+        val ancho = base.conHueco(300f, 240f, 60f).conCuerposIguales(3)
+        val tramos = RoperoCalculo.tramosDeAncho(ancho)
+        assertEquals(2, tramos.size)
+        assertEquals(197.9f, tramos[0], 0.05f)
+        assertEquals(98.5f, tramos[1], 0.05f)
+        val m = RoperoCalculo.calcular(ancho)
+        assertEquals(2, m.piezas.count { it.nombre == "Techo" })
+        assertTrue(m.piezas.filter { it.nombre == "Techo" }.all { it.anchoMm <= 2440 })
+        // Y el de 240 sigue entero.
+        assertEquals(listOf(236.4f), RoperoCalculo.tramosDeAncho(base))
+    }
+
+    @Test
     fun planchas_tapacanto_y_lineas_para_archivar() {
         val m = RoperoCalculo.calcular(base)
         val melamina = m.planchasEstimadas[MaterialPlancha.MELAMINA_18]!!

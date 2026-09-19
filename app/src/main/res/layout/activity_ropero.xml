@@ -37,6 +37,16 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal">
 
+                <TextView style="@style/RotuloRopero" android:text="Ancho del hueco (cm)" />
+                <TextView style="@style/RotuloRopero" android:text="Alto (cm)" />
+                <TextView style="@style/RotuloRopero" android:text="Fondo (cm)" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
                 <EditText
                     android:id="@+id/etAncho"
                     android:layout_width="0dp"
@@ -66,6 +76,16 @@
                     android:importantForAutofill="no"
                     android:inputType="numberDecimal"
                     android:text="60" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView style="@style/RotuloRopero" android:text="Zócalo (cm)" />
+                <TextView style="@style/RotuloRopero" android:text="Maletero (cm, 0 = sin)" />
+                <TextView style="@style/RotuloRopero" android:text="Cuerpos" />
             </LinearLayout>
 
             <LinearLayout

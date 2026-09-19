@@ -255,7 +255,7 @@ class RoperoActivity : AppCompatActivity() {
             referencias = ListaCasilla.ItemArchivable(binding.tvReferenciasTitulo, binding.txReferencias, true),
             items = listasArchivables,
             cliente = cliente.ifBlank { null },
-            paquetesPorNumero = { mapOf("Ropero" to paquete) }
+            paquetesPorNumero = { mapOf(CLAVE_DISENO to paquete) }
         )
         refrescarProyectoActivoUI()
         Toast.makeText(this, "Archivado como $id en ${ProyectoManager.getProyectoActivo()}", Toast.LENGTH_SHORT).show()
@@ -335,5 +335,7 @@ class RoperoActivity : AppCompatActivity() {
         private const val CLAVE_ULTIMO = "ultimo"
         /** El prefijo de sus paquetes en el proyecto: Ropero de Melamina. */
         const val PREFIJO = "Rm"
+        /** La lista del proyecto donde viaja el ropero como paquete (JSON), para redibujarlo en la ficha. */
+        const val CLAVE_DISENO = "DisenoRopero"
     }
 }

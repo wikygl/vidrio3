@@ -128,9 +128,12 @@ object RoperoCalculo {
 
         // ---- Armazón ----
         pieza("Lateral", fondoArm, r.altoCm, 2, cantoCm = r.altoCm + fondoArm); canto(r.altoCm, 2); canto(fondoArm, 2)
-        pieza("Techo", wi, fondoArm, 1, cantoCm = wi); canto(wi, 1)
-        pieza("Piso", wi, fondoArm, 1, cantoCm = wi); canto(wi, 1)
-        if (r.zocaloCm > 0.5f) pieza("Zócalo", wi, r.zocaloCm, 1)
+        // Techo, piso y zócalo van de lateral a lateral; si no caben en la plancha se parten en
+        // el centro de una división, que es donde la unión no se ve y tiene dónde atornillarse.
+        val tramosAncho = tramosDeAncho(r)
+        tramosAncho.forEach { w -> pieza("Techo", w, fondoArm, 1, cantoCm = w); canto(w, 1) }
+        tramosAncho.forEach { w -> pieza("Piso", w, fondoArm, 1, cantoCm = w); canto(w, 1) }
+        if (r.zocaloCm > 0.5f) tramosAncho.forEach { w -> pieza("Zócalo", w, r.zocaloCm, 1) }
         if (n > 1) { pieza("División", fondoArm, hi, n - 1, cantoCm = hi); canto(hi, n - 1) }
         if (r.maleteroCm > 0f) {
             r.cuerpos.forEach { c -> pieza("Repisa maletero", c.anchoCm, fondoInt, 1, cantoCm = c.anchoCm); canto(c.anchoCm, 1) }
@@ -225,6 +228,7 @@ object RoperoCalculo {
         val juntas = piezas.groupBy { Triple(it.nombre, it.medida, it.material) }.values
             .map { grupo -> grupo.first().copy(cantidad = grupo.sumOf { it.cantidad }) }
         val tapacantoM = tapacanto.entries.sumOf { (l, c) -> l.toDouble() * c } / 100.0
+        val largas = juntas.filter { maxOf(it.anchoMm, it.altoMm) > LARGO_PLANCHA_MM }.map { it.nombre }.distinct()
         val referencias = buildString {
             append("Ropero empotrado ${fmt(r.anchoCm)} x ${fmt(r.altoCm)} x ${fmt(r.fondoCm)} cm, melamina ${r.espesorMm} mm\n")
             append("Cuerpos: ").append(r.cuerpos.joinToString(", ") { "${fmt(it.anchoCm)} ${it.tipo.etiqueta.lowercase()}" }).append('\n')
@@ -234,8 +238,42 @@ object RoperoCalculo {
             append('\n')
             planchas.forEach { (m, c) -> append("${m.etiqueta}: $c plancha${if (c == 1) "" else "s"} de 244x183 (estimado con 15% de merma)\n") }
             append("Tapacanto: ${String.format(java.util.Locale.US, "%.1f", tapacantoM)} m")
+            if (largas.isNotEmpty()) append("\nOJO: ${largas.joinToString(", ")} pasan de 244: van en plancha larga (275) o partidas.")
         }
         return MaterialesRopero(juntas, accesorios, tapacanto, planchas, referencias)
+    }
+
+    /** El largo de la plancha de siempre, en mm. */
+    const val LARGO_PLANCHA_MM = 2440
+
+    /**
+     * Los anchos de las piezas que van de lateral a lateral (techo, piso, zócalo): una sola si el
+     * interior cabe en la plancha; si no, trozos que se parten en el centro de una división,
+     * juntando cuerpos de izquierda a derecha mientras quepan en 244.
+     */
+    fun tramosDeAncho(r: Ropero): List<Float> {
+        val wi = r.anchoInteriorCm
+        val largo = LARGO_PLANCHA_MM / 10f
+        if (wi <= largo || r.cuerpos.size < 2) return listOf(wi)
+        val e = r.espesorCm
+        // Los cortes posibles: el centro de cada división.
+        val cortes = mutableListOf<Float>()
+        var pos = 0f
+        r.cuerpos.dropLast(1).forEach { c -> pos += c.anchoCm + e; cortes.add(pos - e / 2f) }
+        val tramos = mutableListOf<Float>()
+        var desde = 0f
+        var i = 0
+        while (i < cortes.size) {
+            // Avanza hasta el último corte que todavía cabe desde [desde].
+            var hasta = cortes[i]
+            while (i + 1 < cortes.size && cortes[i + 1] - desde <= largo) { i++; hasta = cortes[i] }
+            if (wi - desde <= largo) break
+            tramos.add(hasta - desde)
+            desde = hasta
+            i++
+        }
+        tramos.add(wi - desde)
+        return tramos
     }
 
     fun hojasCorredizas(anchoCm: Float): Int = if (anchoCm <= 240f) 2 else ceil(anchoCm / 120f).toInt().coerceAtLeast(3)

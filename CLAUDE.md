@@ -45,6 +45,7 @@ Crystal is an Android business management app (in Spanish) for a glass/metalwork
 | `productos` | Product catalog, pricing, stock, sync |
 | `taller` | Measurement & design entry (windows, doors, glass, shower) |
 | `taller/nova` | Nova corrediza window builder — `NovaCorrediza.kt` + `NovaUIHelper.kt` |
+| `taller/melamina` | Melamine furniture — built-in wardrobe (`Ropero`, `RoperoCalculo`, `VistaRopero`, `RoperoActivity`); archives to the project with prefix `Rm` and design key `DisenoRopero` |
 | `Diseno/nova` | Design view for Nova — `DisenoNovaActivity.kt` + `VistaDiseno.kt` |
 | `Diseno/vitro` | Glass panel design |
 | `casilla` | Project (casilla) lifecycle management and metadata storage |

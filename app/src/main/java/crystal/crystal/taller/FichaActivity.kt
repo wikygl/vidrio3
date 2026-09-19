@@ -95,6 +95,7 @@ class FichaActivity : AppCompatActivity() {
                                 && nombreLista != "Grados" && nombreLista != "DisenoPaquete"
                                 && nombreLista != "DisenoSimbolicoV2" && nombreLista != "DisenoPuerta"
                                 && nombreLista != "DisenoVentanaAl"
+                                && nombreLista != crystal.crystal.taller.melamina.RoperoActivity.CLAVE_DISENO
                                 && nombreLista != crystal.crystal.taller.VitrovenDescriptor.CLAVE
                                 && nombreLista != "Color aluminio" && nombreLista != "Tipo vidrio"
                                 && nombreLista != "DisenoMampara") {
@@ -244,7 +245,8 @@ class FichaActivity : AppCompatActivity() {
         val pedidoPorCliente = mutableMapOf<String, MutableList<String>>()
         val excluidas = setOf(
             "Referencias", "Diseño", "DisenoPaquete", "DisenoSimbolicoV2", "Grados",
-            "DisenoMampara", "DisenoPuerta", crystal.crystal.taller.VitrovenDescriptor.CLAVE
+            "DisenoMampara", "DisenoPuerta", crystal.crystal.taller.VitrovenDescriptor.CLAVE,
+            crystal.crystal.taller.melamina.RoperoActivity.CLAVE_DISENO
         )
 
         // Build ventana→color lookup for color-differentiated keys
@@ -326,6 +328,7 @@ class FichaActivity : AppCompatActivity() {
             if (nombreLista == "Diseño" || nombreLista == "DisenoPaquete"
                 || nombreLista == "DisenoSimbolicoV2" || nombreLista == "Grados"
                 || nombreLista == "DisenoMampara" || nombreLista == "DisenoPuerta"
+                || nombreLista == crystal.crystal.taller.melamina.RoperoActivity.CLAVE_DISENO
                 || nombreLista == crystal.crystal.taller.VitrovenDescriptor.CLAVE) return@forEach
 
             if (nombreLista == "Pedido" || nombreLista == "Referencias") {
@@ -463,6 +466,7 @@ class FichaActivity : AppCompatActivity() {
                 serieAl != null -> "Ventana Aluminio - $serieAl"
                 listas?.any { it.first == "DisenoPaquete" } == true -> "Ventana Nova"
                 listas?.any { it.first == crystal.crystal.taller.VitrovenDescriptor.CLAVE } == true -> "Vitroventana"
+                listas?.any { it.first == crystal.crystal.taller.melamina.RoperoActivity.CLAVE_DISENO } == true -> "Ropero Melamina"
                 else -> "Producto"
             }
             holder.ventanaTextView.text =
@@ -492,6 +496,7 @@ class FichaActivity : AppCompatActivity() {
                     it.first == "DisenoPuerta" -> 4
                     it.first == "DisenoMampara" -> 4
                     it.first == crystal.crystal.taller.VitrovenDescriptor.CLAVE -> 4
+                    it.first == crystal.crystal.taller.melamina.RoperoActivity.CLAVE_DISENO -> 4
                     it.first == "DisenoVentanaAl" -> 4
                     it.first == "DisenoSimbolicoV2" -> 5
                     it.first == "Diseño" -> 6
@@ -619,6 +624,33 @@ class FichaActivity : AppCompatActivity() {
                             }.onFailure {
                                 holder.drawableNameTextView.text = "Error diseño: ${it.message}"
                             }
+                        }
+                    }
+                } else if (nombreLista == crystal.crystal.taller.melamina.RoperoActivity.CLAVE_DISENO) {
+                    // Ropero de melamina: el dibujo se rehace desde su paquete con la misma vista
+                    // de la calculadora, de frente y con lo que lleva cada cuerpo.
+                    datos.forEach { (valor, _) ->
+                        val ropero = crystal.crystal.taller.melamina.Ropero.desdeJson(valor.trim()) ?: return@forEach
+                        runCatching {
+                            val dm = context.resources.displayMetrics
+                            val w = dm.widthPixels.coerceAtLeast(720)
+                            val h = (w * 0.8f).toInt().coerceAtLeast(480)
+                            val vista = crystal.crystal.taller.melamina.VistaRopero(context)
+                            vista.measure(
+                                View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                                View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
+                            )
+                            vista.layout(0, 0, w, h)
+                            vista.ropero = ropero
+                            val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+                            vista.draw(android.graphics.Canvas(bmp))
+                            holder.disenoImageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                            holder.disenoImageView.scaleType = ImageView.ScaleType.FIT_CENTER
+                            holder.disenoImageView.setImageBitmap(bmp)
+                            holder.drawableNameTextView.text = "Ropero de melamina"
+                            tieneDisenoPaquete = true
+                        }.onFailure {
+                            holder.drawableNameTextView.text = "Error diseño: ${it.message}"
                         }
                     }
                 } else if (nombreLista == "Diseño" && !tieneDisenoPaquete) {
