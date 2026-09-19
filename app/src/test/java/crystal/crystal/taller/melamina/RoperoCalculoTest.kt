@@ -48,10 +48,13 @@ class RoperoCalculoTest {
         assertEquals(1, division.cantidad)
         assertEquals(2264, division.altoMm)
         assertEquals(100, pieza(m, "Zócalo")!!.altoMm)
-        val fondo = pieza(m, "Fondo")!!
-        assertEquals(MaterialPlancha.NORDEX_3, fondo.material)
-        assertEquals(1191, fondo.anchoMm)   // 117.3 + 1.8: hasta la mitad de la división
-        assertEquals(2300, fondo.altoMm)
+        // El fondo partido en la división: cada trozo lleva medio espesor de división y su lateral,
+        // y entre los dos suman el ancho entero (240).
+        val fondos = m.piezas.filter { it.nombre == "Fondo" }
+        assertEquals(MaterialPlancha.NORDEX_3, fondos.first().material)
+        assertEquals(2400, fondos.sumOf { it.anchoMm * it.cantidad })
+        assertEquals(1200, fondos.first().anchoMm)   // 117.3 + 1.8 + 0.9
+        assertEquals(2300, fondos.first().altoMm)
     }
 
     @Test
@@ -61,6 +64,9 @@ class RoperoCalculoTest {
         assertEquals(4, entrepano.cantidad)
         assertEquals(1173, entrepano.anchoMm)
         assertEquals(597, entrepano.altoMm)
+        // Los soportes de dos colgadores van sumados en una sola fila.
+        val dosColgadores = RoperoCalculo.calcular(base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR)))
+        assertTrue(dosColgadores.lineasDeAccesorios().lines().contains("Soporte de tubo = 4"))
         val tubo = m.accesorios.first { it.nombre == "Tubo colgador" }
         assertEquals(117.3f, tubo.largoCm, 0.01f)
         assertEquals("117 = 1", m.lineasConLargo("Tubo colgador"))

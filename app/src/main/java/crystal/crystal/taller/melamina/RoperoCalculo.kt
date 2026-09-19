@@ -50,8 +50,10 @@ data class MaterialesRopero(
     fun lineasDeTapacanto(): String =
         tapacanto.entries.sortedByDescending { it.key }.joinToString("\n") { (largo, n) -> "$largo = $n" }
 
+    /** Los accesorios sin largo, sumados por nombre: los soportes de tres colgadores van en una fila. */
     fun lineasDeAccesorios(): String =
-        accesorios.filter { it.largoCm <= 0f }.joinToString("\n") { "${it.nombre} = ${it.cantidad}" }
+        accesorios.filter { it.largoCm <= 0f }.groupBy { it.nombre }.entries
+            .joinToString("\n") { (nombre, xs) -> "$nombre = ${xs.sumOf { it.cantidad }}" }
 
     /** Los accesorios con largo (tubos, rieles corredizos), agrupados por nombre: `largo = cantidad`. */
     fun lineasConLargo(nombre: String): String =
@@ -144,7 +146,7 @@ object RoperoCalculo {
             val altoFondo = r.altoCm - r.zocaloCm
             val cabe = minOf(r.anchoCm, altoFondo) <= 183f && maxOf(r.anchoCm, altoFondo) <= 244f
             if (cabe || n == 1) pieza("Fondo", r.anchoCm, altoFondo, 1, MaterialPlancha.NORDEX_3)
-            else r.cuerpos.forEach { c -> pieza("Fondo", c.anchoCm + e, altoFondo, 1, MaterialPlancha.NORDEX_3) }
+            else tramosDeFondo(r).forEach { w -> pieza("Fondo", w, altoFondo, 1, MaterialPlancha.NORDEX_3) }
         }
 
         // ---- Lo de cada cuerpo ----
@@ -274,6 +276,20 @@ object RoperoCalculo {
         }
         tramos.add(wi - desde)
         return tramos
+    }
+
+    /**
+     * Los trozos del fondo cuando no cabe entero: se parte en el centro de cada división, y los
+     * de las puntas llevan además el lateral, así que entre todos suman el ancho del ropero.
+     */
+    fun tramosDeFondo(r: Ropero): List<Float> {
+        val e = r.espesorCm
+        val n = r.cuerpos.size
+        if (n < 2) return listOf(r.anchoCm)
+        // A cada lado del cuerpo: el lateral entero si es una punta, media división si no.
+        return r.cuerpos.mapIndexed { i, c ->
+            c.anchoCm + (if (i == 0) e else e / 2f) + (if (i == n - 1) e else e / 2f)
+        }
     }
 
     fun hojasCorredizas(anchoCm: Float): Int = if (anchoCm <= 240f) 2 else ceil(anchoCm / 120f).toInt().coerceAtLeast(3)
