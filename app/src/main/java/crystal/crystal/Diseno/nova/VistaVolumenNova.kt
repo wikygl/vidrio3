@@ -117,6 +117,23 @@ class VistaVolumenNova @JvmOverloads constructor(
     /** Avisa con el índice del tramo (pared) que se tocó sin arrastrar. */
     var alTocarPared: ((Int) -> Unit)? = null
 
+    // Acercarse y apartarse: el dibujo se encuadra solo, y sobre ese encuadre el pellizco lo
+    // agranda o achica alrededor del centro de la vista y los dos dedos lo desplazan. Doble toque
+    // vuelve al encuadre. Es zoom del papel, no del ojo: el punto de vista no cambia.
+    var zoom: Float = 1f
+    var desplazamientoX: Float = 0f
+    var desplazamientoY: Float = 0f
+    private var xMedioAnterior = 0f
+    private var yMedioAnterior = 0f
+    private var ultimoToqueMs = 0L
+
+    fun encuadrar() {
+        zoom = 1f
+        desplazamientoX = 0f
+        desplazamientoY = 0f
+        invalidate()
+    }
+
     /** Cada cara tal como quedó en el papel en el último dibujo, de la más lejana a la más cercana. */
     private val carasEnPapel = mutableListOf<Pair<Int, List<PuntoPlano>>>()
 
@@ -168,26 +185,50 @@ class VistaVolumenNova @JvmOverloads constructor(
             }
             android.view.MotionEvent.ACTION_POINTER_DOWN -> {
                 separacionAnterior = separacion(event)
+                if (event.pointerCount >= 2) {
+                    xMedioAnterior = (event.getX(0) + event.getX(1)) / 2f
+                    yMedioAnterior = (event.getY(0) + event.getY(1)) / 2f
+                }
                 conDosDedos = true
                 return true
             }
             android.view.MotionEvent.ACTION_UP -> {
                 if (!movido && !conDosDedos) {
-                    paredEn(event.x, event.y)?.let { alTocarPared?.invoke(it) }
+                    val ahora = android.os.SystemClock.uptimeMillis()
+                    if (ahora - ultimoToqueMs < 300L) {
+                        // Doble toque: de vuelta al encuadre.
+                        ultimoToqueMs = 0L
+                        encuadrar()
+                    } else {
+                        ultimoToqueMs = ahora
+                        paredEn(event.x, event.y)?.let { alTocarPared?.invoke(it) }
+                    }
                 }
                 return true
             }
             android.view.MotionEvent.ACTION_MOVE -> {
                 if (event.pointerCount >= 2) {
-                    // Pellizco: en perspectiva acerca o aleja el ojo; en isométrica no hay ojo.
+                    // Pellizco: agranda o achica el dibujo; y los dos dedos juntos lo desplazan.
                     val ahora = separacion(event)
-                    if (perspectiva && separacionAnterior > 1f && ahora > 1f) {
-                        distanciaCm = (distanciaCm * separacionAnterior / ahora).coerceIn(150f, 5000f)
-                        invalidate()
+                    val xMedio = (event.getX(0) + event.getX(1)) / 2f
+                    val yMedio = (event.getY(0) + event.getY(1)) / 2f
+                    if (separacionAnterior > 1f && ahora > 1f) {
+                        val factor = (ahora / separacionAnterior).coerceIn(0.5f, 2f)
+                        val nuevo = (zoom * factor).coerceIn(0.3f, 8f)
+                        // Se agranda alrededor del punto entre los dedos, que es lo que se está mirando.
+                        val real = nuevo / zoom
+                        desplazamientoX = (desplazamientoX + width / 2f - xMedio) * real - (width / 2f - xMedio)
+                        desplazamientoY = (desplazamientoY + height / 2f - yMedio) * real - (height / 2f - yMedio)
+                        zoom = nuevo
                     }
+                    desplazamientoX += xMedio - xMedioAnterior
+                    desplazamientoY += yMedio - yMedioAnterior
+                    xMedioAnterior = xMedio
+                    yMedioAnterior = yMedio
                     separacionAnterior = ahora
                     xAnterior = event.x
                     yAnterior = event.y
+                    invalidate()
                     return true
                 }
                 if (!movido && kotlin.math.hypot(event.x - xInicio, event.y - yInicio) > 12f * resources.displayMetrics.density) movido = true
@@ -240,7 +281,13 @@ class VistaVolumenNova @JvmOverloads constructor(
 
         fun aPapel(p: Punto3D): PuntoPlano {
             val q = VolumenDelDiseno.proyectar(p, giroGrados, elevacionGrados, distancia, centro)
-            return PuntoPlano(q.x * escala + dx, q.y * escala + dy)
+            // Encuadrado, y encima el zoom alrededor del centro de la vista más el desplazamiento.
+            val x = q.x * escala + dx
+            val y = q.y * escala + dy
+            return PuntoPlano(
+                width / 2f + (x - width / 2f) * zoom + desplazamientoX,
+                height / 2f + (y - height / 2f) * zoom + desplazamientoY
+            )
         }
 
         // La huella en el suelo, punteada: dice de un vistazo cómo dobla la ventana.

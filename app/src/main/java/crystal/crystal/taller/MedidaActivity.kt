@@ -730,11 +730,17 @@ class MedidaActivity : AppCompatActivity() {
             // Al ponerla al día no se le cambia el punto de vista al usuario: se conserva lo girado.
             val giro = vista.giroGrados
             val elevacion = vista.elevacionGrados
+            val zoom = vista.zoom
+            val despX = vista.desplazamientoX
+            val despY = vista.desplazamientoY
             val yaMirada = vista.visibility == View.VISIBLE
             vista.mostrar(paquete)
             if (yaMirada) {
                 vista.giroGrados = giro
                 vista.elevacionGrados = elevacion
+                vista.zoom = zoom
+                vista.desplazamientoX = despX
+                vista.desplazamientoY = despY
             }
             vista.visibility = View.VISIBLE
         }
@@ -787,7 +793,7 @@ class MedidaActivity : AppCompatActivity() {
         val vista = binding.sketchMedidas.vistaActiva
         val texto: String? = when {
             vista == SketchMedidasView.Vista.PERSPECTIVA && conPerspectiva ->
-                "◰ perspectiva generada · arrastra para girar · toca una pared lateral para cambiarla de lado · toca aquí para dibujar a mano"
+                "◰ perspectiva generada · arrastra para girar · toca una pared lateral para cambiarla de lado · pellizca para acercar · toca aquí para dibujar a mano"
             vista == SketchMedidasView.Vista.SUPERIOR && binding.sketchMedidas.enseniaAlgoGenerado() ->
                 "planta generada de las alzadas · toca aquí para editarla a mano"
             (vista == SketchMedidasView.Vista.IZQUIERDA || vista == SketchMedidasView.Vista.DERECHA) &&
