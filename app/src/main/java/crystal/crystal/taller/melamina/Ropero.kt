@@ -58,6 +58,15 @@ data class Ropero(
     /** Alto interior de la parte baja de cada cuerpo, debajo de la repisa del maletero si la hay. */
     val altoBajoCm: Float get() = altoInteriorCm - (if (maleteroCm > 0f) maleteroCm + espesorCm else 0f)
 
+    /** El alto del ropero en el cuerpo [i]: el suyo si lo tiene, y si no el general. */
+    fun altoDeCuerpo(i: Int): Float = cuerpos.getOrNull(i)?.altoCm?.takeIf { it >= 30f } ?: altoCm
+
+    /** ¿Algún cuerpo tiene su propio alto? Entonces el techo va por cuerpos y los laterales cada uno a lo suyo. */
+    val altosDesiguales: Boolean get() = cuerpos.any { it.altoCm >= 30f && kotlin.math.abs(it.altoCm - altoCm) > 0.05f }
+
+    /** El alto mayor de todos, para encuadrar y para el fondo. */
+    val altoMayorCm: Float get() = cuerpos.indices.maxOfOrNull { altoDeCuerpo(it) } ?: altoCm
+
     /** Los anchos interiores de los cuerpos, que con las divisiones entre ellos suman el ancho interior. */
     val anchosDeCuerpos: List<Float> get() = cuerpos.map { it.anchoCm }
 
@@ -167,7 +176,9 @@ data class Cuerpo(
      */
     val alturasEntrepanosCm: List<Float> = emptyList(),
     /** Hojas batientes de este cuerpo; 0 = las que tocan (1 hasta 60 cm de luz, 2 si es más ancho). */
-    val hojasBatientes: Int = 0
+    val hojasBatientes: Int = 0,
+    /** El alto de este lado del ropero, si no es el general (bajo una escalera, un techo que baja): 0 = el general. */
+    val altoCm: Float = 0f
 ) {
     val entrepanosEfectivos: Int get() = when (tipo) {
         TipoCuerpo.COLGAR -> entrepanos.coerceIn(0, 2)
@@ -204,7 +215,7 @@ data class Cuerpo(
 
     fun aJson(): JSONObject = JSONObject().apply {
         put("ancho", anchoCm); put("tipo", tipo.name); put("entrepanos", entrepanos); put("cajones", cajones)
-        put("hojasBatientes", hojasBatientes)
+        put("hojasBatientes", hojasBatientes); put("alto", altoCm)
         put("altosCajones", JSONArray().apply { altosCajonesCm.forEach { put(it.toDouble()) } })
         put("alturasEntrepanos", JSONArray().apply { alturasEntrepanosCm.forEach { put(it.toDouble()) } })
     }
@@ -217,6 +228,7 @@ data class Cuerpo(
                 entrepanos = o.optInt("entrepanos", 0),
                 cajones = o.optInt("cajones", 0),
                 hojasBatientes = o.optInt("hojasBatientes", 0),
+                altoCm = o.optDouble("alto", 0.0).toFloat(),
                 altosCajonesCm = lista(o.optJSONArray("altosCajones")),
                 alturasEntrepanosCm = lista(o.optJSONArray("alturasEntrepanos"))
             )

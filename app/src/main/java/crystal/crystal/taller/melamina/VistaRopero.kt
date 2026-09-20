@@ -66,12 +66,13 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         val margen = 34f * dp
         val fondoPapelX = if (en3d) r.fondoCm * dibujo.oblicuoX else 0f
         val fondoPapelY = if (en3d) -r.fondoCm * dibujo.oblicuoY else 0f
+        val altoMayor = r.altoMayorCm
         escala = min(
             (width - 2 * margen) / (r.anchoCm + fondoPapelX),
-            (height - 2 * margen) / (r.altoCm + fondoPapelY)
+            (height - 2 * margen) / (altoMayor + fondoPapelY)
         )
         origenX = (width - (r.anchoCm + fondoPapelX) * escala) / 2f
-        origenY = height - (height - (r.altoCm + fondoPapelY) * escala) / 2f
+        origenY = height - (height - (altoMayor + fondoPapelY) * escala) / 2f
         dibujo.dibujar(canvas, r, origenX, origenY, escala, mostrarPuertas, en3d, cuerpoResaltado)
         elementoResaltado?.let { el ->
             canvas.drawRect(x(el.x0) - 2 * dp, y(el.y1) - 2 * dp, x(el.x1) + 2 * dp, y(el.y0) + 2 * dp, pResalte)
@@ -84,7 +85,7 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         val r = ropero
         val sep = 14f * dp
         // Ancho total, arriba.
-        val yA = y(r.altoCm) - sep
+        val yA = y(r.altoMayorCm) - sep
         canvas.drawLine(x(0f), yA, x(r.anchoCm), yA, pCota)
         canvas.drawLine(x(0f), yA - 4 * dp, x(0f), yA + 4 * dp, pCota)
         canvas.drawLine(x(r.anchoCm), yA - 4 * dp, x(r.anchoCm), yA + 4 * dp, pCota)

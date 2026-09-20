@@ -131,29 +131,43 @@ object RoperoCalculo {
         val n = r.cuerpos.size
 
         // ---- Armazón ----
-        pieza("Lateral", fondoArm, r.altoCm, 2, cantoCm = r.altoCm + fondoArm); canto(r.altoCm, 2); canto(fondoArm, 2)
-        // Techo, piso y zócalo van de lateral a lateral; si no caben en la plancha se parten en
-        // el centro de una división, que es donde la unión no se ve y tiene dónde atornillarse.
+        // Cada lateral con el alto de su lado (bajo una escalera cada cuerpo tiene el suyo).
+        val altoIzq = r.altoDeCuerpo(0)
+        val altoDer = r.altoDeCuerpo(n - 1)
+        pieza("Lateral", fondoArm, altoIzq, 1, cantoCm = altoIzq + fondoArm); canto(altoIzq, 1); canto(fondoArm, 1)
+        pieza("Lateral", fondoArm, altoDer, 1, cantoCm = altoDer + fondoArm); canto(altoDer, 1); canto(fondoArm, 1)
+        // Piso y zócalo van de lateral a lateral; si no caben en la plancha se parten en el centro
+        // de una división, que es donde la unión no se ve y tiene dónde atornillarse.
         val tramosAncho = tramosDeAncho(r)
-        tramosAncho.forEach { w -> pieza("Techo", w, fondoArm, 1, cantoCm = w); canto(w, 1) }
+        if (r.altosDesiguales) {
+            // Con altos distintos el techo va por cuerpos, cada trozo a su alto, hasta la mitad de
+            // la división (y hasta el lateral en las puntas).
+            tramosDeTechoPorCuerpo(r).forEach { w -> pieza("Techo", w, fondoArm, 1, cantoCm = w); canto(w, 1) }
+        } else {
+            tramosAncho.forEach { w -> pieza("Techo", w, fondoArm, 1, cantoCm = w); canto(w, 1) }
+        }
         tramosAncho.forEach { w -> pieza("Piso", w, fondoArm, 1, cantoCm = w); canto(w, 1) }
         if (r.zocaloCm > 0.5f) tramosAncho.forEach { w -> pieza("Zócalo", w, r.zocaloCm, 1) }
-        if (n > 1) { pieza("División", fondoArm, hi, n - 1, cantoCm = hi); canto(hi, n - 1) }
+        // Cada división sube hasta el techo más alto de los dos cuerpos que separa.
+        for (i in 0 until n - 1) {
+            val altoDiv = maxOf(r.altoDeCuerpo(i), r.altoDeCuerpo(i + 1)) - r.zocaloCm - 2 * e
+            pieza("División", fondoArm, altoDiv, 1, cantoCm = altoDiv); canto(altoDiv, 1)
+        }
         if (r.maleteroCm > 0f) {
             r.cuerpos.forEach { c -> pieza("Repisa maletero", c.anchoCm, fondoInt, 1, cantoCm = c.anchoCm); canto(c.anchoCm, 1) }
         }
         if (r.conFondo) {
             // El fondo va clavado atrás, del zócalo arriba. Si no cabe en la plancha (244 x 183)
             // se parte por cuerpos, cada trozo hasta la mitad de la división.
-            val altoFondo = r.altoCm - r.zocaloCm
+            val altoFondo = r.altoMayorCm - r.zocaloCm
             val cabe = minOf(r.anchoCm, altoFondo) <= 183f && maxOf(r.anchoCm, altoFondo) <= 244f
-            if (cabe || n == 1) pieza("Fondo", r.anchoCm, altoFondo, 1, fondoMat)
-            else tramosDeFondo(r).forEach { w -> pieza("Fondo", w, altoFondo, 1, fondoMat) }
+            if ((cabe || n == 1) && !r.altosDesiguales) pieza("Fondo", r.anchoCm, altoFondo, 1, fondoMat)
+            else tramosDeFondo(r).forEachIndexed { i, w -> pieza("Fondo", w, r.altoDeCuerpo(i) - r.zocaloCm, 1, fondoMat) }
         }
 
         // ---- Lo de cada cuerpo ----
         var tornillos40 = 4 * (2 + (n - 1) + (if (r.maleteroCm > 0f) n else 0)) + 4
-        var tornillos16 = if (r.conFondo) ceil(2 * (r.anchoCm + r.altoCm) / 20f).toInt() else 0
+        var tornillos16 = if (r.conFondo) ceil(2 * (r.anchoCm + r.altoMayorCm) / 20f).toInt() else 0
         var tiradores = 0
         r.cuerpos.forEach { c ->
             val w = c.anchoCm
@@ -192,12 +206,13 @@ object RoperoCalculo {
         when (r.puertas) {
             TipoPuertas.SIN -> Unit
             TipoPuertas.BATIENTES -> {
-                r.cuerpos.forEach { c ->
-                    // Cada cuerpo tapa su hueco y media división a cada lado (o medio lateral).
+                r.cuerpos.forEachIndexed { i, c ->
+                    // Cada cuerpo tapa su hueco y media división a cada lado (o medio lateral), a su alto.
                     val luz = c.anchoCm + e
                     val hojas = hojasBatientes(c, e)
                     val ancho = luz / hojas - LUZ_PUERTA_CM
-                    val altoBajo = (if (r.maleteroCm > 0f) r.altoCm - r.zocaloCm - r.maleteroCm - e else r.altoCm - r.zocaloCm) - LUZ_PUERTA_CM
+                    val altoCuerpo = r.altoDeCuerpo(i)
+                    val altoBajo = (if (r.maleteroCm > 0f) altoCuerpo - r.zocaloCm - r.maleteroCm - e else altoCuerpo - r.zocaloCm) - LUZ_PUERTA_CM
                     pieza("Puerta", ancho, altoBajo, hojas, cantoCm = 2 * (ancho + altoBajo)); canto(ancho, 2 * hojas); canto(altoBajo, 2 * hojas)
                     bisagras += hojas * bisagrasPorAlto(altoBajo)
                     tiradores += hojas
@@ -244,6 +259,10 @@ object RoperoCalculo {
             append("Puertas: ${r.puertas.etiqueta.lowercase()}")
             if (r.puertas == TipoPuertas.CORREDIZAS) append(" (${hojasCorredizas(r)} hojas)")
             append('\n')
+            if (r.altosDesiguales) {
+                append("Altos por lado: ").append(r.cuerpos.indices.joinToString(", ") { fmt(r.altoDeCuerpo(it)) }).append('\n')
+                if (r.puertas == TipoPuertas.CORREDIZAS) append("OJO: corredizas con altos distintos: las hojas van al alto general; revisar.\n")
+            }
             planchas.forEach { (m, c) -> append("${m.etiqueta}: $c plancha${if (c == 1) "" else "s"} de 244x183 (estimado con 15% de merma)\n") }
             append("Tapacanto ${anchoTapacantoMm(r)} x ${fmt(r.tapacantoGrosorMm)} mm: ${String.format(java.util.Locale.US, "%.1f", tapacantoM)} m")
             if (largas.isNotEmpty()) append("\nOJO: ${largas.joinToString(", ")} pasan de 244: van en plancha larga (275) o partidas.")
@@ -295,6 +314,18 @@ object RoperoCalculo {
         // A cada lado del cuerpo: el lateral entero si es una punta, media división si no.
         return r.cuerpos.mapIndexed { i, c ->
             c.anchoCm + (if (i == 0) e else e / 2f) + (if (i == n - 1) e else e / 2f)
+        }
+    }
+
+    /**
+     * El techo por cuerpos (cuando cada lado tiene su alto): cada trozo va entre laterales o
+     * hasta la mitad de la división, así que entre todos suman el ancho interior.
+     */
+    fun tramosDeTechoPorCuerpo(r: Ropero): List<Float> {
+        val e = r.espesorCm
+        val n = r.cuerpos.size
+        return r.cuerpos.mapIndexed { i, c ->
+            c.anchoCm + (if (i == 0) 0f else e / 2f) + (if (i == n - 1) 0f else e / 2f)
         }
     }
 

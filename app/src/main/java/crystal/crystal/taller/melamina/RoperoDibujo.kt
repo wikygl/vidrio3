@@ -83,18 +83,27 @@ class RoperoDibujo(private val dp: Float) {
     private fun dibujarCaras3d(canvas: Canvas, r: Ropero) {
         val dx = r.fondoCm * oblicuoX * escala
         val dy = r.fondoCm * oblicuoY * escala
+        val altoDer = r.altoDeCuerpo(r.cuerpos.size - 1)
         val costado = Path().apply {
             moveTo(x(r.anchoCm), y(0f)); lineTo(x(r.anchoCm) + dx, y(0f) + dy)
-            lineTo(x(r.anchoCm) + dx, y(r.altoCm) + dy); lineTo(x(r.anchoCm), y(r.altoCm)); close()
+            lineTo(x(r.anchoCm) + dx, y(altoDer) + dy); lineTo(x(r.anchoCm), y(altoDer)); close()
         }
         canvas.drawPath(costado, pTableroLado)
         canvas.drawPath(costado, pBorde)
-        val techo = Path().apply {
-            moveTo(x(0f), y(r.altoCm)); lineTo(x(0f) + dx, y(r.altoCm) + dy)
-            lineTo(x(r.anchoCm) + dx, y(r.altoCm) + dy); lineTo(x(r.anchoCm), y(r.altoCm)); close()
+        // El techo, cuerpo por cuerpo con su alto.
+        val e = r.espesorCm
+        val n = r.cuerpos.size
+        RoperoGeometria.cuerposX(r).forEachIndexed { i, (izq, der) ->
+            val alto = r.altoDeCuerpo(i)
+            val x0 = if (i == 0) 0f else izq - e / 2f
+            val x1 = if (i == n - 1) r.anchoCm else der + e / 2f
+            val techo = Path().apply {
+                moveTo(x(x0), y(alto)); lineTo(x(x0) + dx, y(alto) + dy)
+                lineTo(x(x1) + dx, y(alto) + dy); lineTo(x(x1), y(alto)); close()
+            }
+            canvas.drawPath(techo, pTableroTecho)
+            canvas.drawPath(techo, pBorde)
         }
-        canvas.drawPath(techo, pTableroTecho)
-        canvas.drawPath(techo, pBorde)
     }
 
     /** El espesor con el que se PINTA el tablero: el real, pero nunca más fino que un trazo visible. */
@@ -114,21 +123,30 @@ class RoperoDibujo(private val dp: Float) {
     private fun dibujarFrente(canvas: Canvas, r: Ropero, mostrarPuertas: Boolean, cuerpoResaltado: Int, conRotulos: Boolean) {
         // Las posiciones van SIEMPRE con el espesor real: los cuerpos suman el ancho del hueco.
         val e = r.espesorCm
-        // El hueco interior, claro, y encima el armazón.
-        canvas.drawRect(x(0f), y(r.altoCm), x(r.anchoCm), y(0f), pInterior)
+        // El hueco interior, claro, cuerpo por cuerpo hasta su alto, y encima el armazón: cada
+        // lado con su altura (bajo una escalera el techo baja por tramos).
+        val n = r.cuerpos.size
+        val cuerposX = RoperoGeometria.cuerposX(r)
+        cuerposX.forEachIndexed { i, (izq, der) ->
+            val alto = r.altoDeCuerpo(i)
+            canvas.drawRect(x(izq - e), y(alto), x(der + e), y(0f), pInterior)
+        }
         canvas.drawRect(x(e), y(r.zocaloCm), x(r.anchoCm - e), y(0f), pTablero)
         tablero(canvas, r, e, r.anchoCm - e, r.zocaloCm, r.zocaloCm + e)
-        tablero(canvas, r, e, r.anchoCm - e, r.altoCm - e, r.altoCm)
-        tablero(canvas, r, 0f, e, 0f, r.altoCm)
-        tablero(canvas, r, r.anchoCm - e, r.anchoCm, 0f, r.altoCm)
+        cuerposX.forEachIndexed { i, (izq, der) ->
+            val alto = r.altoDeCuerpo(i)
+            // El techo de este cuerpo: hasta la mitad de cada división, y hasta el lateral en las puntas.
+            val x0 = if (i == 0) e else izq - e / 2f
+            val x1 = if (i == n - 1) r.anchoCm - e else der + e / 2f
+            tablero(canvas, r, x0, x1, alto - e, alto)
+        }
+        tablero(canvas, r, 0f, e, 0f, r.altoDeCuerpo(0))
+        tablero(canvas, r, r.anchoCm - e, r.anchoCm, 0f, r.altoDeCuerpo(n - 1))
 
         val pisoY = RoperoGeometria.pisoY(r)
-        val techoY = RoperoGeometria.techoY(r)
         val elementos = RoperoGeometria.elementos(r)
-        var cx = e
-        r.cuerpos.forEachIndexed { i, c ->
-            val izqC = cx
-            val derC = cx + c.anchoCm
+        cuerposX.forEachIndexed { i, (izqC, derC) ->
+            val techoY = RoperoGeometria.techoY(r, i)
             // Lo de dentro se queda dentro del cuerpo: los ganchos no asoman por las divisiones.
             canvas.save()
             canvas.clipRect(x(izqC), y(techoY), x(derC), y(pisoY))
@@ -137,21 +155,31 @@ class RoperoDibujo(private val dp: Float) {
             if (i == cuerpoResaltado) {
                 canvas.drawRect(x(izqC) + dp, y(techoY) + dp, x(derC) - dp, y(pisoY) - dp, pSeleccion)
             }
-            if (i < r.cuerpos.size - 1) tablero(canvas, r, derC, derC + e, pisoY, techoY)
-            cx = derC + e
+            // La división sube hasta el techo más alto de los dos cuerpos que separa.
+            if (i < n - 1) tablero(canvas, r, derC, derC + e, pisoY, maxOf(techoY, RoperoGeometria.techoY(r, i + 1)))
         }
         if (conRotulos) {
             // El rótulo de cada cuerpo va en el zócalo, que ahí no tapa nada; solo si cabe.
-            cx = e
-            r.cuerpos.forEach { c ->
+            cuerposX.forEachIndexed { i, (izq, der) ->
+                val c = r.cuerpos[i]
                 if (pRotulo.measureText(c.tipo.etiqueta) < (c.anchoCm - 4f) * escala) {
-                    canvas.drawText(c.tipo.etiqueta, x(cx + c.anchoCm / 2f), y(r.zocaloCm / 2f) + 4f * dp, pRotulo)
+                    canvas.drawText(c.tipo.etiqueta, x((izq + der) / 2f), y(r.zocaloCm / 2f) + 4f * dp, pRotulo)
                 }
-                cx += c.anchoCm + e
             }
         }
         if (mostrarPuertas) dibujarPuertas(canvas, r)
-        canvas.drawRect(x(0f), y(r.altoCm), x(r.anchoCm), y(0f), pBorde)
+        // El contorno: por arriba sigue el alto de cada cuerpo.
+        val contorno = Path().apply {
+            moveTo(x(0f), y(0f))
+            cuerposX.forEachIndexed { i, (izq, der) ->
+                val alto = r.altoDeCuerpo(i)
+                val x0 = if (i == 0) 0f else izq - e / 2f
+                val x1 = if (i == n - 1) r.anchoCm else der + e / 2f
+                lineTo(x(x0), y(alto)); lineTo(x(x1), y(alto))
+            }
+            lineTo(x(r.anchoCm), y(0f)); close()
+        }
+        canvas.drawPath(contorno, pBorde)
     }
 
     /**
@@ -162,7 +190,7 @@ class RoperoDibujo(private val dp: Float) {
         val e = r.espesorCm
         elementos.filter { it.cuerpo == i }.forEach { el ->
             when (el.tipo) {
-                TipoElemento.CUERPO -> Unit
+                TipoElemento.CUERPO, TipoElemento.CASILLERO -> Unit
                 TipoElemento.REPISA_MALETERO, TipoElemento.ENTREPANO -> tablero(canvas, r, el.x0, el.x1, el.y0, el.y1)
                 TipoElemento.CAJON -> {
                     // El frente gris, un poco metido, con el tirador pegado al canto derecho, como en el plano.
@@ -205,8 +233,9 @@ class RoperoDibujo(private val dp: Float) {
                     val izqC = cx - e / 2f
                     val hojas = RoperoCalculo.hojasBatientes(c, e)
                     val ancho = luz / hojas
-                    val cortes = if (r.maleteroCm > 0f) listOf(r.zocaloCm to r.altoCm - r.maleteroCm - e, r.altoCm - r.maleteroCm - e to r.altoCm)
-                    else listOf(r.zocaloCm to r.altoCm)
+                    val alto = r.altoDeCuerpo(r.cuerpos.indexOf(c))
+                    val cortes = if (r.maleteroCm > 0f) listOf(r.zocaloCm to alto - r.maleteroCm - e, alto - r.maleteroCm - e to alto)
+                    else listOf(r.zocaloCm to alto)
                     cortes.forEach { (y0, y1) ->
                         for (h in 0 until hojas) {
                             val px0 = izqC + h * ancho + 0.3f

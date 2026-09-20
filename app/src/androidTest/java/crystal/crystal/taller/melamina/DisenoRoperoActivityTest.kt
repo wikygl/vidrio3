@@ -91,11 +91,58 @@ class DisenoRoperoActivityTest {
                 val spinners = mutableListOf<android.widget.Spinner>()
                 fun recorrer(v: android.view.View) { if (v is android.widget.Spinner) spinners.add(v); if (v is android.view.ViewGroup) for (i in 0 until v.childCount) recorrer(v.getChildAt(i)) }
                 recorrer(opciones)
-                spinners[0].setSelection(2)   // 2 mm
-                spinners[2].setSelection(3)   // 4 hojas
+                // Puertas, hojas corredizas, melamina, fondo, tapacanto.
+                spinners[4].setSelection(2)   // 2 mm
+                spinners[1].setSelection(3)   // 4 hojas
                 botones(opciones).first { it.text == "Aplicar opciones" }.performClick()
                 assertEquals(2f, vista.ropero.tapacantoGrosorMm, 0.01f)
                 assertEquals(4, vista.ropero.hojasCorredizas)
+            }
+        }
+    }
+
+    @Test
+    fun el_casillero_y_el_alto_del_lado_se_escriben_y_las_opciones_traen_la_calculadora() {
+        ActivityScenario.launch<DisenoRoperoActivity>(intent()).use { esc ->
+            esc.onActivity { a ->
+                val vista = a.findViewById<VistaRopero>(R.id.vistaDiseno)
+                val mando = a.findViewById<LinearLayout>(R.id.contenedorFlotante)
+                val piso = RoperoGeometria.pisoY(vista.ropero)
+                // El casillero de abajo del cuerpo 2 (casilleros, 4 repisas): 50 de alto libre.
+                val cas = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 && it.indice == 0 }
+                vista.alTocarElemento?.invoke(cas)
+                assertTrue(a.findViewById<TextView>(R.id.tvInfoSeleccion).text.startsWith("Casillero 1"))
+                campos(mando).first().setText("50")
+                botones(mando).first { it.text == "Poner" }.performClick()
+                val primera = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 && it.indice == 0 }
+                assertEquals(50f, primera.y0 - piso, 0.01f)
+                // El cuerpo 2 con su propio alto: 200.
+                val cuerpo = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.CUERPO && it.cuerpo == 1 }
+                vista.alTocarElemento?.invoke(cuerpo)
+                campos(mando)[1].setText("200")   // ancho, alto de este lado, repisas, cajones
+                botones(mando).first { it.text == "Aplicar al cuerpo" }.performClick()
+                assertEquals(200f, vista.ropero.cuerpos[1].altoCm, 0.01f)
+                assertTrue(vista.ropero.altosDesiguales)
+                assertEquals(200f - 1.8f, RoperoGeometria.techoY(vista.ropero, 1), 0.01f)
+                // Las opciones traen lo de la calculadora: ancho 300, tres cuerpos, batientes, melamina 15, sin fondo.
+                a.findViewById<android.view.View>(R.id.btnOpciones).performClick()
+                val opciones = a.findViewById<LinearLayout>(R.id.contenedorOpciones)
+                val spinners = mutableListOf<android.widget.Spinner>()
+                fun recorrer(v: android.view.View) { if (v is android.widget.Spinner) spinners.add(v); if (v is android.view.ViewGroup) for (i in 0 until v.childCount) recorrer(v.getChildAt(i)) }
+                recorrer(opciones)
+                val c = campos(opciones)   // ancho, alto, fondo, cuerpos, zócalo, maletero, alto cajón, tubo
+                c[0].setText("300")
+                c[3].setText("3")
+                spinners[0].setSelection(1)   // batientes
+                spinners[2].setSelection(1)   // 15 mm
+                spinners[3].setSelection(2)   // sin fondo
+                botones(opciones).first { it.text == "Aplicar opciones" }.performClick()
+                val r = vista.ropero
+                assertEquals(300f, r.anchoCm, 0.01f)
+                assertEquals(3, r.cuerpos.size)
+                assertEquals(TipoPuertas.BATIENTES, r.puertas)
+                assertEquals(15, r.espesorMm)
+                assertTrue(!r.conFondo)
             }
         }
     }

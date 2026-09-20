@@ -46,6 +46,46 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun los_casilleros_son_los_huecos_entre_repisas_y_se_tocan() {
+        val cas = RoperoGeometria.elementos(base).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
+        // Dos repisas: tres casilleros, del piso a la primera, entre las dos, y de la segunda al techo.
+        assertEquals(3, cas.size)
+        val piso = RoperoGeometria.pisoY(base)
+        assertEquals(piso, cas[0].y0, 0.01f)
+        assertEquals(piso + 75.47f, cas[0].y1, 0.05f)
+        assertEquals(piso + 75.47f + 1.8f, cas[1].y0, 0.05f)
+        assertEquals(RoperoGeometria.techoY(base, 1), cas[2].y1, 0.01f)
+        // El de los cajones no tiene casilleros; y bajo el dedo, en medio del hueco, sale el casillero.
+        assertTrue(RoperoGeometria.elementos(base).none { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 0 })
+        val tocado = RoperoGeometria.elementoEn(base, 180f, 150f)
+        assertEquals(TipoElemento.CASILLERO, tocado!!.tipo)
+        assertEquals(1, tocado.indice)
+    }
+
+    @Test
+    fun cada_lado_puede_tener_su_alto() {
+        val escalera = base.conCuerpo(1, base.cuerpos[1].copy(altoCm = 200f))
+        assertTrue(escalera.altosDesiguales)
+        assertEquals(240f, escalera.altoMayorCm, 0.01f)
+        assertEquals(240f - 1.8f, RoperoGeometria.techoY(escalera, 0), 0.01f)
+        assertEquals(200f - 1.8f, RoperoGeometria.techoY(escalera, 1), 0.01f)
+        val cuerpos = RoperoGeometria.elementos(escalera).filter { it.tipo == TipoElemento.CUERPO }
+        assertEquals(198.2f, cuerpos[1].y1, 0.01f)
+        // Los materiales: cada lateral a su alto, la división al mayor, el techo por cuerpos.
+        val m = RoperoCalculo.calcular(escalera)
+        val laterales = m.piezas.filter { it.nombre == "Lateral" }.map { it.altoMm }.sorted()
+        assertEquals(listOf(2000, 2400), laterales)
+        val division = m.piezas.first { it.nombre == "División" }
+        assertEquals(2400 - 100 - 36, division.altoMm)
+        val techos = m.piezas.filter { it.nombre == "Techo" }
+        assertEquals(2, techos.sumOf { it.cantidad })
+        // Cada trozo: 117.3 de cuerpo + media división = 118.2; los dos suman el ancho interior.
+        assertEquals(236.4f, RoperoCalculo.tramosDeTechoPorCuerpo(escalera).sum(), 0.05f)
+        // Un alto menor de 30 no cuenta.
+        assertTrue(!base.conCuerpo(1, base.cuerpos[1].copy(altoCm = 10f)).altosDesiguales)
+    }
+
+    @Test
     fun se_encuentra_lo_que_hay_bajo_el_dedo() {
         val cajon = RoperoGeometria.elementoEn(base, 50f, 20f)
         assertNotNull(cajon)

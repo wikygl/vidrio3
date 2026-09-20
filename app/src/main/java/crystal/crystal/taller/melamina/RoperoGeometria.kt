@@ -1,7 +1,7 @@
 package crystal.crystal.taller.melamina
 
 /** Qué es cada cosa que hay dentro del ropero. */
-enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO }
+enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO }
 
 /**
  * Un elemento del ropero puesto en su sitio, en cm desde la esquina de abajo a la izquierda del
@@ -39,17 +39,17 @@ object RoperoGeometria {
     /** La cara de arriba del piso. */
     fun pisoY(r: Ropero): Float = r.zocaloCm + r.espesorCm
 
-    /** La cara de abajo del techo. */
-    fun techoY(r: Ropero): Float = r.altoCm - r.espesorCm
+    /** La cara de abajo del techo del cuerpo [i] (cada lado puede tener su alto). */
+    fun techoY(r: Ropero, i: Int = 0): Float = r.altoDeCuerpo(i) - r.espesorCm
 
     /** El tope de la parte baja del cuerpo: la cara de abajo de la repisa del maletero, o el techo. */
-    fun topeBajo(r: Ropero): Float = techoY(r) - (if (r.maleteroCm > 0f) r.maleteroCm + r.espesorCm else 0f)
+    fun topeBajo(r: Ropero, i: Int = 0): Float = techoY(r, i) - (if (r.maleteroCm > 0f) r.maleteroCm + r.espesorCm else 0f)
 
     /** Hasta dónde llegan los cajones apilados desde el piso. */
     fun topeDeCajones(r: Ropero, c: Cuerpo): Float = pisoY(r) + c.altosDeCajones(r.altoCajonCm).sum()
 
-    /** Dónde va el tubo del colgador (su eje). */
-    fun tuboY(r: Ropero): Float = topeBajo(r) - r.tuboBajoTopeCm
+    /** Dónde va el tubo del colgador del cuerpo [i] (su eje). */
+    fun tuboY(r: Ropero, i: Int = 0): Float = topeBajo(r, i) - r.tuboBajoTopeCm
 
     /**
      * La altura (cara de abajo, desde la cara de arriba del piso) de cada repisa del cuerpo: las
@@ -60,9 +60,10 @@ object RoperoGeometria {
         val n = c.entrepanosEfectivos
         if (n == 0) return emptyList()
         if (c.alturasEntrepanosCm.size == n) return c.alturasEntrepanosCm
+        val i = r.cuerpos.indexOf(c).coerceAtLeast(0)
         val piso = pisoY(r)
         val desde = topeDeCajones(r, c) - piso
-        val hasta = (if (c.llevaTubo) tuboY(r) - ROPA_COLGADA_CM else topeBajo(r)) - piso
+        val hasta = (if (c.llevaTubo) tuboY(r, i) - ROPA_COLGADA_CM else topeBajo(r, i)) - piso
         if (c.tipo == TipoCuerpo.COLGAR) return (1..n).map { desde + 30f * it }.filter { it < hasta }
         val paso = (hasta - desde) / (n + 1)
         return (1..n).map { desde + paso * it }
@@ -72,11 +73,11 @@ object RoperoGeometria {
     fun elementos(r: Ropero): List<ElementoRopero> {
         val salen = mutableListOf<ElementoRopero>()
         val piso = pisoY(r)
-        val techo = techoY(r)
-        val tope = topeBajo(r)
         val e = r.espesorCm
         cuerposX(r).forEachIndexed { i, (izq, der) ->
             val c = r.cuerpos[i]
+            val techo = techoY(r, i)
+            val tope = topeBajo(r, i)
             salen.add(ElementoRopero(TipoElemento.CUERPO, i, 0, izq, piso, der, techo))
             if (r.maleteroCm > 0f) salen.add(ElementoRopero(TipoElemento.REPISA_MALETERO, i, 0, izq, tope, der, tope + e))
             var base = piso
@@ -84,20 +85,32 @@ object RoperoGeometria {
                 salen.add(ElementoRopero(TipoElemento.CAJON, i, k, izq, base, der, base + alto))
                 base += alto
             }
-            alturasDeEntrepanos(r, c).forEachIndexed { k, h ->
+            val repisas = alturasDeEntrepanos(r, c)
+            repisas.forEachIndexed { k, h ->
                 salen.add(ElementoRopero(TipoElemento.ENTREPANO, i, k, izq, piso + h, der, piso + h + e))
             }
+            // Los casilleros: el hueco entre el tope de los cajones (o el piso) y cada repisa, y
+            // el último hasta el tope. Se tocan para escribirles el alto. Sin repisas no hay
+            // casilleros: lo que queda sobre los cajones es el cuerpo.
+            var suelo = base
+            repisas.forEachIndexed { k, h ->
+                salen.add(ElementoRopero(TipoElemento.CASILLERO, i, k, izq, suelo, der, piso + h))
+                suelo = piso + h + e
+            }
+            if (repisas.isNotEmpty()) salen.add(ElementoRopero(TipoElemento.CASILLERO, i, repisas.size, izq, suelo, der, tope))
             if (c.llevaTubo) {
-                val t = tuboY(r)
+                val t = tuboY(r, i)
                 salen.add(ElementoRopero(TipoElemento.TUBO, i, 0, izq, t - 2f, der, t + 2f))
             }
         }
         return salen
     }
 
-    /** Lo que hay en ese punto: lo más chico primero (un cajón antes que su cuerpo). */
+    /** Lo que hay en ese punto: lo más chico primero (un cajón o una repisa antes que el casillero, y este antes que su cuerpo). */
     fun elementoEn(r: Ropero, x: Float, y: Float): ElementoRopero? {
         val todos = elementos(r).filter { it.contiene(x, y) }
-        return todos.firstOrNull { it.tipo != TipoElemento.CUERPO } ?: todos.firstOrNull()
+        return todos.firstOrNull { it.tipo != TipoElemento.CUERPO && it.tipo != TipoElemento.CASILLERO }
+            ?: todos.firstOrNull { it.tipo == TipoElemento.CASILLERO }
+            ?: todos.firstOrNull()
     }
 }
