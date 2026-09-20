@@ -29,10 +29,19 @@ data class Ropero(
     /** Alto del frente de cada cajón. */
     val altoCajonCm: Float = 20f,
     /** Cómo se quiere ver en el apunte: con las puertas puestas o el interior. No cambia el cálculo. */
-    val verPuertas: Boolean = false
+    val verPuertas: Boolean = false,
+    // ---- Lo fino, que se toca en la pantalla de diseño ----
+    /** Grosor del tapacanto (PVC): 0.45, 1 o 2 mm. */
+    val tapacantoGrosorMm: Float = 0.45f,
+    /** Espesor del fondo: 3 (nordex) o 5.5 (MDF). */
+    val espesorFondoMm: Float = 3f,
+    /** Cuántas hojas corredizas; 0 = las que tocan por el ancho (2 hasta 240, 3 más allá). */
+    val hojasCorredizas: Int = 0,
+    /** A cuánto del tope va el tubo del colgador. */
+    val tuboBajoTopeCm: Float = 6f
 ) {
     val espesorCm: Float get() = espesorMm / 10f
-    val fondoNordexCm: Float get() = if (conFondo) 0.3f else 0f
+    val fondoNordexCm: Float get() = if (conFondo) espesorFondoMm / 10f else 0f
 
     /** El ancho libre entre los dos laterales. */
     val anchoInteriorCm: Float get() = anchoCm - 2 * espesorCm
@@ -89,6 +98,8 @@ data class Ropero(
         put("espesor", espesorMm); put("zocalo", zocaloCm); put("maletero", maleteroCm)
         put("puertas", puertas.name); put("conFondo", conFondo); put("altoCajon", altoCajonCm)
         put("verPuertas", verPuertas)
+        put("tapacanto", tapacantoGrosorMm); put("espesorFondo", espesorFondoMm)
+        put("hojasCorredizas", hojasCorredizas); put("tuboBajoTope", tuboBajoTopeCm)
         put("cuerpos", JSONArray().apply { cuerpos.forEach { put(it.aJson()) } })
     }.toString()
 
@@ -112,7 +123,11 @@ data class Ropero(
                 puertas = runCatching { TipoPuertas.valueOf(o.optString("puertas", "BATIENTES")) }.getOrDefault(TipoPuertas.BATIENTES),
                 conFondo = o.optBoolean("conFondo", true),
                 altoCajonCm = o.optDouble("altoCajon", 20.0).toFloat(),
-                verPuertas = o.optBoolean("verPuertas", false)
+                verPuertas = o.optBoolean("verPuertas", false),
+                tapacantoGrosorMm = o.optDouble("tapacanto", 0.45).toFloat(),
+                espesorFondoMm = o.optDouble("espesorFondo", 3.0).toFloat(),
+                hojasCorredizas = o.optInt("hojasCorredizas", 0),
+                tuboBajoTopeCm = o.optDouble("tuboBajoTope", 6.0).toFloat()
             )
         }.getOrNull()
     }
@@ -143,7 +158,16 @@ data class Cuerpo(
     val anchoCm: Float = 60f,
     val tipo: TipoCuerpo = TipoCuerpo.ENTREPANOS,
     val entrepanos: Int = 0,
-    val cajones: Int = 0
+    val cajones: Int = 0,
+    /** El alto de cada cajón, de abajo arriba; los que falten van con el alto por defecto del ropero. */
+    val altosCajonesCm: List<Float> = emptyList(),
+    /**
+     * A qué altura va cada repisa (su cara de abajo), medida desde la cara de arriba del piso, de
+     * abajo arriba. Vacío = repartidas a partes iguales en lo que queda libre.
+     */
+    val alturasEntrepanosCm: List<Float> = emptyList(),
+    /** Hojas batientes de este cuerpo; 0 = las que tocan (1 hasta 60 cm de luz, 2 si es más ancho). */
+    val hojasBatientes: Int = 0
 ) {
     val entrepanosEfectivos: Int get() = when (tipo) {
         TipoCuerpo.COLGAR -> entrepanos.coerceIn(0, 2)
@@ -158,8 +182,31 @@ data class Cuerpo(
     }
     val llevaTubo: Boolean get() = tipo == TipoCuerpo.COLGAR || tipo == TipoCuerpo.MIXTO
 
+    /** El alto de cada cajón que se corta, de abajo arriba. */
+    fun altosDeCajones(altoPorDefectoCm: Float): List<Float> =
+        (0 until cajonesEfectivos).map { k -> altosCajonesCm.getOrNull(k)?.takeIf { it >= 8f } ?: altoPorDefectoCm }
+
+    /** Este cuerpo con el cajón [k] de [altoCm]; los demás como estaban. */
+    fun conAltoDeCajon(k: Int, altoCm: Float, altoPorDefectoCm: Float): Cuerpo {
+        val altos = altosDeCajones(altoPorDefectoCm).toMutableList()
+        if (k !in altos.indices) return this
+        altos[k] = altoCm.coerceIn(8f, 80f)
+        return copy(altosCajonesCm = altos)
+    }
+
+    /** Este cuerpo con la repisa [k] a [alturaCm] del piso; las demás donde se reparten hoy. */
+    fun conAlturaDeEntrepano(k: Int, alturaCm: Float, repartidas: List<Float>): Cuerpo {
+        val alturas = (alturasEntrepanosCm.takeIf { it.size == repartidas.size } ?: repartidas).toMutableList()
+        if (k !in alturas.indices) return this
+        alturas[k] = alturaCm.coerceAtLeast(5f)
+        return copy(alturasEntrepanosCm = alturas.sorted())
+    }
+
     fun aJson(): JSONObject = JSONObject().apply {
         put("ancho", anchoCm); put("tipo", tipo.name); put("entrepanos", entrepanos); put("cajones", cajones)
+        put("hojasBatientes", hojasBatientes)
+        put("altosCajones", JSONArray().apply { altosCajonesCm.forEach { put(it.toDouble()) } })
+        put("alturasEntrepanos", JSONArray().apply { alturasEntrepanosCm.forEach { put(it.toDouble()) } })
     }
 
     companion object {
@@ -168,8 +215,14 @@ data class Cuerpo(
                 anchoCm = o.optDouble("ancho", 60.0).toFloat(),
                 tipo = TipoCuerpo.valueOf(o.optString("tipo", "ENTREPANOS")),
                 entrepanos = o.optInt("entrepanos", 0),
-                cajones = o.optInt("cajones", 0)
+                cajones = o.optInt("cajones", 0),
+                hojasBatientes = o.optInt("hojasBatientes", 0),
+                altosCajonesCm = lista(o.optJSONArray("altosCajones")),
+                alturasEntrepanosCm = lista(o.optJSONArray("alturasEntrepanos"))
             )
         }.getOrNull()
+
+        private fun lista(arr: JSONArray?): List<Float> =
+            if (arr == null) emptyList() else (0 until arr.length()).map { arr.optDouble(it, 0.0).toFloat() }
     }
 }

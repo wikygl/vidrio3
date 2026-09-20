@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/contenedorPrincipal"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/sombra"
+    tools:context=".taller.melamina.DisenoRoperoActivity">
+
+    <LinearLayout
+        android:id="@+id/panelInfoSeleccion"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="9dp"
+        android:layout_marginTop="9dp"
+        android:layout_marginEnd="9dp"
+        android:background="@drawable/bg_control_panel"
+        android:elevation="4dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/tvInfoSeleccion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Toca un cajón, una repisa, el tubo o un cuerpo; arrastra repisas y cajones para moverlos"
+            android:textColor="@android:color/black"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <crystal.crystal.taller.melamina.VistaRopero
+        android:id="@+id/vistaDiseno"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginBottom="90dp"
+        android:background="#FFFDF8"
+        android:contentDescription="Lienzo de diseno del ropero"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/panelInfoSeleccion" />
+
+    <!-- Mando del elemento tocado. Va pegado encima del bloque de controles, no sobre el dibujo. -->
+    <LinearLayout
+        android:id="@+id/contenedorFlotante"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="9dp"
+        android:layout_marginEnd="9dp"
+        android:layout_marginBottom="4dp"
+        android:background="@drawable/bg_control_panel"
+        android:elevation="10dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/overlayControles"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Panel flotante de controles -->
+    <FrameLayout
+        android:id="@+id/overlayControles"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_margin="9dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/columnaBotones"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:elevation="6dp"
+            android:padding="8dp">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/filaControles"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent">
+
+                <!-- Las opciones generales: lo que no depende de un elemento tocado. -->
+                <LinearLayout
+                    android:id="@+id/panelOpciones"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_control_panel"
+                    android:elevation="8dp"
+                    android:orientation="vertical"
+                    android:padding="10dp"
+                    android:visibility="gone"
+                    app:layout_constraintBottom_toTopOf="@+id/btnOpciones"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:text="Opciones del ropero"
+                        android:textStyle="bold" />
+
+                    <ScrollView
+                        android:id="@+id/scrollOpciones"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <LinearLayout
+                            android:id="@+id/contenedorOpciones"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
+                    </ScrollView>
+                </LinearLayout>
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/btnOpciones"
+                    style="@style/DisenoNova.ControlButton"
+                    android:background="@drawable/bg_control_blue"
+                    android:contentDescription="Opciones del ropero"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:srcCompat="@drawable/ic_toggle_controls" />
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/btnVista"
+                    style="@style/DisenoNova.ControlButton"
+                    android:background="@drawable/bg_control_blue"
+                    android:contentDescription="Interior, puertas o 3D"
+                    app:layout_constraintBottom_toBottomOf="@+id/btnOpciones"
+                    app:layout_constraintStart_toEndOf="@+id/btnOpciones"
+                    app:layout_constraintTop_toTopOf="@+id/btnOpciones"
+                    app:srcCompat="@drawable/ic_toggle_mode" />
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/btnCotas"
+                    style="@style/DisenoNova.ControlButton"
+                    android:background="@drawable/bg_control_blue"
+                    android:contentDescription="Cotas de cada cosa"
+                    app:layout_constraintBottom_toBottomOf="@+id/btnOpciones"
+                    app:layout_constraintStart_toEndOf="@+id/btnVista"
+                    app:layout_constraintTop_toTopOf="@+id/btnOpciones"
+                    app:srcCompat="@drawable/cota" />
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/btnEnviarCalculadora"
+                    style="@style/DisenoNova.ControlButton"
+                    android:background="@drawable/bg_control_blue"
+                    android:contentDescription="Enviar a calculadora"
+                    android:padding="9dp"
+                    app:layout_constraintBottom_toBottomOf="@+id/btnOpciones"
+                    app:layout_constraintStart_toEndOf="@+id/btnCotas"
+                    app:layout_constraintTop_toTopOf="@+id/btnOpciones"
+                    app:srcCompat="@drawable/calcu" />
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/btnLimpiarDiseno"
+                    style="@style/DisenoNova.ControlButton"
+                    android:background="@drawable/bg_control_blue"
+                    android:contentDescription="Volver a lo de fabrica"
+                    app:layout_constraintBottom_toBottomOf="@+id/btnOpciones"
+                    app:layout_constraintStart_toEndOf="@+id/btnEnviarCalculadora"
+                    app:layout_constraintTop_toTopOf="@+id/btnOpciones"
+                    app:srcCompat="@drawable/escoba" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </FrameLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

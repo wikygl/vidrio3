@@ -44,6 +44,18 @@ class RoperoActivity : AppCompatActivity() {
 
     /** El ropero que se está armando; los cuerpos viven aquí, no en las casillas. */
     private var ropero = Ropero()
+
+    /** La pantalla de diseño devuelve el ropero afinado; se toma tal cual y se calcula. */
+    private val lanzarDiseno = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { res ->
+        if (res.resultCode == RESULT_OK) {
+            val nuevo = Ropero.desdeJson(res.data?.getStringExtra(DisenoRoperoActivity.RESULT_ROPERO)) ?: return@registerForActivityResult
+            ropero = nuevo
+            volcarEnPantalla()
+            calcular()
+        }
+    }
     private var materiales: MaterialesRopero? = null
 
     @SuppressLint("SetTextI18n")
@@ -300,8 +312,10 @@ class RoperoActivity : AppCompatActivity() {
         val melamina = if (ropero.espesorMm <= 15) MaterialPlancha.MELAMINA_15 else MaterialPlancha.MELAMINA_18
         binding.tvMelamina.text = melamina.etiqueta
         binding.txMelamina.text = m.lineasDePiezas(melamina)
-        ponerFila(binding.lyNordex, binding.txNordex, m.lineasDePiezas(MaterialPlancha.NORDEX_3))
-        binding.tvTapacanto.text = if (ropero.espesorMm <= 15) "Tapacanto 19 mm" else "Tapacanto 22 mm"
+        val fondoMat = if (ropero.espesorFondoMm >= 5f) MaterialPlancha.MDF_55 else MaterialPlancha.NORDEX_3
+        binding.tvNordex.text = fondoMat.etiqueta
+        ponerFila(binding.lyNordex, binding.txNordex, m.lineasDePiezas(fondoMat))
+        binding.tvTapacanto.text = RoperoCalculo.nombreTapacanto(ropero)
         binding.txTapacanto.text = m.lineasDeTapacanto()
         ponerFila(binding.lyTubo, binding.txTubo, m.lineasConLargo("Tubo colgador"))
         ponerFila(binding.lyRiel, binding.txRiel, m.lineasConLargo("Riel corredizo"))
@@ -438,8 +452,17 @@ class RoperoActivity : AppCompatActivity() {
     // ==================== PLANCHAS Y COMPARTIR ====================
 
     private fun configurarPlanchasYCompartir() {
+        binding.btDiseno.setOnClickListener { abrirDiseno() }
+        // Como en Nova: la pulsación larga en la ficha también abre el diseño.
+        binding.vistaRopero.setOnLongClickListener { abrirDiseno(); true }
         binding.btPlanchas.setOnClickListener { mandarAlOptimizador() }
         binding.btCompartir.setOnClickListener { compartir() }
+    }
+
+    /** La pantalla de diseño, con el ropero como está en las casillas. */
+    private fun abrirDiseno() {
+        roperoDesdeCasillas()?.let { ropero = it }
+        lanzarDiseno.launch(Intent(this, DisenoRoperoActivity::class.java).putExtra(DisenoRoperoActivity.EXTRA_ROPERO, ropero.aJson()))
     }
 
     /** Las piezas al optimizador de planchas, en cm y con su nombre, para el corte real. */

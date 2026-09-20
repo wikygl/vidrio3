@@ -31,10 +31,26 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
 
     var alTocarCuerpo: ((Int) -> Unit)? = null
 
+    /** Avisa con lo que se tocó dentro del mueble (cajón, repisa, tubo, cuerpo…), o null si se tocó fuera. */
+    var alTocarElemento: ((ElementoRopero?) -> Unit)? = null
+
+    /** Las cotas de cada cosa de dentro: el alto de cada cajón y la altura de cada repisa y del tubo. */
+    var conCotasDeElementos: Boolean = false
+        set(value) { field = value; invalidate() }
+
+    /** El elemento marcado en azul (el que se está editando en la pantalla de diseño). */
+    var elementoResaltado: ElementoRopero? = null
+        set(value) { field = value; invalidate() }
+
+    /** Avisa cuando el dedo arrastra por el lienzo, en cm del mueble (la pantalla de diseño lo usa para mover repisas y cajones). */
+    var alArrastrar: ((ElementoRopero, Float, Float) -> Unit)? = null
+    var alSoltarArrastre: (() -> Unit)? = null
+
     private val dp = resources.displayMetrics.density
     private val dibujo = RoperoDibujo(dp)
     private val pCota = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1565C0"); style = Paint.Style.STROKE; strokeWidth = 1f * dp }
     private val pTexto = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1565C0"); textSize = 11f * dp; textAlign = Paint.Align.CENTER }
+    private val pResalte = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1E88E5"); style = Paint.Style.STROKE; strokeWidth = 2.5f * dp }
 
     // La escala y el origen del último dibujo, para saber qué se tocó.
     private var escala = 1f
@@ -57,7 +73,11 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         origenX = (width - (r.anchoCm + fondoPapelX) * escala) / 2f
         origenY = height - (height - (r.altoCm + fondoPapelY) * escala) / 2f
         dibujo.dibujar(canvas, r, origenX, origenY, escala, mostrarPuertas, en3d, cuerpoResaltado)
+        elementoResaltado?.let { el ->
+            canvas.drawRect(x(el.x0) - 2 * dp, y(el.y1) - 2 * dp, x(el.x1) + 2 * dp, y(el.y0) + 2 * dp, pResalte)
+        }
         if (!en3d) dibujarCotas(canvas)
+        if (!en3d && conCotasDeElementos) dibujarCotasDeElementos(canvas)
     }
 
     private fun dibujarCotas(canvas: Canvas) {
@@ -92,22 +112,71 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         }
     }
 
-    private fun fmt(v: Float): String =
-        if (v == v.toInt().toFloat()) v.toInt().toString() else String.format(java.util.Locale.US, "%.1f", v)
+    /** Dentro del mueble: el alto de cada cajón, y a qué altura del piso va cada repisa y el tubo. */
+    private fun dibujarCotasDeElementos(canvas: Canvas) {
+        val r = ropero
+        val piso = RoperoGeometria.pisoY(r)
+        val chico = Paint(pTexto).apply { textSize = 9f * dp; textAlign = Paint.Align.LEFT }
+        RoperoGeometria.elementos(r).forEach { el ->
+            when (el.tipo) {
+                TipoElemento.CAJON -> canvas.drawText(fmt(el.y1 - el.y0), x(el.x0) + 3 * dp, y((el.y0 + el.y1) / 2f) + 3 * dp, chico)
+                TipoElemento.ENTREPANO -> canvas.drawText("↑" + fmt(el.y0 - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
+                TipoElemento.TUBO -> canvas.drawText("↑" + fmt((el.y0 + el.y1) / 2f - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
+                else -> Unit
+            }
+        }
+    }
+
+    /** Al décimo, sin el .0 de los enteros: 20.000002 sale "20", 20.05 sale "20.1". */
+    private fun fmt(v: Float): String {
+        val d = kotlin.math.round(v * 10f) / 10f
+        return if (d == d.toInt().toFloat()) d.toInt().toString() else String.format(java.util.Locale.US, "%.1f", d)
+    }
 
     private var xInicio = 0f
     private var yInicio = 0f
+    private var arrastrando: ElementoRopero? = null
+    private var movido = false
+    // La pulsación larga se detecta aquí, porque al quedarse con el toque la vista no deja que
+    // Android la detecte sola: es lo que abre la pantalla de diseño desde la ficha.
+    private var pulsacionLarga = false
+    private val avisarPulsacionLarga = Runnable { pulsacionLarga = true; performLongClick() }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { xInicio = event.x; yInicio = event.y; return true }
-            MotionEvent.ACTION_UP -> {
+            MotionEvent.ACTION_DOWN -> {
+                xInicio = event.x; yInicio = event.y; movido = false; pulsacionLarga = false
+                removeCallbacks(avisarPulsacionLarga)
+                if (isLongClickable) postDelayed(avisarPulsacionLarga, 450L)
+                // Solo se arrastra lo que se puede mover: repisas y cajones, y solo si alguien escucha.
+                arrastrando = if (alArrastrar != null) elementoEn(event.x, event.y)?.takeIf { it.tipo == TipoElemento.ENTREPANO || it.tipo == TipoElemento.CAJON } else null
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (kotlin.math.hypot(event.x - xInicio, event.y - yInicio) > 12 * dp) removeCallbacks(avisarPulsacionLarga)
+                val el = arrastrando ?: return true
+                if (!movido && kotlin.math.hypot(event.x - xInicio, event.y - yInicio) > 8 * dp) { movido = true; removeCallbacks(avisarPulsacionLarga) }
+                if (movido) alArrastrar?.invoke(el, (event.x - origenX) / escala, (origenY - event.y) / escala)
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(avisarPulsacionLarga)
+                if (pulsacionLarga) { arrastrando = null; return true }
+                if (movido) { alSoltarArrastre?.invoke(); arrastrando = null; return true }
+                arrastrando = null
                 if (kotlin.math.hypot(event.x - xInicio, event.y - yInicio) > 12 * dp) return true
                 cuerpoEn(event.x)?.let { alTocarCuerpo?.invoke(it) }
+                alTocarElemento?.invoke(elementoEn(event.x, event.y))
                 return true
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    /** Qué hay bajo ese punto del lienzo, en el dibujo de frente; null fuera del mueble o en 3D. */
+    fun elementoEn(px: Float, py: Float): ElementoRopero? {
+        if (en3d) return null
+        return RoperoGeometria.elementoEn(ropero, (px - origenX) / escala, (origenY - py) / escala)
     }
 
     /** Qué cuerpo cae bajo esa x del lienzo; null fuera del mueble. */

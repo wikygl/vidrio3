@@ -138,6 +138,10 @@
             android:name=".ocr.OcrActivity"
             android:exported="false" />
         <activity
+            android:name=".taller.melamina.DisenoRoperoActivity"
+            android:exported="false"
+            android:label="Diseño del ropero" />
+        <activity
             android:name=".taller.melamina.RoperoActivity"
             android:exported="false"
             android:screenOrientation="portrait"

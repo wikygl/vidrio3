@@ -668,6 +668,16 @@
                             android:orientation="horizontal">
 
                             <Button
+                                android:id="@+id/btDiseno"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/color"
+                                android:text="Diseño"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+
+                            <Button
                                 android:id="@+id/btPlanchas"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"

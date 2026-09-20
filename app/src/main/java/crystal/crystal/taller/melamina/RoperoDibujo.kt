@@ -122,8 +122,9 @@ class RoperoDibujo(private val dp: Float) {
         tablero(canvas, r, 0f, e, 0f, r.altoCm)
         tablero(canvas, r, r.anchoCm - e, r.anchoCm, 0f, r.altoCm)
 
-        val pisoY = r.zocaloCm + e            // cara de arriba del piso
-        val techoY = r.altoCm - e             // cara de abajo del techo
+        val pisoY = RoperoGeometria.pisoY(r)
+        val techoY = RoperoGeometria.techoY(r)
+        val elementos = RoperoGeometria.elementos(r)
         var cx = e
         r.cuerpos.forEachIndexed { i, c ->
             val izqC = cx
@@ -131,7 +132,7 @@ class RoperoDibujo(private val dp: Float) {
             // Lo de dentro se queda dentro del cuerpo: los ganchos no asoman por las divisiones.
             canvas.save()
             canvas.clipRect(x(izqC), y(techoY), x(derC), y(pisoY))
-            dibujarCuerpo(canvas, r, c, izqC, derC, pisoY, techoY)
+            dibujarCuerpo(canvas, r, i, elementos)
             canvas.restore()
             if (i == cuerpoResaltado) {
                 canvas.drawRect(x(izqC) + dp, y(techoY) + dp, x(derC) - dp, y(pisoY) - dp, pSeleccion)
@@ -153,62 +154,44 @@ class RoperoDibujo(private val dp: Float) {
         canvas.drawRect(x(0f), y(r.altoCm), x(r.anchoCm), y(0f), pBorde)
     }
 
-    private fun dibujarCuerpo(canvas: Canvas, r: Ropero, c: Cuerpo, izqC: Float, derC: Float, pisoY: Float, techoY: Float) {
+    /**
+     * Lo de dentro de un cuerpo, donde lo pone [RoperoGeometria]: así lo que se pinta es lo que
+     * se toca en la pantalla de diseño y lo que se corta.
+     */
+    private fun dibujarCuerpo(canvas: Canvas, r: Ropero, i: Int, elementos: List<ElementoRopero>) {
         val e = r.espesorCm
-        var topeBajo = techoY
-        if (r.maleteroCm > 0f) {
-            val repisaY = techoY - r.maleteroCm
-            tablero(canvas, r, izqC, derC, repisaY - e, repisaY)
-            topeBajo = repisaY - e
-        }
-        val centroX = (izqC + derC) / 2f
-        // Cajones, desde el piso.
-        var baseY = pisoY
-        for (k in 0 until c.cajonesEfectivos) {
-            val arriba = baseY + r.altoCajonCm
-            // El frente gris, un poco metido, con el tirador pegado al canto derecho, como en el plano.
-            val rect = RectF(x(izqC + 1.5f), y(arriba - 1f), x(derC - 1.5f), y(baseY + 1f))
-            canvas.drawRect(rect, pCajon)
-            canvas.drawRect(rect, pLinea)
-            val medio = baseY + r.altoCajonCm / 2f
-            canvas.drawRect(x(derC - 3f), y(medio + 2.5f), x(derC - 1.5f), y(medio - 2.5f), pTirador)
-            baseY = arriba
-        }
-        // El colgador: el riel claro a 6 cm del tope y los ganchos colgados, como en el plano.
-        if (c.llevaTubo) {
-            val rielY = topeBajo - 6f
-            canvas.drawRect(x(izqC + 1f), y(rielY + 1.5f), x(derC - 1f), y(rielY - 1.5f), pRiel)
-            val largo = derC - izqC
-            val ganchos = (largo / 10f).toInt().coerceIn(1, 12)
-            for (g in 0 until ganchos) {
-                val gx = izqC + largo * (g + 0.5f) / ganchos
-                // El gancho: el ojo sobre el riel, el cuello, y la percha como un trazo en punta.
-                val ojo = RectF(x(gx - 2f), y(rielY + 3.5f), x(gx + 2f), y(rielY - 0.5f))
-                canvas.drawArc(ojo, 200f, 260f, false, pGancho)
-                canvas.drawLine(x(gx), y(rielY - 0.5f), x(gx), y(rielY - 4f), pGancho)
-                canvas.drawLine(x(gx - 4f), y(rielY - 6f), x(gx + 4f), y(rielY - 6f), pGancho)
-                canvas.drawLine(x(gx - 4f), y(rielY - 6f), x(gx), y(rielY - 4f), pGancho)
-                canvas.drawLine(x(gx + 4f), y(rielY - 6f), x(gx), y(rielY - 4f), pGancho)
-            }
-        }
-        // Entrepaños: repartidos en lo que queda. En el colgador van abajo, debajo de la ropa
-        // (la repisa de los zapatos), cada 30 cm desde el piso.
-        val entrepanos = c.entrepanosEfectivos
-        if (entrepanos > 0) {
-            if (c.tipo == TipoCuerpo.COLGAR) {
-                for (k in 0 until entrepanos) {
-                    val ey = baseY + 30f * (k + 1)
-                    if (ey < topeBajo - 6f - 45f) tablero(canvas, r, izqC, derC, ey, ey + e)
+        elementos.filter { it.cuerpo == i }.forEach { el ->
+            when (el.tipo) {
+                TipoElemento.CUERPO -> Unit
+                TipoElemento.REPISA_MALETERO, TipoElemento.ENTREPANO -> tablero(canvas, r, el.x0, el.x1, el.y0, el.y1)
+                TipoElemento.CAJON -> {
+                    // El frente gris, un poco metido, con el tirador pegado al canto derecho, como en el plano.
+                    val rect = RectF(x(el.x0 + 1.5f), y(el.y1 - 1f), x(el.x1 - 1.5f), y(el.y0 + 1f))
+                    canvas.drawRect(rect, pCajon)
+                    canvas.drawRect(rect, pLinea)
+                    val medio = (el.y0 + el.y1) / 2f
+                    canvas.drawRect(x(el.x1 - 3f), y(medio + 2.5f), x(el.x1 - 1.5f), y(medio - 2.5f), pTirador)
                 }
-            } else {
-                val hasta = if (c.llevaTubo) topeBajo - 6f - 45f else topeBajo
-                val paso = (hasta - baseY) / (entrepanos + 1)
-                for (k in 1..entrepanos) {
-                    val ey = baseY + paso * k
-                    tablero(canvas, r, izqC, derC, ey, ey + e)
+                TipoElemento.TUBO -> {
+                    // El colgador: el riel claro y los ganchos colgados, como en el plano.
+                    val rielY = (el.y0 + el.y1) / 2f
+                    canvas.drawRect(x(el.x0 + 1f), y(rielY + 1.5f), x(el.x1 - 1f), y(rielY - 1.5f), pRiel)
+                    val largo = el.x1 - el.x0
+                    val ganchos = (largo / 10f).toInt().coerceIn(1, 12)
+                    for (g in 0 until ganchos) {
+                        val gx = el.x0 + largo * (g + 0.5f) / ganchos
+                        // El gancho: el ojo sobre el riel, el cuello, y la percha como un trazo en punta.
+                        val ojo = RectF(x(gx - 2f), y(rielY + 3.5f), x(gx + 2f), y(rielY - 0.5f))
+                        canvas.drawArc(ojo, 200f, 260f, false, pGancho)
+                        canvas.drawLine(x(gx), y(rielY - 0.5f), x(gx), y(rielY - 4f), pGancho)
+                        canvas.drawLine(x(gx - 4f), y(rielY - 6f), x(gx + 4f), y(rielY - 6f), pGancho)
+                        canvas.drawLine(x(gx - 4f), y(rielY - 6f), x(gx), y(rielY - 4f), pGancho)
+                        canvas.drawLine(x(gx + 4f), y(rielY - 6f), x(gx), y(rielY - 4f), pGancho)
+                    }
                 }
             }
         }
+        if (e <= 0f) return
     }
 
     private fun dibujarPuertas(canvas: Canvas, r: Ropero) {
@@ -220,7 +203,7 @@ class RoperoDibujo(private val dp: Float) {
                 r.cuerpos.forEach { c ->
                     val luz = c.anchoCm + e
                     val izqC = cx - e / 2f
-                    val hojas = if (luz <= 60f) 1 else 2
+                    val hojas = RoperoCalculo.hojasBatientes(c, e)
                     val ancho = luz / hojas
                     val cortes = if (r.maleteroCm > 0f) listOf(r.zocaloCm to r.altoCm - r.maleteroCm - e, r.altoCm - r.maleteroCm - e to r.altoCm)
                     else listOf(r.zocaloCm to r.altoCm)
@@ -241,7 +224,7 @@ class RoperoDibujo(private val dp: Float) {
                 }
             }
             TipoPuertas.CORREDIZAS -> {
-                val hojas = RoperoCalculo.hojasCorredizas(r.anchoCm)
+                val hojas = RoperoCalculo.hojasCorredizas(r)
                 val ancho = (r.anchoInteriorCm + (hojas - 1) * 5f) / hojas
                 val y0 = r.zocaloCm + e + 1.5f
                 val y1 = r.altoCm - e - 2f
