@@ -35,14 +35,15 @@ class RoperoGeometriaTest {
     fun las_repisas_se_reparten_y_se_pueden_poner_a_mano() {
         val repisas = RoperoGeometria.elementos(base).filter { it.tipo == TipoElemento.ENTREPANO }
         assertEquals(2, repisas.size)
-        // Interior 226.4 entre tres: a 75.5 y 150.9 del piso.
-        assertEquals(75.47f, repisas[0].y0 - RoperoGeometria.pisoY(base), 0.05f)
-        assertEquals(150.93f, repisas[1].y0 - RoperoGeometria.pisoY(base), 0.05f)
+        // Interior 226.4 menos dos repisas de 1.8 = 222.8, en tres huecos iguales de 74.27:
+        // la primera a 74.27 del piso, la segunda a 74.27 + 1.8 + 74.27 = 150.33.
+        assertEquals(74.27f, repisas[0].y0 - RoperoGeometria.pisoY(base), 0.05f)
+        assertEquals(150.33f, repisas[1].y0 - RoperoGeometria.pisoY(base), 0.05f)
         val c = base.cuerpos[1]
         val aMano = base.conCuerpo(1, c.conAlturaDeEntrepano(0, 40f, RoperoGeometria.alturasDeEntrepanos(base, c)))
         val r2 = RoperoGeometria.elementos(aMano).filter { it.tipo == TipoElemento.ENTREPANO }
         assertEquals(40f, r2[0].y0 - RoperoGeometria.pisoY(aMano), 0.05f)
-        assertEquals(150.93f, r2[1].y0 - RoperoGeometria.pisoY(aMano), 0.05f)
+        assertEquals(150.33f, r2[1].y0 - RoperoGeometria.pisoY(aMano), 0.05f)
     }
 
     @Test
@@ -52,8 +53,10 @@ class RoperoGeometriaTest {
         assertEquals(3, cas.size)
         val piso = RoperoGeometria.pisoY(base)
         assertEquals(piso, cas[0].y0, 0.01f)
-        assertEquals(piso + 75.47f, cas[0].y1, 0.05f)
-        assertEquals(piso + 75.47f + 1.8f, cas[1].y0, 0.05f)
+        assertEquals(piso + 74.27f, cas[0].y1, 0.05f)
+        assertEquals(piso + 74.27f + 1.8f, cas[1].y0, 0.05f)
+        // Los tres casilleros con el mismo alto libre.
+        cas.forEach { assertEquals(74.27f, it.y1 - it.y0, 0.05f) }
         assertEquals(RoperoGeometria.techoY(base, 1), cas[2].y1, 0.01f)
         // El de los cajones no tiene casilleros; y bajo el dedo, en medio del hueco, sale el casillero.
         assertTrue(RoperoGeometria.elementos(base).none { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 0 })
@@ -97,7 +100,7 @@ class RoperoGeometriaTest {
         val piso = RoperoGeometria.pisoY(mixto)
         val desde = 40f + 1.8f
         val hasta = RoperoGeometria.tuboY(mixto, 0) - RoperoGeometria.ROPA_COLGADA_CM - piso
-        assertEquals(desde + (hasta - desde) / 2f, repisa.y0 - piso, 0.05f)
+        assertEquals(desde + (hasta - desde - 1.8f) / 2f, repisa.y0 - piso, 0.05f)
         // Sin cajones no hay tapa.
         assertTrue(RoperoGeometria.elementos(base).none { it.tipo == TipoElemento.TAPA_CAJONES && it.cuerpo == 1 })
     }
@@ -111,8 +114,9 @@ class RoperoGeometriaTest {
         val piso = RoperoGeometria.pisoY(r)
         val hasta = RoperoGeometria.tuboY(r, 1) - RoperoGeometria.ROPA_COLGADA_CM - piso
         val repisas = RoperoGeometria.alturasDeEntrepanos(r, c)
-        assertEquals(hasta / 3f, repisas[0], 0.05f)
-        assertEquals(2 * hasta / 3f, repisas[1], 0.05f)
+        val libre = (hasta - 2 * 1.8f) / 3f
+        assertEquals(libre, repisas[0], 0.05f)
+        assertEquals(2 * libre + 1.8f, repisas[1], 0.05f)
         val m = RoperoCalculo.calcular(r)
         assertEquals(1, m.accesorios.count { it.nombre == "Tubo colgador" })
         assertEquals(2, m.piezas.filter { it.nombre == "Entrepaño" }.sumOf { it.cantidad })

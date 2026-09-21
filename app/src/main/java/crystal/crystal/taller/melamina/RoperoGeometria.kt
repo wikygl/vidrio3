@@ -72,8 +72,10 @@ object RoperoGeometria {
         val desde = sobreLosCajones(r, c) - piso
         val hasta = (if (c.llevaTubo) tuboY(r, i) - ROPA_COLGADA_CM else topeBajo(r, i)) - piso
         if (c.tipo == TipoCuerpo.COLGAR) return (1..n).map { desde + 30f * it }.filter { it < hasta }
-        val paso = (hasta - desde) / (n + 1)
-        return (1..n).map { desde + paso * it }
+        // Primero se descuentan las repisas y lo que queda se reparte en n+1 huecos iguales:
+        // así todos los casilleros tienen el mismo alto libre.
+        val libre = ((hasta - desde - n * r.espesorCm) / (n + 1)).coerceAtLeast(1f)
+        return (1..n).map { desde + libre * it + r.espesorCm * (it - 1) }
     }
 
     /** Todo lo que hay en el ropero, con su sitio. Los cuerpos van primero, y lo suyo después. */
