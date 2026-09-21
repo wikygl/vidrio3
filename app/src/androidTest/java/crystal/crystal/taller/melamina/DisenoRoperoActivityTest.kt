@@ -60,7 +60,7 @@ class DisenoRoperoActivityTest {
                 val info = a.findViewById<TextView>(R.id.tvInfoSeleccion).text.toString()
                 assertTrue("no describe el cajón: $info", info.startsWith("Cajón 1"))
                 val mando = a.findViewById<LinearLayout>(R.id.contenedorFlotante)
-                assertEquals(android.view.View.VISIBLE, mando.visibility)
+                assertEquals(android.view.View.VISIBLE, a.findViewById<android.view.View>(R.id.scrollMando).visibility)
                 campos(mando).first().setText("35")
                 botones(mando).first { it.text == "Este" }.performClick()
                 val cajones = RoperoGeometria.elementos(vista.ropero).filter { it.tipo == TipoElemento.CAJON }

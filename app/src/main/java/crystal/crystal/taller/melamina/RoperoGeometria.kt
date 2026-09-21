@@ -143,6 +143,18 @@ object RoperoGeometria {
         return c.copy(alturasEntrepanosCm = nuevas)
     }
 
+    /** El cuerpo con el casillero [k] de [altoCm] libres moviendo SOLO la repisa de encima (o la de abajo en el último): las demás no se tocan. */
+    fun conAltoDeCasilleroSoloEsa(r: Ropero, c: Cuerpo, h: Hueco, k: Int, altoCm: Float): Cuerpo {
+        val repartidas = alturasDeEntrepanos(r, c, h)
+        val alto = altoCm.coerceAtLeast(5f)
+        val cas = casilleros(r, c, h).getOrNull(k) ?: return c
+        return when {
+            k < repartidas.size -> c.conAlturaDeEntrepano(k, cas.y0 - h.y0 + alto, repartidas)
+            k > 0 -> c.conAlturaDeEntrepano(k - 1, (cas.y1 - alto - r.espesorCm - h.y0).coerceAtLeast(5f), repartidas)
+            else -> c
+        }
+    }
+
     /**
      * Los casilleros del hueco, de abajo arriba: del tope de los cajones (o el piso) a cada
      * repisa, y el último hasta el tope. Cada uno con su hueco (de cara a cara).

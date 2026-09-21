@@ -54,7 +54,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         // Arrastrar una repisa o un cajón: la repisa cambia de altura; el cajón cambia su alto
         // (se lleva el canto de arriba, el de abajo queda donde apoya).
         binding.vistaDiseno.alArrastrar = { el, _, yCm -> arrastrar(el, yCm) }
-        binding.vistaDiseno.alSoltarArrastre = { seleccion?.let { s -> seleccionar(RoperoGeometria.elementos(ropero).firstOrNull { it.esElMismo(s) }) } }
+        binding.vistaDiseno.alSoltarArrastre = { refrescar(conMando = true) }
     }
 
     private fun arrastrar(el: ElementoRopero, yCm: Float) {
@@ -73,10 +73,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             }
             else -> return
         }
-        binding.vistaDiseno.ropero = ropero
-        seleccion = RoperoGeometria.elementos(ropero).firstOrNull { it.esElMismo(el) }
-        binding.vistaDiseno.elementoResaltado = seleccion
-        binding.tvInfoSeleccion.text = descripcion(seleccion)
+        refrescar(conMando = false)
     }
 
     /** Al medio centímetro: lo que se corta. */
@@ -93,7 +90,6 @@ class DisenoRoperoActivity : AppCompatActivity() {
             if (unido == null) { Toast.makeText(this, motivo, Toast.LENGTH_LONG).show() }
             else {
                 ropero = unido
-                binding.vistaDiseno.ropero = ropero
                 // Queda elegida la celda unida: la que ahora ocupa el medio de las dos.
                 val xm = (minOf(primera.x0, el.x0) + maxOf(primera.x1, el.x1)) / 2f
                 val ym = (minOf(primera.y0, el.y0) + maxOf(primera.y1, el.y1)) / 2f
@@ -101,7 +97,13 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 return
             }
         }
+        // La tapa de los cajones se edita como el espacio de los cajones.
+        if (el?.tipo == TipoElemento.TAPA_CAJONES) {
+            seleccionar(RoperoGeometria.elementos(ropero).firstOrNull { it.tipo == TipoElemento.ZONA_CAJONES && it.cuerpo == el.cuerpo && it.ruta == el.ruta })
+            return
+        }
         seleccion = el
+        binding.vistaDiseno.ropero = ropero
         binding.vistaDiseno.elementoResaltado = el
         binding.tvInfoSeleccion.text = descripcion(el)
         armarMando(el)
@@ -165,16 +167,15 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private fun armarMando(el: ElementoRopero?) {
         val mando = binding.contenedorFlotante
         mando.removeAllViews()
-        fun esconder() { binding.scrollMando.visibility = View.GONE; mando.visibility = View.GONE }
-        if (el == null) { esconder(); return }
-        val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: run { esconder(); return }
-        val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: run { esconder(); return }
+        if (el == null) { esconderMando(); return }
+        val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: run { esconderMando(); return }
+        val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: run { esconderMando(); return }
         val piso = hueco.y0
         /** El cuerpo o la columna de este elemento, cambiado. */
         fun conEste(nuevo: Cuerpo) = ropero.conCuerpoEn(el.cuerpo, el.ruta, nuevo)
         when (el.tipo) {
-            TipoElemento.DIVISION_COLUMNA -> Unit
-            TipoElemento.COLUMNA -> mando.addView(mandoDeCuerpo(el, c))
+            TipoElemento.DIVISION_COLUMNA, TipoElemento.TAPA_CAJONES -> Unit
+            TipoElemento.CUERPO, TipoElemento.COLUMNA -> mando.addView(mandoDeCuerpo(el, c))
             TipoElemento.CAJON -> {
                 val etAlto = campo("Alto de este cajón (cm)", fmt(el.y1 - el.y0))
                 mando.addView(fila(
@@ -205,19 +206,10 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 // (los de abajo se quedan): así los de abajo salen chicos y el resto iguales.
                 // "Solo esta" mueve nada más la repisa de encima (o la de abajo en el último).
                 val etAlto = campo("Alto libre de este casillero (cm)", fmt(el.y1 - el.y0))
-                val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c, hueco)
                 mando.addView(fila(
                     etAlto,
                     boton("Poner") { aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, num(etAlto, el.y1 - el.y0))) },
-                    boton("Solo esta") {
-                        val alto = num(etAlto, el.y1 - el.y0).coerceAtLeast(5f)
-                        val nuevoCuerpo = if (el.indice < repartidas.size) {
-                            c.conAlturaDeEntrepano(el.indice, el.y0 - piso + alto, repartidas)
-                        } else if (el.indice > 0) {
-                            c.conAlturaDeEntrepano(el.indice - 1, (el.y1 - alto - ropero.espesorCm - piso).coerceAtLeast(5f), repartidas)
-                        } else c
-                        aplicar(conEste(nuevoCuerpo))
-                    },
+                    boton("Solo esta") { aplicar(conEste(RoperoGeometria.conAltoDeCasilleroSoloEsa(ropero, c, hueco, el.indice, num(etAlto, el.y1 - el.y0)))) },
                     boton("Repartir de nuevo") { aplicar(conEste(c.copy(alturasEntrepanosCm = emptyList()))) }
                 ))
                 mando.addView(filaDeRepisas(el, c))
@@ -239,8 +231,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             }
             TipoElemento.COLGADOR -> {
                 // El colgador: el tubo, y las repisas que van debajo de la ropa.
-                val etTubo = campo("Tubo bajo el tope (cm)", fmt(ropero.tuboBajoTopeCm))
-                mando.addView(fila(etTubo, boton("Poner") { aplicar(ropero.copy(tuboBajoTopeCm = num(etTubo, ropero.tuboBajoTopeCm).coerceIn(2f, 40f))) }))
+                mando.addView(filaDeTubo())
                 mando.addView(filaDeRepisas(el, c))
                 mando.addView(filaDeUnir(el))
                 if (el.ruta.isNotEmpty()) mando.addView(mandoDeCuerpo(el, c))
@@ -257,32 +248,24 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     ))
                 }))
             }
-            TipoElemento.TAPA_CAJONES -> {
-                // La tapa va donde acaban los cajones: lo que se cambia es el alto de estos.
-                val et = campo("Alto de cada cajón de este cuerpo (cm)", fmt(ropero.altoCajonCm))
-                mando.addView(fila(et, boton("Poner") {
-                    val alto = num(et, ropero.altoCajonCm).coerceIn(8f, 80f)
-                    aplicar(conEste(c.copy(altosCajonesCm = List(c.cajonesEfectivos) { alto })))
-                }))
-            }
-            TipoElemento.TUBO -> {
-                val et = campo("Tubo bajo el tope (cm)", fmt(ropero.tuboBajoTopeCm))
-                mando.addView(fila(et, boton("Poner") { aplicar(ropero.copy(tuboBajoTopeCm = num(et, ropero.tuboBajoTopeCm).coerceIn(2f, 40f))) }))
-            }
-            TipoElemento.CUERPO -> mando.addView(mandoDeCuerpo(el, c))
+            TipoElemento.TUBO -> mando.addView(filaDeTubo())
         }
         // Un botón para recoger el mando y ver el dibujo entero.
         mando.addView(boton("▾ Recoger") { esconderMando() })
         binding.scrollMando.visibility = View.VISIBLE
         binding.scrollMando.scrollTo(0, 0)
-        mando.visibility = View.VISIBLE
     }
 
     /** Esconde el mando y el teclado, para que se vea el dibujo entero (la selección se queda). */
     private fun esconderMando() {
         binding.scrollMando.visibility = View.GONE
-        binding.contenedorFlotante.visibility = View.GONE
         esconderTeclado()
+    }
+
+    /** A cuánto del tope va el tubo del colgador (es del ropero entero). */
+    private fun filaDeTubo(): View {
+        val et = campo("Tubo bajo el tope (cm)", fmt(ropero.tuboBajoTopeCm))
+        return fila(et, boton("Poner") { aplicar(ropero.copy(tuboBajoTopeCm = num(et, ropero.tuboBajoTopeCm).coerceIn(2f, 40f))) })
     }
 
     private fun esconderTeclado() {
@@ -395,9 +378,19 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private fun aplicar(nuevo: Ropero) {
         esconderTeclado()
         ropero = nuevo
+        refrescar(conMando = true)
+    }
+
+    /** Redibuja y vuelve a elegir lo que estaba elegido (si sigue existiendo); con o sin rearmar el mando. */
+    private fun refrescar(conMando: Boolean) {
         binding.vistaDiseno.ropero = ropero
-        val s = seleccion
-        seleccionar(if (s == null) null else RoperoGeometria.elementos(ropero).firstOrNull { it.esElMismo(s) })
+        val s = seleccion?.let { viejo -> RoperoGeometria.elementos(ropero).firstOrNull { it.esElMismo(viejo) } }
+        if (conMando) seleccionar(s)
+        else {
+            seleccion = s
+            binding.vistaDiseno.elementoResaltado = s
+            binding.tvInfoSeleccion.text = descripcion(s)
+        }
     }
 
     // ==================== OPCIONES GENERALES ====================
