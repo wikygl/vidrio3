@@ -28,7 +28,14 @@ object RoperoUnion {
         if (a.esElMismo(b)) return null to "Es la misma celda"
         val mismaColumna = a.cuerpo == b.cuerpo && a.ruta == b.ruta
         if (mismaColumna) {
-            if (a.tipo == TipoElemento.ZONA_CAJONES || b.tipo == TipoElemento.ZONA_CAJONES) return null to "Los cajones no se unen con el casillero de encima: quítalos o cámbialos"
+            if (a.tipo == TipoElemento.ZONA_CAJONES || b.tipo == TipoElemento.ZONA_CAJONES) {
+                // Los cajones con el casillero de encima: se quita la tapa y quedan dentro de él.
+                val cas = if (a.tipo == TipoElemento.ZONA_CAJONES) b else a
+                if (cas.tipo == TipoElemento.ZONA_CAJONES || cas.indice != 0) return null to "Los cajones solo se unen con el casillero que tienen justo encima"
+                val c = r.cuerpoEn(a.cuerpo, a.ruta) ?: return null to ""
+                if (!c.tapaSobreCajones) return null to "Ya están unidos: los cajones no llevan tapa"
+                return r.conCuerpoEn(a.cuerpo, a.ruta, c.copy(tapaSobreCajones = false)) to ""
+            }
             if (abs(a.indice - b.indice) != 1) return null to "Tienen que estar uno sobre otro, pegados"
             return unirAlto(r, a, b) to ""
         }
@@ -36,7 +43,6 @@ object RoperoUnion {
         if (abs(a.y0 - b.y0) > TOLERANCIA || abs(a.y1 - b.y1) > TOLERANCIA) return null to "Para unir a lo ancho tienen que tener la misma altura"
         val (izq, der) = if (a.x0 < b.x0) a to b else b to a
         if (abs(der.x0 - izq.x1 - r.espesorCm) > TOLERANCIA) return null to "Tienen que ser vecinas, con solo una división entre ellas"
-        if ((izq.tipo == TipoElemento.ZONA_CAJONES) != (der.tipo == TipoElemento.ZONA_CAJONES)) return null to "Los cajones solo se unen con cajones de la misma altura"
         val rutaPadre = izq.ruta.dropLast(2)
         if (izq.cuerpo == der.cuerpo && izq.ruta.size == der.ruta.size && izq.ruta.size >= 2 && rutaPadre == der.ruta.dropLast(2)
             && izq.ruta[izq.ruta.size - 2] == der.ruta[der.ruta.size - 2] && der.ruta.last() == izq.ruta.last() + 1) {
@@ -64,10 +70,11 @@ object RoperoUnion {
         return r.conCuerpoEn(a.cuerpo, a.ruta, c.copy(entrepanos = alturas.size, alturasEntrepanosCm = alturas, partes = partes))
     }
 
-    /** La celda con una repisa al medio: lo contrario de unir a lo alto. */
+    /** La celda con una repisa al medio: lo contrario de unir a lo alto. Sobre unos cajones sin tapa, les devuelve la tapa. */
     fun desunirAlto(r: Ropero, el: ElementoRopero): Ropero {
         if (el.tipo !in setOf(TipoElemento.CASILLERO, TipoElemento.COLGADOR)) return r
         val c = r.cuerpoEn(el.cuerpo, el.ruta) ?: return r
+        if (el.indice == 0 && c.cajonesEfectivos > 0 && !c.tapaSobreCajones) return r.conCuerpoEn(el.cuerpo, el.ruta, c.copy(tapaSobreCajones = true))
         val h = RoperoGeometria.huecoDe(r, el.cuerpo, el.ruta) ?: return r
         val alturas = RoperoGeometria.alturasDeEntrepanos(r, c, h).toMutableList()
         val nueva = (el.y0 + el.y1) / 2f - r.espesorCm / 2f - h.y0
@@ -89,7 +96,7 @@ object RoperoUnion {
         val huecos = RoperoGeometria.columnasDeCasillero(r, padre, casillero, k)
         val columnas = padre.columnasDe(k)
         if (j + 1 !in columnas.indices) return r
-        val unida = columnaUnida(r, columnas[j], huecos[j], columnas[j + 1], huecos[j + 1], izq, casillero)
+        val unida = columnaUnida(r, columnas[j], huecos[j], columnas[j + 1], huecos[j + 1], izq, casillero, der)
         val nuevas = columnas.take(j) + unida + columnas.drop(j + 2)
         // Si queda una sola columna se deja así: ocupa el casillero entero, con sus tramos.
         return r.conCuerpoEn(izq.cuerpo, rutaPadre, padre.conColumnas(k, nuevas))
@@ -100,7 +107,7 @@ object RoperoUnion {
         val a = r.cuerpos[i]; val b = r.cuerpos[i + 1]
         val ha = RoperoGeometria.huecoDeCuerpo(r, i); val hb = RoperoGeometria.huecoDeCuerpo(r, i + 1)
         val region = Hueco(ha.x0, hb.x1, ha.y0, ha.y1)
-        val unido = columnaUnida(r, a, ha, b, hb, izq, region)
+        val unido = columnaUnida(r, a, ha, b, hb, izq, region, der)
         return r.copy(cuerpos = r.cuerpos.take(i) + unido + r.cuerpos.drop(i + 2))
     }
 
@@ -109,17 +116,22 @@ object RoperoUnion {
      * unidos a todo lo ancho, o repisas donde acaba y empieza la celda unida, y las dos columnas
      * recortadas por debajo y por encima.
      */
-    private fun columnaUnida(r: Ropero, a: Cuerpo, ha: Hueco, b: Cuerpo, hb: Hueco, izq: ElementoRopero, region: Hueco): Cuerpo {
+    private fun columnaUnida(r: Ropero, a: Cuerpo, ha: Hueco, b: Cuerpo, hb: Hueco, izq: ElementoRopero, region: Hueco, der: ElementoRopero = izq): Cuerpo {
         val e = r.espesorCm
         val ancho = ha.ancho + e + hb.ancho
         val y0 = izq.y0; val y1 = izq.y1
         val fijo = a.anchoFijo || b.anchoFijo
-        if (izq.tipo == TipoElemento.ZONA_CAJONES) {
-            // Los cajones de la izquierda a todo lo ancho; encima, el casillero partido en las dos columnas recortadas.
-            val altos = a.altosDeCajones(r.altoCajonCm)
+        val zonaIzq = izq.tipo == TipoElemento.ZONA_CAJONES
+        val zonaDer = der.tipo == TipoElemento.ZONA_CAJONES
+        if (zonaIzq || zonaDer) {
+            // Los cajones (los del lado que los tiene) a todo lo ancho; encima, el casillero
+            // partido en las dos columnas recortadas. Un casillero vacío de la misma altura se
+            // los traga: cajones más anchos.
+            val conCajones = if (zonaIzq) a else b
+            val altos = conCajones.altosDeCajones(r.altoCajonCm)
             val tapa = y1 + e
             val arriba = listOfNotNull(recortar(r, a, ha, tapa, region.y1), recortar(r, b, hb, tapa, region.y1))
-            var c = Cuerpo(anchoCm = ancho, tipo = TipoCuerpo.CAJONES, cajones = altos.size, altosCajonesCm = altos, cajonesALaVista = a.cajonesALaVista, anchoFijo = fijo)
+            var c = Cuerpo(anchoCm = ancho, tipo = TipoCuerpo.CAJONES, cajones = altos.size, altosCajonesCm = altos, cajonesALaVista = conCajones.cajonesALaVista, anchoFijo = fijo)
             if (arriba.size == 2 && region.y1 > tapa + 1f) c = c.conColumnas(0, arriba)
             return c
         }

@@ -87,7 +87,7 @@ object RoperoGeometria {
      * hueco). Lo de arriba arranca en su cara de arriba; sin cajones, en el piso.
      */
     fun sobreLosCajones(r: Ropero, c: Cuerpo, h: Hueco): Float =
-        if (c.cajonesEfectivos > 0) topeDeCajones(r, c, h) + r.espesorCm else h.y0
+        if (c.cajonesEfectivos > 0) topeDeCajones(r, c, h) + (if (c.tapaSobreCajones) r.espesorCm else 0f) else h.y0
 
     /** Dónde va el tubo del colgador (su eje) en el hueco. */
     fun tuboY(r: Ropero, h: Hueco): Float = h.y1 - r.tuboBajoTopeCm
@@ -245,9 +245,9 @@ object RoperoGeometria {
             base += alto
         }
         if (c.cajonesEfectivos > 0) {
-            // El espacio de todos los cajones (para su cota) y la tapa que los remata.
+            // El espacio de todos los cajones (para su cota) y la tapa que los remata (si la llevan).
             salen.add(ElementoRopero(TipoElemento.ZONA_CAJONES, i, 0, h.x0, h.y0, h.x1, base, ruta))
-            salen.add(ElementoRopero(TipoElemento.TAPA_CAJONES, i, 0, h.x0, base, h.x1, base + e, ruta))
+            if (c.tapaSobreCajones) salen.add(ElementoRopero(TipoElemento.TAPA_CAJONES, i, 0, h.x0, base, h.x1, base + e, ruta))
         }
         alturasDeEntrepanos(r, c, h).forEachIndexed { k, alt ->
             salen.add(ElementoRopero(TipoElemento.ENTREPANO, i, k, h.x0, h.y0 + alt, h.x1, h.y0 + alt + e, ruta))

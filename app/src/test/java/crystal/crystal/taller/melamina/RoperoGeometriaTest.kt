@@ -311,6 +311,34 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun unir_los_cajones_con_el_casillero_de_encima_quita_la_tapa_y_a_lo_ancho_los_ensancha() {
+        // A lo alto: el cuerpo 1 (3 cajones) y su casillero de encima: sin tapa, el casillero baja hasta los cajones.
+        val zona = RoperoGeometria.elementos(base).first { it.tipo == TipoElemento.ZONA_CAJONES && it.cuerpo == 0 }
+        val encima = RoperoGeometria.elementos(base).first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 0 && it.indice == 0 }
+        assertEquals(zona.y1 + 1.8f, encima.y0, 0.01f)
+        val (r, motivo) = RoperoUnion.unir(base, zona, encima)
+        assertEquals("", motivo)
+        assertTrue(!r!!.cuerpos[0].tapaSobreCajones)
+        val els = RoperoGeometria.elementos(r)
+        assertTrue(els.none { it.tipo == TipoElemento.TAPA_CAJONES && it.cuerpo == 0 })
+        assertEquals(zona.y1, els.first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 0 && it.indice == 0 }.y0, 0.01f)
+        assertTrue(RoperoCalculo.calcular(r).piezas.none { it.nombre == "Tapa de cajones" })
+        // Desunir a lo alto sobre ese casillero devuelve la tapa.
+        val vuelto = RoperoUnion.desunirAlto(r, els.first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 0 && it.indice == 0 })
+        assertTrue(vuelto.cuerpos[0].tapaSobreCajones)
+        // A lo ancho: los cajones (60 de alto) con un casillero vecino de la misma altura: cajones a todo lo ancho.
+        val vecino = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 1, alturasEntrepanosCm = listOf(60f)))
+        val z = RoperoGeometria.elementos(vecino).first { it.tipo == TipoElemento.ZONA_CAJONES && it.cuerpo == 0 }
+        val cas = RoperoGeometria.elementos(vecino).first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 && it.indice == 0 }
+        assertEquals(z.y1, cas.y1, 0.01f)
+        val (ancho, motivo2) = RoperoUnion.unir(vecino, z, cas)
+        assertEquals("", motivo2)
+        assertEquals(1, ancho!!.cuerpos.size)
+        assertEquals(3, ancho.cuerpos[0].cajonesEfectivos)
+        assertEquals(236.4f, RoperoGeometria.elementos(ancho).first { it.tipo == TipoElemento.CAJON }.let { it.x1 - it.x0 }, 0.01f)
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]

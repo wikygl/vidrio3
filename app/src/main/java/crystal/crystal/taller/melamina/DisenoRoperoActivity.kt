@@ -120,7 +120,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.TUBO -> "Tubo del colgador $donde: a ${fmt(ropero.tuboBajoTopeCm)} bajo el tope, ${fmt((el.y0 + el.y1) / 2f - piso)} del piso"
             TipoElemento.CASILLERO -> "Casillero ${el.indice + 1} $donde: ${fmt(el.y1 - el.y0)} de alto libre" + (if (c.columnasDe(el.indice).isNotEmpty()) ", partido en ${c.columnasDe(el.indice).size} columnas" else "")
             TipoElemento.TAPA_CAJONES -> "Tapa sobre los cajones $donde: a ${fmt(el.y0 - piso)} del piso (sube con los cajones)"
-            TipoElemento.ZONA_CAJONES -> "Cajones $donde: ${c.cajonesEfectivos} en ${fmt(el.y1 - el.y0)} de alto"
+            TipoElemento.ZONA_CAJONES -> "Cajones $donde: ${c.cajonesEfectivos} en ${fmt(el.y1 - el.y0)} de alto" + (if (!c.tapaSobreCajones) ", sin tapa (unidos al casillero de encima)" else "")
             TipoElemento.COLGADOR -> "Colgador $donde: ${fmt(el.y1 - el.y0)} libres, el tubo a ${fmt(ropero.tuboBajoTopeCm)} del tope"
             TipoElemento.DIVISION_COLUMNA -> "División entre columnas del casillero ${el.ruta.last() + 1}, cuerpo ${el.cuerpo + 1}"
             TipoElemento.MALETERO -> if (ropero.maleteroPropio) "Maletero, compartimento ${el.indice + 1} de ${ropero.maleteroCuerpos}: ${fmt(el.x1 - el.x0)} de ancho, ${fmt(ropero.maleteroCm)} libres"
@@ -528,7 +528,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         binding.btnLimpiarDiseno.setOnClickListener {
             // Vuelve a lo de fábrica en lo fino; el hueco y los cuerpos se quedan.
             aplicar(ropero.copy(
-                cuerpos = ropero.cuerpos.map { it.copy(altosCajonesCm = emptyList(), alturasEntrepanosCm = emptyList(), hojasBatientes = 0, altoCm = 0f, cajonesALaVista = false, anchoFijo = false, partes = emptyMap(), puertasPropias = null, puertasPorCasillero = false) },
+                cuerpos = ropero.cuerpos.map { it.copy(altosCajonesCm = emptyList(), alturasEntrepanosCm = emptyList(), hojasBatientes = 0, altoCm = 0f, cajonesALaVista = false, anchoFijo = false, partes = emptyMap(), puertasPropias = null, puertasPorCasillero = false, tapaSobreCajones = true) },
                 hojasCorredizas = 0, tuboBajoTopeCm = 6f, tapacantoGrosorMm = 0.45f, tapacantoPuertasMm = 3f, espesorFondoMm = 3f, maleteroCuerpos = 0, maleteroHojas = 0
             ))
             Toast.makeText(this, "Lo fino vuelve a lo de fábrica", Toast.LENGTH_SHORT).show()

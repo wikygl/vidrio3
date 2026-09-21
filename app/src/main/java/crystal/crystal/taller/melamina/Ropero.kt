@@ -238,7 +238,9 @@ data class Cuerpo(
     /** Puertas de este cuerpo, si no son las del ropero (en una columna, si las lleva). */
     val puertasPropias: TipoPuertas? = null,
     /** Cada casillero (y el colgador) con sus propias puertas, dentro de su hueco. */
-    val puertasPorCasillero: Boolean = false
+    val puertasPorCasillero: Boolean = false,
+    /** La tapa de melamina sobre los cajones. Sin ella, los cajones quedan dentro del casillero de encima (unidos). */
+    val tapaSobreCajones: Boolean = true
 ) {
     /** Las columnas en que está partido el casillero [k]; vacío si no lo está. */
     fun columnasDe(k: Int): List<Cuerpo> = partes[k].orEmpty()
@@ -307,7 +309,7 @@ data class Cuerpo(
     fun aJson(): JSONObject = JSONObject().apply {
         put("ancho", anchoCm); put("tipo", tipo.name); put("entrepanos", entrepanos); put("cajones", cajones)
         put("hojasBatientes", hojasBatientes); put("alto", altoCm); put("aLaVista", cajonesALaVista)
-        put("anchoFijo", anchoFijo); put("puertasPorCasillero", puertasPorCasillero)
+        put("anchoFijo", anchoFijo); put("puertasPorCasillero", puertasPorCasillero); put("tapa", tapaSobreCajones)
         puertasPropias?.let { put("puertasPropias", it.name) }
         if (partes.isNotEmpty()) put("partes", JSONArray().apply {
             partes.forEach { (k, columnas) -> put(JSONObject().apply { put("casillero", k); put("columnas", JSONArray().apply { columnas.forEach { put(it.aJson()) } }) }) }
@@ -352,6 +354,7 @@ data class Cuerpo(
                 cajonesALaVista = o.optBoolean("aLaVista", false),
                 anchoFijo = o.optBoolean("anchoFijo", false),
                 puertasPorCasillero = o.optBoolean("puertasPorCasillero", false),
+                tapaSobreCajones = o.optBoolean("tapa", true),
                 puertasPropias = o.optString("puertasPropias", "").takeIf { it.isNotBlank() }?.let { runCatching { TipoPuertas.valueOf(it) }.getOrNull() },
                 partes = (o.optJSONArray("partes") ?: JSONArray()).let { arr ->
                     (0 until arr.length()).mapNotNull { idx ->
