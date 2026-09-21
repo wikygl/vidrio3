@@ -34,6 +34,12 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
     /** Avisa con lo que se tocó dentro del mueble (cajón, repisa, tubo, cuerpo…), o null si se tocó fuera. */
     var alTocarElemento: ((ElementoRopero?) -> Unit)? = null
 
+    /** Avisa cuando se toca la cota de alto de un trozo (casillero, colgador, maletero, espacio de cajones): para escribirle el alto. */
+    var alTocarCota: ((ElementoRopero) -> Unit)? = null
+
+    /** Dónde quedó pintada cada cota de alto, para saber cuál se tocó. */
+    private val cotasDeTrozos = mutableListOf<Pair<android.graphics.RectF, ElementoRopero>>()
+
     /** Las cotas de cada cosa de dentro: el alto de cada cajón y la altura de cada repisa y del tubo. */
     var conCotasDeElementos: Boolean = false
         set(value) { field = value; invalidate() }
@@ -118,15 +124,35 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         val r = ropero
         val piso = RoperoGeometria.pisoY(r)
         val chico = Paint(pTexto).apply { textSize = 9f * dp; textAlign = Paint.Align.LEFT }
+        val derecha = Paint(pTexto).apply { textSize = 9f * dp; textAlign = Paint.Align.RIGHT }
+        cotasDeTrozos.clear()
         RoperoGeometria.elementos(r).forEach { el ->
             when (el.tipo) {
                 TipoElemento.CAJON -> canvas.drawText(fmt(el.y1 - el.y0), x(el.x0) + 3 * dp, y((el.y0 + el.y1) / 2f) + 3 * dp, chico)
                 TipoElemento.ENTREPANO -> canvas.drawText("↑" + fmt(el.y0 - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
                 TipoElemento.TUBO -> canvas.drawText("↑" + fmt((el.y0 + el.y1) / 2f - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
+                // El alto libre de cada trozo: una cota vertical pegada al canto derecho, que se toca para escribirla.
+                TipoElemento.CASILLERO, TipoElemento.COLGADOR, TipoElemento.MALETERO, TipoElemento.ZONA_CAJONES -> {
+                    val cx = x(el.x1) - 9 * dp
+                    val y0 = y(el.y0); val y1 = y(el.y1)
+                    if (y0 - y1 < 12 * dp) return@forEach
+                    canvas.drawLine(cx, y1 + 1 * dp, cx, y0 - 1 * dp, pCota)
+                    canvas.drawLine(cx - 3 * dp, y1 + 1 * dp, cx + 3 * dp, y1 + 1 * dp, pCota)
+                    canvas.drawLine(cx - 3 * dp, y0 - 1 * dp, cx + 3 * dp, y0 - 1 * dp, pCota)
+                    val texto = fmt(el.y1 - el.y0)
+                    val ty = (y0 + y1) / 2f + 3 * dp
+                    canvas.drawText(texto, cx - 3 * dp, ty, derecha)
+                    val ancho = derecha.measureText(texto)
+                    cotasDeTrozos.add(android.graphics.RectF(cx - 3 * dp - ancho - 6 * dp, ty - 14 * dp, cx + 6 * dp, ty + 6 * dp) to el)
+                }
                 else -> Unit
             }
         }
     }
+
+    /** La cota de alto de qué trozo hay bajo ese punto del lienzo, si hay una. */
+    fun cotaDeTrozoEn(px: Float, py: Float): ElementoRopero? =
+        if (en3d || !conCotasDeElementos) null else cotasDeTrozos.firstOrNull { it.first.contains(px, py) }?.second
 
     /** Al décimo, sin el .0 de los enteros: 20.000002 sale "20", 20.05 sale "20.1". */
     private fun fmt(v: Float): String {
@@ -169,7 +195,9 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
                 cuerpoEn(event.x)?.let { alTocarCuerpo?.invoke(it) }
                 // En la cota de un cuerpo se elige el cuerpo entero; dentro del mueble, lo que haya.
                 val cuerpoDeCota = cuerpoEnCota(event.x, event.y)
+                val cotaDeTrozo = cotaDeTrozoEn(event.x, event.y)
                 if (cuerpoDeCota != null) alTocarElemento?.invoke(RoperoGeometria.cuerpo(ropero, cuerpoDeCota))
+                else if (cotaDeTrozo != null && alTocarCota != null) alTocarCota?.invoke(cotaDeTrozo)
                 else alTocarElemento?.invoke(elementoEn(event.x, event.y))
                 return true
             }

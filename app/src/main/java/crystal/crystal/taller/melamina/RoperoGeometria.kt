@@ -1,7 +1,7 @@
 package crystal.crystal.taller.melamina
 
 /** Qué es cada cosa que hay dentro del ropero. */
-enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO, TAPA_CAJONES, MALETERO, COLGADOR }
+enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO, TAPA_CAJONES, MALETERO, COLGADOR, ZONA_CAJONES }
 
 /**
  * Un elemento del ropero puesto en su sitio, en cm desde la esquina de abajo a la izquierda del
@@ -147,6 +147,8 @@ object RoperoGeometria {
                 base += alto
             }
             if (c.cajonesEfectivos > 0) {
+                // El espacio de todos los cajones (para su cota) y la tapa que los remata.
+                salen.add(ElementoRopero(TipoElemento.ZONA_CAJONES, i, 0, izq, piso, der, base))
                 salen.add(ElementoRopero(TipoElemento.TAPA_CAJONES, i, 0, izq, base, der, base + e))
                 base += e
             }
@@ -177,8 +179,38 @@ object RoperoGeometria {
      */
     fun elementoEn(r: Ropero, x: Float, y: Float): ElementoRopero? {
         val todos = elementos(r).filter { it.contiene(x, y) && it.tipo != TipoElemento.CUERPO }
-        return todos.firstOrNull { it.tipo != TipoElemento.CASILLERO && it.tipo != TipoElemento.MALETERO && it.tipo != TipoElemento.COLGADOR }
+        return todos.firstOrNull { it.tipo != TipoElemento.CASILLERO && it.tipo != TipoElemento.MALETERO && it.tipo != TipoElemento.COLGADOR && it.tipo != TipoElemento.ZONA_CAJONES }
             ?: todos.firstOrNull()
+    }
+
+    /**
+     * El cuerpo con el trozo [el] (casillero, colgador, maletero o espacio de cajones) puesto a
+     * [altoCm] libres: lo que hace la cota de alto de cada trozo. El maletero cambia el ropero
+     * entero, así que devuelve el ropero.
+     */
+    fun conAltoDeTrozo(r: Ropero, el: ElementoRopero, altoCm: Float): Ropero {
+        val c = r.cuerpos.getOrNull(el.cuerpo) ?: return r
+        val alto = altoCm.coerceAtLeast(5f)
+        return when (el.tipo) {
+            TipoElemento.MALETERO -> r.copy(maleteroCm = alto.coerceIn(5f, 120f))
+            TipoElemento.CASILLERO -> r.conCuerpo(el.cuerpo, conAltoDeCasillero(r, el.cuerpo, el.indice, alto))
+            TipoElemento.ZONA_CAJONES -> {
+                // Todos los cajones del cuerpo a partes iguales en ese alto.
+                val n = c.cajonesEfectivos
+                r.conCuerpo(el.cuerpo, c.copy(altosCajonesCm = List(n) { (alto / n).coerceIn(8f, 80f) }))
+            }
+            TipoElemento.COLGADOR -> {
+                val repisas = alturasDeEntrepanos(r, c)
+                if (repisas.isNotEmpty()) r.conCuerpo(el.cuerpo, conAltoDeCasillero(r, el.cuerpo, repisas.size, alto))
+                else if (c.cajonesEfectivos > 0) {
+                    // Sin repisas, lo que sobra se lo llevan los cajones, a partes iguales.
+                    val n = c.cajonesEfectivos
+                    val paraCajones = topeBajo(r, el.cuerpo) - alto - r.espesorCm - pisoY(r)
+                    r.conCuerpo(el.cuerpo, c.copy(altosCajonesCm = List(n) { (paraCajones / n).coerceIn(8f, 80f) }))
+                } else r
+            }
+            else -> r
+        }
     }
 
     /** El elemento "cuerpo entero" del cuerpo [i], el que se elige tocando su cota. */

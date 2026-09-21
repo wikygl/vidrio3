@@ -151,6 +151,31 @@ class RoperoCalculoTest {
     }
 
     @Test
+    fun puertas_interiores_dentro_de_cada_hueco_y_zocalo_bajo_el_piso() {
+        val r = base.copy(puertasInteriores = true, zocaloDelante = false, maleteroCm = 40f)
+        val m = RoperoCalculo.calcular(r)
+        // Cada puerta dentro de su hueco de 117.3 (dos hojas de 58.65 - 0.3 - 0.6 = 57.75), del
+        // piso (11.8) a la repisa del maletero (196.4): 184.6 - 0.3 - 0.6 = 183.7.
+        val puerta = pieza(m, "Puerta")!!
+        assertEquals(4, puerta.cantidad)
+        assertEquals(578, puerta.anchoMm)
+        assertEquals(1837, puerta.altoMm)
+        // La del maletero: 40 - 0.3 - 0.6 = 39.1, en el hueco de 117.3.
+        assertEquals(391, pieza(m, "Puerta maletero")!!.altoMm)
+        assertEquals(578, pieza(m, "Puerta maletero")!!.anchoMm)
+        // El zócalo metido bajo el piso: entre laterales (236.4) y de su alto, sin canto.
+        assertEquals(2364, pieza(m, "Zócalo")!!.anchoMm)
+        assertEquals(100, pieza(m, "Zócalo")!!.altoMm)
+        // Con cajones a la vista e interiores: los frentes en el hueco (117.3 - 0.3 - 0.6) y del piso al tope de los cajones.
+        val conCajones = r.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2, cajonesALaVista = true))
+        val frentes = RoperoCalculo.frentesALaVista(conCajones, conCajones.cuerpos[1])
+        assertEquals(11.8f, frentes[0].first, 0.01f)
+        assertEquals(51.8f, frentes[1].second, 0.01f)
+        assertEquals(1164, pieza(RoperoCalculo.calcular(conCajones), "Frente cajón")!!.anchoMm)
+        assertEquals(51.8f + 1.8f, RoperoCalculo.puertaBaja(conCajones, 1).first, 0.01f)
+    }
+
+    @Test
     fun los_cajones_traen_frente_caja_fondo_y_rieles() {
         val conCajones = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3))
         val m = RoperoCalculo.calcular(conCajones)
@@ -164,7 +189,10 @@ class RoperoCalculoTest {
         assertEquals(160, lateral.altoMm)    // 20 - 4
         val fondoCajon = pieza(m, "Fondo cajón")!!
         assertEquals(MaterialPlancha.NORDEX_3, fondoCajon.material)
-        assertEquals(1147, fondoCajon.anchoMm)  // 117.3 - 2.6
+        assertEquals(1111, fondoCajon.anchoMm)  // 117.3 - 2.6 de rieles - 3.6 (dos melaminas, por ser cajón interior)
+        // A la vista, la caja solo pierde los rieles.
+        val aLaVista = RoperoCalculo.calcular(conCajones.conCuerpo(1, conCajones.cuerpos[1].copy(cajonesALaVista = true)))
+        assertEquals(1147, pieza(aLaVista, "Fondo cajón")!!.anchoMm)
         val riel = m.accesorios.first { it.nombre.startsWith("Riel de cajón") }
         assertEquals("Riel de cajón 50 cm (par)", riel.nombre)
         assertEquals(3, riel.cantidad)

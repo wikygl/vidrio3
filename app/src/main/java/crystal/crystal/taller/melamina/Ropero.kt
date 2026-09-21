@@ -42,6 +42,10 @@ data class Ropero(
      * suyas, a partes iguales.
      */
     val maleteroCuerpos: Int = 0,
+    /** El zócalo delante, en el plano de las puertas (lo corriente), o metido debajo del piso entre los laterales. */
+    val zocaloDelante: Boolean = true,
+    /** Puertas interiores (dentro del armazón, cada una en su hueco) o frontales (encima del armazón, tapando medias divisiones). */
+    val puertasInteriores: Boolean = false,
     /** Hojas de cada puerta del maletero propio: 0 = las que tocan (1 hasta 60, 2 si es más ancho), 1 o 2. */
     val maleteroHojas: Int = 0,
     /** Espesor del fondo: 3 (nordex) o 5.5 (MDF). */
@@ -125,6 +129,7 @@ data class Ropero(
         put("verPuertas", verPuertas)
         put("tapacanto", tapacantoGrosorMm); put("tapacantoPuertas", tapacantoPuertasMm); put("espesorFondo", espesorFondoMm)
         put("maleteroCuerpos", maleteroCuerpos); put("maleteroHojas", maleteroHojas)
+        put("zocaloDelante", zocaloDelante); put("puertasInteriores", puertasInteriores)
         put("hojasCorredizas", hojasCorredizas); put("tuboBajoTope", tuboBajoTopeCm)
         put("cuerpos", JSONArray().apply { cuerpos.forEach { put(it.aJson()) } })
     }.toString()
@@ -154,6 +159,8 @@ data class Ropero(
                 tapacantoPuertasMm = o.optDouble("tapacantoPuertas", 3.0).toFloat(),
                 maleteroCuerpos = o.optInt("maleteroCuerpos", 0),
                 maleteroHojas = o.optInt("maleteroHojas", 0),
+                zocaloDelante = o.optBoolean("zocaloDelante", true),
+                puertasInteriores = o.optBoolean("puertasInteriores", false),
                 espesorFondoMm = o.optDouble("espesorFondo", 3.0).toFloat(),
                 hojasCorredizas = o.optInt("hojasCorredizas", 0),
                 tuboBajoTopeCm = o.optDouble("tuboBajoTope", 6.0).toFloat()

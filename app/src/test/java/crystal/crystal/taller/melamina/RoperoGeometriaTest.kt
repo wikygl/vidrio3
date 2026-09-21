@@ -131,6 +131,27 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun la_cota_de_alto_de_cada_trozo_se_escribe() {
+        // El espacio de cajones (3 de 20) puesto a 90: tres de 30.
+        val zona = RoperoGeometria.elementos(base).first { it.tipo == TipoElemento.ZONA_CAJONES && it.cuerpo == 0 }
+        assertEquals(60f, zona.y1 - zona.y0, 0.01f)
+        val r = RoperoGeometria.conAltoDeTrozo(base, zona, 90f)
+        assertEquals(listOf(30f, 30f, 30f), r.cuerpos[0].altosDeCajones(20f))
+        // El maletero a 50.
+        val conMal = base.copy(maleteroCm = 40f)
+        val mal = RoperoGeometria.elementos(conMal).first { it.tipo == TipoElemento.MALETERO }
+        assertEquals(50f, RoperoGeometria.conAltoDeTrozo(conMal, mal, 50f).maleteroCm, 0.01f)
+        // El colgador de un mixto sin repisas: lo que sobra va a los cajones.
+        val mixto = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.MIXTO, cajones = 2))
+        val colgador = RoperoGeometria.elementos(mixto).first { it.tipo == TipoElemento.COLGADOR && it.cuerpo == 0 }
+        val r2 = RoperoGeometria.conAltoDeTrozo(mixto, colgador, 150f)
+        val colgador2 = RoperoGeometria.elementos(r2).first { it.tipo == TipoElemento.COLGADOR && it.cuerpo == 0 }
+        assertEquals(150f, colgador2.y1 - colgador2.y0, 0.05f)
+        // La zona de cajones no se toca por dentro (los cajones van primero), pero existe para su cota.
+        assertEquals(TipoElemento.CAJON, RoperoGeometria.elementoEn(base, 50f, 20f)!!.tipo)
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]
