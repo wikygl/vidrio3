@@ -146,6 +146,9 @@ data class Ropero(
         return c
     }
 
+    /** El ropero con el árbol de cada cuerpo aplanado (ver [Cuerpo.aplanado]). */
+    fun aplanado(): Ropero = copy(cuerpos = cuerpos.map { it.aplanado() })
+
     /** El ropero con el cuerpo de esa [ruta] cambiado por [nuevo] (el ancho se conserva, como en [conCuerpo]). */
     fun conCuerpoEn(indice: Int, ruta: List<Int>, nuevo: Cuerpo): Ropero {
         val c = cuerpos.getOrNull(indice) ?: return this
@@ -263,6 +266,26 @@ data class Cuerpo(
     /** La tapa de melamina sobre los cajones. Sin ella, los cajones quedan dentro del casillero de encima (unidos). */
     val tapaSobreCajones: Boolean = true
 ) {
+    /**
+     * Una columna que no es más que un reparto: sin repisas, cajones, tubo ni puertas, y con su
+     * único casillero partido en columnas. Sus columnas son hermanas de las de al lado.
+     */
+    val esSoloReparto: Boolean
+        get() = entrepanosEfectivos == 0 && cajonesEfectivos == 0 && !llevaTubo && puertasPropias == null && !puertasPorCasillero
+            && partes.keys == setOf(0) && columnasDe(0).size >= 2
+
+    /**
+     * El cuerpo con el árbol aplanado: las columnas que solo son un reparto se sustituyen por
+     * sus columnas (que pasan a ser hermanas), y un casillero con una sola columna que es solo
+     * reparto se parte directamente en las de ella. Así lo que se ve al lado es vecino de verdad.
+     */
+    fun aplanado(): Cuerpo {
+        val nuevas = partes.mapValues { (_, cols) ->
+            cols.map { it.aplanado() }.flatMap { col -> if (col.esSoloReparto) col.columnasDe(0) else listOf(col) }
+        }
+        return copy(partes = nuevas)
+    }
+
     /** Las columnas en que está partido el casillero [k]; vacío si no lo está. */
     fun columnasDe(k: Int): List<Cuerpo> = partes[k].orEmpty()
 

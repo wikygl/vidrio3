@@ -89,7 +89,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             val (unido, motivo) = RoperoUnion.unir(ropero, primera, el)
             if (unido == null) { Toast.makeText(this, motivo, Toast.LENGTH_LONG).show() }
             else {
-                ropero = unido
+                ropero = unido.aplanado()
                 // Queda elegida la celda unida: la que ahora ocupa el medio de las dos.
                 val xm = (minOf(primera.x0, el.x0) + maxOf(primera.x1, el.x1)) / 2f
                 val ym = (minOf(primera.y0, el.y0) + maxOf(primera.y1, el.y1)) / 2f
@@ -201,17 +201,8 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     boton("Repartir de nuevo") { aplicar(conEste(c.copy(alturasEntrepanosCm = emptyList()))) }
                 ))
             }
+            // Los trozos: el alto se escribe en su cota; aquí solo lo que no hace otra herramienta.
             TipoElemento.CASILLERO -> {
-                // El alto libre del casillero. "Poner" fija este y reparte de nuevo los de arriba
-                // (los de abajo se quedan): así los de abajo salen chicos y el resto iguales.
-                // "Solo esta" mueve nada más la repisa de encima (o la de abajo en el último).
-                val etAlto = campo("Alto libre de este casillero (cm)", fmt(el.y1 - el.y0))
-                mando.addView(fila(
-                    etAlto,
-                    boton("Poner") { aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, num(etAlto, el.y1 - el.y0))) },
-                    boton("Solo esta") { aplicar(conEste(RoperoGeometria.conAltoDeCasilleroSoloEsa(ropero, c, hueco, el.indice, num(etAlto, el.y1 - el.y0)))) },
-                    boton("Repartir de nuevo") { aplicar(conEste(c.copy(alturasEntrepanosCm = emptyList()))) }
-                ))
                 mando.addView(filaDeRepisas(el, c))
                 mando.addView(filaDeUnir(el))
                 // El casillero partido en columnas, cada una un cuerpo con lo suyo.
@@ -220,21 +211,16 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     val n = (etColumnas.text.toString().toIntOrNull() ?: 1).coerceIn(1, 6)
                     aplicar(conEste(c.conCasilleroPartido(el.indice, n, el.x1 - el.x0, ropero.espesorCm)))
                 }))
-                if (el.ruta.isNotEmpty()) mando.addView(mandoDeCuerpo(el, c))
             }
             TipoElemento.ZONA_CAJONES -> {
-                val etAlto = campo("Alto de todos los cajones (cm)", fmt(el.y1 - el.y0))
-                mando.addView(fila(etAlto, boton("Poner") { aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, num(etAlto, el.y1 - el.y0))) }))
                 mando.addView(filaDeCajones(el, c))
                 mando.addView(filaDeUnir(el))
-                if (el.ruta.isNotEmpty()) mando.addView(mandoDeCuerpo(el, c))
             }
             TipoElemento.COLGADOR -> {
                 // El colgador: el tubo, y las repisas que van debajo de la ropa.
                 mando.addView(filaDeTubo())
                 mando.addView(filaDeRepisas(el, c))
                 mando.addView(filaDeUnir(el))
-                if (el.ruta.isNotEmpty()) mando.addView(mandoDeCuerpo(el, c))
             }
             TipoElemento.REPISA_MALETERO, TipoElemento.MALETERO -> {
                 val et = campo("Alto libre del maletero (cm)", fmt(ropero.maleteroCm))
@@ -278,15 +264,24 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private fun pedirAltoDeTrozo(el: ElementoRopero) {
         seleccionar(el)
         val et = campo("Alto libre (cm)", fmt(el.y1 - el.y0))
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        // "Poner" fija este alto y reparte de nuevo los casilleros de arriba (los de abajo se
+        // quedan). "Solo esta" mueve nada más la repisa de encima (o la de abajo en el último).
+        val dialogo = androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle(descripcion(el))
             .setView(fila(et))
             .setPositiveButton("Poner") { _, _ -> aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, num(et, el.y1 - el.y0))) }
             .setNegativeButton("Cancelar", null)
-            .show()
+        if (el.tipo == TipoElemento.CASILLERO || el.tipo == TipoElemento.COLGADOR) {
+            dialogo.setNeutralButton("Solo esta repisa") { _, _ ->
+                val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: return@setNeutralButton
+                val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: return@setNeutralButton
+                aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, RoperoGeometria.conAltoDeCasilleroSoloEsa(ropero, c, hueco, el.indice, num(et, el.y1 - el.y0))))
+            }
+        }
+        dialogo.show()
     }
 
-    /** Cuántas repisas lleva el cuerpo o la columna (los casilleros son una más): se reparten de nuevo al cambiarlas. */
+    /** Cuántas repisas lleva el cuerpo o la columna (los casilleros son una más): "Poner" las reparte de nuevo, aunque sean las mismas. */
     private fun filaDeRepisas(el: ElementoRopero, c: Cuerpo): View {
         val et = campo(if (el.ruta.isEmpty()) "Repisas del cuerpo" else "Repisas de la columna", c.entrepanosEfectivos.toString(), entero = true)
         return fila(et, boton("Poner") {
@@ -377,7 +372,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
     /** Un cambio: se guarda, se redibuja y se vuelve a elegir lo mismo (si sigue existiendo). */
     private fun aplicar(nuevo: Ropero) {
         esconderTeclado()
-        ropero = nuevo
+        ropero = nuevo.aplanado()
         refrescar(conMando = true)
     }
 

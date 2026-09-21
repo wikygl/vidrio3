@@ -383,6 +383,35 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun una_columna_que_solo_es_reparto_se_aplana_y_sus_columnas_son_vecinas() {
+        // Cuerpo 1 (117.3, sin repisas) partido en [30 | 85.5]; la de 85.5 partida a su vez en [40 | 43.7].
+        val e = 1.8f
+        val liso = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.ENTREPANOS))
+        val cas = RoperoGeometria.casilleros(liso, liso.cuerpos[0], RoperoGeometria.huecoDeCuerpo(liso, 0))[0]
+        var c = liso.cuerpos[0].conCasilleroPartido(0, 2, cas.ancho, e)
+        var r = liso.conCuerpo(0, c).conAnchoEn(0, listOf(0, 0), 30f)
+        c = r.cuerpos[0]
+        val envoltorio = c.columnasDe(0)[1].conCasilleroPartido(0, 2, 85.5f, e)
+        r = r.conCuerpoEn(0, listOf(0, 1), envoltorio)
+        assertTrue(r.cuerpos[0].columnasDe(0)[1].esSoloReparto)
+        // Aplanado: tres columnas hermanas, que suman lo mismo.
+        val plano = r.aplanado()
+        val columnas = plano.cuerpos[0].columnasDe(0)
+        assertEquals(3, columnas.size)
+        assertEquals(30f, columnas[0].anchoCm, 0.01f)
+        assertEquals(117.3f, columnas.sumOf { it.anchoCm.toDouble() }.toFloat() + 2 * e, 0.05f)
+        // Y ahora las dos primeras se pueden unir (antes estaban en niveles distintos).
+        val els = RoperoGeometria.elementos(plano)
+        val a = els.first { it.tipo == TipoElemento.CASILLERO && it.ruta == listOf(0, 0) }
+        val b = els.first { it.tipo == TipoElemento.CASILLERO && it.ruta == listOf(0, 1) }
+        val (unido, motivo) = RoperoUnion.unir(plano, a, b)
+        assertEquals("", motivo)
+        assertEquals(2, unido!!.aplanado().cuerpos[0].columnasDe(0).size)
+        // Una columna con repisas no se aplana.
+        assertTrue(!Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 1).conCasilleroPartido(0, 2, 60f, e).esSoloReparto)
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]

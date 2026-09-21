@@ -108,14 +108,17 @@ class DisenoRoperoActivityTest {
                 val vista = a.findViewById<VistaRopero>(R.id.vistaDiseno)
                 val mando = a.findViewById<LinearLayout>(R.id.contenedorFlotante)
                 val piso = RoperoGeometria.pisoY(vista.ropero)
-                // El casillero de abajo del cuerpo 2 (casilleros, 4 repisas): 50 de alto libre.
+                // El casillero de abajo del cuerpo 2 (casilleros, 4 repisas): su mando pone las repisas del cuerpo (3).
                 val cas = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 && it.indice == 0 }
                 vista.alTocarElemento?.invoke(cas)
                 assertTrue(a.findViewById<TextView>(R.id.tvInfoSeleccion).text.startsWith("Casillero 1"))
-                campos(mando).first().setText("50")
+                campos(mando).first().setText("3")
                 botones(mando).first { it.text == "Poner" }.performClick()
-                val primera = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 && it.indice == 0 }
-                assertEquals(50f, primera.y0 - piso, 0.01f)
+                assertEquals(3, RoperoGeometria.elementos(vista.ropero).count { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 })
+                // El alto de un casillero va por su cota: lo que hace el diálogo.
+                val primeraCelda = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 && it.indice == 0 }
+                val conAlto = RoperoGeometria.conAltoDeTrozo(vista.ropero, primeraCelda, 50f)
+                assertEquals(50f, RoperoGeometria.elementos(conAlto).first { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 && it.indice == 0 }.y0 - piso, 0.01f)
                 // El cuerpo 2 con su propio alto: 200. El cuerpo entero se elige tocando su cota de abajo.
                 val (cx, cy) = vista.puntoDeCotaDeCuerpo(1)
                 assertEquals(1, vista.elementoEnCota(cx, cy)?.cuerpo)
