@@ -258,7 +258,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             adapter = ArrayAdapter(this@DisenoRoperoActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Melamina 18 mm", "Melamina 15 mm"))
             setSelection(if (ropero.espesorMm <= 15) 1 else 0)
         }
-        val grosores = listOf(0.45f, 1f, 2f)
+        val grosores = listOf(0.45f, 1f, 2f, 3f)
         val spTapacanto = Spinner(this).apply {
             adapter = ArrayAdapter(this@DisenoRoperoActivity, android.R.layout.simple_spinner_dropdown_item, grosores.map { "${fmt(it)} mm" })
             setSelection(grosores.indexOfFirst { kotlin.math.abs(it - ropero.tapacantoGrosorMm) < 0.01f }.coerceAtLeast(0))

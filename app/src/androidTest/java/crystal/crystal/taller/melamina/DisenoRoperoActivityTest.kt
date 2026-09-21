@@ -92,10 +92,10 @@ class DisenoRoperoActivityTest {
                 fun recorrer(v: android.view.View) { if (v is android.widget.Spinner) spinners.add(v); if (v is android.view.ViewGroup) for (i in 0 until v.childCount) recorrer(v.getChildAt(i)) }
                 recorrer(opciones)
                 // Puertas, hojas corredizas, melamina, fondo, tapacanto.
-                spinners[4].setSelection(2)   // 2 mm
+                spinners[4].setSelection(3)   // 3 mm
                 spinners[1].setSelection(3)   // 4 hojas
                 botones(opciones).first { it.text == "Aplicar opciones" }.performClick()
-                assertEquals(2f, vista.ropero.tapacantoGrosorMm, 0.01f)
+                assertEquals(3f, vista.ropero.tapacantoGrosorMm, 0.01f)
                 assertEquals(4, vista.ropero.hojasCorredizas)
             }
         }

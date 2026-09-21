@@ -31,7 +31,7 @@ data class Ropero(
     /** Cómo se quiere ver en el apunte: con las puertas puestas o el interior. No cambia el cálculo. */
     val verPuertas: Boolean = false,
     // ---- Lo fino, que se toca en la pantalla de diseño ----
-    /** Grosor del tapacanto (PVC): 0.45, 1 o 2 mm. */
+    /** Grosor del tapacanto (PVC): 0.45, 1, 2 o 3 mm; los de uso corriente son 0.45 y 3. */
     val tapacantoGrosorMm: Float = 0.45f,
     /** Espesor del fondo: 3 (nordex) o 5.5 (MDF). */
     val espesorFondoMm: Float = 3f,
