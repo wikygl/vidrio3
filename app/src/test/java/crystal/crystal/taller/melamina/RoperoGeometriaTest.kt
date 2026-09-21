@@ -473,6 +473,35 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun mover_un_cuerpo_lo_pone_donde_se_suelta_con_todo_lo_suyo() {
+        // Tres cuerpos: cajones (3), casilleros, colgador. El primero soltado con el centro cerca del borde derecho del último: va al final.
+        val tres = base.conCuerposIguales(3).conCuerpo(2, Cuerpo(tipo = TipoCuerpo.COLGAR))
+        val cuerpo0 = RoperoGeometria.cuerpo(tres, 0)!!
+        val huecos = RoperoGeometria.hermanasDe(tres, cuerpo0)
+        assertEquals(3, huecos.size)
+        val (destino, borde) = RoperoGeometria.destinoDeMovimiento(tres, cuerpo0, huecos[2].x1 - 5f)
+        assertEquals(2, destino)
+        assertEquals(huecos[2].x1, borde, 0.01f)
+        val movido = tres.conMovido(0, emptyList(), destino)
+        assertEquals(listOf(TipoCuerpo.ENTREPANOS, TipoCuerpo.COLGAR, TipoCuerpo.CAJONES), movido.cuerpos.map { it.tipo })
+        assertEquals(3, movido.cuerpos[2].cajonesEfectivos)
+        // Soltarlo donde ya está no cambia nada.
+        val (mismo, _) = RoperoGeometria.destinoDeMovimiento(tres, cuerpo0, huecos[0].x0 + 1f)
+        assertEquals(tres, tres.conMovido(0, emptyList(), mismo))
+        // Una columna entre sus hermanas: [30 | 40 | 47.3] y la última soltada al principio.
+        val liso = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.ENTREPANOS))
+        val cas = RoperoGeometria.casilleros(liso, liso.cuerpos[0], RoperoGeometria.huecoDeCuerpo(liso, 0))[0]
+        var r = liso.conCuerpo(0, liso.cuerpos[0].conCasilleroPartido(0, 3, cas.ancho, 1.8f)).conAnchoEn(0, listOf(0, 0), 30f).conAnchoEn(0, listOf(0, 1), 40f)
+        r = r.conCuerpoEn(0, listOf(0, 2), Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2))
+        val ultima = RoperoGeometria.elementos(r).first { it.tipo == TipoElemento.COLUMNA && it.ruta == listOf(0, 2) }
+        val (d2, _) = RoperoGeometria.destinoDeMovimiento(r, ultima, cas.x0 + 1f)
+        assertEquals(0, d2)
+        val r2 = r.conMovido(0, listOf(0, 2), d2)
+        assertEquals(listOf(TipoCuerpo.CAJONES, TipoCuerpo.ENTREPANOS, TipoCuerpo.ENTREPANOS), r2.cuerpos[0].columnasDe(0).map { it.tipo })
+        assertEquals(30f, r2.cuerpos[0].columnasDe(0)[1].anchoCm, 0.01f)
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]

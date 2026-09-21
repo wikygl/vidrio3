@@ -381,6 +381,33 @@ object RoperoGeometria {
         return r.conCuerpoEn(el.cuerpo, el.ruta, nuevo)
     }
 
+    /** Los huecos de las hermanas de [el] (los cuerpos, o las columnas del mismo casillero), de izquierda a derecha. */
+    fun hermanasDe(r: Ropero, el: ElementoRopero): List<Hueco> {
+        if (el.ruta.size < 2) return r.cuerpos.indices.map { huecoDeCuerpo(r, it) }
+        val rutaPadre = el.ruta.dropLast(2)
+        val k = el.ruta[el.ruta.size - 2]
+        val padre = r.cuerpoEn(el.cuerpo, rutaPadre) ?: return emptyList()
+        val huecoPadre = huecoDe(r, el.cuerpo, rutaPadre) ?: return emptyList()
+        val casillero = casilleros(r, padre, huecoPadre).getOrNull(k) ?: return emptyList()
+        return columnasDeCasillero(r, padre, casillero, k)
+    }
+
+    /**
+     * Dónde caería [el] si se suelta con su centro en [xCm]: el hueco entre hermanas (0 = antes de
+     * la primera, n = después de la última) cuyo borde queda más cerca, y la x de ese borde.
+     */
+    fun destinoDeMovimiento(r: Ropero, el: ElementoRopero, xCm: Float): Pair<Int, Float> {
+        val hermanas = hermanasDe(r, el)
+        if (hermanas.isEmpty()) return 0 to xCm
+        // Los bordes donde se puede meter: el borde izquierdo de cada hermana y el derecho de la última.
+        val bordes = hermanas.map { it.x0 } + hermanas.last().x1
+        val cual = bordes.indices.minByOrNull { kotlin.math.abs(bordes[it] - xCm) } ?: 0
+        // Con el elemento fuera de la lista, los huecos a su derecha corren uno.
+        val propio = hermanas.indexOfFirst { kotlin.math.abs(it.x0 - el.x0) < 0.01f }
+        val destino = if (propio >= 0 && cual > propio) cual - 1 else cual
+        return destino to bordes[cual]
+    }
+
     /** El elemento "cuerpo entero" del cuerpo [i], el que se elige tocando su cota. */
     fun cuerpo(r: Ropero, i: Int): ElementoRopero? = elementos(r).firstOrNull { it.tipo == TipoElemento.CUERPO && it.cuerpo == i }
 }

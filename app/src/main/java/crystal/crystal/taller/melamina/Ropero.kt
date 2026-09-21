@@ -148,6 +148,23 @@ data class Ropero(
         return c
     }
 
+    /**
+     * El ropero con el cuerpo [i] (o la columna de su [ruta]) puesto en el sitio [destino] entre
+     * sus hermanas (0 = el primero, n = el último), con todo lo suyo. Los anchos se quedan.
+     */
+    fun conMovido(i: Int, ruta: List<Int>, destino: Int): Ropero {
+        if (ruta.size < 2) {
+            if (i !in cuerpos.indices) return this
+            return copy(cuerpos = Cuerpo.movida(cuerpos, i, destino))
+        }
+        val rutaPadre = ruta.dropLast(2)
+        val k = ruta[ruta.size - 2]; val j = ruta.last()
+        val padre = cuerpoEn(i, rutaPadre) ?: return this
+        val columnas = padre.columnasDe(k)
+        if (j !in columnas.indices) return this
+        return conCuerpoEn(i, rutaPadre, padre.conColumnas(k, Cuerpo.movida(columnas, j, destino)))
+    }
+
     /** El ropero con el árbol de cada cuerpo aplanado (ver [Cuerpo.aplanado]). */
     fun aplanado(): Ropero = copy(cuerpos = cuerpos.map { it.aplanado() })
 
@@ -386,6 +403,14 @@ data class Cuerpo(
     }
 
     companion object {
+        /** La lista con el elemento [desde] sacado y metido en el hueco [destino] (contado con él fuera de la lista). */
+        fun movida(lista: List<Cuerpo>, desde: Int, destino: Int): List<Cuerpo> {
+            val sin = lista.toMutableList()
+            val el = sin.removeAt(desde)
+            sin.add(destino.coerceIn(0, sin.size), el)
+            return sin
+        }
+
         /**
          * Las columnas repartidas para que sumen [libre]: las fijadas se quedan, las sueltas se
          * reparten el resto a partes iguales; si todas están fijadas, todas a escala. Las que

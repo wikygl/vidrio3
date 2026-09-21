@@ -239,6 +239,24 @@ class DisenoRoperoActivityTest {
         }
     }
 
+    @Test
+    fun mover_arrastra_la_sombra_del_cuerpo_y_lo_coloca_al_soltar() {
+        ActivityScenario.launch<DisenoRoperoActivity>(intent()).use { esc ->
+            esc.onActivity { a ->
+                val vista = a.findViewById<VistaRopero>(R.id.vistaDiseno)
+                val mando = a.findViewById<LinearLayout>(R.id.contenedorFlotante)
+                // El cuerpo 1 (cajones) elegido por su cota, y "Mover…".
+                vista.alTocarElemento?.invoke(RoperoGeometria.cuerpo(vista.ropero, 0))
+                botones(mando).first { it.text == "Mover…" }.performClick()
+                assertEquals(0, vista.moviendo?.cuerpo)
+                // Se suelta con el centro en el borde derecho del cuerpo 2: pasa al final.
+                val huecos = RoperoGeometria.hermanasDe(vista.ropero, RoperoGeometria.cuerpo(vista.ropero, 0)!!)
+                vista.alSoltarMovimiento?.invoke(RoperoGeometria.cuerpo(vista.ropero, 0)!!, huecos[1].x1 - 3f)
+                assertEquals(listOf(TipoCuerpo.ENTREPANOS, TipoCuerpo.CAJONES), vista.ropero.cuerpos.map { it.tipo })
+            }
+        }
+    }
+
     /** Deja una captura con un cajón tocado, para mirarla desde la PC. */
     @Test
     fun guarda_captura_de_la_pantalla() {

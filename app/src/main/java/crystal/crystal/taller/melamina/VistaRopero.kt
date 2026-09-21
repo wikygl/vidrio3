@@ -34,6 +34,18 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
     /** Avisa con lo que se tocó dentro del mueble (cajón, repisa, tubo, cuerpo…), o null si se tocó fuera. */
     var alTocarElemento: ((ElementoRopero?) -> Unit)? = null
 
+    /**
+     * El cuerpo o columna que se está moviendo: mientras no sea null, el dedo arrastra una sombra
+     * suya por el mueble y al soltar se avisa con la x (cm) donde quedó su centro.
+     */
+    var moviendo: ElementoRopero? = null
+        set(value) { field = value; sombraX = null; invalidate() }
+    private var sombraX: Float? = null
+    var alSoltarMovimiento: ((ElementoRopero, Float) -> Unit)? = null
+
+    private val pSombra = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1E88E5"); style = Paint.Style.FILL; alpha = 70 }
+    private val pDestino = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1E88E5"); style = Paint.Style.STROKE; strokeWidth = 3f * dp }
+
     /** Avisa cuando se toca la cota de alto de un trozo (casillero, colgador, maletero, espacio de cajones): para escribirle el alto. */
     var alTocarCota: ((ElementoRopero) -> Unit)? = null
 
@@ -87,6 +99,14 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         dibujo.dibujar(canvas, r, origenX, origenY, escala, mostrarPuertas, en3d, cuerpoResaltado)
         elementoResaltado?.let { el ->
             canvas.drawRect(x(el.x0) - 2 * dp, y(el.y1) - 2 * dp, x(el.x1) + 2 * dp, y(el.y0) + 2 * dp, pResalte)
+        }
+        // La sombra del cuerpo que se mueve, centrada en el dedo, y la raya donde caería al soltar.
+        val mov = moviendo; val sx = sombraX
+        if (mov != null && sx != null && !en3d) {
+            val medio = (mov.x1 - mov.x0) / 2f
+            canvas.drawRect(x(sx - medio), y(mov.y1), x(sx + medio), y(mov.y0), pSombra)
+            val (_, borde) = RoperoGeometria.destinoDeMovimiento(r, mov, sx)
+            canvas.drawLine(x(borde), y(mov.y1) - 6 * dp, x(borde), y(mov.y0) + 6 * dp, pDestino)
         }
         if (!en3d) dibujarCotas(canvas)
         if (!en3d && conCotasDeElementos) dibujarCotasDeElementos(canvas)
@@ -221,6 +241,15 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
     private val avisarPulsacionLarga = Runnable { pulsacionLarga = true; performLongClick() }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // Moviendo un cuerpo: el dedo lleva la sombra; al soltar, se coloca.
+        moviendo?.let { mov ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> { sombraX = (event.x - origenX) / escala; invalidate() }
+                MotionEvent.ACTION_UP -> { val sx = sombraX; moviendo = null; if (sx != null) alSoltarMovimiento?.invoke(mov, sx) }
+                MotionEvent.ACTION_CANCEL -> moviendo = null
+            }
+            return true
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 xInicio = event.x; yInicio = event.y; movido = false; pulsacionLarga = false
