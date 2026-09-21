@@ -140,13 +140,6 @@ class DisenoRoperoActivity : AppCompatActivity() {
         when (el.tipo) {
             TipoElemento.CAJON -> {
                 val etAlto = campo("Alto de este cajón (cm)", fmt(el.y1 - el.y0))
-                // El espacio de cajones del cuerpo: cuántos y si se ven desde fuera.
-                val etCuantos = campo("Cajones del cuerpo", c.cajonesEfectivos.toString(), entero = true)
-                val cbALaVista = CheckBox(this).apply { text = "A la vista"; textSize = 12f; isChecked = c.cajonesALaVista }
-                mando.addView(fila(etCuantos, cbALaVista, boton("Poner") {
-                    val cuantos = (etCuantos.text.toString().toIntOrNull() ?: c.cajonesEfectivos).coerceIn(1, 10)
-                    aplicar(ropero.conCuerpo(el.cuerpo, c.copy(cajones = cuantos, cajonesALaVista = cbALaVista.isChecked)))
-                }))
                 mando.addView(fila(
                     etAlto,
                     boton("Este") { aplicar(ropero.conCuerpo(el.cuerpo, c.conAltoDeCajon(el.indice, num(etAlto, el.y1 - el.y0), ropero.altoCajonCm))) },
@@ -159,6 +152,13 @@ class DisenoRoperoActivity : AppCompatActivity() {
                         aplicar(ropero.copy(altoCajonCm = alto, cuerpos = ropero.cuerpos.map { it.copy(altosCajonesCm = emptyList()) }))
                     }
                 ))
+                // El espacio de cajones del cuerpo: cuántos y si se ven desde fuera.
+                val etCuantos = campo("Cajones del cuerpo", c.cajonesEfectivos.toString(), entero = true)
+                val cbALaVista = CheckBox(this).apply { text = "A la vista"; textSize = 12f; isChecked = c.cajonesALaVista }
+                mando.addView(fila(etCuantos, cbALaVista, boton("Poner") {
+                    val cuantos = (etCuantos.text.toString().toIntOrNull() ?: c.cajonesEfectivos).coerceIn(1, 10)
+                    aplicar(ropero.conCuerpo(el.cuerpo, c.copy(cajones = cuantos, cajonesALaVista = cbALaVista.isChecked)))
+                }))
             }
             TipoElemento.ENTREPANO -> {
                 val etAltura = campo("Altura de esta repisa desde el piso (cm)", fmt(el.y0 - piso))
