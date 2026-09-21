@@ -303,7 +303,8 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val et = campo(if (el.ruta.isEmpty()) "Repisas del cuerpo" else "Repisas de la columna", c.entrepanosEfectivos.toString(), entero = true)
         return fila(et, boton("Poner") {
             val n = (et.text.toString().toIntOrNull() ?: c.entrepanosEfectivos).coerceIn(0, 12)
-            aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(entrepanos = n, alturasEntrepanosCm = emptyList())))
+            // Las alturas escritas solo se pierden si cambia el número de repisas.
+            aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(entrepanos = n, alturasEntrepanosCm = if (n == c.entrepanosEfectivos) c.alturasEntrepanosCm else emptyList())))
         })
     }
 
@@ -366,12 +367,17 @@ class DisenoRoperoActivity : AppCompatActivity() {
         caja.addView(if (esColumna) fila(spTipo, etAncho) else fila(spTipo, etAncho, etAltoLado))
         caja.addView(fila(etRepisas, etCajones, spHojas, cbALaVista))
         caja.addView(fila(spPuertas, cbPorCasillero, boton(if (esColumna) "Aplicar a la columna" else "Aplicar al cuerpo") {
+            val tipo = tipos[spTipo.selectedItemPosition.coerceIn(0, tipos.lastIndex)]
+            val repisas = etRepisas.text.toString().toIntOrNull() ?: 0
+            val cajones = etCajones.text.toString().toIntOrNull() ?: 0
+            // Lo escrito a mano (alturas de repisas, altos de cajones) se respeta si no cambia lo que lo define.
             val nuevo = c.copy(
-                tipo = tipos[spTipo.selectedItemPosition.coerceIn(0, tipos.lastIndex)],
-                entrepanos = etRepisas.text.toString().toIntOrNull() ?: 0,
-                cajones = etCajones.text.toString().toIntOrNull() ?: 0,
+                tipo = tipo,
+                entrepanos = repisas,
+                cajones = cajones,
                 hojasBatientes = spHojas.selectedItemPosition,
-                alturasEntrepanosCm = emptyList(),
+                alturasEntrepanosCm = if (tipo == c.tipo && repisas == c.entrepanos) c.alturasEntrepanosCm else emptyList(),
+                altosCajonesCm = if (tipo == c.tipo && cajones == c.cajones) c.altosCajonesCm else emptyList(),
                 altoCm = if (esColumna) c.altoCm else num(etAltoLado, 0f).let { if (it >= 30f) it else 0f },
                 cajonesALaVista = cbALaVista.isChecked,
                 puertasPropias = puertasElegidas(spPuertas),
