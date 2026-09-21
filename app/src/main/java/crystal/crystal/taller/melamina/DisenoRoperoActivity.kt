@@ -82,7 +82,25 @@ class DisenoRoperoActivity : AppCompatActivity() {
     /** Al medio centímetro: lo que se corta. */
     private fun redondear(v: Float): Float = (v * 2f).roundToInt() / 2f
 
+    /** La celda que espera a que se toque su vecina para unirlas. */
+    private var uniendo: ElementoRopero? = null
+
     private fun seleccionar(el: ElementoRopero?) {
+        val primera = uniendo
+        if (primera != null && el != null && !el.esElMismo(primera)) {
+            uniendo = null
+            val (unido, motivo) = RoperoUnion.unir(ropero, primera, el)
+            if (unido == null) { Toast.makeText(this, motivo, Toast.LENGTH_LONG).show() }
+            else {
+                ropero = unido
+                binding.vistaDiseno.ropero = ropero
+                // Queda elegida la celda unida: la que ahora ocupa el medio de las dos.
+                val xm = (minOf(primera.x0, el.x0) + maxOf(primera.x1, el.x1)) / 2f
+                val ym = (minOf(primera.y0, el.y0) + maxOf(primera.y1, el.y1)) / 2f
+                seleccionar(RoperoGeometria.elementoEn(ropero, xm, ym))
+                return
+            }
+        }
         seleccion = el
         binding.vistaDiseno.elementoResaltado = el
         binding.tvInfoSeleccion.text = descripcion(el)
@@ -206,6 +224,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     boton("Repartir de nuevo") { aplicar(conEste(c.copy(alturasEntrepanosCm = emptyList()))) }
                 ))
                 mando.addView(filaDeRepisas(el, c))
+                mando.addView(filaDeUnir(el))
                 // El casillero partido en columnas, cada una un cuerpo con lo suyo.
                 val etColumnas = campo("Partir en columnas (1 = sin partir)", c.columnasDe(el.indice).size.coerceAtLeast(1).toString(), entero = true)
                 mando.addView(fila(etColumnas, boton("Partir") {
@@ -223,6 +242,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     val conCuantos = conEste(c.copy(cajones = cuantos, cajonesALaVista = cbALaVista.isChecked))
                     aplicar(RoperoGeometria.conAltoDeTrozo(conCuantos, el, num(etAlto, el.y1 - el.y0)))
                 }))
+                mando.addView(filaDeUnir(el))
                 if (el.ruta.isNotEmpty()) mando.addView(filaDeColumna(el, c))
             }
             TipoElemento.COLGADOR -> {
@@ -230,6 +250,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 val etTubo = campo("Tubo bajo el tope (cm)", fmt(ropero.tuboBajoTopeCm))
                 mando.addView(fila(etTubo, boton("Poner") { aplicar(ropero.copy(tuboBajoTopeCm = num(etTubo, ropero.tuboBajoTopeCm).coerceIn(2f, 40f))) }))
                 mando.addView(filaDeRepisas(el, c))
+                mando.addView(filaDeUnir(el))
                 if (el.ruta.isNotEmpty()) mando.addView(filaDeColumna(el, c))
             }
             TipoElemento.REPISA_MALETERO, TipoElemento.MALETERO -> {
@@ -321,6 +342,19 @@ class DisenoRoperoActivity : AppCompatActivity() {
             val n = (et.text.toString().toIntOrNull() ?: c.entrepanosEfectivos).coerceIn(0, 12)
             aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(entrepanos = n, alturasEntrepanosCm = emptyList())))
         })
+    }
+
+    /** Unir esta celda con una vecina (se toca después), y desunirla a lo ancho o a lo alto. */
+    private fun filaDeUnir(el: ElementoRopero): View {
+        val botones = mutableListOf<View>(boton("Unir con…") {
+            uniendo = el
+            binding.tvInfoSeleccion.text = "Toca la celda vecina (de la misma altura si es al lado, del mismo ancho si es encima o debajo) para unirlas"
+        })
+        if (el.tipo != TipoElemento.ZONA_CAJONES) {
+            botones.add(boton("Desunir a lo ancho") { aplicar(RoperoUnion.desunirAncho(ropero, el)) })
+            botones.add(boton("Desunir a lo alto") { aplicar(RoperoUnion.desunirAlto(ropero, el)) })
+        }
+        return fila(*botones.toTypedArray())
     }
 
     private val opcionesDePuertas = listOf(null, TipoPuertas.SIN, TipoPuertas.BATIENTES, TipoPuertas.CORREDIZAS)

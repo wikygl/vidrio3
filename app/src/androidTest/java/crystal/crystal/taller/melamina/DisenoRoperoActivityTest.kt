@@ -150,6 +150,26 @@ class DisenoRoperoActivityTest {
         }
     }
 
+    @Test
+    fun unir_con_toca_la_vecina_y_las_une() {
+        ActivityScenario.launch<DisenoRoperoActivity>(intent()).use { esc ->
+            esc.onActivity { a ->
+                val vista = a.findViewById<VistaRopero>(R.id.vistaDiseno)
+                val mando = a.findViewById<LinearLayout>(R.id.contenedorFlotante)
+                val cas = RoperoGeometria.elementos(vista.ropero).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
+                assertEquals(5, cas.size)
+                vista.alTocarElemento?.invoke(cas[0])
+                botones(mando).first { it.text == "Unir con…" }.performClick()
+                vista.alTocarElemento?.invoke(cas[1])
+                val despues = RoperoGeometria.elementos(vista.ropero).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
+                assertEquals(4, despues.size)
+                assertEquals(cas[1].y1, despues[0].y1, 0.05f)
+                // Queda elegida la celda unida.
+                assertTrue(a.findViewById<TextView>(R.id.tvInfoSeleccion).text.startsWith("Casillero 1"))
+            }
+        }
+    }
+
     /** Deja una captura con un cajón tocado, para mirarla desde la PC. */
     @Test
     fun guarda_captura_de_la_pantalla() {

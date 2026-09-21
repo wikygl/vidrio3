@@ -227,6 +227,90 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun unir_dos_casilleros_a_lo_alto_quita_la_repisa() {
+        // Cuerpo 2: dos repisas, tres casilleros. Unir el de abajo con el del medio: queda una repisa, la de arriba, donde estaba.
+        val antes = RoperoGeometria.elementos(base).filter { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 }
+        val cas = RoperoGeometria.elementos(base).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
+        val (r, motivo) = RoperoUnion.unir(base, cas[0], cas[1])
+        assertEquals("", motivo)
+        val repisas = RoperoGeometria.elementos(r!!).filter { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 }
+        assertEquals(1, repisas.size)
+        assertEquals(antes[1].y0, repisas[0].y0, 0.01f)
+        val unidos = RoperoGeometria.elementos(r).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
+        assertEquals(2, unidos.size)
+        assertEquals(cas[0].y0, unidos[0].y0, 0.01f)
+        assertEquals(cas[1].y1, unidos[0].y1, 0.01f)
+        // No se unen dos que no están pegados, ni cosas que no son celdas.
+        assertTrue(RoperoUnion.unir(base, cas[0], cas[2]).first == null)
+        val cajon = RoperoGeometria.elementos(base).first { it.tipo == TipoElemento.CAJON }
+        assertTrue(RoperoUnion.unir(base, cas[0], cajon).first == null)
+        // Desunir a lo alto le pone la repisa al medio.
+        val vuelto = RoperoUnion.desunirAlto(r, unidos[0])
+        assertEquals(2, RoperoGeometria.elementos(vuelto).count { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 })
+    }
+
+    @Test
+    fun unir_los_cajones_de_dos_cuerpos_los_hace_a_todo_lo_ancho() {
+        // Dos cuerpos de cajones iguales (3 de 20): unidos, un cuerpo de 236.4 con tres cajones a
+        // todo lo ancho y encima el casillero partido en las dos columnas de antes.
+        val dos = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3))
+        val zonas = RoperoGeometria.elementos(dos).filter { it.tipo == TipoElemento.ZONA_CAJONES }
+        assertEquals(2, zonas.size)
+        val (r, motivo) = RoperoUnion.unir(dos, zonas[0], zonas[1])
+        assertEquals("", motivo)
+        assertEquals(1, r!!.cuerpos.size)
+        assertEquals(236.4f, r.cuerpos[0].anchoCm, 0.01f)
+        assertEquals(3, r.cuerpos[0].cajonesEfectivos)
+        val els = RoperoGeometria.elementos(r)
+        val cajones = els.filter { it.tipo == TipoElemento.CAJON && it.ruta.isEmpty() }
+        assertEquals(3, cajones.size)
+        assertEquals(236.4f, cajones[0].x1 - cajones[0].x0, 0.01f)
+        // Arriba, dos columnas de 117.3 con la división entre ellas, que arranca sobre la tapa.
+        val division = els.first { it.tipo == TipoElemento.DIVISION_COLUMNA }
+        assertEquals(11.8f + 60f + 1.8f, division.y0, 0.01f)
+        assertEquals(2, r.cuerpos[0].columnasDe(0).size)
+        assertEquals(117.3f, RoperoGeometria.huecoDe(r, 0, listOf(0, 0))!!.ancho, 0.01f)
+        // Los materiales: un solo cuerpo, la tapa de 236.4 y una división de casillero.
+        val m = RoperoCalculo.calcular(r)
+        assertEquals(2364, m.piezas.first { it.nombre == "Tapa de cajones" }.anchoMm)
+        assertEquals(1, m.piezas.filter { it.nombre == "División de casillero" }.sumOf { it.cantidad })
+        assertTrue(m.piezas.none { it.nombre == "División" })
+    }
+
+    @Test
+    fun unir_dos_casilleros_vecinos_a_lo_ancho_corta_la_division_en_ese_tramo() {
+        // Dos cuerpos de casilleros con dos repisas cada uno, a la misma altura. Unir los del medio.
+        val dos = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 2))
+        val medioIzq = RoperoGeometria.elementos(dos).first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 0 && it.indice == 1 }
+        val medioDer = RoperoGeometria.elementos(dos).first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 && it.indice == 1 }
+        val (r, motivo) = RoperoUnion.unir(dos, medioIzq, medioDer)
+        assertEquals("", motivo)
+        assertEquals(1, r!!.cuerpos.size)
+        val c = r.cuerpos[0]
+        // Dos repisas (bajo y sobre la celda unida), el casillero de abajo y el de arriba partidos, el del medio no.
+        assertEquals(2, c.entrepanosEfectivos)
+        assertEquals(2, c.columnasDe(0).size)
+        assertEquals(0, c.columnasDe(1).size)
+        assertEquals(2, c.columnasDe(2).size)
+        val els = RoperoGeometria.elementos(r)
+        val medio = els.first { it.tipo == TipoElemento.CASILLERO && it.ruta.isEmpty() && it.indice == 1 }
+        assertEquals(medioIzq.y0, medio.y0, 0.05f)
+        assertEquals(medioIzq.y1, medio.y1, 0.05f)
+        assertEquals(236.4f, medio.x1 - medio.x0, 0.01f)
+        // Las divisiones de columna van solo abajo y arriba, no en el tramo unido.
+        val divisiones = els.filter { it.tipo == TipoElemento.DIVISION_COLUMNA }
+        assertEquals(2, divisiones.size)
+        assertTrue(divisiones.none { it.y0 < medio.y1 && it.y1 > medio.y0 })
+        // Desunir a lo ancho vuelve a partir el del medio con las columnas de su vecino.
+        val vuelto = RoperoUnion.desunirAncho(r, medio)
+        assertEquals(2, vuelto.cuerpos[0].columnasDe(1).size)
+        // Con distinta altura no se unen.
+        val desiguales = dos.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 3))
+        val aIzq = RoperoGeometria.elementos(desiguales).first { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 0 && it.indice == 1 }
+        assertTrue(RoperoUnion.unir(desiguales, aIzq, medioDer).first == null)
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]
