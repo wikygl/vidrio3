@@ -339,6 +339,26 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun casilleros_mas_cajones_reparte_las_repisas_sobre_la_tapa() {
+        val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.CAJONES_CASILLEROS, cajones = 2, entrepanos = 2))
+        val c = r.cuerpos[1]
+        assertEquals(2, c.cajonesEfectivos)
+        assertEquals(2, c.entrepanosEfectivos)
+        assertTrue(!c.llevaTubo)
+        val els = RoperoGeometria.elementos(r).filter { it.cuerpo == 1 }
+        assertEquals(2, els.count { it.tipo == TipoElemento.CAJON })
+        assertEquals(1, els.count { it.tipo == TipoElemento.TAPA_CAJONES })
+        // Tres casilleros iguales sobre la tapa: (226.4 - 40 - 1.8 - 3.6) / 3 = 60.33.
+        val cas = els.filter { it.tipo == TipoElemento.CASILLERO }
+        assertEquals(3, cas.size)
+        assertEquals(11.8f + 40f + 1.8f, cas[0].y0, 0.01f)
+        cas.forEach { assertEquals(60.33f, it.y1 - it.y0, 0.05f) }
+        val m = RoperoCalculo.calcular(r)
+        assertEquals(2, m.piezas.filter { it.nombre == "Entrepaño" && it.anchoMm == 1173 }.sumOf { it.cantidad })
+        assertEquals(5, m.piezas.filter { it.nombre == "Frente cajón" }.sumOf { it.cantidad })   // 3 del cuerpo 1 y 2 de este
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]

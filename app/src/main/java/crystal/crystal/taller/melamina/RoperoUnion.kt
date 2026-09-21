@@ -80,7 +80,7 @@ object RoperoUnion {
         val nueva = (el.y0 + el.y1) / 2f - r.espesorCm / 2f - h.y0
         alturas.add(el.indice.coerceAtMost(alturas.size), nueva)
         val partes = c.partes.mapKeys { (k, _) -> if (k > el.indice) k + 1 else k }
-        val tipo = if (c.tipo == TipoCuerpo.CAJONES) TipoCuerpo.ENTREPANOS else c.tipo
+        val tipo = if (c.tipo == TipoCuerpo.CAJONES) TipoCuerpo.CAJONES_CASILLEROS else c.tipo
         return r.conCuerpoEn(el.cuerpo, el.ruta, c.copy(tipo = tipo, entrepanos = alturas.size, alturasEntrepanosCm = alturas, partes = partes))
     }
 
@@ -168,6 +168,7 @@ object RoperoUnion {
         val llevaTubo = c.llevaTubo && abs(hasta - h.y1) < TOLERANCIA
         val tipo = when {
             altos.isNotEmpty() && llevaTubo -> TipoCuerpo.MIXTO
+            altos.isNotEmpty() && nuevasAlturas.isNotEmpty() -> TipoCuerpo.CAJONES_CASILLEROS
             altos.isNotEmpty() -> TipoCuerpo.CAJONES
             llevaTubo && nuevasAlturas.isNotEmpty() -> TipoCuerpo.COLGAR_CASILLEROS
             llevaTubo -> TipoCuerpo.COLGAR
