@@ -193,6 +193,8 @@ object RoperoCalculo {
                     pieza("Frente y trasera de caja", cajaW - 2 * e, cajaH, 2, cantoCm = cajaW - 2 * e); canto(cajaW - 2 * e, 2)
                 }
                 pieza("Fondo cajón", cajaW, cajaProf, cajones, fondoMat)
+                // La tapa sobre los cajones, que los separa del colgador o del hueco de arriba.
+                pieza("Tapa de cajones", w, fondoInt, 1, cantoCm = w); canto(w, 1); tornillos40 += 4
                 val riel = RIELES_CAJON.lastOrNull { it <= cajaProf } ?: RIELES_CAJON.first()
                 accesorios.add(Accesorio("Riel de cajón $riel cm (par)", cajones))
                 tiradores += cajones

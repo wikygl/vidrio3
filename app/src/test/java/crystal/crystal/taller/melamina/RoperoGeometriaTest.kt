@@ -86,6 +86,39 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun sobre_los_cajones_va_una_tapa_y_lo_de_arriba_arranca_encima() {
+        val tapa = RoperoGeometria.elementos(base).first { it.tipo == TipoElemento.TAPA_CAJONES && it.cuerpo == 0 }
+        assertEquals(71.8f, tapa.y0, 0.01f)      // tres cajones de 20 sobre el piso
+        assertEquals(73.6f, tapa.y1, 0.01f)
+        assertEquals(1, RoperoCalculo.calcular(base).piezas.filter { it.nombre == "Tapa de cajones" }.sumOf { it.cantidad })
+        // En un mixto las repisas se reparten desde la cara de arriba de la tapa.
+        val mixto = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.MIXTO, cajones = 2, entrepanos = 1))
+        val repisa = RoperoGeometria.elementos(mixto).first { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 0 }
+        val piso = RoperoGeometria.pisoY(mixto)
+        val desde = 40f + 1.8f
+        val hasta = RoperoGeometria.tuboY(mixto, 0) - RoperoGeometria.ROPA_COLGADA_CM - piso
+        assertEquals(desde + (hasta - desde) / 2f, repisa.y0 - piso, 0.05f)
+        // Sin cajones no hay tapa.
+        assertTrue(RoperoGeometria.elementos(base).none { it.tipo == TipoElemento.TAPA_CAJONES && it.cuerpo == 1 })
+    }
+
+    @Test
+    fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
+        val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
+        val c = r.cuerpos[1]
+        assertTrue(c.llevaTubo)
+        assertEquals(2, c.entrepanosEfectivos)
+        val piso = RoperoGeometria.pisoY(r)
+        val hasta = RoperoGeometria.tuboY(r, 1) - RoperoGeometria.ROPA_COLGADA_CM - piso
+        val repisas = RoperoGeometria.alturasDeEntrepanos(r, c)
+        assertEquals(hasta / 3f, repisas[0], 0.05f)
+        assertEquals(2 * hasta / 3f, repisas[1], 0.05f)
+        val m = RoperoCalculo.calcular(r)
+        assertEquals(1, m.accesorios.count { it.nombre == "Tubo colgador" })
+        assertEquals(2, m.piezas.filter { it.nombre == "Entrepaño" }.sumOf { it.cantidad })
+    }
+
+    @Test
     fun se_encuentra_lo_que_hay_bajo_el_dedo() {
         val cajon = RoperoGeometria.elementoEn(base, 50f, 20f)
         assertNotNull(cajon)

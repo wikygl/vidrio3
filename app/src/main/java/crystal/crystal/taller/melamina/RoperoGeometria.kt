@@ -1,7 +1,7 @@
 package crystal.crystal.taller.melamina
 
 /** Qué es cada cosa que hay dentro del ropero. */
-enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO }
+enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO, TAPA_CAJONES }
 
 /**
  * Un elemento del ropero puesto en su sitio, en cm desde la esquina de abajo a la izquierda del
@@ -48,6 +48,13 @@ object RoperoGeometria {
     /** Hasta dónde llegan los cajones apilados desde el piso. */
     fun topeDeCajones(r: Ropero, c: Cuerpo): Float = pisoY(r) + c.altosDeCajones(r.altoCajonCm).sum()
 
+    /**
+     * Sobre los cajones va una tapa de melamina que los separa de lo de arriba (el colgador o el
+     * hueco). Lo de arriba arranca en su cara de arriba; sin cajones, en el piso.
+     */
+    fun sobreLosCajones(r: Ropero, c: Cuerpo): Float =
+        if (c.cajonesEfectivos > 0) topeDeCajones(r, c) + r.espesorCm else pisoY(r)
+
     /** Dónde va el tubo del colgador del cuerpo [i] (su eje). */
     fun tuboY(r: Ropero, i: Int = 0): Float = topeBajo(r, i) - r.tuboBajoTopeCm
 
@@ -62,7 +69,7 @@ object RoperoGeometria {
         if (c.alturasEntrepanosCm.size == n) return c.alturasEntrepanosCm
         val i = r.cuerpos.indexOf(c).coerceAtLeast(0)
         val piso = pisoY(r)
-        val desde = topeDeCajones(r, c) - piso
+        val desde = sobreLosCajones(r, c) - piso
         val hasta = (if (c.llevaTubo) tuboY(r, i) - ROPA_COLGADA_CM else topeBajo(r, i)) - piso
         if (c.tipo == TipoCuerpo.COLGAR) return (1..n).map { desde + 30f * it }.filter { it < hasta }
         val paso = (hasta - desde) / (n + 1)
@@ -84,6 +91,10 @@ object RoperoGeometria {
             c.altosDeCajones(r.altoCajonCm).forEachIndexed { k, alto ->
                 salen.add(ElementoRopero(TipoElemento.CAJON, i, k, izq, base, der, base + alto))
                 base += alto
+            }
+            if (c.cajonesEfectivos > 0) {
+                salen.add(ElementoRopero(TipoElemento.TAPA_CAJONES, i, 0, izq, base, der, base + e))
+                base += e
             }
             val repisas = alturasDeEntrepanos(r, c)
             repisas.forEachIndexed { k, h ->

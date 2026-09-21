@@ -97,6 +97,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.REPISA_MALETERO -> "Repisa del maletero: ${fmt(ropero.maleteroCm)} libres arriba"
             TipoElemento.TUBO -> "Tubo del colgador: a ${fmt(ropero.tuboBajoTopeCm)} bajo el tope, ${fmt(RoperoGeometria.tuboY(ropero, el.cuerpo) - piso)} del piso"
             TipoElemento.CASILLERO -> "Casillero ${el.indice + 1} del cuerpo ${el.cuerpo + 1}: ${fmt(el.y1 - el.y0)} de alto libre"
+            TipoElemento.TAPA_CAJONES -> "Tapa sobre los cajones del cuerpo ${el.cuerpo + 1}: a ${fmt(el.y0 - piso)} del piso (sube con los cajones)"
         }
     }
 
@@ -180,6 +181,14 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.REPISA_MALETERO -> {
                 val et = campo("Alto libre del maletero (cm)", fmt(ropero.maleteroCm))
                 mando.addView(fila(et, boton("Poner") { aplicar(ropero.copy(maleteroCm = num(et, ropero.maleteroCm).coerceIn(0f, 120f))) }))
+            }
+            TipoElemento.TAPA_CAJONES -> {
+                // La tapa va donde acaban los cajones: lo que se cambia es el alto de estos.
+                val et = campo("Alto de cada cajón de este cuerpo (cm)", fmt(ropero.altoCajonCm))
+                mando.addView(fila(et, boton("Poner") {
+                    val alto = num(et, ropero.altoCajonCm).coerceIn(8f, 80f)
+                    aplicar(ropero.conCuerpo(el.cuerpo, c.copy(altosCajonesCm = List(c.cajonesEfectivos) { alto })))
+                }))
             }
             TipoElemento.TUBO -> {
                 val et = campo("Tubo bajo el tope (cm)", fmt(ropero.tuboBajoTopeCm))

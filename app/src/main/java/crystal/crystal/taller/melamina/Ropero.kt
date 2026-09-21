@@ -148,7 +148,9 @@ enum class TipoCuerpo(val etiqueta: String) {
     ENTREPANOS("Casilleros"),
     CAJONES("Cajones"),
     /** Colgador arriba y cajones abajo, con casilleros entre medio si se piden. */
-    MIXTO("Colgador + cajones")
+    MIXTO("Colgador + cajones"),
+    /** Colgador arriba y casilleros abajo, repartidos bajo la ropa colgada. */
+    COLGAR_CASILLEROS("Colgador + casilleros")
 }
 
 enum class TipoPuertas(val etiqueta: String) {
@@ -185,13 +187,14 @@ data class Cuerpo(
         TipoCuerpo.ENTREPANOS -> entrepanos.coerceIn(0, 12)
         TipoCuerpo.CAJONES -> 0
         TipoCuerpo.MIXTO -> entrepanos.coerceIn(0, 4)
+        TipoCuerpo.COLGAR_CASILLEROS -> entrepanos.coerceIn(1, 6)
     }
     val cajonesEfectivos: Int get() = when (tipo) {
         TipoCuerpo.CAJONES -> cajones.coerceIn(1, 10)
         TipoCuerpo.MIXTO -> cajones.coerceIn(1, 6)
         else -> 0
     }
-    val llevaTubo: Boolean get() = tipo == TipoCuerpo.COLGAR || tipo == TipoCuerpo.MIXTO
+    val llevaTubo: Boolean get() = tipo == TipoCuerpo.COLGAR || tipo == TipoCuerpo.MIXTO || tipo == TipoCuerpo.COLGAR_CASILLEROS
 
     /** El alto de cada cajón que se corta, de abajo arriba. */
     fun altosDeCajones(altoPorDefectoCm: Float): List<Float> =
