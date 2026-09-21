@@ -184,7 +184,7 @@ object RoperoPuertas {
      * de arriba llega a media tapa, donde arranca la puerta. Interior: del piso al tope de los cajones.
      */
     fun frentesALaVista(r: Ropero, c: Cuerpo, h: Hueco): List<Pair<Float, Float>> {
-        val altos = c.altosDeCajones(r.altoCajonCm)
+        val altos = RoperoGeometria.altosDeCajones(r, c, h)
         if (altos.isEmpty()) return emptyList()
         val topes = altos.runningFold(h.y0) { acc, alto -> acc + alto }
         val interior = r.puertasInteriores

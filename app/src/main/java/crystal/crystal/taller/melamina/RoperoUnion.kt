@@ -128,7 +128,7 @@ object RoperoUnion {
             // partido en las dos columnas recortadas. Un casillero vacío de la misma altura se
             // los traga: cajones más anchos.
             val conCajones = if (zonaIzq) a else b
-            val altos = conCajones.altosDeCajones(r.altoCajonCm)
+            val altos = RoperoGeometria.altosDeCajones(r, conCajones, if (zonaIzq) ha else hb)
             val tapa = y1 + e
             val arriba = listOfNotNull(recortar(r, a, ha, tapa, region.y1), recortar(r, b, hb, tapa, region.y1))
             var c = Cuerpo(anchoCm = ancho, tipo = TipoCuerpo.CAJONES, cajones = altos.size, altosCajonesCm = altos, cajonesALaVista = conCajones.cajonesALaVista, anchoFijo = fijo)
@@ -156,7 +156,7 @@ object RoperoUnion {
         if (hasta - desde < 1f) return null
         val e = r.espesorCm
         val conCajones = c.cajonesEfectivos > 0 && abs(desde - h.y0) < TOLERANCIA && RoperoGeometria.topeDeCajones(r, c, h) + e <= hasta + TOLERANCIA
-        val altos = if (conCajones) c.altosDeCajones(r.altoCajonCm) else emptyList()
+        val altos = if (conCajones) RoperoGeometria.altosDeCajones(r, c, h) else emptyList()
         val alturas = RoperoGeometria.alturasDeEntrepanos(r, c, h)
         // Las repisas del tramo: su cara de abajo entre desde y hasta (sin contar las que hacen de borde).
         val dentro = alturas.withIndex().filter { (_, alt) -> h.y0 + alt > desde + TOLERANCIA && h.y0 + alt + e < hasta - TOLERANCIA }

@@ -85,6 +85,10 @@ class DisenoRoperoActivityTest {
                 vista.alArrastrar?.invoke(repisa, (repisa.x0 + repisa.x1) / 2f, piso + 33.2f)
                 val movida = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 && it.indice == 0 }
                 assertEquals(33f, movida.y0 - piso, 0.01f)   // al medio centímetro
+                // El imán: cerca de la cara de arriba del primer cajón del cuerpo 1 (a 20 del piso), se pega a ella.
+                vista.alArrastrar?.invoke(movida, (movida.x0 + movida.x1) / 2f, piso + 21.3f)
+                val pegada = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 && it.indice == 0 }
+                assertEquals(20f, pegada.y0 - piso, 0.01f)
                 // Opciones: tapacanto de 2 mm y 4 hojas corredizas.
                 a.findViewById<android.view.View>(R.id.btnOpciones).performClick()
                 val opciones = a.findViewById<LinearLayout>(R.id.contenedorOpciones)

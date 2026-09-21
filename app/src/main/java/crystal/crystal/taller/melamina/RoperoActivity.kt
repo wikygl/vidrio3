@@ -309,9 +309,12 @@ class RoperoActivity : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun mostrarResultados(m: MaterialesRopero) {
-        val melamina = if (ropero.espesorMm <= 15) MaterialPlancha.MELAMINA_15 else MaterialPlancha.MELAMINA_18
-        binding.tvMelamina.text = melamina.etiqueta
+        val melamina = RoperoCalculo.melaminaInterior(ropero)
+        val melColor = RoperoCalculo.melaminaVisible(ropero)
+        binding.tvMelamina.text = if (ropero.interiorBlanco) "${melamina.etiqueta} blanca" else melamina.etiqueta
         binding.txMelamina.text = m.lineasDePiezas(melamina)
+        binding.tvMelaminaColor.text = melColor.etiqueta
+        ponerFila(binding.lyMelaminaColor, binding.txMelaminaColor, if (melColor == melamina) "" else m.lineasDePiezas(melColor))
         val fondoMat = if (ropero.espesorFondoMm >= 5f) MaterialPlancha.MDF_55 else MaterialPlancha.NORDEX_3
         binding.tvNordex.text = fondoMat.etiqueta
         ponerFila(binding.lyNordex, binding.txNordex, m.lineasDePiezas(fondoMat))
@@ -413,6 +416,7 @@ class RoperoActivity : AppCompatActivity() {
             referencias = fila(binding.lyReferencias, binding.tvReferencias, binding.txReferencias),
             items = listOf(
                 fila(binding.lyMelamina, binding.tvMelamina, binding.txMelamina),
+                fila(binding.lyMelaminaColor, binding.tvMelaminaColor, binding.txMelaminaColor),
                 fila(binding.lyNordex, binding.tvNordex, binding.txNordex),
                 fila(binding.lyTapacanto, binding.tvTapacanto, binding.txTapacanto),
                 fila(binding.lyTapacantoPuertas, binding.tvTapacantoPuertas, binding.txTapacantoPuertas),
@@ -433,6 +437,7 @@ class RoperoActivity : AppCompatActivity() {
     private fun devolverResultadoMasivo() {
         val perfiles = mapOf(
             ModoMasivoHelper.texto(binding.tvMelamina) to ModoMasivoHelper.texto(binding.txMelamina),
+            ModoMasivoHelper.texto(binding.tvMelaminaColor) to ModoMasivoHelper.texto(binding.txMelaminaColor),
             ModoMasivoHelper.texto(binding.tvNordex) to ModoMasivoHelper.texto(binding.txNordex),
             ModoMasivoHelper.texto(binding.tvTapacanto) to ModoMasivoHelper.texto(binding.txTapacanto),
             ModoMasivoHelper.texto(binding.tvTapacantoPuertas) to ModoMasivoHelper.texto(binding.txTapacantoPuertas),

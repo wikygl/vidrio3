@@ -7,6 +7,9 @@ import kotlin.math.roundToInt
 enum class MaterialPlancha(val etiqueta: String, val planchaAnchoMm: Int, val planchaAltoMm: Int) {
     MELAMINA_18("Melamina 18 mm", 2440, 1830),
     MELAMINA_15("Melamina 15 mm", 2440, 1830),
+    /** La de color: solo lo que se ve sin abrir (puertas, frentes a la vista, zócalo), cuando el interior va en blanco. */
+    MELAMINA_18_COLOR("Melamina 18 mm de color", 2440, 1830),
+    MELAMINA_15_COLOR("Melamina 15 mm de color", 2440, 1830),
     NORDEX_3("Nordex 3 mm", 2440, 1830),
     MDF_55("MDF 5.5 mm", 2440, 1830)
 }
@@ -120,9 +123,20 @@ object RoperoCalculo {
     private const val GRUNA_ZOCALO_CM = 0.15f
     private val RIELES_CAJON = listOf(30, 35, 40, 45, 50, 55)
 
+    /** La melamina del armazón y lo de dentro (blanca si el interior va en blanco). */
+    fun melaminaInterior(r: Ropero): MaterialPlancha = if (r.espesorMm <= 15) MaterialPlancha.MELAMINA_15 else MaterialPlancha.MELAMINA_18
+
+    /** La melamina de lo que se ve sin abrir: la de color si el interior va en blanco; si no, la misma. */
+    fun melaminaVisible(r: Ropero): MaterialPlancha = when {
+        !r.interiorBlanco -> melaminaInterior(r)
+        r.espesorMm <= 15 -> MaterialPlancha.MELAMINA_15_COLOR
+        else -> MaterialPlancha.MELAMINA_18_COLOR
+    }
+
     fun calcular(r: Ropero): MaterialesRopero {
         val e = r.espesorCm
-        val mel = if (r.espesorMm <= 15) MaterialPlancha.MELAMINA_15 else MaterialPlancha.MELAMINA_18
+        val mel = melaminaInterior(r)
+        val melColor = melaminaVisible(r)
         val fondoMat = if (r.espesorFondoMm >= 5f) MaterialPlancha.MDF_55 else MaterialPlancha.NORDEX_3
         val piezas = mutableListOf<PiezaMelamina>()
         val accesorios = mutableListOf<Accesorio>()
@@ -148,7 +162,9 @@ object RoperoCalculo {
             val w = anchoCm - cantosEnAlto * t
             val h = altoCm - cantosEnAncho * t
             val cantoCm = cantosEnAncho * w + cantosEnAlto * h
-            piezas.add(PiezaMelamina(nombre, mm(w), mm(h), cantidad, material, mm(cantoCm)))
+            // Lo visible va en la melamina de color (si el interior es blanco); el resto, en la de dentro.
+            val mat = if (visible && material == mel) melColor else material
+            piezas.add(PiezaMelamina(nombre, mm(w), mm(h), cantidad, mat, mm(cantoCm)))
             canto(w, cantosEnAncho * cantidad, visible)
             canto(h, cantosEnAlto * cantidad, visible)
         }
@@ -216,7 +232,7 @@ object RoperoCalculo {
                 accesorios.add(Accesorio("Tubo colgador", 1, largoCm = w))
                 accesorios.add(Accesorio("Soporte de tubo", 2))
             }
-            val altosCajones = c.altosDeCajones(r.altoCajonCm)
+            val altosCajones = RoperoGeometria.altosDeCajones(r, c, h)
             val cajones = altosCajones.size
             if (cajones > 0) {
                 // Cada cajón con su alto: el frente y la caja se cortan por cajón, y los iguales
@@ -293,7 +309,8 @@ object RoperoCalculo {
         val tapacantoPuertasM = tapacantoPuertas.entries.sumOf { (l, c) -> l.toDouble() * c } / 100.0
         val largas = juntas.filter { maxOf(it.anchoMm, it.altoMm) > LARGO_PLANCHA_MM }.map { it.nombre }.distinct()
         val referencias = buildString {
-            append("Ropero empotrado ${fmt(r.anchoCm)} x ${fmt(r.altoCm)} x ${fmt(r.fondoCm)} cm, melamina ${r.espesorMm} mm\n")
+            append("Ropero empotrado ${fmt(r.anchoCm)} x ${fmt(r.altoCm)} x ${fmt(r.fondoCm)} cm, melamina ${r.espesorMm} mm")
+            append(if (r.interiorBlanco) " (interior en blanco, lo visible de color)\n" else " (todo del mismo color)\n")
             append("Cuerpos: ").append(r.cuerpos.joinToString(", ") { "${fmt(it.anchoCm)} ${it.tipo.etiqueta.lowercase()}" }).append('\n')
             append(if (r.zocaloDelante) "Zócalo ${fmt(r.zocaloCm)} delante (melamina ${fmt(altoZocalo(r))} + canto)" else "Zócalo ${fmt(r.zocaloCm)} bajo el piso")
             if (r.maleteroCm > 0f) append(", maletero ${fmt(r.maleteroCm)}").append(if (r.maleteroPropio) " en ${r.maleteroCuerpos}" else "")

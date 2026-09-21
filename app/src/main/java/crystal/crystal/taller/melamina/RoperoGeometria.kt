@@ -79,8 +79,21 @@ object RoperoGeometria {
 
     // ==================== Lo de dentro de un hueco ====================
 
+    /**
+     * El alto de cada cajón del hueco, de abajo arriba: los escritos (o el de por defecto), pero
+     * si entre todos se pasan de lo que hay (el hueco menos la tapa), se encogen a escala hasta
+     * caber: en un hueco de 51.8 dos cajones no pueden pasar de 25.9 cada uno.
+     */
+    fun altosDeCajones(r: Ropero, c: Cuerpo, h: Hueco): List<Float> {
+        val altos = c.altosDeCajones(r.altoCajonCm)
+        if (altos.isEmpty()) return altos
+        val disponible = h.alto - (if (c.tapaSobreCajones) r.espesorCm else 0f)
+        val suma = altos.sum()
+        return if (suma <= disponible + 0.01f) altos else altos.map { it * disponible / suma }
+    }
+
     /** Hasta dónde llegan los cajones apilados desde el piso del hueco. */
-    fun topeDeCajones(r: Ropero, c: Cuerpo, h: Hueco): Float = h.y0 + c.altosDeCajones(r.altoCajonCm).sum()
+    fun topeDeCajones(r: Ropero, c: Cuerpo, h: Hueco): Float = h.y0 + altosDeCajones(r, c, h).sum()
 
     /**
      * Sobre los cajones va una tapa de melamina que los separa de lo de arriba (el colgador o el
@@ -243,7 +256,7 @@ object RoperoGeometria {
     private fun elementosDelHueco(r: Ropero, i: Int, ruta: List<Int>, c: Cuerpo, h: Hueco, salen: MutableList<ElementoRopero>) {
         val e = r.espesorCm
         var base = h.y0
-        c.altosDeCajones(r.altoCajonCm).forEachIndexed { k, alto ->
+        altosDeCajones(r, c, h).forEachIndexed { k, alto ->
             salen.add(ElementoRopero(TipoElemento.CAJON, i, k, h.x0, base, h.x1, base + alto, ruta))
             base += alto
         }

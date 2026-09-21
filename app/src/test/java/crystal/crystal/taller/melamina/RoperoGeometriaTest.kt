@@ -412,6 +412,22 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun los_cajones_no_se_salen_de_su_hueco() {
+        // Tres cajones de 20 en un hueco de 51.8 (con tapa quedan 50): se encogen a 16.67 cada uno.
+        val c = Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3)
+        val h = Hueco(0f, 60f, 0f, 51.8f)
+        val altos = RoperoGeometria.altosDeCajones(base, c, h)
+        assertEquals(3, altos.size)
+        altos.forEach { assertEquals(50f / 3f, it, 0.01f) }
+        assertEquals(50f, RoperoGeometria.topeDeCajones(base, c, h), 0.01f)
+        // Sin tapa, dos cajones de 30 en 51.8: 25.9 cada uno.
+        val sinTapa = Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2, altosCajonesCm = listOf(30f, 30f), tapaSobreCajones = false)
+        RoperoGeometria.altosDeCajones(base, sinTapa, h).forEach { assertEquals(25.9f, it, 0.01f) }
+        // Si caben, se quedan como están.
+        assertEquals(listOf(20f, 20f), RoperoGeometria.altosDeCajones(base, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2), h))
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]

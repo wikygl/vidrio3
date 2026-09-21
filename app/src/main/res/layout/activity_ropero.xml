@@ -483,6 +483,32 @@
                                             android:text="@string/_0_0" />
                                     </LinearLayout>
 
+                                    <!-- Melamina de color: lo que se ve sin abrir, si el interior va en blanco -->
+                                    <LinearLayout
+                                        android:id="@+id/lyMelaminaColor"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/sombra"
+                                        android:orientation="horizontal"
+                                        android:visibility="gone">
+
+                                        <TextView
+                                            android:id="@+id/tvMelaminaColor"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Melamina 18 mm de color" />
+
+                                        <TextView
+                                            android:id="@+id/txMelaminaColor"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
                                     <!-- Nordex -->
                                     <LinearLayout
                                         android:id="@+id/lyNordex"

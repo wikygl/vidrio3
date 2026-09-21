@@ -107,15 +107,18 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: return
         val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: return
         val piso = hueco.y0
+        // El imán: si la cara que se arrastra cae cerca de la de otra melamina (repisa, tapa,
+        // cajón de otra columna), se pega a ella: los casilleros de al lado salen a la misma altura.
+        val iman = imantar(yCm, el)
         when (el.tipo) {
             TipoElemento.ENTREPANO -> {
                 val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c, hueco)
-                val nueva = (yCm - piso).coerceIn(5f, hueco.alto - ropero.espesorCm - 5f)
-                ropero = ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conAlturaDeEntrepano(el.indice, redondear(nueva), repartidas))
+                val nueva = (if (iman != null) iman - piso else redondear(yCm - piso)).coerceIn(5f, hueco.alto - ropero.espesorCm - 5f)
+                ropero = ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conAlturaDeEntrepano(el.indice, nueva, repartidas))
             }
             TipoElemento.CAJON -> {
-                val alto = (yCm - el.y0).coerceIn(8f, 80f)
-                ropero = ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conAltoDeCajon(el.indice, redondear(alto), ropero.altoCajonCm))
+                val alto = (if (iman != null) iman - el.y0 else redondear(yCm - el.y0)).coerceIn(8f, 80f)
+                ropero = ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conAltoDeCajon(el.indice, alto, ropero.altoCajonCm))
             }
             else -> return
         }
@@ -124,6 +127,27 @@ class DisenoRoperoActivity : AppCompatActivity() {
 
     /** Al medio centímetro: lo que se corta. */
     private fun redondear(v: Float): Float = (v * 2f).roundToInt() / 2f
+
+    /** Alcance del imán al arrastrar, en cm del mueble. */
+    private val IMAN_CM = 2.5f
+
+    /**
+     * La altura [yCm] pegada a la cara más cercana de otra melamina (cara de abajo de repisas,
+     * tapas y repisas del maletero; cara de arriba de cajones) que no sea de la misma columna,
+     * si está a menos de [IMAN_CM]; null si no hay ninguna cerca.
+     */
+    private fun imantar(yCm: Float, el: ElementoRopero): Float? {
+        val caras = RoperoGeometria.elementos(ropero)
+            .filter { !(it.cuerpo == el.cuerpo && it.ruta == el.ruta) }
+            .flatMap {
+                when (it.tipo) {
+                    TipoElemento.ENTREPANO, TipoElemento.TAPA_CAJONES, TipoElemento.REPISA_MALETERO -> listOf(it.y0)
+                    TipoElemento.CAJON -> listOf(it.y1)
+                    else -> emptyList()
+                }
+            }
+        return caras.minByOrNull { kotlin.math.abs(it - yCm) }?.takeIf { kotlin.math.abs(it - yCm) < IMAN_CM }
+    }
 
     /** La celda que espera a que se toque su vecina para unirlas. */
     private var uniendo: ElementoRopero? = null
@@ -499,6 +523,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val fondos = listOf(3f, 5.5f, 0f)
         val spFondo = desplegable(listOf("Fondo nordex 3 mm", "Fondo MDF 5.5 mm", "Sin fondo"), if (!ropero.conFondo) 2 else if (ropero.espesorFondoMm >= 5f) 1 else 0)
         val spTapacanto = desplegable(grosores.map { "Tapacanto interior ${fmt(it)} mm" }, grosor(ropero.tapacantoGrosorMm))
+        val spColor = desplegable(listOf("Interior blanco, lo visible de color", "Todo del mismo color"), if (ropero.interiorBlanco) 0 else 1)
 
         caja.addView(titulo("Hueco"))
         caja.addView(fila(etAncho, etAlto, etFondoCm, etCuerpos))
@@ -513,6 +538,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         caja.addView(fila(spHojas, spTapacantoPuertas))
         caja.addView(titulo("Materiales"))
         caja.addView(fila(spEspesor, spFondo, spTapacanto))
+        caja.addView(fila(spColor))
         caja.addView(boton("Aplicar opciones") {
             val fondoElegido = fondos[spFondo.selectedItemPosition.coerceIn(0, 2)]
             var nuevo = ropero.copy(
@@ -530,7 +556,8 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 espesorMm = if (spEspesor.selectedItemPosition == 1) 15 else 18,
                 conFondo = fondoElegido > 0f,
                 espesorFondoMm = if (fondoElegido > 0f) fondoElegido else ropero.espesorFondoMm,
-                tapacantoGrosorMm = grosores[spTapacanto.selectedItemPosition.coerceIn(0, grosores.lastIndex)]
+                tapacantoGrosorMm = grosores[spTapacanto.selectedItemPosition.coerceIn(0, grosores.lastIndex)],
+                interiorBlanco = spColor.selectedItemPosition == 0
             )
             // El hueco: cambiar el ancho reparte los cuerpos de nuevo; el alto y el fondo no.
             val ancho = num(etAncho, ropero.anchoCm).coerceAtLeast(30f)

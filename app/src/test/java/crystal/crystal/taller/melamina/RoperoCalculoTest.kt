@@ -229,8 +229,15 @@ class RoperoCalculoTest {
     @Test
     fun planchas_tapacanto_y_lineas_para_archivar() {
         val m = RoperoCalculo.calcular(base)
+        // El interior en blanco y lo visible (las cuatro puertas y el zócalo) en la de color.
         val melamina = m.planchasEstimadas[MaterialPlancha.MELAMINA_18]!!
-        assertTrue("planchas de melamina fuera de rango: $melamina", melamina in 4..6)
+        assertTrue("planchas de melamina blanca fuera de rango: $melamina", melamina in 3..5)
+        assertEquals(2, m.planchasEstimadas[MaterialPlancha.MELAMINA_18_COLOR])
+        assertEquals(4, m.piezasDe(MaterialPlancha.MELAMINA_18_COLOR).first { it.nombre == "Puerta" }.cantidad)
+        assertEquals(MaterialPlancha.MELAMINA_18_COLOR, m.piezas.first { it.nombre == "Zócalo" }.material)
+        // Todo del mismo color: una sola melamina.
+        val unColor = RoperoCalculo.calcular(base.copy(interiorBlanco = false))
+        assertTrue(unColor.piezas.none { it.material == MaterialPlancha.MELAMINA_18_COLOR })
         // El fondo de 240 x 230 no cabe en una plancha de 244 x 183: va partido en dos trozos de 119 x 230.
         assertEquals(2, pieza(m, "Fondo")!!.cantidad)
         assertEquals(2, m.planchasEstimadas[MaterialPlancha.NORDEX_3])
@@ -242,7 +249,7 @@ class RoperoCalculoTest {
         assertTrue(m.lineasDeTapacantoPuertas().lines().contains("229 = 8"))
         val lineas = m.lineasDePiezas(MaterialPlancha.MELAMINA_18).lines()
         assertTrue(lineas.contains("59.7x240 = 2"))
-        assertTrue(lineas.contains("58.7x229.1 = 4"))
+        assertTrue(m.lineasDePiezas(MaterialPlancha.MELAMINA_18_COLOR).lines().contains("58.7x229.1 = 4"))
         assertNotNull(m.lineasDeTapacanto().lines().firstOrNull { it == "240 = 2" })
         assertTrue(m.referencias.contains("Ropero empotrado 240 x 240 x 60"))
     }
