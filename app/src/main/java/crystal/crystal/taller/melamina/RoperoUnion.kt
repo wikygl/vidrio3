@@ -131,7 +131,7 @@ object RoperoUnion {
             val altos = RoperoGeometria.altosDeCajones(r, conCajones, if (zonaIzq) ha else hb)
             val tapa = y1 + e
             val arriba = listOfNotNull(recortar(r, a, ha, tapa, region.y1), recortar(r, b, hb, tapa, region.y1))
-            var c = Cuerpo(anchoCm = ancho, tipo = TipoCuerpo.CAJONES, cajones = altos.size, altosCajonesCm = altos, cajonesALaVista = conCajones.cajonesALaVista, anchoFijo = fijo)
+            var c = Cuerpo(anchoCm = ancho, tipo = TipoCuerpo.CAJONES, cajones = altos.size, altosCajonesCm = altos, cajonesALaVista = conCajones.cajonesALaVista, anchoFijo = fijo, altoCajonesFijoCm = conCajones.altoCajonesFijoCm)
             if (arriba.size == 2 && region.y1 > tapa + 1f) c = c.conColumnas(0, arriba)
             return c
         }

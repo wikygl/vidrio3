@@ -267,7 +267,12 @@ data class Cuerpo(
     /** Cada casillero (y el colgador) con sus propias puertas, dentro de su hueco. */
     val puertasPorCasillero: Boolean = false,
     /** La tapa de melamina sobre los cajones. Sin ella, los cajones quedan dentro del casillero de encima (unidos). */
-    val tapaSobreCajones: Boolean = true
+    val tapaSobreCajones: Boolean = true,
+    /**
+     * El alto del espacio de los cajones escrito a mano (0 = libre). Fijo, no se mueve: al
+     * cambiar un cajón, los demás se reparten lo que quede; al cambiar cuántos son, se reparten.
+     */
+    val altoCajonesFijoCm: Float = 0f
 ) {
     /**
      * Una columna que no es más que un reparto: sin repisas, cajones, tubo ni puertas, y con su
@@ -340,14 +345,31 @@ data class Cuerpo(
     val llevaTubo: Boolean get() = tipo == TipoCuerpo.COLGAR || tipo == TipoCuerpo.MIXTO || tipo == TipoCuerpo.COLGAR_CASILLEROS
 
     /** El alto de cada cajón que se corta, de abajo arriba. */
-    fun altosDeCajones(altoPorDefectoCm: Float): List<Float> =
-        (0 until cajonesEfectivos).map { k -> altosCajonesCm.getOrNull(k)?.takeIf { it >= 8f } ?: altoPorDefectoCm }
+    fun altosDeCajones(altoPorDefectoCm: Float): List<Float> {
+        val altos = (0 until cajonesEfectivos).map { k -> altosCajonesCm.getOrNull(k)?.takeIf { it >= 8f } ?: altoPorDefectoCm }
+        // Con el espacio fijo, entre todos suman eso: si no cuadran (cambió cuántos son), a escala.
+        val suma = altos.sum()
+        return if (altoCajonesFijoCm > 0f && altos.isNotEmpty() && kotlin.math.abs(suma - altoCajonesFijoCm) > 0.01f) altos.map { it * altoCajonesFijoCm / suma } else altos
+    }
 
-    /** Este cuerpo con el cajón [k] de [altoCm]; los demás como estaban. */
+    /**
+     * Este cuerpo con el cajón [k] de [altoCm]. Con el espacio libre, los demás se quedan como
+     * estaban (el espacio crece o mengua); con el espacio fijo, los demás se reparten lo que
+     * queda, a escala de lo que tenían, y el espacio no se mueve.
+     */
     fun conAltoDeCajon(k: Int, altoCm: Float, altoPorDefectoCm: Float): Cuerpo {
         val altos = altosDeCajones(altoPorDefectoCm).toMutableList()
         if (k !in altos.indices) return this
-        altos[k] = altoCm.coerceIn(8f, 80f)
+        if (altoCajonesFijoCm <= 0f || altos.size == 1) {
+            altos[k] = altoCm.coerceIn(8f, 80f)
+            return copy(altosCajonesCm = altos)
+        }
+        val otros = altos.indices.filter { it != k }
+        val nuevo = altoCm.coerceIn(8f, altoCajonesFijoCm - 8f * otros.size)
+        val quedan = altoCajonesFijoCm - nuevo
+        val sumaOtros = otros.sumOf { altos[it].toDouble() }.toFloat().coerceAtLeast(0.01f)
+        otros.forEach { altos[it] = (altos[it] * quedan / sumaOtros).coerceAtLeast(8f) }
+        altos[k] = nuevo
         return copy(altosCajonesCm = altos)
     }
 
@@ -361,7 +383,7 @@ data class Cuerpo(
 
     fun aJson(): JSONObject = JSONObject().apply {
         put("ancho", anchoCm); put("tipo", tipo.name); put("entrepanos", entrepanos); put("cajones", cajones)
-        put("hojasBatientes", hojasBatientes); put("alto", altoCm); put("aLaVista", cajonesALaVista)
+        put("hojasBatientes", hojasBatientes); put("alto", altoCm); put("aLaVista", cajonesALaVista); put("altoCajonesFijo", altoCajonesFijoCm)
         put("anchoFijo", anchoFijo); put("puertasPorCasillero", puertasPorCasillero); put("tapa", tapaSobreCajones)
         puertasPropias?.let { put("puertasPropias", it.name) }
         if (partes.isNotEmpty()) put("partes", JSONArray().apply {
@@ -429,6 +451,7 @@ data class Cuerpo(
                 anchoFijo = o.optBoolean("anchoFijo", false),
                 puertasPorCasillero = o.optBoolean("puertasPorCasillero", false),
                 tapaSobreCajones = o.optBoolean("tapa", true),
+                altoCajonesFijoCm = o.optDouble("altoCajonesFijo", 0.0).toFloat(),
                 puertasPropias = o.optString("puertasPropias", "").takeIf { it.isNotBlank() }?.let { runCatching { TipoPuertas.valueOf(it) }.getOrNull() },
                 partes = (o.optJSONArray("partes") ?: JSONArray()).let { arr ->
                     (0 until arr.length()).mapNotNull { idx ->

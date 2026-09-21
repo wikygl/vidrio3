@@ -333,9 +333,10 @@ object RoperoGeometria {
         val nuevo = when (el.tipo) {
             TipoElemento.CASILLERO -> conAltoDeCasillero(r, c, h, el.indice, alto)
             TipoElemento.ZONA_CAJONES -> {
-                // Todos los cajones del cuerpo a partes iguales en ese alto.
+                // Todos los cajones del cuerpo a partes iguales en ese alto, que queda fijo: al
+                // cambiar luego un cajón, los demás se reparten lo que quede y el espacio no se mueve.
                 val n = c.cajonesEfectivos
-                c.copy(altosCajonesCm = List(n) { (alto / n).coerceIn(8f, 80f) })
+                c.copy(altosCajonesCm = List(n) { (alto / n).coerceIn(8f, 80f) }, altoCajonesFijoCm = alto)
             }
             TipoElemento.COLGADOR -> {
                 val repisas = alturasDeEntrepanos(r, c, h)

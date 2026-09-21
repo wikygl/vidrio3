@@ -434,6 +434,28 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun el_espacio_de_cajones_escrito_queda_fijo_y_los_cajones_se_lo_reparten() {
+        // La zona del cuerpo 1 (3 cajones) puesta a 51.8: fija, 17.27 cada uno.
+        val zona = RoperoGeometria.elementos(base).first { it.tipo == TipoElemento.ZONA_CAJONES && it.cuerpo == 0 }
+        val r = RoperoGeometria.conAltoDeTrozo(base, zona, 51.8f)
+        val c = r.cuerpos[0]
+        assertEquals(51.8f, c.altoCajonesFijoCm, 0.01f)
+        assertEquals(51.8f, c.altosDeCajones(20f).sum(), 0.01f)
+        // El primero a 30: los otros dos se reparten 21.8 y el espacio sigue en 51.8.
+        val c2 = c.conAltoDeCajon(0, 30f, 20f)
+        assertEquals(30f, c2.altosDeCajones(20f)[0], 0.01f)
+        assertEquals(51.8f, c2.altosDeCajones(20f).sum(), 0.01f)
+        assertEquals(10.9f, c2.altosDeCajones(20f)[1], 0.01f)
+        val zona2 = RoperoGeometria.elementos(r.conCuerpo(0, c2)).first { it.tipo == TipoElemento.ZONA_CAJONES && it.cuerpo == 0 }
+        assertEquals(51.8f, zona2.y1 - zona2.y0, 0.01f)
+        // Con dos cajones en vez de tres, siguen sumando 51.8.
+        assertEquals(51.8f, c2.copy(cajones = 2).altosDeCajones(20f).sum(), 0.01f)
+        // Libre: el espacio crece con el cajon.
+        val libre = c.copy(altoCajonesFijoCm = 0f).conAltoDeCajon(0, 30f, 20f)
+        assertEquals(30f + 2 * 51.8f / 3f, libre.altosDeCajones(20f).sum(), 0.01f)
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]

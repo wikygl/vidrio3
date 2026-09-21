@@ -224,7 +224,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.TUBO -> "Tubo del colgador $donde: a ${fmt(ropero.tuboBajoTopeCm)} bajo el tope, ${fmt((el.y0 + el.y1) / 2f - piso)} del piso"
             TipoElemento.CASILLERO -> "Casillero ${el.indice + 1} $donde: ${fmt(el.y1 - el.y0)} de alto libre" + (if (c.columnasDe(el.indice).isNotEmpty()) ", partido en ${c.columnasDe(el.indice).size} columnas" else "")
             TipoElemento.TAPA_CAJONES -> "Tapa sobre los cajones $donde: a ${fmt(el.y0 - piso)} del piso (sube con los cajones)"
-            TipoElemento.ZONA_CAJONES -> "Cajones $donde: ${c.cajonesEfectivos} en ${fmt(el.y1 - el.y0)} de alto" + (if (!c.tapaSobreCajones) ", sin tapa (unidos al casillero de encima)" else "")
+            TipoElemento.ZONA_CAJONES -> "Cajones $donde: ${c.cajonesEfectivos} en ${fmt(el.y1 - el.y0)} de alto" + (if (c.altoCajonesFijoCm > 0f) " (fijo)" else "") + (if (!c.tapaSobreCajones) ", sin tapa (unidos al casillero de encima)" else "")
             TipoElemento.COLGADOR -> "Colgador $donde: ${fmt(el.y1 - el.y0)} libres, el tubo a ${fmt(ropero.tuboBajoTopeCm)} del tope"
             TipoElemento.DIVISION_COLUMNA -> "División entre columnas del casillero ${el.ruta.last() + 1}, cuerpo ${el.cuerpo + 1}"
             TipoElemento.COLUMNA -> "Columna ${el.ruta.last() + 1} del casillero ${el.ruta[el.ruta.size - 2] + 1}, cuerpo ${el.cuerpo + 1}: ${c.tipo.etiqueta.lowercase()}, ${fmt(el.x1 - el.x0)} de ancho"
@@ -363,6 +363,9 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private fun filaDeAlto(el: ElementoRopero, c: Cuerpo, hueco: Hueco): View {
         val et = campo("Alto libre (cm)", fmt(el.y1 - el.y0))
         val botones = mutableListOf<View>(et, boton("Poner") { aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, num(et, el.y1 - el.y0))) })
+        if (el.tipo == TipoElemento.ZONA_CAJONES && c.altoCajonesFijoCm > 0f) {
+            botones.add(boton("Libre") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(altoCajonesFijoCm = 0f))) })
+        }
         if (el.tipo != TipoElemento.ZONA_CAJONES) {
             botones.add(boton("Solo esta") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, RoperoGeometria.conAltoDeCasilleroSoloEsa(ropero, c, hueco, el.indice, num(et, el.y1 - el.y0)))) })
             botones.add(boton("Repartir") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(alturasEntrepanosCm = emptyList()))) })
