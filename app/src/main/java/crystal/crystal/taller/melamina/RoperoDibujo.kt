@@ -204,7 +204,7 @@ class RoperoDibujo(private val dp: Float) {
         val e = r.espesorCm
         elementos.filter { it.cuerpo == i }.forEach { el ->
             when (el.tipo) {
-                TipoElemento.CUERPO, TipoElemento.CASILLERO, TipoElemento.MALETERO, TipoElemento.COLGADOR, TipoElemento.ZONA_CAJONES -> Unit
+                TipoElemento.CUERPO, TipoElemento.CASILLERO, TipoElemento.MALETERO, TipoElemento.COLGADOR, TipoElemento.ZONA_CAJONES, TipoElemento.COLUMNA -> Unit
                 TipoElemento.REPISA_MALETERO, TipoElemento.ENTREPANO, TipoElemento.TAPA_CAJONES, TipoElemento.DIVISION_COLUMNA -> tablero(canvas, r, el.x0, el.x1, el.y0, el.y1)
                 TipoElemento.CAJON -> {
                     // El frente gris, un poco metido, con el tirador pegado al canto derecho, como en el plano.

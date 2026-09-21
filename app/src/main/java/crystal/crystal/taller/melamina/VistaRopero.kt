@@ -91,8 +91,8 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
     private fun dibujarCotas(canvas: Canvas) {
         val r = ropero
         val sep = 14f * dp
-        // Ancho total, arriba.
-        val yA = y(r.altoMayorCm) - sep
+        // Ancho total, arriba (más arriba aún si hay una fila de cuerpos encima del mueble).
+        val yA = y(r.altoMayorCm) - sep - (if (r.cuerpos.any { it.partes.isNotEmpty() }) 16 * dp else 0f)
         canvas.drawLine(x(0f), yA, x(r.anchoCm), yA, pCota)
         canvas.drawLine(x(0f), yA - 4 * dp, x(0f), yA + 4 * dp, pCota)
         canvas.drawLine(x(r.anchoCm), yA - 4 * dp, x(r.anchoCm), yA + 4 * dp, pCota)
@@ -106,18 +106,38 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         canvas.rotate(-90f, xA - 4 * dp, y(r.altoCm / 2f))
         canvas.drawText(fmt(r.altoCm), xA - 4 * dp, y(r.altoCm / 2f), pTexto)
         canvas.restore()
-        // Cada cuerpo, abajo.
+        // Abajo, cada cuerpo; y si un cuerpo tiene un casillero partido en columnas, abajo van
+        // sus columnas (las del casillero más bajo) y el cuerpo entero sube a una fila encima del
+        // mueble: dos rutas, el conjunto por arriba y cada parte por abajo.
+        cotasDeCuerpos.clear()
+        val elementos = RoperoGeometria.elementos(r)
         val yB = y(0f) + sep
-        var cx = r.espesorCm
-        r.cuerpos.forEach { c ->
-            canvas.drawLine(x(cx), yB, x(cx + c.anchoCm), yB, pCota)
-            canvas.drawLine(x(cx), yB - 4 * dp, x(cx), yB + 4 * dp, pCota)
-            canvas.drawLine(x(cx + c.anchoCm), yB - 4 * dp, x(cx + c.anchoCm), yB + 4 * dp, pCota)
-            // El número solo si cabe en su tramo: en la ficha chica se pisaban unos con otros.
-            val texto = fmt(c.anchoCm)
-            if (pTexto.measureText(texto) < c.anchoCm * escala - 2 * dp) canvas.drawText(texto, x(cx + c.anchoCm / 2f), yB + 11 * dp, pTexto)
-            cx += c.anchoCm + r.espesorCm
+        var hayColumnas = false
+        RoperoGeometria.cuerposX(r).forEachIndexed { i, (izq, der) ->
+            val c = r.cuerpos[i]
+            val k = c.partes.keys.minOrNull()
+            val columnas = if (k == null) emptyList() else elementos.filter { it.tipo == TipoElemento.COLUMNA && it.cuerpo == i && it.ruta == listOf(k, it.indice) }
+            if (columnas.isEmpty()) cotaDeAncho(canvas, izq, der, yB, RoperoGeometria.cuerpo(r, i))
+            else { hayColumnas = true; columnas.forEach { col -> cotaDeAncho(canvas, col.x0, col.x1, yB, col) } }
         }
+        if (hayColumnas) {
+            val yC = y(r.altoMayorCm) - sep
+            RoperoGeometria.cuerposX(r).forEachIndexed { i, (izq, der) -> cotaDeAncho(canvas, izq, der, yC, RoperoGeometria.cuerpo(r, i), arriba = true) }
+        }
+    }
+
+    /** Dónde quedó pintada cada cota de ancho (de un cuerpo o una columna), para saber cuál se tocó. */
+    private val cotasDeCuerpos = mutableListOf<Pair<android.graphics.RectF, ElementoRopero>>()
+
+    /** Una cota de ancho entre [x0] y [x1] (cm) a la altura [yPx], con su número si cabe, que se toca para elegir [el]. */
+    private fun cotaDeAncho(canvas: Canvas, x0: Float, x1: Float, yPx: Float, el: ElementoRopero?, arriba: Boolean = false) {
+        canvas.drawLine(x(x0), yPx, x(x1), yPx, pCota)
+        canvas.drawLine(x(x0), yPx - 4 * dp, x(x0), yPx + 4 * dp, pCota)
+        canvas.drawLine(x(x1), yPx - 4 * dp, x(x1), yPx + 4 * dp, pCota)
+        // El número solo si cabe en su tramo: en la ficha chica se pisaban unos con otros.
+        val texto = fmt(x1 - x0)
+        if (pTexto.measureText(texto) < (x1 - x0) * escala - 2 * dp) canvas.drawText(texto, x((x0 + x1) / 2f), if (arriba) yPx - 3 * dp else yPx + 11 * dp, pTexto)
+        if (el != null) cotasDeCuerpos.add(android.graphics.RectF(x(x0), yPx - 10 * dp, x(x1), yPx + 16 * dp) to el)
     }
 
     /** Dentro del mueble: el alto de cada cajón, y a qué altura del piso va cada repisa y el tubo. */
@@ -197,10 +217,10 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
                 arrastrando = null
                 if (kotlin.math.hypot(event.x - xInicio, event.y - yInicio) > 12 * dp) return true
                 cuerpoEn(event.x)?.let { alTocarCuerpo?.invoke(it) }
-                // En la cota de un cuerpo se elige el cuerpo entero; dentro del mueble, lo que haya.
-                val cuerpoDeCota = cuerpoEnCota(event.x, event.y)
+                // En la cota de un cuerpo o columna se elige entero; dentro del mueble, lo que haya.
+                val deCota = elementoEnCota(event.x, event.y)
                 val cotaDeTrozo = cotaDeTrozoEn(event.x, event.y)
-                if (cuerpoDeCota != null) alTocarElemento?.invoke(RoperoGeometria.cuerpo(ropero, cuerpoDeCota))
+                if (deCota != null) alTocarElemento?.invoke(deCota)
                 else if (cotaDeTrozo != null && alTocarCota != null) alTocarCota?.invoke(cotaDeTrozo)
                 else alTocarElemento?.invoke(elementoEn(event.x, event.y))
                 return true
@@ -215,20 +235,18 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         return RoperoGeometria.elementoEn(ropero, (px - origenX) / escala, (origenY - py) / escala)
     }
 
-    /** Qué cuerpo tiene su cota (la de abajo, con su ancho) bajo ese punto; null si el punto no está en la franja de las cotas. */
-    fun cuerpoEnCota(px: Float, py: Float): Int? {
-        if (en3d) return null
-        val yB = y(0f) + 14f * dp
-        if (py < yB - 10f * dp || py > yB + 22f * dp) return null
-        return cuerpoEn(px)
-    }
+    /** El cuerpo o la columna cuya cota de ancho está bajo ese punto; null si ahí no hay cota. */
+    fun elementoEnCota(px: Float, py: Float): ElementoRopero? =
+        if (en3d) null else cotasDeCuerpos.firstOrNull { it.first.contains(px, py) }?.second
+
+    /** Qué cuerpo tiene su cota de ancho bajo ese punto; null si no es la de un cuerpo entero. */
+    fun cuerpoEnCota(px: Float, py: Float): Int? = elementoEnCota(px, py)?.takeIf { it.tipo == TipoElemento.CUERPO }?.cuerpo
 
     /** Dónde cae en el lienzo la cota del cuerpo [i]: para las pruebas. */
     @androidx.annotation.VisibleForTesting
     fun puntoDeCotaDeCuerpo(i: Int): Pair<Float, Float> {
-        var cx = ropero.espesorCm
-        ropero.cuerpos.take(i).forEach { cx += it.anchoCm + ropero.espesorCm }
-        return x(cx + ropero.cuerpos[i].anchoCm / 2f) to y(0f) + 14f * dp
+        val rect = cotasDeCuerpos.firstOrNull { it.second.tipo == TipoElemento.CUERPO && it.second.cuerpo == i }?.first ?: return 0f to 0f
+        return rect.centerX() to rect.centerY()
     }
 
     /** Qué cuerpo cae bajo esa x del lienzo; null fuera del mueble. */

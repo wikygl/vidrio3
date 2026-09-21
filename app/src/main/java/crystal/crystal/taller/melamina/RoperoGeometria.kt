@@ -1,7 +1,7 @@
 package crystal.crystal.taller.melamina
 
 /** Qué es cada cosa que hay dentro del ropero. */
-enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO, TAPA_CAJONES, MALETERO, COLGADOR, ZONA_CAJONES, DIVISION_COLUMNA }
+enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO, TAPA_CAJONES, MALETERO, COLGADOR, ZONA_CAJONES, DIVISION_COLUMNA, COLUMNA }
 
 /**
  * Un elemento del ropero puesto en su sitio, en cm desde la esquina de abajo a la izquierda del
@@ -261,6 +261,8 @@ object RoperoGeometria {
             val columnas = columnasDeCasillero(r, c, hk, k)
             columnas.forEachIndexed { j, hj ->
                 if (j < columnas.lastIndex) salen.add(ElementoRopero(TipoElemento.DIVISION_COLUMNA, i, j, hj.x1, hk.y0, hj.x1 + e, hk.y1, ruta + listOf(k)))
+                // La columna entera (como el cuerpo entero): se elige por su cota de abajo.
+                salen.add(ElementoRopero(TipoElemento.COLUMNA, i, j, hj.x0, hj.y0, hj.x1, hj.y1, ruta + listOf(k, j)))
                 elementosDelHueco(r, i, ruta + listOf(k, j), c.columnasDe(k)[j], hj, salen)
             }
         }
@@ -278,7 +280,7 @@ object RoperoGeometria {
      * que él). El cuerpo entero nunca sale de aquí: se elige por su cota.
      */
     fun elementoEn(r: Ropero, x: Float, y: Float): ElementoRopero? {
-        val todos = elementos(r).filter { it.contiene(x, y) && it.tipo != TipoElemento.CUERPO }
+        val todos = elementos(r).filter { it.contiene(x, y) && it.tipo != TipoElemento.CUERPO && it.tipo != TipoElemento.COLUMNA }
         return todos.filter { it.tipo !in trozos }.minByOrNull { it.area }
             ?: todos.filter { it.tipo in trozos }.minByOrNull { it.area }
     }

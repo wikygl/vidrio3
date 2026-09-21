@@ -123,6 +123,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.ZONA_CAJONES -> "Cajones $donde: ${c.cajonesEfectivos} en ${fmt(el.y1 - el.y0)} de alto" + (if (!c.tapaSobreCajones) ", sin tapa (unidos al casillero de encima)" else "")
             TipoElemento.COLGADOR -> "Colgador $donde: ${fmt(el.y1 - el.y0)} libres, el tubo a ${fmt(ropero.tuboBajoTopeCm)} del tope"
             TipoElemento.DIVISION_COLUMNA -> "División entre columnas del casillero ${el.ruta.last() + 1}, cuerpo ${el.cuerpo + 1}"
+            TipoElemento.COLUMNA -> "Columna ${el.ruta.last() + 1} del casillero ${el.ruta[el.ruta.size - 2] + 1}, cuerpo ${el.cuerpo + 1}: ${c.tipo.etiqueta.lowercase()}, ${fmt(el.x1 - el.x0)} de ancho"
             TipoElemento.MALETERO -> if (ropero.maleteroPropio) "Maletero, compartimento ${el.indice + 1} de ${ropero.maleteroCuerpos}: ${fmt(el.x1 - el.x0)} de ancho, ${fmt(ropero.maleteroCm)} libres"
                                      else "Maletero sobre el cuerpo ${el.cuerpo + 1}: ${fmt(ropero.maleteroCm)} libres (0 compartimentos = sigue a los cuerpos)"
         }
@@ -172,6 +173,11 @@ class DisenoRoperoActivity : AppCompatActivity() {
         fun conEste(nuevo: Cuerpo) = ropero.conCuerpoEn(el.cuerpo, el.ruta, nuevo)
         when (el.tipo) {
             TipoElemento.DIVISION_COLUMNA -> Unit
+            TipoElemento.COLUMNA -> {
+                // La columna entera, elegida por su cota de abajo: lo que en un cuerpo entero.
+                mando.addView(filaDeColumna(el, c))
+                mando.addView(filaDeRepisas(el, c))
+            }
             TipoElemento.CAJON -> {
                 val etAlto = campo("Alto de este cajón (cm)", fmt(el.y1 - el.y0))
                 mando.addView(fila(
