@@ -118,8 +118,8 @@ class DisenoRoperoActivityTest {
                 assertEquals(50f, primera.y0 - piso, 0.01f)
                 // El cuerpo 2 con su propio alto: 200. El cuerpo entero se elige tocando su cota de abajo.
                 val (cx, cy) = vista.puntoDeCotaDeCuerpo(1)
-                assertEquals(1, vista.cuerpoEnCota(cx, cy))
-                assertEquals(null, vista.cuerpoEnCota(cx, cy - 200f))
+                assertEquals(1, vista.elementoEnCota(cx, cy)?.cuerpo)
+                assertEquals(null, vista.elementoEnCota(cx, cy - 200f))
                 val cuerpo = RoperoGeometria.cuerpo(vista.ropero, 1)!!
                 vista.alTocarElemento?.invoke(cuerpo)
                 campos(mando)[1].setText("200")   // ancho, alto de este lado, repisas, cajones
@@ -236,18 +236,18 @@ class DisenoRoperoActivityTest {
         // Cuerpo 1: el casillero sobre los cajones partido en dos (49 | 47); la izquierda con tres
         // casilleros y el del medio partido otra vez (23.6 | el resto), con puerta batiente propia.
         val casA = RoperoGeometria.casilleros(plano, plano.cuerpos[0], RoperoGeometria.huecoDeCuerpo(plano, 0))[0]
-        var a = plano.cuerpos[0].conCasilleroPartido(0, 2, casA.ancho, e).conAnchoDeColumna(0, 0, 49f, casA.ancho, e)
+        var a = plano.cuerpos[0].conCasilleroPartido(0, 2, casA.ancho, e)
         var gris = Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 2, puertasPropias = TipoPuertas.BATIENTES, hojasBatientes = 1)
         a = a.conCuerpoEn(listOf(0, 0), gris)
         a = a.conCuerpoEn(listOf(0, 1), Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 4))
-        plano = plano.conCuerpo(0, a)
+        plano = plano.conCuerpo(0, a).conAnchoEn(0, listOf(0, 0), 49f)
         val huecoGris = RoperoGeometria.huecoDe(plano, 0, listOf(0, 0))!!
         gris = plano.cuerpoEn(0, listOf(0, 0))!!
         val casGris = RoperoGeometria.casilleros(plano, gris, huecoGris)[1]
-        gris = gris.conCasilleroPartido(1, 2, casGris.ancho, e).conAnchoDeColumna(1, 0, 23.6f, casGris.ancho, e)
+        gris = gris.conCasilleroPartido(1, 2, casGris.ancho, e)
         gris = gris.conCuerpoEn(listOf(1, 0), Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 2))
         gris = gris.conCuerpoEn(listOf(1, 1), Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 2))
-        plano = plano.conCuerpoEn(0, listOf(0, 0), gris)
+        plano = plano.conCuerpoEn(0, listOf(0, 0), gris).conAnchoEn(0, listOf(0, 0, 1, 0), 23.6f)
         // Cuerpo 2: el casillero sobre los tres cajones partido en dos de 29, con cuatro repisas cada uno.
         val casB = RoperoGeometria.casilleros(plano, plano.cuerpos[1], RoperoGeometria.huecoDeCuerpo(plano, 1))[0]
         var b = plano.cuerpos[1].conCasilleroPartido(0, 2, casB.ancho, e)

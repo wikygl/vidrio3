@@ -200,15 +200,6 @@ object RoperoGeometria {
         return alturasDeEntrepanos(r, c, h)
     }
 
-    // ==================== Lo de siempre, por cuerpo ====================
-
-    fun topeDeCajones(r: Ropero, c: Cuerpo): Float = topeDeCajones(r, c, huecoDeCuerpo(r, r.cuerpos.indexOf(c).coerceAtLeast(0)))
-    fun sobreLosCajones(r: Ropero, c: Cuerpo): Float = sobreLosCajones(r, c, huecoDeCuerpo(r, r.cuerpos.indexOf(c).coerceAtLeast(0)))
-    fun tuboY(r: Ropero, i: Int = 0): Float = tuboY(r, huecoDeCuerpo(r, i))
-    fun alturasDeEntrepanos(r: Ropero, c: Cuerpo): List<Float> = alturasDeEntrepanos(r, c, huecoDeCuerpo(r, r.cuerpos.indexOf(c).coerceAtLeast(0)))
-    fun conAltoDeCasillero(r: Ropero, i: Int, k: Int, altoCm: Float): Cuerpo =
-        r.cuerpos.getOrNull(i)?.let { conAltoDeCasillero(r, it, huecoDeCuerpo(r, i), k, altoCm) } ?: Cuerpo()
-
     // ==================== Los elementos ====================
 
     /** Todo lo que hay en el ropero, con su sitio. Los cuerpos van primero, y lo suyo después. */

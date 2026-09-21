@@ -58,7 +58,7 @@ object RoperoPuertas {
         val e = r.espesorCm
         if (r.puertas == TipoPuertas.CORREDIZAS) {
             // Las del ropero entero, por dentro del armazón.
-            corredizasEn(r, Hueco(e, r.anchoCm - e, r.zocaloCm + e, r.altoCm - e), RoperoCalculo.hojasCorredizas(r), hojas, rieles)
+            corredizasEn(Hueco(e, r.anchoCm - e, r.zocaloCm + e, r.altoCm - e), RoperoCalculo.hojasCorredizas(r), hojas, rieles)
         } else {
             r.cuerpos.forEachIndexed { i, c ->
                 val h = RoperoGeometria.huecoDeCuerpo(r, i)
@@ -94,7 +94,7 @@ object RoperoPuertas {
             RoperoGeometria.casilleros(r, c, h).forEach { hk ->
                 when (tipo) {
                     TipoPuertas.BATIENTES -> batientesEn(r, c, hk, ClaseDePuerta.PUERTA, tumbado = hk.alto < 40f, hojas = hojas, frontalTapaAbajo = true)
-                    TipoPuertas.CORREDIZAS -> corredizasEn(r, hk, RoperoCalculo.hojasCorredizas(c, hk.ancho), hojas, rieles)
+                    TipoPuertas.CORREDIZAS -> corredizasEn(hk, hojasCorredizasPorAncho(hk.ancho), hojas, rieles)
                     TipoPuertas.SIN -> Unit
                 }
             }
@@ -103,7 +103,7 @@ object RoperoPuertas {
                 val (desde, hasta) = puertaBaja(r, c, h)
                 batientesEn(r, c, Hueco(h.x0, h.x1, desde, hasta), ClaseDePuerta.PUERTA, tumbado = hasta - desde < 40f, hojas = hojas, frontalTapaAbajo = false, yaConTableros = true)
             }
-            TipoPuertas.CORREDIZAS -> corredizasEn(r, h, RoperoCalculo.hojasCorredizas(c, h.ancho), hojas, rieles)
+            TipoPuertas.CORREDIZAS -> corredizasEn(h, hojasCorredizasPorAncho(h.ancho), hojas, rieles)
             TipoPuertas.SIN -> Unit
         }
         // Las columnas de los casilleros partidos, cada una con las suyas si las lleva.
@@ -147,7 +147,7 @@ object RoperoPuertas {
     }
 
     /** Hojas corredizas por dentro de un hueco, montadas 5 cm, con sus dos rieles. */
-    private fun corredizasEn(r: Ropero, h: Hueco, n: Int, hojas: MutableList<Hoja>, rieles: MutableList<Float>) {
+    private fun corredizasEn(h: Hueco, n: Int, hojas: MutableList<Hoja>, rieles: MutableList<Float>) {
         val ancho = (h.ancho + (n - 1) * MONTA_CORREDIZA_CM) / n
         val y0 = h.y0 + 1.5f
         val y1 = h.y1 - 2f
@@ -160,14 +160,8 @@ object RoperoPuertas {
         rieles.add(h.ancho); rieles.add(h.ancho)
     }
 
-    /** Lo que tapa la puerta de un cuerpo a lo ancho: su hueco, y media división a cada lado si es frontal. */
-    fun luzDePuerta(r: Ropero, c: Cuerpo): Float = c.anchoCm + (if (r.puertasInteriores) 0f else r.espesorCm)
-
-    /** Lo mismo, por el hueco (en las columnas el ancho del cuerpo es el del hueco ajustado). */
+    /** Lo que tapa una puerta a lo ancho: su hueco, y media división a cada lado si es frontal. */
     private fun luzDelHueco(r: Ropero, h: Hueco): Float = h.ancho + (if (r.puertasInteriores) 0f else r.espesorCm)
-
-    /** Las hojas de la puerta de un cuerpo: las pedidas, o 1 hasta 60 de luz y 2 si es más ancha. */
-    fun hojasDePuerta(r: Ropero, c: Cuerpo): Int = RoperoCalculo.hojasBatientes(c, if (r.puertasInteriores) 0f else r.espesorCm)
 
     /**
      * De dónde a dónde va la puerta baja de un cuerpo (sin gruña). Frontal: del zócalo (o de

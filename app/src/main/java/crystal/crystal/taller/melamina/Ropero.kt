@@ -87,9 +87,6 @@ data class Ropero(
     /** El alto mayor de todos, para encuadrar y para el fondo. */
     val altoMayorCm: Float get() = cuerpos.indices.maxOfOrNull { altoDeCuerpo(it) } ?: altoCm
 
-    /** Los anchos interiores de los cuerpos, que con las divisiones entre ellos suman el ancho interior. */
-    val anchosDeCuerpos: List<Float> get() = cuerpos.map { it.anchoCm }
-
     /** El mismo ropero con los cuerpos repartidos a partes iguales. */
     fun conCuerposIguales(cantidad: Int): Ropero {
         val n = cantidad.coerceIn(1, 8)
@@ -300,12 +297,6 @@ data class Cuerpo(
             if (k == exceptoCasillero) cols else repartir(cols, anchoCm - (cols.size - 1) * espesorCm, espesorCm)
         })
 
-    /** Este cuerpo con la columna [j] del casillero [k] a [anchoCm], fijada; las demás se reparten lo que quede. */
-    fun conAnchoDeColumna(k: Int, j: Int, anchoCm: Float, anchoLibre: Float, espesorCm: Float): Cuerpo {
-        val columnas = columnasDe(k)
-        if (j !in columnas.indices) return this
-        return conColumnas(k, conAnchoFijado(columnas, j, anchoCm, anchoLibre - (columnas.size - 1) * espesorCm))
-    }
     val entrepanosEfectivos: Int get() = when (tipo) {
         TipoCuerpo.COLGAR -> entrepanos.coerceIn(0, 2)
         TipoCuerpo.ENTREPANOS -> entrepanos.coerceIn(0, 12)

@@ -264,9 +264,6 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
     fun elementoEnCota(px: Float, py: Float): ElementoRopero? =
         if (en3d) null else cotasDeCuerpos.firstOrNull { it.first.contains(px, py) }?.second
 
-    /** Qué cuerpo tiene su cota de ancho bajo ese punto; null si no es la de un cuerpo entero. */
-    fun cuerpoEnCota(px: Float, py: Float): Int? = elementoEnCota(px, py)?.takeIf { it.tipo == TipoElemento.CUERPO }?.cuerpo
-
     /** Dónde cae en el lienzo la cota del cuerpo [i]: para las pruebas. */
     @androidx.annotation.VisibleForTesting
     fun puntoDeCotaDeCuerpo(i: Int): Pair<Float, Float> {

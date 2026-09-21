@@ -130,7 +130,7 @@ class RoperoCalculoTest {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3, cajonesALaVista = true))
         val c = r.cuerpos[1]
         // Del zócalo (10) al primer tope (31.8), luego 20 cada uno, y el último hasta media tapa (71.8 + 0.9).
-        val frentes = RoperoCalculo.frentesALaVista(r, c)
+        val frentes = RoperoPuertas.frentesALaVista(r, c, RoperoGeometria.huecoDeCuerpo(r, 1))
         assertEquals(3, frentes.size)
         assertEquals(10f, frentes[0].first, 0.01f)
         assertEquals(31.8f, frentes[0].second, 0.01f)
@@ -142,7 +142,7 @@ class RoperoCalculoTest {
         assertTrue(fs.all { it.anchoMm == 1182 })
         assertEquals(setOf(209, 191, 200), fs.map { it.altoMm }.toSet())
         // La puerta del cuerpo arranca sobre media tapa: 240 - 72.7 - 0.3 - 0.6 = 166.4.
-        val (desde, hasta) = RoperoCalculo.puertaBaja(r, 1)
+        val (desde, hasta) = RoperoPuertas.puertaBaja(r, r.cuerpos[1], RoperoGeometria.huecoDeCuerpo(r, 1))
         assertEquals(72.7f, desde, 0.01f)
         assertEquals(240f, hasta, 0.01f)
         assertTrue(m.piezas.filter { it.nombre == "Puerta" }.any { it.altoMm == 1664 })
@@ -168,11 +168,11 @@ class RoperoCalculoTest {
         assertEquals(100, pieza(m, "Zócalo")!!.altoMm)
         // Con cajones a la vista e interiores: los frentes en el hueco (117.3 - 0.3 - 0.6) y del piso al tope de los cajones.
         val conCajones = r.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2, cajonesALaVista = true))
-        val frentes = RoperoCalculo.frentesALaVista(conCajones, conCajones.cuerpos[1])
+        val frentes = RoperoPuertas.frentesALaVista(conCajones, conCajones.cuerpos[1], RoperoGeometria.huecoDeCuerpo(conCajones, 1))
         assertEquals(11.8f, frentes[0].first, 0.01f)
         assertEquals(51.8f, frentes[1].second, 0.01f)
         assertEquals(1164, pieza(RoperoCalculo.calcular(conCajones), "Frente cajón")!!.anchoMm)
-        assertEquals(51.8f + 1.8f, RoperoCalculo.puertaBaja(conCajones, 1).first, 0.01f)
+        assertEquals(51.8f + 1.8f, RoperoPuertas.puertaBaja(conCajones, conCajones.cuerpos[1], RoperoGeometria.huecoDeCuerpo(conCajones, 1)).first, 0.01f)
     }
 
     @Test
@@ -208,7 +208,7 @@ class RoperoCalculoTest {
         // Los entrepaños pierden el carril de las hojas: 59.7 - 8.
         assertEquals(517, pieza(m, "Entrepaño")!!.altoMm)
         assertEquals("236 = 2", m.lineasConLargo("Riel corredizo"))
-        assertEquals(3, RoperoCalculo.hojasCorredizas(300f))
+        assertEquals(3, RoperoPuertas.hojasCorredizasPorAncho(300f))
     }
 
     @Test

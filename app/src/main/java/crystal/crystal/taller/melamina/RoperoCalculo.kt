@@ -155,8 +155,6 @@ object RoperoCalculo {
 
         val fondoArm = r.fondoArmazonCm
         val fondoInt = r.fondoInteriorCm
-        val wi = r.anchoInteriorCm
-        val hi = r.altoInteriorCm
         val n = r.cuerpos.size
 
         // ---- Armazón ----
@@ -264,7 +262,7 @@ object RoperoCalculo {
         puertas.hojas.forEach { hoja ->
             pieza(hoja.clase.nombre, hoja.ancho, hoja.alto, 1, cantosEnAncho = 2, cantosEnAlto = 2, visible = true)
             when (hoja.clase) {
-                ClaseDePuerta.PUERTA, ClaseDePuerta.PUERTA_MALETERO -> { bisagras += bisagrasPorAlto(hoja.alto); tiradores += 1 }
+                ClaseDePuerta.PUERTA, ClaseDePuerta.PUERTA_MALETERO -> { bisagras += RoperoPuertas.bisagrasPorAlto(hoja.alto); tiradores += 1 }
                 ClaseDePuerta.FRENTE_CAJON -> tiradores += 1
                 ClaseDePuerta.HOJA_CORREDIZA -> Unit
             }
@@ -335,16 +333,6 @@ object RoperoCalculo {
         return tramos.mapIndexed { i, w -> w + (if (i == 0) e / 2f else 0f) + (if (i == tramos.lastIndex) e / 2f else 0f) }
     }
 
-    fun luzDePuerta(r: Ropero, c: Cuerpo): Float = RoperoPuertas.luzDePuerta(r, c)
-    fun hojasDePuerta(r: Ropero, c: Cuerpo): Int = RoperoPuertas.hojasDePuerta(r, c)
-
-    /** De dónde a dónde va la puerta baja del cuerpo [i] (sin gruña). */
-    fun puertaBaja(r: Ropero, i: Int): Pair<Float, Float> = RoperoPuertas.puertaBaja(r, r.cuerpos[i], RoperoGeometria.huecoDeCuerpo(r, i))
-
-    /** De dónde a dónde va cada frente de cajón a la vista del cuerpo (sin gruña), de abajo arriba. */
-    fun frentesALaVista(r: Ropero, c: Cuerpo): List<Pair<Float, Float>> =
-        RoperoPuertas.frentesALaVista(r, c, RoperoGeometria.huecoDeCuerpo(r, r.cuerpos.indexOf(c).coerceAtLeast(0)))
-
     /** El largo de la plancha de siempre, en mm. */
     const val LARGO_PLANCHA_MM = 2440
 
@@ -404,13 +392,8 @@ object RoperoCalculo {
         }
     }
 
-    fun hojasCorredizas(anchoCm: Float): Int = RoperoPuertas.hojasCorredizasPorAncho(anchoCm)
-
-    /** Las hojas corredizas propias de un cuerpo o casillero: las que tocan por su ancho. */
-    fun hojasCorredizas(c: Cuerpo, anchoCm: Float): Int = hojasCorredizas(anchoCm)
-
     /** Las hojas corredizas del ropero: las que se pidieron a mano, o las que tocan por el ancho. */
-    fun hojasCorredizas(r: Ropero): Int = if (r.hojasCorredizas in 2..6) r.hojasCorredizas else hojasCorredizas(r.anchoCm)
+    fun hojasCorredizas(r: Ropero): Int = if (r.hojasCorredizas in 2..6) r.hojasCorredizas else RoperoPuertas.hojasCorredizasPorAncho(r.anchoCm)
 
     /** Las hojas batientes de un cuerpo: las pedidas a mano, o 1 hasta 60 cm de luz y 2 si es más ancho. */
     fun hojasBatientes(c: Cuerpo, espesorCm: Float): Int =
@@ -425,7 +408,6 @@ object RoperoCalculo {
     /** El del tapacanto de lo que se ve: "Tapacanto puertas 22 x 3 mm". */
     fun nombreTapacantoPuertas(r: Ropero): String = "Tapacanto puertas ${anchoTapacantoMm(r)} x ${fmt(r.tapacantoPuertasMm)} mm"
 
-    fun bisagrasPorAlto(altoCm: Float): Int = RoperoPuertas.bisagrasPorAlto(altoCm)
 
     /** A mm, con una pizca para que 57.75 (que en float puede quedar en 57.7499) redondee como en el papel. */
     private fun mm(cm: Float): Int = (cm * 10f + 0.01f).roundToInt()
