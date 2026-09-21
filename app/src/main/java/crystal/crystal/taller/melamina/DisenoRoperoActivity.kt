@@ -88,7 +88,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
     }
 
     private fun descripcion(el: ElementoRopero?): String {
-        if (el == null) return "Toca un cajón, un casillero, una repisa, el tubo o un cuerpo; arrastra repisas y cajones para moverlos"
+        if (el == null) return "Toca un cajón, un casillero, una repisa, el tubo, un cuerpo o el maletero; arrastra repisas y cajones para moverlos"
         val c = ropero.cuerpos.getOrNull(el.cuerpo) ?: return ""
         val piso = RoperoGeometria.pisoY(ropero)
         return when (el.tipo) {
@@ -99,6 +99,8 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.TUBO -> "Tubo del colgador: a ${fmt(ropero.tuboBajoTopeCm)} bajo el tope, ${fmt(RoperoGeometria.tuboY(ropero, el.cuerpo) - piso)} del piso"
             TipoElemento.CASILLERO -> "Casillero ${el.indice + 1} del cuerpo ${el.cuerpo + 1}: ${fmt(el.y1 - el.y0)} de alto libre"
             TipoElemento.TAPA_CAJONES -> "Tapa sobre los cajones del cuerpo ${el.cuerpo + 1}: a ${fmt(el.y0 - piso)} del piso (sube con los cajones)"
+            TipoElemento.MALETERO -> if (ropero.maleteroPropio) "Maletero, compartimento ${el.indice + 1} de ${ropero.maleteroCuerpos}: ${fmt(el.x1 - el.x0)} de ancho, ${fmt(ropero.maleteroCm)} libres"
+                                     else "Maletero sobre el cuerpo ${el.cuerpo + 1}: ${fmt(ropero.maleteroCm)} libres (0 compartimentos = sigue a los cuerpos)"
         }
     }
 
@@ -138,6 +140,13 @@ class DisenoRoperoActivity : AppCompatActivity() {
         when (el.tipo) {
             TipoElemento.CAJON -> {
                 val etAlto = campo("Alto de este cajón (cm)", fmt(el.y1 - el.y0))
+                // El espacio de cajones del cuerpo: cuántos y si se ven desde fuera.
+                val etCuantos = campo("Cajones del cuerpo", c.cajonesEfectivos.toString(), entero = true)
+                val cbALaVista = CheckBox(this).apply { text = "A la vista"; textSize = 12f; isChecked = c.cajonesALaVista }
+                mando.addView(fila(etCuantos, cbALaVista, boton("Poner") {
+                    val cuantos = (etCuantos.text.toString().toIntOrNull() ?: c.cajonesEfectivos).coerceIn(1, 10)
+                    aplicar(ropero.conCuerpo(el.cuerpo, c.copy(cajones = cuantos, cajonesALaVista = cbALaVista.isChecked)))
+                }))
                 mando.addView(fila(
                     etAlto,
                     boton("Este") { aplicar(ropero.conCuerpo(el.cuerpo, c.conAltoDeCajon(el.indice, num(etAlto, el.y1 - el.y0), ropero.altoCajonCm))) },
@@ -183,7 +192,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     boton("Repartir de nuevo") { aplicar(ropero.conCuerpo(el.cuerpo, c.copy(alturasEntrepanosCm = emptyList()))) }
                 ))
             }
-            TipoElemento.REPISA_MALETERO -> {
+            TipoElemento.REPISA_MALETERO, TipoElemento.MALETERO -> {
                 val et = campo("Alto libre del maletero (cm)", fmt(ropero.maleteroCm))
                 val etCuerpos = campo("Compartimentos (0 = como abajo)", ropero.maleteroCuerpos.toString(), entero = true)
                 val spHojasMal = Spinner(this).apply {

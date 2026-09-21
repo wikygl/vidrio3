@@ -146,6 +146,24 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun el_maletero_se_toca_aparte_del_cuerpo() {
+        val r = base.copy(maleteroCm = 40f)
+        // El cuerpo acaba en la repisa del maletero (238.2 - 40 - 1.8 = 196.4); encima, el maletero.
+        val cuerpo = RoperoGeometria.elementos(r).first { it.tipo == TipoElemento.CUERPO && it.cuerpo == 0 }
+        assertEquals(196.4f, cuerpo.y1, 0.01f)
+        val arriba = RoperoGeometria.elementoEn(r, 50f, 220f)
+        assertEquals(TipoElemento.MALETERO, arriba!!.tipo)
+        assertEquals(0, arriba.cuerpo)
+        assertEquals(RoperoGeometria.techoY(r), arriba.y1, 0.01f)
+        // Con compartimentos propios, cada uno es un maletero: el de la derecha con el índice 1.
+        val propio = r.copy(maleteroCuerpos = 2)
+        val der = RoperoGeometria.elementoEn(propio, 200f, 220f)
+        assertEquals(TipoElemento.MALETERO, der!!.tipo)
+        assertEquals(1, der.indice)
+        assertEquals(2, RoperoGeometria.elementos(propio).count { it.tipo == TipoElemento.MALETERO })
+    }
+
+    @Test
     fun se_encuentra_lo_que_hay_bajo_el_dedo() {
         val cajon = RoperoGeometria.elementoEn(base, 50f, 20f)
         assertNotNull(cajon)

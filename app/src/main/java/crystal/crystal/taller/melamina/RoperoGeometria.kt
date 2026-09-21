@@ -1,7 +1,7 @@
 package crystal.crystal.taller.melamina
 
 /** Qué es cada cosa que hay dentro del ropero. */
-enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO, TAPA_CAJONES }
+enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO, TAPA_CAJONES, MALETERO }
 
 /**
  * Un elemento del ropero puesto en su sitio, en cm desde la esquina de abajo a la izquierda del
@@ -130,10 +130,17 @@ object RoperoGeometria {
             val c = r.cuerpos[i]
             val techo = techoY(r, i)
             val tope = topeBajo(r, i)
-            salen.add(ElementoRopero(TipoElemento.CUERPO, i, 0, izq, piso, der, techo))
+            // El cuerpo es la parte baja: con maletero, del piso a su repisa. El maletero se toca aparte.
+            salen.add(ElementoRopero(TipoElemento.CUERPO, i, 0, izq, piso, der, if (r.maleteroCm > 0f) tope else techo))
             // La repisa del maletero: una por cuerpo, o una sola de lateral a lateral si el maletero es propio.
-            if (r.maleteroCm > 0f && !r.maleteroPropio) salen.add(ElementoRopero(TipoElemento.REPISA_MALETERO, i, 0, izq, tope, der, tope + e))
-            if (r.maleteroPropio && i == 0) salen.add(ElementoRopero(TipoElemento.REPISA_MALETERO, 0, 0, e, tope, r.anchoCm - e, tope + e))
+            if (r.maleteroCm > 0f && !r.maleteroPropio) {
+                salen.add(ElementoRopero(TipoElemento.REPISA_MALETERO, i, 0, izq, tope, der, tope + e))
+                salen.add(ElementoRopero(TipoElemento.MALETERO, i, 0, izq, tope + e, der, techo))
+            }
+            if (r.maleteroPropio && i == 0) {
+                salen.add(ElementoRopero(TipoElemento.REPISA_MALETERO, 0, 0, e, tope, r.anchoCm - e, tope + e))
+                maleterosX(r).forEachIndexed { k, (x0, x1) -> salen.add(ElementoRopero(TipoElemento.MALETERO, 0, k, x0, tope + e, x1, techo)) }
+            }
             var base = piso
             c.altosDeCajones(r.altoCajonCm).forEachIndexed { k, alto ->
                 salen.add(ElementoRopero(TipoElemento.CAJON, i, k, izq, base, der, base + alto))
@@ -167,8 +174,8 @@ object RoperoGeometria {
     /** Lo que hay en ese punto: lo más chico primero (un cajón o una repisa antes que el casillero, y este antes que su cuerpo). */
     fun elementoEn(r: Ropero, x: Float, y: Float): ElementoRopero? {
         val todos = elementos(r).filter { it.contiene(x, y) }
-        return todos.firstOrNull { it.tipo != TipoElemento.CUERPO && it.tipo != TipoElemento.CASILLERO }
-            ?: todos.firstOrNull { it.tipo == TipoElemento.CASILLERO }
+        return todos.firstOrNull { it.tipo != TipoElemento.CUERPO && it.tipo != TipoElemento.CASILLERO && it.tipo != TipoElemento.MALETERO }
+            ?: todos.firstOrNull { it.tipo == TipoElemento.CASILLERO || it.tipo == TipoElemento.MALETERO }
             ?: todos.firstOrNull()
     }
 }
