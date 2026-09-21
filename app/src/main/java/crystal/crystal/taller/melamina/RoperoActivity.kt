@@ -452,8 +452,7 @@ class RoperoActivity : AppCompatActivity() {
     // ==================== PLANCHAS Y COMPARTIR ====================
 
     private fun configurarPlanchasYCompartir() {
-        binding.btDiseno.setOnClickListener { abrirDiseno() }
-        // Como en Nova: la pulsación larga en la ficha también abre el diseño.
+        // Como en Nova: la pulsación larga en la ficha abre el diseño.
         binding.vistaRopero.setOnLongClickListener { abrirDiseno(); true }
         binding.btPlanchas.setOnClickListener { mandarAlOptimizador() }
         binding.btCompartir.setOnClickListener { compartir() }
