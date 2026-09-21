@@ -201,8 +201,8 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     boton("Repartir de nuevo") { aplicar(conEste(c.copy(alturasEntrepanosCm = emptyList()))) }
                 ))
             }
-            // Los trozos: el alto se escribe en su cota; aquí solo lo que no hace otra herramienta.
             TipoElemento.CASILLERO -> {
+                mando.addView(filaDeAlto(el, c, hueco))
                 mando.addView(filaDeRepisas(el, c))
                 mando.addView(filaDeUnir(el))
                 // El casillero partido en columnas, cada una un cuerpo con lo suyo.
@@ -213,11 +213,13 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 }))
             }
             TipoElemento.ZONA_CAJONES -> {
+                mando.addView(filaDeAlto(el, c, hueco))
                 mando.addView(filaDeCajones(el, c))
                 mando.addView(filaDeUnir(el))
             }
             TipoElemento.COLGADOR -> {
-                // El colgador: el tubo, y las repisas que van debajo de la ropa.
+                // El colgador: su alto, el tubo, y las repisas que van debajo de la ropa.
+                mando.addView(filaDeAlto(el, c, hueco))
                 mando.addView(filaDeTubo())
                 mando.addView(filaDeRepisas(el, c))
                 mando.addView(filaDeUnir(el))
@@ -246,6 +248,21 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private fun esconderMando() {
         binding.scrollMando.visibility = View.GONE
         esconderTeclado()
+    }
+
+    /**
+     * El alto libre de un trozo (casillero, colgador, espacio de cajones): lo mismo que su cota.
+     * "Poner" fija este y reparte de nuevo los de arriba; "Solo esta" mueve nada más la repisa de
+     * encima (o la de abajo en el último); "Repartir" vuelve a repartir todas.
+     */
+    private fun filaDeAlto(el: ElementoRopero, c: Cuerpo, hueco: Hueco): View {
+        val et = campo("Alto libre (cm)", fmt(el.y1 - el.y0))
+        val botones = mutableListOf<View>(et, boton("Poner") { aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, num(et, el.y1 - el.y0))) })
+        if (el.tipo != TipoElemento.ZONA_CAJONES) {
+            botones.add(boton("Solo esta") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, RoperoGeometria.conAltoDeCasilleroSoloEsa(ropero, c, hueco, el.indice, num(et, el.y1 - el.y0)))) })
+            botones.add(boton("Repartir") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(alturasEntrepanosCm = emptyList()))) })
+        }
+        return fila(*botones.toTypedArray())
     }
 
     /** A cuánto del tope va el tubo del colgador (es del ropero entero). */
