@@ -198,6 +198,28 @@ class DisenoRoperoActivityTest {
         }
     }
 
+    @Test
+    fun igualar_con_pone_la_repisa_a_la_altura_del_cajon_tocado() {
+        ActivityScenario.launch<DisenoRoperoActivity>(intent()).use { esc ->
+            esc.onActivity { a ->
+                val vista = a.findViewById<VistaRopero>(R.id.vistaDiseno)
+                val mando = a.findViewById<LinearLayout>(R.id.contenedorFlotante)
+                val repisa = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 && it.indice == 0 }
+                vista.alTocarElemento?.invoke(repisa)
+                botones(mando).first { it.text == "Igualar con…" }.performClick()
+                // Se toca el segundo cajón del cuerpo 1: la repisa se pone en su cara de arriba (a 40 del piso).
+                val cajon = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.CAJON && it.cuerpo == 0 && it.indice == 1 }
+                vista.alTocarElemento?.invoke(cajon)
+                val igualada = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 && it.indice == 0 }
+                assertEquals(cajon.y1, igualada.y0, 0.01f)
+                // Y la tapa que remata los cajones se elige aunque el dedo caiga un poco dentro del cajón de abajo.
+                val tapa = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.TAPA_CAJONES && it.cuerpo == 0 }
+                val tocado = RoperoGeometria.elementoEn(vista.ropero, (tapa.x0 + tapa.x1) / 2f, tapa.y0 - 1.5f)
+                assertEquals(TipoElemento.TAPA_CAJONES, tocado!!.tipo)
+            }
+        }
+    }
+
     /** Deja una captura con un cajón tocado, para mirarla desde la PC. */
     @Test
     fun guarda_captura_de_la_pantalla() {

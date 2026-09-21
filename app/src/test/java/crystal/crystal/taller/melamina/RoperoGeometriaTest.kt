@@ -413,13 +413,19 @@ class RoperoGeometriaTest {
 
     @Test
     fun los_cajones_no_se_salen_de_su_hueco() {
-        // Tres cajones de 20 en un hueco de 51.8 (con tapa quedan 50): se encogen a 16.67 cada uno.
+        // Tres cajones de 20 en un hueco de 51.8: llenan el hueco, así que la tapa sobra (el
+        // tablero de arriba hace de tapa) y se encogen a 51.8 / 3 = 17.27 cada uno.
         val c = Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3)
         val h = Hueco(0f, 60f, 0f, 51.8f)
         val altos = RoperoGeometria.altosDeCajones(base, c, h)
         assertEquals(3, altos.size)
-        altos.forEach { assertEquals(50f / 3f, it, 0.01f) }
-        assertEquals(50f, RoperoGeometria.topeDeCajones(base, c, h), 0.01f)
+        altos.forEach { assertEquals(51.8f / 3f, it, 0.01f) }
+        assertEquals(51.8f, RoperoGeometria.topeDeCajones(base, c, h), 0.01f)
+        assertTrue(!RoperoGeometria.llevaTapa(base, c, h))
+        // Si no llenan el hueco, llevan tapa: dos de 20 en 51.8.
+        assertTrue(RoperoGeometria.llevaTapa(base, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2), h))
+        // Con repisas encima, siempre tapa.
+        assertTrue(RoperoGeometria.llevaTapa(base, Cuerpo(tipo = TipoCuerpo.CAJONES_CASILLEROS, cajones = 3, entrepanos = 1), h))
         // Sin tapa, dos cajones de 30 en 51.8: 25.9 cada uno.
         val sinTapa = Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2, altosCajonesCm = listOf(30f, 30f), tapaSobreCajones = false)
         RoperoGeometria.altosDeCajones(base, sinTapa, h).forEach { assertEquals(25.9f, it, 0.01f) }

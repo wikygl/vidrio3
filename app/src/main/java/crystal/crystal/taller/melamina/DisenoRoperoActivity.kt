@@ -152,7 +152,37 @@ class DisenoRoperoActivity : AppCompatActivity() {
     /** La celda que espera a que se toque su vecina para unirlas. */
     private var uniendo: ElementoRopero? = null
 
+    /** La repisa, cajón o espacio de cajones que espera a que se toque la melamina a cuya altura igualarse. */
+    private var igualando: ElementoRopero? = null
+
+    /** La cara horizontal de [el] a la que se iguala: la de abajo de un tablero, la de arriba de un cajón o celda. */
+    private fun caraDe(el: ElementoRopero): Float = when (el.tipo) {
+        TipoElemento.ENTREPANO, TipoElemento.TAPA_CAJONES, TipoElemento.REPISA_MALETERO, TipoElemento.TUBO -> el.y0
+        else -> el.y1
+    }
+
+    /** [movil] puesto a la altura de la cara de [objetivo]: lo mismo que arrastrarlo hasta ahí. */
+    private fun igualar(movil: ElementoRopero, objetivo: ElementoRopero) {
+        val y = caraDe(objetivo)
+        val c = ropero.cuerpoEn(movil.cuerpo, movil.ruta) ?: return
+        val hueco = RoperoGeometria.huecoDe(ropero, movil.cuerpo, movil.ruta) ?: return
+        val nuevo = when (movil.tipo) {
+            TipoElemento.ENTREPANO -> ropero.conCuerpoEn(movil.cuerpo, movil.ruta,
+                c.conAlturaDeEntrepano(movil.indice, (y - hueco.y0).coerceIn(5f, hueco.alto - ropero.espesorCm - 5f), RoperoGeometria.alturasDeEntrepanos(ropero, c, hueco)))
+            TipoElemento.CAJON -> ropero.conCuerpoEn(movil.cuerpo, movil.ruta, c.conAltoDeCajon(movil.indice, (y - movil.y0).coerceIn(8f, 80f), ropero.altoCajonCm))
+            TipoElemento.ZONA_CAJONES -> RoperoGeometria.conAltoDeTrozo(ropero, movil, y - hueco.y0)
+            else -> return
+        }
+        aplicar(nuevo)
+    }
+
     private fun seleccionar(el: ElementoRopero?) {
+        val movil = igualando
+        if (movil != null && el != null && !el.esElMismo(movil)) {
+            igualando = null
+            igualar(movil, el)
+            return
+        }
         val primera = uniendo
         if (primera != null && el != null && !el.esElMismo(primera)) {
             uniendo = null
@@ -263,6 +293,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     }
                 ))
                 mando.addView(filaDeCajones(el, c))
+                mando.addView(fila(botonIgualar(el)))
             }
             TipoElemento.ENTREPANO -> {
                 val etAltura = campo("Altura de esta repisa desde el piso (cm)", fmt(el.y0 - piso))
@@ -272,6 +303,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     boton("Poner") { aplicar(conEste(c.conAlturaDeEntrepano(el.indice, num(etAltura, el.y0 - piso), repartidas))) },
                     boton("Repartir de nuevo") { aplicar(conEste(c.copy(alturasEntrepanosCm = emptyList()))) }
                 ))
+                mando.addView(fila(botonIgualar(el)))
             }
             TipoElemento.CASILLERO -> {
                 mando.addView(filaDeAlto(el, c, hueco))
@@ -287,6 +319,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.ZONA_CAJONES -> {
                 mando.addView(filaDeAlto(el, c, hueco))
                 mando.addView(filaDeCajones(el, c))
+                mando.addView(fila(botonIgualar(el)))
                 mando.addView(filaDeUnir(el))
             }
             TipoElemento.COLGADOR -> {
@@ -378,6 +411,13 @@ class DisenoRoperoActivity : AppCompatActivity() {
             // Las alturas escritas solo se pierden si cambia el número de repisas.
             aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(entrepanos = n, alturasEntrepanosCm = if (n == c.entrepanosEfectivos) c.alturasEntrepanosCm else emptyList())))
         })
+    }
+
+    /** Poner esta repisa, cajón o espacio de cajones a la altura de otra melamina, que se toca después. */
+    private fun botonIgualar(el: ElementoRopero) = boton("Igualar con…") {
+        igualando = el
+        esconderMando()
+        binding.tvInfoSeleccion.text = "Toca la repisa, tapa o cajón a cuya altura quieres ponerlo (la cara de abajo de un tablero, la de arriba de un cajón)"
     }
 
     /** Unir esta celda con una vecina (se toca después), y desunirla a lo ancho o a lo alto. */

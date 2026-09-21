@@ -87,9 +87,19 @@ object RoperoGeometria {
     fun altosDeCajones(r: Ropero, c: Cuerpo, h: Hueco): List<Float> {
         val altos = c.altosDeCajones(r.altoCajonCm)
         if (altos.isEmpty()) return altos
-        val disponible = h.alto - (if (c.tapaSobreCajones) r.espesorCm else 0f)
+        val disponible = h.alto - (if (llevaTapa(r, c, h)) r.espesorCm else 0f)
         val suma = altos.sum()
         return if (suma <= disponible + 0.01f) altos else altos.map { it * disponible / suma }
+    }
+
+    /**
+     * Si los cajones llevan tapa: la suya, salvo que llenen el hueco entero (sin repisas ni tubo
+     * encima): ahí el tablero de arriba ya hace de tapa. Dos cajones de 25.9 en un hueco de 51.8.
+     */
+    fun llevaTapa(r: Ropero, c: Cuerpo, h: Hueco): Boolean {
+        if (c.cajonesEfectivos == 0 || !c.tapaSobreCajones) return false
+        if (c.entrepanosEfectivos > 0 || c.llevaTubo) return true
+        return c.altosDeCajones(r.altoCajonCm).sum() < h.alto - r.espesorCm - 0.05f
     }
 
     /** Hasta dónde llegan los cajones apilados desde el piso del hueco. */
@@ -100,7 +110,7 @@ object RoperoGeometria {
      * hueco). Lo de arriba arranca en su cara de arriba; sin cajones, en el piso.
      */
     fun sobreLosCajones(r: Ropero, c: Cuerpo, h: Hueco): Float =
-        if (c.cajonesEfectivos > 0) topeDeCajones(r, c, h) + (if (c.tapaSobreCajones) r.espesorCm else 0f) else h.y0
+        if (c.cajonesEfectivos > 0) topeDeCajones(r, c, h) + (if (llevaTapa(r, c, h)) r.espesorCm else 0f) else h.y0
 
     /** Dónde va el tubo del colgador (su eje) en el hueco. */
     fun tuboY(r: Ropero, h: Hueco): Float = h.y1 - r.tuboBajoTopeCm
@@ -263,7 +273,7 @@ object RoperoGeometria {
         if (c.cajonesEfectivos > 0) {
             // El espacio de todos los cajones (para su cota) y la tapa que los remata (si la llevan).
             salen.add(ElementoRopero(TipoElemento.ZONA_CAJONES, i, 0, h.x0, h.y0, h.x1, base, ruta))
-            if (c.tapaSobreCajones) salen.add(ElementoRopero(TipoElemento.TAPA_CAJONES, i, 0, h.x0, base, h.x1, base + e, ruta))
+            if (llevaTapa(r, c, h)) salen.add(ElementoRopero(TipoElemento.TAPA_CAJONES, i, 0, h.x0, base, h.x1, base + e, ruta))
         }
         alturasDeEntrepanos(r, c, h).forEachIndexed { k, alt ->
             salen.add(ElementoRopero(TipoElemento.ENTREPANO, i, k, h.x0, h.y0 + alt, h.x1, h.y0 + alt + e, ruta))
@@ -289,16 +299,26 @@ object RoperoGeometria {
     }
 
     private val trozos = setOf(TipoElemento.CASILLERO, TipoElemento.MALETERO, TipoElemento.COLGADOR, TipoElemento.ZONA_CAJONES)
+    private val finos = setOf(TipoElemento.ENTREPANO, TipoElemento.TAPA_CAJONES, TipoElemento.REPISA_MALETERO, TipoElemento.TUBO, TipoElemento.DIVISION_COLUMNA)
+
+    /** Hasta cuánto de lejos (cm) se da por tocado un tablero fino: con el dedo no se acierta a 1.8 cm. */
+    const val HOLGURA_FINOS_CM = 2.5f
 
     /**
-     * Lo que hay en ese punto: lo más chico primero (un cajón o una repisa antes que el casillero
-     * o el colgador que lo contiene, y dentro de un casillero partido lo de sus columnas antes
-     * que él). El cuerpo entero nunca sale de aquí: se elige por su cota.
+     * Lo que hay en ese punto: primero un tablero fino cerca (repisa, tapa, tubo, división: se
+     * dan por tocados hasta a [HOLGURA_FINOS_CM], que si no siempre gana el cajón de al lado);
+     * luego lo más chico (un cajón antes que el casillero que lo contiene, y dentro de un
+     * casillero partido lo de sus columnas antes que él). El cuerpo entero nunca sale de aquí:
+     * se elige por su cota.
      */
     fun elementoEn(r: Ropero, x: Float, y: Float): ElementoRopero? {
-        val todos = elementos(r).filter { it.contiene(x, y) && it.tipo != TipoElemento.CUERPO && it.tipo != TipoElemento.COLUMNA }
-        return todos.filter { it.tipo !in trozos }.minByOrNull { it.area }
-            ?: todos.filter { it.tipo in trozos }.minByOrNull { it.area }
+        val todos = elementos(r).filter { it.tipo != TipoElemento.CUERPO && it.tipo != TipoElemento.COLUMNA }
+        val fino = todos.filter { it.tipo in finos && x in it.x0..it.x1 && y > it.y0 - HOLGURA_FINOS_CM && y < it.y1 + HOLGURA_FINOS_CM }
+            .minByOrNull { kotlin.math.abs((it.y0 + it.y1) / 2f - y) }
+        if (fino != null) return fino
+        val dentro = todos.filter { it.contiene(x, y) }
+        return dentro.filter { it.tipo !in trozos }.minByOrNull { it.area }
+            ?: dentro.filter { it.tipo in trozos }.minByOrNull { it.area }
     }
 
     /**
