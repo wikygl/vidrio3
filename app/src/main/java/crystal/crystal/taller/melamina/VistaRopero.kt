@@ -71,15 +71,19 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         super.onDraw(canvas)
         val r = ropero
         val margen = 34f * dp
+        // Las filas de cotas de columnas, de gruesas a finas, van debajo del mueble: sitio para ellas.
+        filasDeColumnas = if (en3d) emptyList() else filasDeColumnas(r)
+        val extraAbajo = (filasDeColumnas.size - 1).coerceAtLeast(0) * FILA_DP * dp
+        val extraArriba = if (filasDeColumnas.isNotEmpty()) FILA_DP * dp else 0f
         val fondoPapelX = if (en3d) r.fondoCm * dibujo.oblicuoX else 0f
         val fondoPapelY = if (en3d) -r.fondoCm * dibujo.oblicuoY else 0f
         val altoMayor = r.altoMayorCm
         escala = min(
             (width - 2 * margen) / (r.anchoCm + fondoPapelX),
-            (height - 2 * margen) / (altoMayor + fondoPapelY)
+            (height - 2 * margen - extraAbajo - extraArriba) / (altoMayor + fondoPapelY)
         )
         origenX = (width - (r.anchoCm + fondoPapelX) * escala) / 2f
-        origenY = height - (height - (altoMayor + fondoPapelY) * escala) / 2f
+        origenY = height - extraAbajo - (height - extraAbajo - extraArriba - (altoMayor + fondoPapelY) * escala) / 2f
         dibujo.dibujar(canvas, r, origenX, origenY, escala, mostrarPuertas, en3d, cuerpoResaltado)
         elementoResaltado?.let { el ->
             canvas.drawRect(x(el.x0) - 2 * dp, y(el.y1) - 2 * dp, x(el.x1) + 2 * dp, y(el.y0) + 2 * dp, pResalte)
@@ -106,24 +110,52 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         canvas.rotate(-90f, xA - 4 * dp, y(r.altoCm / 2f))
         canvas.drawText(fmt(r.altoCm), xA - 4 * dp, y(r.altoCm / 2f), pTexto)
         canvas.restore()
-        // Abajo, cada cuerpo; y si un cuerpo tiene un casillero partido en columnas, abajo van
-        // sus columnas (las del casillero más bajo) y el cuerpo entero sube a una fila encima del
-        // mueble: dos rutas, el conjunto por arriba y cada parte por abajo.
+        // Abajo, cada cuerpo; y si hay cuerpos con casilleros partidos en columnas, abajo van las
+        // columnas, una fila por nivel (las gruesas primero, las más finas más abajo), y los
+        // cuerpos enteros suben a una fila encima del mueble: el conjunto por arriba y cada parte
+        // por abajo, y cada cota se toca para elegir lo suyo.
         cotasDeCuerpos.clear()
-        val elementos = RoperoGeometria.elementos(r)
         val yB = y(0f) + sep
-        var hayColumnas = false
-        RoperoGeometria.cuerposX(r).forEachIndexed { i, (izq, der) ->
-            val c = r.cuerpos[i]
-            val k = c.partes.keys.minOrNull()
-            val columnas = if (k == null) emptyList() else elementos.filter { it.tipo == TipoElemento.COLUMNA && it.cuerpo == i && it.ruta == listOf(k, it.indice) }
-            if (columnas.isEmpty()) cotaDeAncho(canvas, izq, der, yB, RoperoGeometria.cuerpo(r, i))
-            else { hayColumnas = true; columnas.forEach { col -> cotaDeAncho(canvas, col.x0, col.x1, yB, col) } }
-        }
-        if (hayColumnas) {
+        if (filasDeColumnas.isEmpty()) {
+            RoperoGeometria.cuerposX(r).forEachIndexed { i, (izq, der) -> cotaDeAncho(canvas, izq, der, yB, RoperoGeometria.cuerpo(r, i)) }
+        } else {
+            filasDeColumnas.forEachIndexed { fila, columnas ->
+                val yF = yB + fila * FILA_DP * dp
+                // Los cuerpos sin partir (o las columnas sin partir) siguen en cada fila, para que se puedan tocar.
+                columnas.forEach { col -> cotaDeAncho(canvas, col.x0, col.x1, yF, col) }
+            }
             val yC = y(r.altoMayorCm) - sep
             RoperoGeometria.cuerposX(r).forEachIndexed { i, (izq, der) -> cotaDeAncho(canvas, izq, der, yC, RoperoGeometria.cuerpo(r, i), arriba = true) }
         }
+    }
+
+    /** Alto de cada fila de cotas de columnas. */
+    private val FILA_DP = 18f
+
+    private var filasDeColumnas: List<List<ElementoRopero>> = emptyList()
+
+    /**
+     * Las filas de columnas de abajo: la primera, las columnas del casillero partido más bajo de
+     * cada cuerpo (o el cuerpo entero si no está partido); cada fila siguiente, lo mismo dentro de
+     * cada columna de la anterior, hasta que no quede nada partido. Vacío si nada está partido.
+     */
+    private fun filasDeColumnas(r: Ropero): List<List<ElementoRopero>> {
+        val elementos = RoperoGeometria.elementos(r)
+        val filas = mutableListOf<List<ElementoRopero>>()
+        var nivel: List<ElementoRopero> = r.cuerpos.indices.mapNotNull { RoperoGeometria.cuerpo(r, it) }
+        while (true) {
+            var algunaPartida = false
+            val siguiente = nivel.flatMap { el ->
+                val c = r.cuerpoEn(el.cuerpo, el.ruta)
+                val k = c?.partes?.keys?.minOrNull()
+                val columnas = if (k == null) emptyList() else elementos.filter { it.tipo == TipoElemento.COLUMNA && it.cuerpo == el.cuerpo && it.ruta == el.ruta + listOf(k, it.indice) }
+                if (columnas.isEmpty()) listOf(el) else { algunaPartida = true; columnas }
+            }
+            if (!algunaPartida) break
+            filas.add(siguiente)
+            nivel = siguiente
+        }
+        return filas
     }
 
     /** Dónde quedó pintada cada cota de ancho (de un cuerpo o una columna), para saber cuál se tocó. */
