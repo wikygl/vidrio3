@@ -44,9 +44,10 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/panelInfoSeleccion" />
 
-    <!-- Mando del elemento tocado. Va pegado encima del bloque de controles, no sobre el dibujo. -->
-    <LinearLayout
-        android:id="@+id/contenedorFlotante"
+    <!-- Mando del elemento tocado. Va pegado encima del bloque de controles, no sobre el dibujo;
+         con tope de alto y con scroll, para que con el teclado abierto siga viéndose el dibujo. -->
+    <ScrollView
+        android:id="@+id/scrollMando"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="9dp"
@@ -54,12 +55,20 @@
         android:layout_marginBottom="4dp"
         android:background="@drawable/bg_control_panel"
         android:elevation="10dp"
-        android:orientation="vertical"
-        android:padding="8dp"
         android:visibility="gone"
+        app:layout_constrainedHeight="true"
+        app:layout_constraintHeight_max="150dp"
         app:layout_constraintBottom_toTopOf="@+id/overlayControles"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent">
+
+        <LinearLayout
+            android:id="@+id/contenedorFlotante"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp" />
+    </ScrollView>
 
     <!-- Panel flotante de controles -->
     <FrameLayout

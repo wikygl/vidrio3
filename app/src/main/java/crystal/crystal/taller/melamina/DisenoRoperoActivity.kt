@@ -165,9 +165,10 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private fun armarMando(el: ElementoRopero?) {
         val mando = binding.contenedorFlotante
         mando.removeAllViews()
-        if (el == null) { mando.visibility = View.GONE; return }
-        val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: run { mando.visibility = View.GONE; return }
-        val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: run { mando.visibility = View.GONE; return }
+        fun esconder() { binding.scrollMando.visibility = View.GONE; mando.visibility = View.GONE }
+        if (el == null) { esconder(); return }
+        val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: run { esconder(); return }
+        val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: run { esconder(); return }
         val piso = hueco.y0
         /** El cuerpo o la columna de este elemento, cambiado. */
         fun conEste(nuevo: Cuerpo) = ropero.conCuerpoEn(el.cuerpo, el.ruta, nuevo)
@@ -326,7 +327,24 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 }))
             }
         }
+        // Un botón para recoger el mando y ver el dibujo entero.
+        mando.addView(boton("▾ Recoger") { esconderMando() })
+        binding.scrollMando.visibility = View.VISIBLE
+        binding.scrollMando.scrollTo(0, 0)
         mando.visibility = View.VISIBLE
+    }
+
+    /** Esconde el mando y el teclado, para que se vea el dibujo entero (la selección se queda). */
+    private fun esconderMando() {
+        binding.scrollMando.visibility = View.GONE
+        binding.contenedorFlotante.visibility = View.GONE
+        esconderTeclado()
+    }
+
+    private fun esconderTeclado() {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+        imm?.hideSoftInputFromWindow(binding.vistaDiseno.windowToken, 0)
+        binding.vistaDiseno.requestFocus()
     }
 
     /** La cota de alto de un trozo (casillero, colgador, maletero, cajones) se toca y se escribe. */
@@ -354,6 +372,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private fun filaDeUnir(el: ElementoRopero): View {
         val botones = mutableListOf<View>(boton("Unir con…") {
             uniendo = el
+            esconderMando()
             binding.tvInfoSeleccion.text = "Toca la celda vecina (de la misma altura si es al lado, del mismo ancho si es encima o debajo) para unirlas"
         })
         if (el.tipo != TipoElemento.ZONA_CAJONES) {
@@ -414,6 +433,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
 
     /** Un cambio: se guarda, se redibuja y se vuelve a elegir lo mismo (si sigue existiendo). */
     private fun aplicar(nuevo: Ropero) {
+        esconderTeclado()
         ropero = nuevo
         binding.vistaDiseno.ropero = ropero
         val s = seleccion
