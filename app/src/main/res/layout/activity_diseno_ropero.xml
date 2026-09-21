@@ -27,7 +27,7 @@
             android:id="@+id/tvInfoSeleccion"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Toca un cajón, una repisa, el tubo o un cuerpo; arrastra repisas y cajones para moverlos"
+            android:text="Toca un cajón, un casillero, una repisa, el tubo o un cuerpo; arrastra repisas y cajones para moverlos"
             android:textColor="@android:color/black"
             android:textSize="12sp" />
     </LinearLayout>

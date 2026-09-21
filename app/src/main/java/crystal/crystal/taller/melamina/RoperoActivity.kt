@@ -317,6 +317,8 @@ class RoperoActivity : AppCompatActivity() {
         ponerFila(binding.lyNordex, binding.txNordex, m.lineasDePiezas(fondoMat))
         binding.tvTapacanto.text = RoperoCalculo.nombreTapacanto(ropero)
         binding.txTapacanto.text = m.lineasDeTapacanto()
+        binding.tvTapacantoPuertas.text = RoperoCalculo.nombreTapacantoPuertas(ropero)
+        ponerFila(binding.lyTapacantoPuertas, binding.txTapacantoPuertas, m.lineasDeTapacantoPuertas())
         ponerFila(binding.lyTubo, binding.txTubo, m.lineasConLargo("Tubo colgador"))
         ponerFila(binding.lyRiel, binding.txRiel, m.lineasConLargo("Riel corredizo"))
         binding.txAccesorios.text = m.lineasDeAccesorios()
@@ -413,6 +415,7 @@ class RoperoActivity : AppCompatActivity() {
                 fila(binding.lyMelamina, binding.tvMelamina, binding.txMelamina),
                 fila(binding.lyNordex, binding.tvNordex, binding.txNordex),
                 fila(binding.lyTapacanto, binding.tvTapacanto, binding.txTapacanto),
+                fila(binding.lyTapacantoPuertas, binding.tvTapacantoPuertas, binding.txTapacantoPuertas),
                 fila(binding.lyTubo, binding.tvTubo, binding.txTubo),
                 fila(binding.lyRiel, binding.tvRiel, binding.txRiel),
                 fila(binding.lyAccesorios, binding.tvAccesorios, binding.txAccesorios)
@@ -432,6 +435,7 @@ class RoperoActivity : AppCompatActivity() {
             ModoMasivoHelper.texto(binding.tvMelamina) to ModoMasivoHelper.texto(binding.txMelamina),
             ModoMasivoHelper.texto(binding.tvNordex) to ModoMasivoHelper.texto(binding.txNordex),
             ModoMasivoHelper.texto(binding.tvTapacanto) to ModoMasivoHelper.texto(binding.txTapacanto),
+            ModoMasivoHelper.texto(binding.tvTapacantoPuertas) to ModoMasivoHelper.texto(binding.txTapacantoPuertas),
             ModoMasivoHelper.texto(binding.tvTubo) to ModoMasivoHelper.texto(binding.txTubo),
             ModoMasivoHelper.texto(binding.tvRiel) to ModoMasivoHelper.texto(binding.txRiel)
         ).filter { it.value.isNotBlank() }
@@ -483,7 +487,8 @@ class RoperoActivity : AppCompatActivity() {
         val texto = buildString {
             append(m.referencias).append("\n\n")
             append("LISTA DE CORTE (cm)\n").append(m.listaDeCorte()).append("\n\n")
-            append("TAPACANTO (cm = cantidad)\n").append(m.lineasDeTapacanto()).append("\n\n")
+            append("TAPACANTO INTERIOR (cm = cantidad)\n").append(m.lineasDeTapacanto()).append("\n\n")
+            if (m.tapacantoPuertas.isNotEmpty()) append("TAPACANTO PUERTAS (cm = cantidad)\n").append(m.lineasDeTapacantoPuertas()).append("\n\n")
             m.nombresConLargo().forEach { append(it.uppercase()).append(" (cm = cantidad)\n").append(m.lineasConLargo(it)).append("\n\n") }
             append("ACCESORIOS\n").append(m.lineasDeAccesorios())
         }

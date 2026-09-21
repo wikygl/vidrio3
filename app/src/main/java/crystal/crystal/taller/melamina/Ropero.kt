@@ -31,8 +31,19 @@ data class Ropero(
     /** Cómo se quiere ver en el apunte: con las puertas puestas o el interior. No cambia el cálculo. */
     val verPuertas: Boolean = false,
     // ---- Lo fino, que se toca en la pantalla de diseño ----
-    /** Grosor del tapacanto (PVC): 0.45, 1, 2 o 3 mm; los de uso corriente son 0.45 y 3. */
+    /** Grosor del tapacanto (PVC) de lo de dentro: 0.45, 1, 2 o 3 mm; lo corriente es 0.45. */
     val tapacantoGrosorMm: Float = 0.45f,
+    /** Grosor del tapacanto de lo que se ve (puertas, zócalo, frentes a la vista): lo corriente es 3. */
+    val tapacantoPuertasMm: Float = 3f,
+    /**
+     * En cuántos compartimentos se parte el maletero. 0 = sigue a los cuerpos de abajo (la
+     * repisa por cuerpo y las divisiones de piso a techo). Con 1 o más, la repisa va de
+     * lateral a lateral, las divisiones de abajo llegan hasta ella y el maletero lleva las
+     * suyas, a partes iguales.
+     */
+    val maleteroCuerpos: Int = 0,
+    /** Hojas de cada puerta del maletero propio: 0 = las que tocan (1 hasta 60, 2 si es más ancho), 1 o 2. */
+    val maleteroHojas: Int = 0,
     /** Espesor del fondo: 3 (nordex) o 5.5 (MDF). */
     val espesorFondoMm: Float = 3f,
     /** Cuántas hojas corredizas; 0 = las que tocan por el ancho (2 hasta 240, 3 más allá). */
@@ -41,6 +52,11 @@ data class Ropero(
     val tuboBajoTopeCm: Float = 6f
 ) {
     val espesorCm: Float get() = espesorMm / 10f
+    val tapacantoCm: Float get() = tapacantoGrosorMm / 10f
+    val tapacantoPuertasCm: Float get() = tapacantoPuertasMm / 10f
+
+    /** El maletero con sus propios compartimentos (no se puede bajo una escalera: ahí sigue a los cuerpos). */
+    val maleteroPropio: Boolean get() = maleteroCm > 0f && maleteroCuerpos > 0 && !altosDesiguales
     val fondoNordexCm: Float get() = if (conFondo) espesorFondoMm / 10f else 0f
 
     /** El ancho libre entre los dos laterales. */
@@ -107,7 +123,8 @@ data class Ropero(
         put("espesor", espesorMm); put("zocalo", zocaloCm); put("maletero", maleteroCm)
         put("puertas", puertas.name); put("conFondo", conFondo); put("altoCajon", altoCajonCm)
         put("verPuertas", verPuertas)
-        put("tapacanto", tapacantoGrosorMm); put("espesorFondo", espesorFondoMm)
+        put("tapacanto", tapacantoGrosorMm); put("tapacantoPuertas", tapacantoPuertasMm); put("espesorFondo", espesorFondoMm)
+        put("maleteroCuerpos", maleteroCuerpos); put("maleteroHojas", maleteroHojas)
         put("hojasCorredizas", hojasCorredizas); put("tuboBajoTope", tuboBajoTopeCm)
         put("cuerpos", JSONArray().apply { cuerpos.forEach { put(it.aJson()) } })
     }.toString()
@@ -134,6 +151,9 @@ data class Ropero(
                 altoCajonCm = o.optDouble("altoCajon", 20.0).toFloat(),
                 verPuertas = o.optBoolean("verPuertas", false),
                 tapacantoGrosorMm = o.optDouble("tapacanto", 0.45).toFloat(),
+                tapacantoPuertasMm = o.optDouble("tapacantoPuertas", 3.0).toFloat(),
+                maleteroCuerpos = o.optInt("maleteroCuerpos", 0),
+                maleteroHojas = o.optInt("maleteroHojas", 0),
                 espesorFondoMm = o.optDouble("espesorFondo", 3.0).toFloat(),
                 hojasCorredizas = o.optInt("hojasCorredizas", 0),
                 tuboBajoTopeCm = o.optDouble("tuboBajoTope", 6.0).toFloat()
@@ -180,7 +200,9 @@ data class Cuerpo(
     /** Hojas batientes de este cuerpo; 0 = las que tocan (1 hasta 60 cm de luz, 2 si es más ancho). */
     val hojasBatientes: Int = 0,
     /** El alto de este lado del ropero, si no es el general (bajo una escalera, un techo que baja): 0 = el general. */
-    val altoCm: Float = 0f
+    val altoCm: Float = 0f,
+    /** Los cajones se ven desde fuera: sus frentes van en el plano de las puertas y la puerta del cuerpo arranca sobre ellos. */
+    val cajonesALaVista: Boolean = false
 ) {
     val entrepanosEfectivos: Int get() = when (tipo) {
         TipoCuerpo.COLGAR -> entrepanos.coerceIn(0, 2)
@@ -218,7 +240,7 @@ data class Cuerpo(
 
     fun aJson(): JSONObject = JSONObject().apply {
         put("ancho", anchoCm); put("tipo", tipo.name); put("entrepanos", entrepanos); put("cajones", cajones)
-        put("hojasBatientes", hojasBatientes); put("alto", altoCm)
+        put("hojasBatientes", hojasBatientes); put("alto", altoCm); put("aLaVista", cajonesALaVista)
         put("altosCajones", JSONArray().apply { altosCajonesCm.forEach { put(it.toDouble()) } })
         put("alturasEntrepanos", JSONArray().apply { alturasEntrepanosCm.forEach { put(it.toDouble()) } })
     }
@@ -232,6 +254,7 @@ data class Cuerpo(
                 cajones = o.optInt("cajones", 0),
                 hojasBatientes = o.optInt("hojasBatientes", 0),
                 altoCm = o.optDouble("alto", 0.0).toFloat(),
+                cajonesALaVista = o.optBoolean("aLaVista", false),
                 altosCajonesCm = lista(o.optJSONArray("altosCajones")),
                 alturasEntrepanosCm = lista(o.optJSONArray("alturasEntrepanos"))
             )

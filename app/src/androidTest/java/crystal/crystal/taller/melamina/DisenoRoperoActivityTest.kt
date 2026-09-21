@@ -172,4 +172,32 @@ class DisenoRoperoActivityTest {
             }
         }
     }
+
+    /** El ropero del plano del taller, por dentro y por fuera: zócalo delante, cajones a la vista, maletero al centro. */
+    @Test
+    fun guarda_captura_del_ropero_del_plano() {
+        val plano = Ropero(anchoCm = 140f, altoCm = 238f, fondoCm = 60f, zocaloCm = 7f, maleteroCm = 40f, maleteroCuerpos = 2, maleteroHojas = 1)
+            .conCuerposIguales(3)
+            .conCuerpo(0, Cuerpo(tipo = TipoCuerpo.MIXTO, cajones = 4, cajonesALaVista = true, hojasBatientes = 1))
+            .conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR, entrepanos = 2))
+            .conCuerpo(2, Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 6))
+            .conAnchoDeCuerpo(0, 60f)
+        val it = Intent(ApplicationProvider.getApplicationContext(), DisenoRoperoActivity::class.java)
+            .putExtra(DisenoRoperoActivity.EXTRA_ROPERO, plano.aJson())
+        ActivityScenario.launch<DisenoRoperoActivity>(it).use { esc ->
+            listOf(false, true).forEach { conPuertas ->
+                esc.onActivity { a -> a.findViewById<VistaRopero>(R.id.vistaDiseno).mostrarPuertas = conPuertas }
+                Thread.sleep(600)
+                esc.onActivity { a ->
+                    val raiz = a.window.decorView
+                    if (raiz.width == 0 || raiz.height == 0) return@onActivity
+                    val bmp = android.graphics.Bitmap.createBitmap(raiz.width, raiz.height, android.graphics.Bitmap.Config.ARGB_8888)
+                    raiz.draw(android.graphics.Canvas(bmp))
+                    val dir = a.getExternalFilesDir(null) ?: return@onActivity
+                    val nombre = if (conPuertas) "plano_ropero_puertas.png" else "plano_ropero_interior.png"
+                    java.io.FileOutputStream(java.io.File(dir, nombre)).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, it) }
+                }
+            }
+        }
+    }
 }

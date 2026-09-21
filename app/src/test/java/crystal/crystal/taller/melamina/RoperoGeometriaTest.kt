@@ -106,6 +106,29 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun poner_el_alto_de_un_casillero_reparte_los_de_arriba() {
+        // Cuerpo 2: dos repisas, tres casilleros de 74.27. El de abajo a 30 (zapatillas): la
+        // primera repisa a 30, y las otras dos... la segunda se reparte con lo que queda:
+        // 226.4 - 30 - 1.8 = 194.6 libres para dos casilleros y una repisa: (194.6 - 1.8) / 2 = 96.4.
+        val r = base.conCuerpo(1, RoperoGeometria.conAltoDeCasillero(base, 1, 0, 30f))
+        val cas = RoperoGeometria.elementos(r).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
+        assertEquals(30f, cas[0].y1 - cas[0].y0, 0.05f)
+        assertEquals(96.4f, cas[1].y1 - cas[1].y0, 0.05f)
+        assertEquals(96.4f, cas[2].y1 - cas[2].y0, 0.05f)
+        // Ahora el segundo a 50: el primero se queda en 30 y el de arriba se lleva el resto.
+        val r2 = r.conCuerpo(1, RoperoGeometria.conAltoDeCasillero(r, 1, 1, 50f))
+        val cas2 = RoperoGeometria.elementos(r2).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
+        assertEquals(30f, cas2[0].y1 - cas2[0].y0, 0.05f)
+        assertEquals(50f, cas2[1].y1 - cas2[1].y0, 0.05f)
+        assertEquals(226.4f - 30f - 50f - 3.6f, cas2[2].y1 - cas2[2].y0, 0.05f)
+        // El de arriba del todo baja la repisa de debajo y no toca las demás.
+        val r3 = r2.conCuerpo(1, RoperoGeometria.conAltoDeCasillero(r2, 1, 2, 60f))
+        val cas3 = RoperoGeometria.elementos(r3).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
+        assertEquals(60f, cas3[2].y1 - cas3[2].y0, 0.05f)
+        assertEquals(30f, cas3[0].y1 - cas3[0].y0, 0.05f)
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]
@@ -139,7 +162,7 @@ class RoperoGeometriaTest {
         val conAlto = base.conCuerpo(0, base.cuerpos[0].conAltoDeCajon(0, 30f, 20f))
         val m = RoperoCalculo.calcular(conAlto)
         val frentes = m.piezas.filter { it.nombre == "Frente cajón" }
-        assertEquals(setOf(296, 196), frentes.map { it.altoMm }.toSet())
+        assertEquals(setOf(295, 195), frentes.map { it.altoMm }.toSet())   // menos 0.09 de canto fino
         assertEquals(3, frentes.sumOf { it.cantidad })
         // Una hoja a mano en un cuerpo de 117: dos tocaban.
         val unaHoja = base.conCuerpo(1, base.cuerpos[1].copy(hojasBatientes = 1))

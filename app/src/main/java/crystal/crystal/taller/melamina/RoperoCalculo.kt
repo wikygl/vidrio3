@@ -34,8 +34,10 @@ data class Accesorio(val nombre: String, val cantidad: Int, val largoCm: Float =
 data class MaterialesRopero(
     val piezas: List<PiezaMelamina>,
     val accesorios: List<Accesorio>,
-    /** Cantos a cubrir, en cm, con cuántos de cada largo. */
+    /** Cantos de dentro a cubrir (tapacanto fino), en cm, con cuántos de cada largo. */
     val tapacanto: Map<Int, Int>,
+    /** Cantos de lo que se ve (puertas, zócalo, frentes a la vista): el tapacanto grueso. */
+    val tapacantoPuertas: Map<Int, Int> = emptyMap(),
     val planchasEstimadas: Map<MaterialPlancha, Int>,
     val referencias: String
 ) {
@@ -50,6 +52,9 @@ data class MaterialesRopero(
 
     fun lineasDeTapacanto(): String =
         tapacanto.entries.sortedByDescending { it.key }.joinToString("\n") { (largo, n) -> "$largo = $n" }
+
+    fun lineasDeTapacantoPuertas(): String =
+        tapacantoPuertas.entries.sortedByDescending { it.key }.joinToString("\n") { (largo, n) -> "$largo = $n" }
 
     /** Los accesorios sin largo, sumados por nombre: los soportes de tres colgadores van en una fila. */
     fun lineasDeAccesorios(): String =
@@ -91,10 +96,17 @@ data class MaterialesRopero(
  * - Cajones: frente falso 4 mm menor que el hueco por lado, caja 4 cm más baja que el frente y
  *   5 cm más corta que el fondo útil, con 13 mm por lado para los rieles, fondo de nordex.
  * - Puertas batientes superpuestas: una por cuerpo hasta 60 cm, dos si es más ancho, 3 mm de
- *   luz; bisagras según el alto. Las del maletero aparte.
+ *   luz; bisagras según el alto. Las del maletero aparte (por compartimento del maletero si
+ *   tiene los suyos). Con los cajones a la vista, la puerta arranca sobre la tapa de los
+ *   cajones y cada frente va en el plano de las puertas, con su gruña.
+ * - El zócalo va en el plano de las puertas, del color de fuera: de lateral a lateral (medio
+ *   lateral cada lado), y de alto lo que deje el canto grueso y una gruña de unos 2 mm, al
+ *   medio centímetro hacia abajo (zócalo 7 con canto 3 = melamina 6.5).
  * - Corredizas por dentro del armazón: dos hojas hasta 240, tres más allá, montadas 5 cm.
  * - Tapacanto en todo canto que se ve: frentes del armazón, cantos de entrepaños, contorno de
- *   puertas y frentes de cajón, canto superior de las cajas.
+ *   puertas y frentes de cajón, canto superior de las cajas. Lo de dentro con el fino (0.45)
+ *   y lo de fuera con el grueso (3). El tapacanto SE DESCUENTA de la pieza: una puerta de
+ *   100 x 50 canteada a la vuelta con 3 mm se corta a 99.4 x 49.4.
  * - Planchas: el área de las piezas más un 15% de merma, a plancha entera; el optimizador de
  *   planchas da el corte real.
  */
@@ -106,6 +118,8 @@ object RoperoCalculo {
     private const val RIEL_CAJON_CM = 1.3f
     private const val CAJA_MAS_BAJA_CM = 4f
     private const val CAJA_MAS_CORTA_CM = 5f
+    /** La gruña mínima entre el zócalo y las puertas: la de 1.5 mm se redondea a 2. */
+    private const val GRUNA_ZOCALO_CM = 0.15f
     private val RIELES_CAJON = listOf(30, 35, 40, 45, 50, 55)
 
     fun calcular(r: Ropero): MaterialesRopero {
@@ -115,13 +129,30 @@ object RoperoCalculo {
         val piezas = mutableListOf<PiezaMelamina>()
         val accesorios = mutableListOf<Accesorio>()
         val tapacanto = mutableMapOf<Int, Int>()
-        fun canto(largoCm: Float, cantidad: Int) {
+        val tapacantoPuertas = mutableMapOf<Int, Int>()
+        fun canto(largoCm: Float, cantidad: Int, visible: Boolean = false) {
             val l = largoCm.roundToInt()
-            if (l > 0 && cantidad > 0) tapacanto[l] = (tapacanto[l] ?: 0) + cantidad
+            val mapa = if (visible) tapacantoPuertas else tapacanto
+            if (l > 0 && cantidad > 0) mapa[l] = (mapa[l] ?: 0) + cantidad
         }
-        fun pieza(nombre: String, anchoCm: Float, altoCm: Float, cantidad: Int, material: MaterialPlancha = mel, cantoCm: Float = 0f) {
+        /**
+         * Una pieza por su medida de sitio ([anchoCm] x [altoCm]) y qué cantos lleva:
+         * [cantosEnAncho] los cantos a lo largo del ancho (arriba y abajo: descuentan del alto),
+         * [cantosEnAlto] los de los lados (descuentan del ancho). Lo [visible] lleva el canto
+         * grueso. Se apunta la pieza ya descontada y los cantos con su largo de corte.
+         */
+        fun pieza(
+            nombre: String, anchoCm: Float, altoCm: Float, cantidad: Int, material: MaterialPlancha = mel,
+            cantosEnAncho: Int = 0, cantosEnAlto: Int = 0, visible: Boolean = false
+        ) {
             if (cantidad <= 0 || anchoCm <= 0f || altoCm <= 0f) return
-            piezas.add(PiezaMelamina(nombre, mm(anchoCm), mm(altoCm), cantidad, material, mm(cantoCm)))
+            val t = if (visible) r.tapacantoPuertasCm else r.tapacantoCm
+            val w = anchoCm - cantosEnAlto * t
+            val h = altoCm - cantosEnAncho * t
+            val cantoCm = cantosEnAncho * w + cantosEnAlto * h
+            piezas.add(PiezaMelamina(nombre, mm(w), mm(h), cantidad, material, mm(cantoCm)))
+            canto(w, cantosEnAncho * cantidad, visible)
+            canto(h, cantosEnAlto * cantidad, visible)
         }
 
         val fondoArm = r.fondoArmazonCm
@@ -134,27 +165,34 @@ object RoperoCalculo {
         // Cada lateral con el alto de su lado (bajo una escalera cada cuerpo tiene el suyo).
         val altoIzq = r.altoDeCuerpo(0)
         val altoDer = r.altoDeCuerpo(n - 1)
-        pieza("Lateral", fondoArm, altoIzq, 1, cantoCm = altoIzq + fondoArm); canto(altoIzq, 1); canto(fondoArm, 1)
-        pieza("Lateral", fondoArm, altoDer, 1, cantoCm = altoDer + fondoArm); canto(altoDer, 1); canto(fondoArm, 1)
+        pieza("Lateral", fondoArm, altoIzq, 1, cantosEnAncho = 1, cantosEnAlto = 1)
+        pieza("Lateral", fondoArm, altoDer, 1, cantosEnAncho = 1, cantosEnAlto = 1)
         // Piso y zócalo van de lateral a lateral; si no caben en la plancha se parten en el centro
         // de una división, que es donde la unión no se ve y tiene dónde atornillarse.
         val tramosAncho = tramosDeAncho(r)
         if (r.altosDesiguales) {
             // Con altos distintos el techo va por cuerpos, cada trozo a su alto, hasta la mitad de
             // la división (y hasta el lateral en las puntas).
-            tramosDeTechoPorCuerpo(r).forEach { w -> pieza("Techo", w, fondoArm, 1, cantoCm = w); canto(w, 1) }
+            tramosDeTechoPorCuerpo(r).forEach { w -> pieza("Techo", w, fondoArm, 1, cantosEnAncho = 1) }
         } else {
-            tramosAncho.forEach { w -> pieza("Techo", w, fondoArm, 1, cantoCm = w); canto(w, 1) }
+            tramosAncho.forEach { w -> pieza("Techo", w, fondoArm, 1, cantosEnAncho = 1) }
         }
-        tramosAncho.forEach { w -> pieza("Piso", w, fondoArm, 1, cantoCm = w); canto(w, 1) }
-        if (r.zocaloCm > 0.5f) tramosAncho.forEach { w -> pieza("Zócalo", w, r.zocaloCm, 1) }
-        // Cada división sube hasta el techo más alto de los dos cuerpos que separa.
+        tramosAncho.forEach { w -> pieza("Piso", w, fondoArm, 1, cantosEnAncho = 1) }
+        // El zócalo va delante, en el plano de las puertas, con el canto grueso arriba; la pieza
+        // se pide con el canto puesto para que quede la melamina de altoZocalo.
+        if (r.zocaloCm > 0.5f) tramosDeZocalo(r).forEach { w -> pieza("Zócalo", w, altoZocalo(r) + r.tapacantoPuertasCm, 1, cantosEnAncho = 1, visible = true) }
+        // Cada división sube hasta el techo más alto de los dos cuerpos que separa; con el
+        // maletero propio, solo hasta su repisa.
         for (i in 0 until n - 1) {
-            val altoDiv = maxOf(r.altoDeCuerpo(i), r.altoDeCuerpo(i + 1)) - r.zocaloCm - 2 * e
-            pieza("División", fondoArm, altoDiv, 1, cantoCm = altoDiv); canto(altoDiv, 1)
+            val altoDiv = if (r.maleteroPropio) r.altoBajoCm
+                          else maxOf(r.altoDeCuerpo(i), r.altoDeCuerpo(i + 1)) - r.zocaloCm - 2 * e
+            pieza("División", fondoArm, altoDiv, 1, cantosEnAlto = 1)
         }
-        if (r.maleteroCm > 0f) {
-            r.cuerpos.forEach { c -> pieza("Repisa maletero", c.anchoCm, fondoInt, 1, cantoCm = c.anchoCm); canto(c.anchoCm, 1) }
+        if (r.maleteroPropio) {
+            tramosAncho.forEach { w -> pieza("Repisa maletero", w, fondoArm, 1, cantosEnAncho = 1) }
+            pieza("División maletero", fondoInt, r.maleteroCm, r.maleteroCuerpos - 1, cantosEnAlto = 1)
+        } else if (r.maleteroCm > 0f) {
+            r.cuerpos.forEach { c -> pieza("Repisa maletero", c.anchoCm, fondoInt, 1, cantosEnAncho = 1) }
         }
         if (r.conFondo) {
             // El fondo va clavado atrás, del zócalo arriba. Si no cabe en la plancha (244 x 183)
@@ -166,13 +204,13 @@ object RoperoCalculo {
         }
 
         // ---- Lo de cada cuerpo ----
-        var tornillos40 = 4 * (2 + (n - 1) + (if (r.maleteroCm > 0f) n else 0)) + 4
+        var tornillos40 = 4 * (2 + (n - 1) + (if (r.maleteroPropio) n + r.maleteroCuerpos - 1 else if (r.maleteroCm > 0f) n else 0)) + 4
         var tornillos16 = if (r.conFondo) ceil(2 * (r.anchoCm + r.altoMayorCm) / 20f).toInt() else 0
         var tiradores = 0
         r.cuerpos.forEach { c ->
             val w = c.anchoCm
             val entrepanos = c.entrepanosEfectivos
-            if (entrepanos > 0) { pieza("Entrepaño", w, fondoInt, entrepanos, cantoCm = w); canto(w, entrepanos); tornillos40 += 4 * entrepanos }
+            if (entrepanos > 0) { pieza("Entrepaño", w, fondoInt, entrepanos, cantosEnAncho = 1); tornillos40 += 4 * entrepanos }
             if (c.llevaTubo) {
                 accesorios.add(Accesorio("Tubo colgador", 1, largoCm = w))
                 accesorios.add(Accesorio("Soporte de tubo", 2))
@@ -182,19 +220,28 @@ object RoperoCalculo {
             if (cajones > 0) {
                 // Cada cajón con su alto: el frente y la caja se cortan por cajón, y los iguales
                 // se juntan al final en la lista.
-                val frenteW = w - 0.4f
                 val cajaProf = (fondoInt - CAJA_MAS_CORTA_CM).coerceAtLeast(20f)
                 val cajaW = w - 2 * RIEL_CAJON_CM
                 altosCajones.forEach { hc ->
-                    val frenteH = hc - 0.4f
-                    pieza("Frente cajón", frenteW, frenteH, 1, cantoCm = 2 * (frenteW + frenteH)); canto(frenteW, 2); canto(frenteH, 2)
                     val cajaH = (hc - CAJA_MAS_BAJA_CM).coerceAtLeast(6f)
-                    pieza("Lateral cajón", cajaProf, cajaH, 2, cantoCm = cajaProf); canto(cajaProf, 2)
-                    pieza("Frente y trasera de caja", cajaW - 2 * e, cajaH, 2, cantoCm = cajaW - 2 * e); canto(cajaW - 2 * e, 2)
+                    pieza("Lateral cajón", cajaProf, cajaH, 2, cantosEnAncho = 1)
+                    pieza("Frente y trasera de caja", cajaW - 2 * e, cajaH, 2, cantosEnAncho = 1)
+                }
+                if (c.cajonesALaVista) {
+                    // Frentes a la vista: en el plano de las puertas, tan anchos como la puerta del
+                    // cuerpo, cada uno a lo alto de su cajón (el de abajo tapa el piso y el de
+                    // arriba media tapa), con la gruña y el canto grueso a la vuelta.
+                    val frenteW = w + e - LUZ_PUERTA_CM
+                    frentesALaVista(r, c).forEach { (y0, y1) ->
+                        pieza("Frente cajón", frenteW, y1 - y0 - LUZ_PUERTA_CM, 1, cantosEnAncho = 2, cantosEnAlto = 2, visible = true)
+                    }
+                } else {
+                    val frenteW = w - 0.4f
+                    altosCajones.forEach { hc -> pieza("Frente cajón", frenteW, hc - 0.4f, 1, cantosEnAncho = 2, cantosEnAlto = 2) }
                 }
                 pieza("Fondo cajón", cajaW, cajaProf, cajones, fondoMat)
                 // La tapa sobre los cajones, que los separa del colgador o del hueco de arriba.
-                pieza("Tapa de cajones", w, fondoInt, 1, cantoCm = w); canto(w, 1); tornillos40 += 4
+                pieza("Tapa de cajones", w, fondoInt, 1, cantosEnAncho = 1); tornillos40 += 4
                 val riel = RIELES_CAJON.lastOrNull { it <= cajaProf } ?: RIELES_CAJON.first()
                 accesorios.add(Accesorio("Riel de cajón $riel cm (par)", cajones))
                 tiradores += cajones
@@ -213,14 +260,26 @@ object RoperoCalculo {
                     val luz = c.anchoCm + e
                     val hojas = hojasBatientes(c, e)
                     val ancho = luz / hojas - LUZ_PUERTA_CM
-                    val altoCuerpo = r.altoDeCuerpo(i)
-                    val altoBajo = (if (r.maleteroCm > 0f) altoCuerpo - r.zocaloCm - r.maleteroCm - e else altoCuerpo - r.zocaloCm) - LUZ_PUERTA_CM
-                    pieza("Puerta", ancho, altoBajo, hojas, cantoCm = 2 * (ancho + altoBajo)); canto(ancho, 2 * hojas); canto(altoBajo, 2 * hojas)
+                    val (desde, hasta) = puertaBaja(r, i)
+                    val altoBajo = hasta - desde - LUZ_PUERTA_CM
+                    pieza("Puerta", ancho, altoBajo, hojas, cantosEnAncho = 2, cantosEnAlto = 2, visible = true)
                     bisagras += hojas * bisagrasPorAlto(altoBajo)
                     tiradores += hojas
-                    if (r.maleteroCm > 0f) {
+                    if (r.maleteroCm > 0f && !r.maleteroPropio) {
                         val altoMal = r.maleteroCm + e - LUZ_PUERTA_CM
-                        pieza("Puerta maletero", ancho, altoMal, hojas, cantoCm = 2 * (ancho + altoMal)); canto(ancho, 2 * hojas); canto(altoMal, 2 * hojas)
+                        pieza("Puerta maletero", ancho, altoMal, hojas, cantosEnAncho = 2, cantosEnAlto = 2, visible = true)
+                        bisagras += hojas * bisagrasPorAlto(altoMal)
+                        tiradores += hojas
+                    }
+                    if (c.cajonesALaVista) tiradores += c.cajonesEfectivos
+                }
+                if (r.maleteroPropio) {
+                    // Las puertas del maletero por compartimento suyo, no por cuerpo.
+                    val altoMal = r.maleteroCm + e - LUZ_PUERTA_CM
+                    RoperoGeometria.maleterosX(r).forEach { (x0, x1) ->
+                        val hojas = hojasBatientes(Cuerpo(anchoCm = x1 - x0, hojasBatientes = r.maleteroHojas), e)
+                        val ancho = (x1 - x0 + e) / hojas - LUZ_PUERTA_CM
+                        pieza("Puerta maletero", ancho, altoMal, hojas, cantosEnAncho = 2, cantosEnAlto = 2, visible = true)
                         bisagras += hojas * bisagrasPorAlto(altoMal)
                         tiradores += hojas
                     }
@@ -230,7 +289,7 @@ object RoperoCalculo {
                 val hojas = hojasCorredizas(r)
                 val ancho = (wi + (hojas - 1) * MONTA_CORREDIZA_CM) / hojas
                 val alto = hi - 3.5f
-                pieza("Hoja corrediza", ancho, alto, hojas, cantoCm = 2 * (ancho + alto)); canto(ancho, 2 * hojas); canto(alto, 2 * hojas)
+                pieza("Hoja corrediza", ancho, alto, hojas, cantosEnAncho = 2, cantosEnAlto = 2, visible = true)
                 accesorios.add(Accesorio("Riel corredizo", 2, largoCm = wi))
                 accesorios.add(Accesorio("Kit ruedas corredizas", hojas))
                 accesorios.add(Accesorio("Tirador embutido", hojas))
@@ -253,11 +312,14 @@ object RoperoCalculo {
         val juntas = piezas.groupBy { Triple(it.nombre, it.medida, it.material) }.values
             .map { grupo -> grupo.first().copy(cantidad = grupo.sumOf { it.cantidad }) }
         val tapacantoM = tapacanto.entries.sumOf { (l, c) -> l.toDouble() * c } / 100.0
+        val tapacantoPuertasM = tapacantoPuertas.entries.sumOf { (l, c) -> l.toDouble() * c } / 100.0
         val largas = juntas.filter { maxOf(it.anchoMm, it.altoMm) > LARGO_PLANCHA_MM }.map { it.nombre }.distinct()
         val referencias = buildString {
             append("Ropero empotrado ${fmt(r.anchoCm)} x ${fmt(r.altoCm)} x ${fmt(r.fondoCm)} cm, melamina ${r.espesorMm} mm\n")
             append("Cuerpos: ").append(r.cuerpos.joinToString(", ") { "${fmt(it.anchoCm)} ${it.tipo.etiqueta.lowercase()}" }).append('\n')
-            append("Zócalo ${fmt(r.zocaloCm)}").append(if (r.maleteroCm > 0f) ", maletero ${fmt(r.maleteroCm)}" else "").append('\n')
+            append("Zócalo ${fmt(r.zocaloCm)} (melamina ${fmt(altoZocalo(r))} + canto)")
+            if (r.maleteroCm > 0f) append(", maletero ${fmt(r.maleteroCm)}").append(if (r.maleteroPropio) " en ${r.maleteroCuerpos}" else "")
+            append('\n')
             append("Puertas: ${r.puertas.etiqueta.lowercase()}")
             if (r.puertas == TipoPuertas.CORREDIZAS) append(" (${hojasCorredizas(r)} hojas)")
             append('\n')
@@ -266,10 +328,59 @@ object RoperoCalculo {
                 if (r.puertas == TipoPuertas.CORREDIZAS) append("OJO: corredizas con altos distintos: las hojas van al alto general; revisar.\n")
             }
             planchas.forEach { (m, c) -> append("${m.etiqueta}: $c plancha${if (c == 1) "" else "s"} de 244x183 (estimado con 15% de merma)\n") }
-            append("Tapacanto ${anchoTapacantoMm(r)} x ${fmt(r.tapacantoGrosorMm)} mm: ${String.format(java.util.Locale.US, "%.1f", tapacantoM)} m")
+            append("${nombreTapacanto(r)}: ${String.format(java.util.Locale.US, "%.1f", tapacantoM)} m")
+            if (tapacantoPuertasM > 0.0) append("; ${nombreTapacantoPuertas(r)}: ${String.format(java.util.Locale.US, "%.1f", tapacantoPuertasM)} m")
+            append("\nLas piezas van con el tapacanto descontado.")
             if (largas.isNotEmpty()) append("\nOJO: ${largas.joinToString(", ")} pasan de 244: van en plancha larga (275) o partidas.")
         }
-        return MaterialesRopero(juntas, accesorios, tapacanto, planchas, referencias)
+        return MaterialesRopero(juntas, accesorios, tapacanto, tapacantoPuertas, planchas, referencias)
+    }
+
+    /**
+     * El alto de la melamina del zócalo: el zócalo menos el canto grueso y una gruña de al menos
+     * 1.5 mm, al medio centímetro hacia abajo. Zócalo 7 con canto 3: 6.55 → 6.5.
+     */
+    fun altoZocalo(r: Ropero): Float =
+        (kotlin.math.floor((r.zocaloCm - r.tapacantoPuertasCm - GRUNA_ZOCALO_CM) * 2f) / 2f).coerceAtLeast(2f)
+
+    /**
+     * El zócalo en el plano de las puertas va de medio lateral a medio lateral, como ellas; si
+     * no cabe en la plancha se parte como el piso, y los trozos de las puntas llevan su medio lateral.
+     */
+    fun tramosDeZocalo(r: Ropero): List<Float> {
+        val e = r.espesorCm
+        val tramos = tramosDeAncho(r)
+        if (tramos.size == 1) return listOf(r.anchoCm - e)
+        return tramos.mapIndexed { i, w -> w + (if (i == 0) e / 2f else 0f) + (if (i == tramos.lastIndex) e / 2f else 0f) }
+    }
+
+    /**
+     * De dónde a dónde va la puerta baja del cuerpo [i] (sin gruña): del zócalo (o de media tapa
+     * sobre los cajones, si están a la vista) hasta el maletero o el techo.
+     */
+    fun puertaBaja(r: Ropero, i: Int): Pair<Float, Float> {
+        val c = r.cuerpos[i]
+        val e = r.espesorCm
+        val desde = if (c.cajonesALaVista && c.cajonesEfectivos > 0) RoperoGeometria.topeDeCajones(r, c) + e / 2f else r.zocaloCm
+        val hasta = if (r.maleteroCm > 0f) RoperoGeometria.topeBajo(r, i) + e else r.altoDeCuerpo(i)
+        return desde to hasta
+    }
+
+    /**
+     * De dónde a dónde va cada frente de cajón a la vista (sin gruña), de abajo arriba: el de
+     * abajo arranca en el zócalo (tapa el piso), cada uno acaba donde acaba su cajón, y el de
+     * arriba llega a media tapa, donde arranca la puerta.
+     */
+    fun frentesALaVista(r: Ropero, c: Cuerpo): List<Pair<Float, Float>> {
+        val altos = c.altosDeCajones(r.altoCajonCm)
+        if (altos.isEmpty()) return emptyList()
+        val piso = RoperoGeometria.pisoY(r)
+        val topes = altos.runningFold(piso) { acc, h -> acc + h }
+        return altos.indices.map { k ->
+            val y0 = if (k == 0) r.zocaloCm else topes[k]
+            val y1 = if (k == altos.lastIndex) topes[k + 1] + r.espesorCm / 2f else topes[k + 1]
+            y0 to y1
+        }
     }
 
     /** El largo de la plancha de siempre, en mm. */
@@ -343,8 +454,11 @@ object RoperoCalculo {
     /** El ancho del tapacanto que cubre el canto del tablero: 22 para 18 mm, 19 para 15. */
     fun anchoTapacantoMm(r: Ropero): Int = if (r.espesorMm <= 15) 19 else 22
 
-    /** El nombre de la lista de tapacanto, con su ancho y su grosor: "Tapacanto 22 x 0.45 mm". */
+    /** El nombre de la lista de tapacanto de dentro, con su ancho y su grosor: "Tapacanto 22 x 0.45 mm". */
     fun nombreTapacanto(r: Ropero): String = "Tapacanto ${anchoTapacantoMm(r)} x ${fmt(r.tapacantoGrosorMm)} mm"
+
+    /** El del tapacanto de lo que se ve: "Tapacanto puertas 22 x 3 mm". */
+    fun nombreTapacantoPuertas(r: Ropero): String = "Tapacanto puertas ${anchoTapacantoMm(r)} x ${fmt(r.tapacantoPuertasMm)} mm"
 
     fun bisagrasPorAlto(altoCm: Float): Int = when {
         altoCm <= 90f -> 2

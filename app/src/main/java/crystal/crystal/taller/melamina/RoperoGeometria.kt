@@ -39,6 +39,49 @@ object RoperoGeometria {
     /** La cara de arriba del piso. */
     fun pisoY(r: Ropero): Float = r.zocaloCm + r.espesorCm
 
+    /**
+     * El x de cada compartimento del maletero, de cara a cara. Si el maletero no tiene los
+     * suyos, son los de los cuerpos.
+     */
+    fun maleterosX(r: Ropero): List<Pair<Float, Float>> {
+        if (!r.maleteroPropio) return cuerposX(r)
+        val e = r.espesorCm
+        val m = r.maleteroCuerpos
+        val ancho = (r.anchoInteriorCm - (m - 1) * e) / m
+        return (0 until m).map { k -> val izq = e + k * (ancho + e); izq to izq + ancho }
+    }
+
+    /**
+     * El cuerpo con el casillero [k] de [altoCm] libres: se pone la repisa de encima y las de
+     * más arriba se reparten de nuevo a partes iguales en lo que queda; las de abajo no se
+     * tocan. En el casillero de arriba del todo se baja la repisa de debajo y no se mueve
+     * ninguna otra. Así se hacen los de abajo chicos (zapatillas) y los demás iguales.
+     */
+    fun conAltoDeCasillero(r: Ropero, i: Int, k: Int, altoCm: Float): Cuerpo {
+        val c = r.cuerpos.getOrNull(i) ?: return Cuerpo()
+        val e = r.espesorCm
+        val piso = pisoY(r)
+        val repartidas = alturasDeEntrepanos(r, c)
+        val n = repartidas.size
+        if (n == 0) return c
+        val alto = altoCm.coerceAtLeast(5f)
+        val hasta = (if (c.llevaTubo) tuboY(r, i) - ROPA_COLGADA_CM else topeBajo(r, i)) - piso
+        if (k >= n) {
+            // El de arriba: la repisa de debajo baja hasta dejarle ese alto.
+            return c.conAlturaDeEntrepano(n - 1, (hasta - alto - e).coerceAtLeast(5f), repartidas)
+        }
+        val suelo = if (k == 0) sobreLosCajones(r, c) - piso else repartidas[k - 1] + e
+        val nuevas = repartidas.toMutableList()
+        nuevas[k] = suelo + alto
+        val quedan = n - 1 - k
+        if (quedan > 0) {
+            val desde = nuevas[k] + e
+            val libre = ((hasta - desde - quedan * e) / (quedan + 1)).coerceAtLeast(1f)
+            for (j in 1..quedan) nuevas[k + j] = desde + libre * j + e * (j - 1)
+        }
+        return c.copy(alturasEntrepanosCm = nuevas)
+    }
+
     /** La cara de abajo del techo del cuerpo [i] (cada lado puede tener su alto). */
     fun techoY(r: Ropero, i: Int = 0): Float = r.altoDeCuerpo(i) - r.espesorCm
 
@@ -88,7 +131,9 @@ object RoperoGeometria {
             val techo = techoY(r, i)
             val tope = topeBajo(r, i)
             salen.add(ElementoRopero(TipoElemento.CUERPO, i, 0, izq, piso, der, techo))
-            if (r.maleteroCm > 0f) salen.add(ElementoRopero(TipoElemento.REPISA_MALETERO, i, 0, izq, tope, der, tope + e))
+            // La repisa del maletero: una por cuerpo, o una sola de lateral a lateral si el maletero es propio.
+            if (r.maleteroCm > 0f && !r.maleteroPropio) salen.add(ElementoRopero(TipoElemento.REPISA_MALETERO, i, 0, izq, tope, der, tope + e))
+            if (r.maleteroPropio && i == 0) salen.add(ElementoRopero(TipoElemento.REPISA_MALETERO, 0, 0, e, tope, r.anchoCm - e, tope + e))
             var base = piso
             c.altosDeCajones(r.altoCajonCm).forEachIndexed { k, alto ->
                 salen.add(ElementoRopero(TipoElemento.CAJON, i, k, izq, base, der, base + alto))

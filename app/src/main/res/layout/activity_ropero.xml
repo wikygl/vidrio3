@@ -533,6 +533,32 @@
                                             android:text="@string/_0_0" />
                                     </LinearLayout>
 
+                                    <!-- Tapacanto de puertas (el grueso) -->
+                                    <LinearLayout
+                                        android:id="@+id/lyTapacantoPuertas"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/blanco"
+                                        android:orientation="horizontal"
+                                        android:visibility="gone">
+
+                                        <TextView
+                                            android:id="@+id/tvTapacantoPuertas"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Tapacanto puertas 22 x 3 mm" />
+
+                                        <TextView
+                                            android:id="@+id/txTapacantoPuertas"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
                                     <!-- Tubo colgador -->
                                     <LinearLayout
                                         android:id="@+id/lyTubo"
