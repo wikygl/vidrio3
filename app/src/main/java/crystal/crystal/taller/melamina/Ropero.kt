@@ -107,7 +107,29 @@ data class Ropero(
     fun conAnchoDeCuerpo(indice: Int, anchoCm: Float): Ropero {
         if (indice !in cuerpos.indices) return this
         val libre = anchoInteriorCm - (cuerpos.size - 1) * espesorCm
-        return copy(cuerpos = Cuerpo.conAnchoFijado(cuerpos, indice, anchoCm, libre))
+        // Los cuerpos que cambian de ancho reparten el suyo entre sus columnas (las fijadas se quedan).
+        val nuevos = Cuerpo.conAnchoFijado(cuerpos, indice, anchoCm, libre)
+        return copy(cuerpos = nuevos.mapIndexed { i, c -> if (kotlin.math.abs(c.anchoCm - cuerpos[i].anchoCm) > 0.01f) c.conAnchoTotal(c.anchoCm, espesorCm) else c })
+    }
+
+    /**
+     * El ancho escrito para el cuerpo o la columna de esa [ruta], que se respeta: sus hermanas
+     * fijadas no se tocan, y lo que cambie se lleva hacia arriba (el casillero, su cuerpo…) hasta
+     * los cuerpos del ropero, donde lo absorben los que no están fijados. La medida de arriba es
+     * la suma de las de abajo, no al revés.
+     */
+    fun conAnchoEn(indice: Int, ruta: List<Int>, anchoCm: Float): Ropero {
+        if (ruta.size < 2) return conAnchoDeCuerpo(indice, anchoCm)
+        val rutaPadre = ruta.dropLast(2)
+        val k = ruta[ruta.size - 2]; val j = ruta.last()
+        val padre = cuerpoEn(indice, rutaPadre) ?: return this
+        val columnas = padre.columnasDe(k)
+        if (j !in columnas.indices) return this
+        val nuevasColumnas = columnas.mapIndexed { jj, col -> if (jj == j) col.conAnchoTotal(anchoCm.coerceAtLeast(5f), espesorCm).copy(anchoFijo = true) else col }
+        val anchoPadre = nuevasColumnas.sumOf { it.anchoCm.toDouble() }.toFloat() + (columnas.size - 1) * espesorCm
+        // El padre con esa columna puesta y sus otros casilleros repartidos al ancho nuevo.
+        val padreNuevo = padre.conColumnas(k, nuevasColumnas).conAnchoTotal(anchoPadre, espesorCm, exceptoCasillero = k)
+        return conCuerpoEn(indice, rutaPadre, padreNuevo).conAnchoEn(indice, rutaPadre, anchoPadre)
     }
 
     fun conCuerpo(indice: Int, cuerpo: Cuerpo): Ropero =
@@ -268,6 +290,16 @@ data class Cuerpo(
         return conColumnas(k, columnas.mapIndexed { jj, col -> if (jj == j) col.conCuerpoEn(ruta.drop(2), nuevo) else col })
     }
 
+    /**
+     * Este cuerpo a [anchoCm] de ancho, con las columnas de cada casillero partido repartidas al
+     * ancho nuevo: las fijadas se quedan y las demás se reparten lo que quede (o todas a escala
+     * si todas están fijadas). Cada columna que cambie hace lo mismo con las suyas.
+     */
+    fun conAnchoTotal(anchoCm: Float, espesorCm: Float, exceptoCasillero: Int = -1): Cuerpo =
+        copy(anchoCm = anchoCm, partes = partes.mapValues { (k, cols) ->
+            if (k == exceptoCasillero) cols else repartir(cols, anchoCm - (cols.size - 1) * espesorCm, espesorCm)
+        })
+
     /** Este cuerpo con la columna [j] del casillero [k] a [anchoCm], fijada; las demás se reparten lo que quede. */
     fun conAnchoDeColumna(k: Int, j: Int, anchoCm: Float, anchoLibre: Float, espesorCm: Float): Cuerpo {
         val columnas = columnasDe(k)
@@ -323,6 +355,27 @@ data class Cuerpo(
     }
 
     companion object {
+        /**
+         * Las columnas repartidas para que sumen [libre]: las fijadas se quedan, las sueltas se
+         * reparten el resto a partes iguales; si todas están fijadas, todas a escala. Las que
+         * cambian reparten a su vez las suyas.
+         */
+        fun repartir(columnas: List<Cuerpo>, libre: Float, espesorCm: Float): List<Cuerpo> {
+            if (columnas.isEmpty()) return columnas
+            val suma = columnas.sumOf { it.anchoCm.toDouble() }.toFloat()
+            if (kotlin.math.abs(suma - libre) < 0.01f) return columnas
+            val sueltas = columnas.indices.filter { !columnas[it].anchoFijo }
+            val nuevos: List<Float> = if (sueltas.isEmpty()) {
+                val factor = libre / suma.coerceAtLeast(1f)
+                columnas.map { it.anchoCm * factor }
+            } else {
+                val fijo = columnas.filter { it.anchoFijo }.sumOf { it.anchoCm.toDouble() }.toFloat()
+                val cada = ((libre - fijo) / sueltas.size).coerceAtLeast(5f)
+                columnas.mapIndexed { i, c -> if (i in sueltas) cada else c.anchoCm }
+            }
+            return columnas.mapIndexed { i, c -> if (kotlin.math.abs(nuevos[i] - c.anchoCm) > 0.01f) c.conAnchoTotal(nuevos[i], espesorCm) else c }
+        }
+
         /**
          * Los cuerpos con el [indice] a [anchoCm], fijado, y lo que sobre o falte repartido entre
          * los que no están fijados (o entre todos los demás si todos lo están), para que sigan

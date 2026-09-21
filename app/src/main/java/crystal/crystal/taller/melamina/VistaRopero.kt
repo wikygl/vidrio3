@@ -119,11 +119,8 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         if (filasDeColumnas.isEmpty()) {
             RoperoGeometria.cuerposX(r).forEachIndexed { i, (izq, der) -> cotaDeAncho(canvas, izq, der, yB, RoperoGeometria.cuerpo(r, i)) }
         } else {
-            filasDeColumnas.forEachIndexed { fila, columnas ->
-                val yF = yB + fila * FILA_DP * dp
-                // Los cuerpos sin partir (o las columnas sin partir) siguen en cada fila, para que se puedan tocar.
-                columnas.forEach { col -> cotaDeAncho(canvas, col.x0, col.x1, yF, col) }
-            }
+            // Abajo, las columnas de verdad (las últimas de cada partición); arriba, los cuerpos, que son la suma.
+            filasDeColumnas[0].forEach { col -> cotaDeAncho(canvas, col.x0, col.x1, yB, col) }
             val yC = y(r.altoMayorCm) - sep
             RoperoGeometria.cuerposX(r).forEachIndexed { i, (izq, der) -> cotaDeAncho(canvas, izq, der, yC, RoperoGeometria.cuerpo(r, i), arriba = true) }
         }
@@ -135,27 +132,23 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
     private var filasDeColumnas: List<List<ElementoRopero>> = emptyList()
 
     /**
-     * Las filas de columnas de abajo: la primera, las columnas del casillero partido más bajo de
-     * cada cuerpo (o el cuerpo entero si no está partido); cada fila siguiente, lo mismo dentro de
-     * cada columna de la anterior, hasta que no quede nada partido. Vacío si nada está partido.
+     * La fila de columnas de abajo: las columnas hoja de cada cuerpo (bajando por el casillero
+     * partido más bajo de cada uno, hasta las que ya no están partidas), o el cuerpo entero si no
+     * está partido. Vacío si nada está partido.
      */
     private fun filasDeColumnas(r: Ropero): List<List<ElementoRopero>> {
         val elementos = RoperoGeometria.elementos(r)
-        val filas = mutableListOf<List<ElementoRopero>>()
-        var nivel: List<ElementoRopero> = r.cuerpos.indices.mapNotNull { RoperoGeometria.cuerpo(r, it) }
-        while (true) {
-            var algunaPartida = false
-            val siguiente = nivel.flatMap { el ->
-                val c = r.cuerpoEn(el.cuerpo, el.ruta)
-                val k = c?.partes?.keys?.minOrNull()
-                val columnas = if (k == null) emptyList() else elementos.filter { it.tipo == TipoElemento.COLUMNA && it.cuerpo == el.cuerpo && it.ruta == el.ruta + listOf(k, it.indice) }
-                if (columnas.isEmpty()) listOf(el) else { algunaPartida = true; columnas }
-            }
-            if (!algunaPartida) break
-            filas.add(siguiente)
-            nivel = siguiente
+        var algunaPartida = false
+        fun hojas(el: ElementoRopero): List<ElementoRopero> {
+            val c = r.cuerpoEn(el.cuerpo, el.ruta)
+            val k = c?.partes?.keys?.minOrNull() ?: return listOf(el)
+            val columnas = elementos.filter { it.tipo == TipoElemento.COLUMNA && it.cuerpo == el.cuerpo && it.ruta == el.ruta + listOf(k, it.indice) }
+            if (columnas.isEmpty()) return listOf(el)
+            if (columnas.size > 1) algunaPartida = true
+            return columnas.flatMap { hojas(it) }
         }
-        return filas
+        val fila = r.cuerpos.indices.mapNotNull { RoperoGeometria.cuerpo(r, it) }.flatMap { hojas(it) }
+        return if (algunaPartida) listOf(fila) else emptyList()
     }
 
     /** Dónde quedó pintada cada cota de ancho (de un cuerpo o una columna), para saber cuál se tocó. */

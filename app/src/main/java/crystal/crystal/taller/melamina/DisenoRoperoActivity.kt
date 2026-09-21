@@ -423,10 +423,11 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 puertasPropias = puertasElegidas(spPuertas),
                 puertasPorCasillero = cbPorCasillero.isChecked
             )
-            var padreNuevo = padre.conCuerpoEn(listOf(k, j), nueva)
+            var r = ropero.conCuerpoEn(el.cuerpo, el.ruta, nueva)
             val ancho = num(etAncho, anchoHoy)
-            if (kotlin.math.abs(ancho - anchoHoy) > 0.05f) padreNuevo = padreNuevo.conAnchoDeColumna(k, j, ancho, casillero.ancho, ropero.espesorCm)
-            aplicar(ropero.conCuerpoEn(el.cuerpo, rutaPadre, padreNuevo))
+            // El ancho escrito se respeta: lo que cambie sube al cuerpo (la medida de arriba es la suma).
+            if (kotlin.math.abs(ancho - anchoHoy) > 0.05f) r = r.conAnchoEn(el.cuerpo, el.ruta, ancho)
+            aplicar(r)
         }))
         return caja
     }

@@ -206,6 +206,29 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun el_ancho_de_una_columna_se_respeta_y_sube_al_cuerpo() {
+        // Cuerpo 1 (117.3) con el casillero partido en dos de 57.75. La columna 1 a 70: la 2 se
+        // queda en 57.75, el cuerpo pasa a 70 + 1.8 + 57.75 = 129.55 y el otro cuerpo absorbe el resto.
+        val e = 1.8f
+        val sinRepisas = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2))
+        val cas = RoperoGeometria.casilleros(sinRepisas, sinRepisas.cuerpos[0], RoperoGeometria.huecoDeCuerpo(sinRepisas, 0))[0]
+        val r0 = sinRepisas.conCuerpo(0, sinRepisas.cuerpos[0].conCasilleroPartido(0, 2, cas.ancho, e))
+        val r = r0.conAnchoEn(0, listOf(0, 0), 70f)
+        val columnas = r.cuerpos[0].columnasDe(0)
+        assertEquals(70f, columnas[0].anchoCm, 0.01f)
+        assertTrue(columnas[0].anchoFijo)
+        assertEquals(57.75f, columnas[1].anchoCm, 0.01f)
+        assertEquals(129.55f, r.cuerpos[0].anchoCm, 0.01f)
+        assertEquals(236.4f - e - 129.55f, r.cuerpos[1].anchoCm, 0.01f)
+        // Y en el dibujo las columnas miden eso mismo (sin escalar).
+        assertEquals(70f, RoperoGeometria.huecoDe(r, 0, listOf(0, 0))!!.ancho, 0.01f)
+        // Al escribir el cuerpo entero (arriba), las columnas se reparten: la fijada se queda, la otra cede.
+        val r2 = r.conAnchoDeCuerpo(0, 100f)
+        assertEquals(70f, r2.cuerpos[0].columnasDe(0)[0].anchoCm, 0.01f)
+        assertEquals(100f - e - 70f, r2.cuerpos[0].columnasDe(0)[1].anchoCm, 0.01f)
+    }
+
+    @Test
     fun puertas_propias_por_cuerpo_y_por_casillero() {
         // Como el cuerpo verde del plano: dos casilleros, cada uno con sus corredizas interiores;
         // el otro cuerpo con las batientes del ropero.
