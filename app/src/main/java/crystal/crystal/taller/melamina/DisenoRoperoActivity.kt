@@ -33,6 +33,44 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private var seleccion: ElementoRopero? = null
     private var conCotas = true
 
+    // ==================== DESHACER Y REHACER ====================
+
+    /** Los roperos de antes de cada cambio (el último, al final) y los que se deshicieron. */
+    private val pasados = ArrayDeque<Ropero>()
+    private val deshechos = ArrayDeque<Ropero>()
+    /** El ropero de antes de empezar a arrastrar: el arrastre entero cuenta como un solo cambio. */
+    private var antesDeArrastrar: Ropero? = null
+
+    /** Apunta el ropero de [antes] como paso que se puede deshacer; un cambio nuevo borra lo rehacible. */
+    private fun anotar(antes: Ropero) {
+        if (antes == ropero) return
+        pasados.addLast(antes)
+        if (pasados.size > 60) pasados.removeFirst()
+        deshechos.clear()
+        refrescarDeshacer()
+    }
+
+    private fun deshacer() {
+        val antes = pasados.removeLastOrNull() ?: return
+        deshechos.addLast(ropero)
+        ropero = antes
+        refrescarDeshacer()
+        refrescar(conMando = true)
+    }
+
+    private fun rehacer() {
+        val despues = deshechos.removeLastOrNull() ?: return
+        pasados.addLast(ropero)
+        ropero = despues
+        refrescarDeshacer()
+        refrescar(conMando = true)
+    }
+
+    private fun refrescarDeshacer() {
+        binding.btnDeshacer.alpha = if (pasados.isEmpty()) 0.35f else 1f
+        binding.btnRehacer.alpha = if (deshechos.isEmpty()) 0.35f else 1f
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityDisenoRoperoBinding.inflate(layoutInflater)
@@ -44,6 +82,9 @@ class DisenoRoperoActivity : AppCompatActivity() {
         configurarToques()
         configurarBotones()
         armarOpciones()
+        binding.btnDeshacer.setOnClickListener { deshacer() }
+        binding.btnRehacer.setOnClickListener { rehacer() }
+        refrescarDeshacer()
     }
 
     // ==================== EL ELEMENTO TOCADO ====================
@@ -54,10 +95,15 @@ class DisenoRoperoActivity : AppCompatActivity() {
         // Arrastrar una repisa o un cajón: la repisa cambia de altura; el cajón cambia su alto
         // (se lleva el canto de arriba, el de abajo queda donde apoya).
         binding.vistaDiseno.alArrastrar = { el, _, yCm -> arrastrar(el, yCm) }
-        binding.vistaDiseno.alSoltarArrastre = { refrescar(conMando = true) }
+        binding.vistaDiseno.alSoltarArrastre = {
+            antesDeArrastrar?.let { anotar(it) }
+            antesDeArrastrar = null
+            refrescar(conMando = true)
+        }
     }
 
     private fun arrastrar(el: ElementoRopero, yCm: Float) {
+        if (antesDeArrastrar == null) antesDeArrastrar = ropero
         val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: return
         val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: return
         val piso = hueco.y0
@@ -89,7 +135,9 @@ class DisenoRoperoActivity : AppCompatActivity() {
             val (unido, motivo) = RoperoUnion.unir(ropero, primera, el)
             if (unido == null) { Toast.makeText(this, motivo, Toast.LENGTH_LONG).show() }
             else {
+                val antes = ropero
                 ropero = unido.aplanado()
+                anotar(antes)
                 // Queda elegida la celda unida: la que ahora ocupa el medio de las dos.
                 val xm = (minOf(primera.x0, el.x0) + maxOf(primera.x1, el.x1)) / 2f
                 val ym = (minOf(primera.y0, el.y0) + maxOf(primera.y1, el.y1)) / 2f
@@ -395,7 +443,9 @@ class DisenoRoperoActivity : AppCompatActivity() {
     /** Un cambio: se guarda, se redibuja y se vuelve a elegir lo mismo (si sigue existiendo). */
     private fun aplicar(nuevo: Ropero) {
         esconderTeclado()
+        val antes = ropero
         ropero = nuevo.aplanado()
+        anotar(antes)
         refrescar(conMando = true)
     }
 

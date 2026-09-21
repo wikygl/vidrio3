@@ -170,6 +170,30 @@ class DisenoRoperoActivityTest {
         }
     }
 
+    @Test
+    fun deshacer_y_rehacer_vuelven_por_los_cambios() {
+        ActivityScenario.launch<DisenoRoperoActivity>(intent()).use { esc ->
+            esc.onActivity { a ->
+                val vista = a.findViewById<VistaRopero>(R.id.vistaDiseno)
+                val mando = a.findViewById<LinearLayout>(R.id.contenedorFlotante)
+                val cajon = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.CAJON && it.indice == 0 }
+                vista.alTocarElemento?.invoke(cajon)
+                campos(mando).first().setText("35")
+                botones(mando).first { it.text == "Este" }.performClick()
+                fun altoDelPrimero() = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.CAJON && it.indice == 0 }.let { it.y1 - it.y0 }
+                assertEquals(35f, altoDelPrimero(), 0.01f)
+                a.findViewById<android.view.View>(R.id.btnDeshacer).performClick()
+                assertEquals(20f, altoDelPrimero(), 0.01f)
+                a.findViewById<android.view.View>(R.id.btnRehacer).performClick()
+                assertEquals(35f, altoDelPrimero(), 0.01f)
+                // Deshacer dos veces seguidas no pasa de donde se empezó.
+                a.findViewById<android.view.View>(R.id.btnDeshacer).performClick()
+                a.findViewById<android.view.View>(R.id.btnDeshacer).performClick()
+                assertEquals(20f, altoDelPrimero(), 0.01f)
+            }
+        }
+    }
+
     /** Deja una captura con un cajón tocado, para mirarla desde la PC. */
     @Test
     fun guarda_captura_de_la_pantalla() {
