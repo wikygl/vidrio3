@@ -218,7 +218,11 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val donde = if (el.ruta.isEmpty()) "del cuerpo ${el.cuerpo + 1}" else "de la columna ${el.ruta.last() + 1} (casillero ${el.ruta[el.ruta.size - 2] + 1}, cuerpo ${el.cuerpo + 1})"
         return when (el.tipo) {
             TipoElemento.CUERPO -> "Cuerpo ${el.cuerpo + 1}: ${c.tipo.etiqueta.lowercase()}, ${fmt(c.anchoCm)} de ancho"
-            TipoElemento.CAJON -> "Cajón ${el.indice + 1} $donde: ${fmt(el.y1 - el.y0)} de alto (arranca a ${fmt(el.y0 - piso)} del piso)"
+            TipoElemento.CAJON -> {
+                val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta)
+                val caja = hueco?.let { RoperoGeometria.altosDeCajas(ropero, c, it).getOrNull(el.indice) } ?: (el.y1 - el.y0)
+                "Cajón ${el.indice + 1} $donde: caja de ${fmt(caja)}, frente de ${fmt(el.y1 - el.y0)} (arranca a ${fmt(el.y0 - piso)} del piso)"
+            }
             TipoElemento.ENTREPANO -> "Repisa ${el.indice + 1} $donde: a ${fmt(el.y0 - piso)} del piso"
             TipoElemento.REPISA_MALETERO -> "Repisa del maletero: ${fmt(ropero.maleteroCm)} libres arriba"
             TipoElemento.TUBO -> "Tubo del colgador $donde: a ${fmt(ropero.tuboBajoTopeCm)} bajo el tope, ${fmt((el.y0 + el.y1) / 2f - piso)} del piso"
@@ -279,16 +283,19 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.DIVISION_COLUMNA, TipoElemento.TAPA_CAJONES -> Unit
             TipoElemento.CUERPO, TipoElemento.COLUMNA -> mando.addView(mandoDeCuerpo(el, c))
             TipoElemento.CAJON -> {
-                val etAlto = campo("Alto de este cajón (cm)", fmt(el.y1 - el.y0))
+                // Lo que se escribe es la CAJA del cajón; el frente ocupa su tramo del espacio
+                // (con el espacio fijo, los frentes rellenan el espacio entre todos).
+                val caja = RoperoGeometria.altosDeCajas(ropero, c, hueco).getOrNull(el.indice) ?: (el.y1 - el.y0)
+                val etAlto = campo("Alto de la caja de este cajón (cm)", fmt(caja))
                 mando.addView(fila(
                     etAlto,
-                    boton("Este") { aplicar(conEste(c.conAltoDeCajon(el.indice, num(etAlto, el.y1 - el.y0), ropero.altoCajonCm))) },
+                    boton("Este") { aplicar(conEste(c.conAltoDeCajon(el.indice, num(etAlto, caja), ropero.altoCajonCm))) },
                     boton("Todo el cuerpo") {
-                        val alto = num(etAlto, el.y1 - el.y0).coerceIn(8f, 80f)
+                        val alto = num(etAlto, caja).coerceIn(8f, 80f)
                         aplicar(conEste(c.copy(altosCajonesCm = List(c.cajonesEfectivos) { alto })))
                     },
                     boton("Todos") {
-                        val alto = num(etAlto, el.y1 - el.y0).coerceIn(8f, 80f)
+                        val alto = num(etAlto, caja).coerceIn(8f, 80f)
                         aplicar(ropero.copy(altoCajonCm = alto, cuerpos = ropero.cuerpos.map { it.copy(altosCajonesCm = emptyList()) }))
                     }
                 ))

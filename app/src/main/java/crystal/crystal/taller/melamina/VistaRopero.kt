@@ -174,7 +174,15 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         cotasDeTrozos.clear()
         RoperoGeometria.elementos(r).forEach { el ->
             when (el.tipo) {
-                TipoElemento.CAJON -> canvas.drawText(fmt(el.y1 - el.y0), x(el.x0) + 3 * dp, y((el.y0 + el.y1) / 2f) + 3 * dp, chico)
+                // El cajón: el alto de su caja y, si el frente es más alto (espacio fijo), el del frente entre paréntesis.
+                TipoElemento.CAJON -> {
+                    val c = r.cuerpoEn(el.cuerpo, el.ruta)
+                    val hueco = RoperoGeometria.huecoDe(r, el.cuerpo, el.ruta)
+                    val caja = if (c != null && hueco != null) RoperoGeometria.altosDeCajas(r, c, hueco).getOrNull(el.indice) else null
+                    val frente = el.y1 - el.y0
+                    val texto = if (caja != null && kotlin.math.abs(caja - frente) > 0.05f) fmt(caja) + " (" + fmt(frente) + ")" else fmt(frente)
+                    canvas.drawText(texto, x(el.x0) + 3 * dp, y((el.y0 + el.y1) / 2f) + 3 * dp, chico)
+                }
                 // La altura de repisas y tubo desde el piso, solo donde cabe (en las columnas angostas se pisaban con las cotas).
                 TipoElemento.ENTREPANO -> if ((el.x1 - el.x0) * escala > 70 * dp) canvas.drawText("↑" + fmt(el.y0 - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
                 TipoElemento.TUBO -> if ((el.x1 - el.x0) * escala > 70 * dp) canvas.drawText("↑" + fmt((el.y0 + el.y1) / 2f - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
