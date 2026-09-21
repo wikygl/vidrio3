@@ -41,8 +41,6 @@ class RoperoDibujo(private val dp: Float) {
     private val pRiel = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_RIEL); style = Paint.Style.FILL }
     private val pGancho = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#8A8A8A"); style = Paint.Style.STROKE; strokeWidth = 1.3f * dp; strokeCap = Paint.Cap.ROUND }
     val pCajon = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_CAJON); style = Paint.Style.FILL }
-    /** La caja del cajón (lo que corre por dentro), más oscura que su frente cuando el frente es más alto. */
-    private val pCaja = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#7A7A7A"); style = Paint.Style.FILL }
     val pPuerta = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_PUERTA); style = Paint.Style.FILL }
     private val pPuertaCorrediza = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#BDBDBD"); style = Paint.Style.FILL; alpha = 230 }
     private val pTirador = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#3A3A3A"); style = Paint.Style.FILL }
@@ -216,19 +214,16 @@ class RoperoDibujo(private val dp: Float) {
                 TipoElemento.CUERPO, TipoElemento.CASILLERO, TipoElemento.MALETERO, TipoElemento.COLGADOR, TipoElemento.ZONA_CAJONES, TipoElemento.COLUMNA -> Unit
                 TipoElemento.REPISA_MALETERO, TipoElemento.ENTREPANO, TipoElemento.TAPA_CAJONES, TipoElemento.DIVISION_COLUMNA -> tablero(canvas, r, el.x0, el.x1, el.y0, el.y1)
                 TipoElemento.CAJON -> {
-                    // El frente gris, un poco metido, con el tirador pegado al canto derecho, como en el plano.
-                    val rect = RectF(x(el.x0 + 1.5f), y(el.y1 - 1f), x(el.x1 - 1.5f), y(el.y0 + 1f))
+                    // Por dentro se ve la CAJA (la que se escribió), centrada en su tramo, con sus
+                    // rieles a los lados; el frente (la tapa) se ve en la vista con puertas.
+                    val medio = (el.y0 + el.y1) / 2f
+                    val caja = (cajaDe(r, el) ?: (el.y1 - el.y0)).coerceAtMost(el.y1 - el.y0)
+                    val rect = RectF(x(el.x0 + 1.5f), y(medio + caja / 2f - 0.5f), x(el.x1 - 1.5f), y(medio - caja / 2f + 0.5f))
                     canvas.drawRect(rect, pCajon)
                     canvas.drawRect(rect, pLinea)
-                    val medio = (el.y0 + el.y1) / 2f
-                    // La caja de verdad, centrada en su frente, si el frente es más alto que ella (espacio fijo).
-                    val caja = cajaDe(r, el)
-                    if (caja != null && el.y1 - el.y0 - caja > 0.1f) {
-                        val cajaRect = RectF(x(el.x0 + 3f), y(medio + caja / 2f), x(el.x1 - 4.5f), y(medio - caja / 2f))
-                        canvas.drawRect(cajaRect, pCaja)
-                        canvas.drawRect(cajaRect, pLinea)
-                    }
-                    canvas.drawRect(x(el.x1 - 3f), y(medio + 2.5f), x(el.x1 - 1.5f), y(medio - 2.5f), pTirador)
+                    // Los rieles: una franja a cada lado de la caja.
+                    canvas.drawRect(x(el.x0 + 1.5f), rect.top, x(el.x0 + 2.8f), rect.bottom, pLinea)
+                    canvas.drawRect(x(el.x1 - 2.8f), rect.top, x(el.x1 - 1.5f), rect.bottom, pLinea)
                 }
                 TipoElemento.TUBO -> {
                     // El colgador: el riel claro y los ganchos colgados, como en el plano.
