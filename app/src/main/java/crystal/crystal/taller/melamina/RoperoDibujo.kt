@@ -41,6 +41,8 @@ class RoperoDibujo(private val dp: Float) {
     private val pRiel = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_RIEL); style = Paint.Style.FILL }
     private val pGancho = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#8A8A8A"); style = Paint.Style.STROKE; strokeWidth = 1.3f * dp; strokeCap = Paint.Cap.ROUND }
     val pCajon = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_CAJON); style = Paint.Style.FILL }
+    /** La caja del cajón (lo que corre por dentro), más oscura que su frente cuando el frente es más alto. */
+    private val pCaja = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#7A7A7A"); style = Paint.Style.FILL }
     val pPuerta = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(COLOR_PUERTA); style = Paint.Style.FILL }
     private val pPuertaCorrediza = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#BDBDBD"); style = Paint.Style.FILL; alpha = 230 }
     private val pTirador = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#3A3A3A"); style = Paint.Style.FILL }
@@ -105,6 +107,13 @@ class RoperoDibujo(private val dp: Float) {
             canvas.drawPath(techo, pTableroTecho)
             canvas.drawPath(techo, pBorde)
         }
+    }
+
+    /** El alto de la caja del cajón [el] (lo escrito), o null si no se sabe. */
+    fun cajaDe(r: Ropero, el: ElementoRopero): Float? {
+        val c = r.cuerpoEn(el.cuerpo, el.ruta) ?: return null
+        val hueco = RoperoGeometria.huecoDe(r, el.cuerpo, el.ruta) ?: return null
+        return RoperoGeometria.altosDeCajas(r, c, hueco).getOrNull(el.indice)
     }
 
     /** El espesor con el que se PINTA el tablero: el real, pero nunca más fino que un trazo visible. */
@@ -212,6 +221,13 @@ class RoperoDibujo(private val dp: Float) {
                     canvas.drawRect(rect, pCajon)
                     canvas.drawRect(rect, pLinea)
                     val medio = (el.y0 + el.y1) / 2f
+                    // La caja de verdad, centrada en su frente, si el frente es más alto que ella (espacio fijo).
+                    val caja = cajaDe(r, el)
+                    if (caja != null && el.y1 - el.y0 - caja > 0.1f) {
+                        val cajaRect = RectF(x(el.x0 + 3f), y(medio + caja / 2f), x(el.x1 - 4.5f), y(medio - caja / 2f))
+                        canvas.drawRect(cajaRect, pCaja)
+                        canvas.drawRect(cajaRect, pLinea)
+                    }
                     canvas.drawRect(x(el.x1 - 3f), y(medio + 2.5f), x(el.x1 - 1.5f), y(medio - 2.5f), pTirador)
                 }
                 TipoElemento.TUBO -> {

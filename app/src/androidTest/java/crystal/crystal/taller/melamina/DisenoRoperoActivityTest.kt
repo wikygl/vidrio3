@@ -220,6 +220,25 @@ class DisenoRoperoActivityTest {
         }
     }
 
+    /** Tres cajas de 18 en un espacio fijo de 80: los frentes rellenan y la caja se ve dentro. */
+    @Test
+    fun guarda_captura_de_cajas_en_espacio_fijo() {
+        val r = ropero.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3, altosCajonesCm = listOf(18f, 18f, 18f), altoCajonesFijoCm = 80f))
+        val it = Intent(ApplicationProvider.getApplicationContext(), DisenoRoperoActivity::class.java)
+            .putExtra(DisenoRoperoActivity.EXTRA_ROPERO, r.aJson())
+        ActivityScenario.launch<DisenoRoperoActivity>(it).use { esc ->
+            Thread.sleep(600)
+            esc.onActivity { a ->
+                val raiz = a.window.decorView
+                if (raiz.width == 0 || raiz.height == 0) return@onActivity
+                val bmp = android.graphics.Bitmap.createBitmap(raiz.width, raiz.height, android.graphics.Bitmap.Config.ARGB_8888)
+                raiz.draw(android.graphics.Canvas(bmp))
+                val dir = a.getExternalFilesDir(null) ?: return@onActivity
+                java.io.FileOutputStream(java.io.File(dir, "cajas_fijas.png")).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, it) }
+            }
+        }
+    }
+
     /** Deja una captura con un cajón tocado, para mirarla desde la PC. */
     @Test
     fun guarda_captura_de_la_pantalla() {
