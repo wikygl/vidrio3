@@ -269,8 +269,9 @@ data class Cuerpo(
     /** La tapa de melamina sobre los cajones. Sin ella, los cajones quedan dentro del casillero de encima (unidos). */
     val tapaSobreCajones: Boolean = true,
     /**
-     * El alto del espacio de los cajones escrito a mano (0 = libre). Fijo, no se mueve: al
-     * cambiar un cajón, los demás se reparten lo que quede; al cambiar cuántos son, se reparten.
+     * El alto del espacio de los cajones escrito a mano (0 = libre). Es el espacio, y no se
+     * mueve: los cajones se quedan con su alto y lo que sobre queda libre encima; solo si entre
+     * todos se pasan del espacio, se encogen hasta caber.
      */
     val altoCajonesFijoCm: Float = 0f
 ) {
@@ -347,29 +348,20 @@ data class Cuerpo(
     /** El alto de cada cajón que se corta, de abajo arriba. */
     fun altosDeCajones(altoPorDefectoCm: Float): List<Float> {
         val altos = (0 until cajonesEfectivos).map { k -> altosCajonesCm.getOrNull(k)?.takeIf { it >= 8f } ?: altoPorDefectoCm }
-        // Con el espacio fijo, entre todos suman eso: si no cuadran (cambió cuántos son), a escala.
+        // Con el espacio fijo, solo si entre todos se pasan de él se encogen a escala hasta caber.
         val suma = altos.sum()
-        return if (altoCajonesFijoCm > 0f && altos.isNotEmpty() && kotlin.math.abs(suma - altoCajonesFijoCm) > 0.01f) altos.map { it * altoCajonesFijoCm / suma } else altos
+        return if (altoCajonesFijoCm > 0f && suma > altoCajonesFijoCm + 0.01f) altos.map { it * altoCajonesFijoCm / suma } else altos
     }
 
     /**
-     * Este cuerpo con el cajón [k] de [altoCm]. Con el espacio libre, los demás se quedan como
-     * estaban (el espacio crece o mengua); con el espacio fijo, los demás se reparten lo que
-     * queda, a escala de lo que tenían, y el espacio no se mueve.
+     * Este cuerpo con el cajón [k] de [altoCm]; los demás como estaban. Con el espacio fijo, el
+     * cajón no puede pasar de lo que dejan los demás (8 cm cada uno como poco).
      */
     fun conAltoDeCajon(k: Int, altoCm: Float, altoPorDefectoCm: Float): Cuerpo {
         val altos = altosDeCajones(altoPorDefectoCm).toMutableList()
         if (k !in altos.indices) return this
-        if (altoCajonesFijoCm <= 0f || altos.size == 1) {
-            altos[k] = altoCm.coerceIn(8f, 80f)
-            return copy(altosCajonesCm = altos)
-        }
-        val otros = altos.indices.filter { it != k }
-        val nuevo = altoCm.coerceIn(8f, altoCajonesFijoCm - 8f * otros.size)
-        val quedan = altoCajonesFijoCm - nuevo
-        val sumaOtros = otros.sumOf { altos[it].toDouble() }.toFloat().coerceAtLeast(0.01f)
-        otros.forEach { altos[it] = (altos[it] * quedan / sumaOtros).coerceAtLeast(8f) }
-        altos[k] = nuevo
+        val tope = if (altoCajonesFijoCm > 0f) altoCajonesFijoCm - 8f * (altos.size - 1) else 80f
+        altos[k] = altoCm.coerceIn(8f, tope.coerceAtLeast(8f))
         return copy(altosCajonesCm = altos)
     }
 

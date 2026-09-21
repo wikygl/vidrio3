@@ -307,6 +307,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             }
             TipoElemento.CASILLERO -> {
                 mando.addView(filaDeAlto(el, c, hueco))
+                mando.addView(filaDeContenido(el, c))
                 mando.addView(filaDeRepisas(el, c))
                 mando.addView(filaDeUnir(el))
                 // El casillero partido en columnas, cada una un cuerpo con lo suyo.
@@ -413,6 +414,22 @@ class DisenoRoperoActivity : AppCompatActivity() {
             val n = (et.text.toString().toIntOrNull() ?: c.entrepanosEfectivos).coerceIn(0, 12)
             // Las alturas escritas solo se pierden si cambia el número de repisas.
             aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(entrepanos = n, alturasEntrepanosCm = if (n == c.entrepanosEfectivos) c.alturasEntrepanosCm else emptyList())))
+        })
+    }
+
+    /**
+     * Lo que lleva dentro el casillero: nada, o un colgador, cajones, repisas… (una columna
+     * única con ese contenido, que luego se edita tocando lo suyo).
+     */
+    private fun filaDeContenido(el: ElementoRopero, c: Cuerpo): View {
+        val tipos = TipoCuerpo.values()
+        val unica = c.columnasDe(el.indice).singleOrNull()
+        val opciones = listOf("Dentro: nada") + tipos.map { "Dentro: " + it.etiqueta.lowercase() }
+        val sp = desplegable(opciones, if (unica == null) 0 else tipos.indexOf(unica.tipo) + 1)
+        return fila(sp, boton("Poner") {
+            val elegido = sp.selectedItemPosition
+            val nuevas = if (elegido == 0) emptyList() else listOf((unica ?: Cuerpo(anchoCm = el.x1 - el.x0)).copy(tipo = tipos[elegido - 1], alturasEntrepanosCm = emptyList()))
+            aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conColumnas(el.indice, nuevas)))
         })
     }
 

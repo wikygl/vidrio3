@@ -99,11 +99,24 @@ object RoperoGeometria {
     fun llevaTapa(r: Ropero, c: Cuerpo, h: Hueco): Boolean {
         if (c.cajonesEfectivos == 0 || !c.tapaSobreCajones) return false
         if (c.entrepanosEfectivos > 0 || c.llevaTubo) return true
-        return c.altosDeCajones(r.altoCajonCm).sum() < h.alto - r.espesorCm - 0.05f
+        val altoZona = if (c.altoCajonesFijoCm > 0f) maxOf(c.altoCajonesFijoCm, c.altosDeCajones(r.altoCajonCm).sum()) else c.altosDeCajones(r.altoCajonCm).sum()
+        return altoZona < h.alto - r.espesorCm - 0.05f
     }
 
-    /** Hasta dónde llegan los cajones apilados desde el piso del hueco. */
-    fun topeDeCajones(r: Ropero, c: Cuerpo, h: Hueco): Float = h.y0 + altosDeCajones(r, c, h).sum()
+    /**
+     * El alto del espacio de los cajones: el escrito a mano (fijo, tope del hueco menos la tapa
+     * si se pasa) o, si es libre, lo que suman los cajones.
+     */
+    fun altoDeZonaDeCajones(r: Ropero, c: Cuerpo, h: Hueco): Float {
+        if (c.cajonesEfectivos == 0) return 0f
+        val suma = altosDeCajones(r, c, h).sum()
+        if (c.altoCajonesFijoCm <= 0f) return suma
+        val disponible = h.alto - (if (llevaTapa(r, c, h)) r.espesorCm else 0f)
+        return c.altoCajonesFijoCm.coerceIn(suma, disponible.coerceAtLeast(suma))
+    }
+
+    /** Hasta dónde llega el espacio de los cajones desde el piso del hueco (la cara de abajo de la tapa). */
+    fun topeDeCajones(r: Ropero, c: Cuerpo, h: Hueco): Float = h.y0 + altoDeZonaDeCajones(r, c, h)
 
     /**
      * Sobre los cajones va una tapa de melamina que los separa de lo de arriba (el colgador o el
@@ -271,7 +284,9 @@ object RoperoGeometria {
             base += alto
         }
         if (c.cajonesEfectivos > 0) {
-            // El espacio de todos los cajones (para su cota) y la tapa que los remata (si la llevan).
+            // El espacio de todos los cajones (para su cota; con alto fijo, lo que sobra queda libre
+            // encima de ellos) y la tapa que lo remata (si la llevan).
+            base = topeDeCajones(r, c, h)
             salen.add(ElementoRopero(TipoElemento.ZONA_CAJONES, i, 0, h.x0, h.y0, h.x1, base, ruta))
             if (llevaTapa(r, c, h)) salen.add(ElementoRopero(TipoElemento.TAPA_CAJONES, i, 0, h.x0, base, h.x1, base + e, ruta))
         }

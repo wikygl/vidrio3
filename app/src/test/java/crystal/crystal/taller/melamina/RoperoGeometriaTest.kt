@@ -441,16 +441,23 @@ class RoperoGeometriaTest {
         val c = r.cuerpos[0]
         assertEquals(51.8f, c.altoCajonesFijoCm, 0.01f)
         assertEquals(51.8f, c.altosDeCajones(20f).sum(), 0.01f)
-        // El primero a 30: los otros dos se reparten 21.8 y el espacio sigue en 51.8.
+        // El primero a 30: los otros dos se quedan (17.27), suman 64.5 > 51.8, así que se encogen a escala hasta 51.8.
         val c2 = c.conAltoDeCajon(0, 30f, 20f)
-        assertEquals(30f, c2.altosDeCajones(20f)[0], 0.01f)
         assertEquals(51.8f, c2.altosDeCajones(20f).sum(), 0.01f)
-        assertEquals(10.9f, c2.altosDeCajones(20f)[1], 0.01f)
+        assertEquals(30f * 51.8f / 64.53f, c2.altosDeCajones(20f)[0], 0.05f)
         val zona2 = RoperoGeometria.elementos(r.conCuerpo(0, c2)).first { it.tipo == TipoElemento.ZONA_CAJONES && it.cuerpo == 0 }
         assertEquals(51.8f, zona2.y1 - zona2.y0, 0.01f)
-        // Con dos cajones en vez de tres, siguen sumando 51.8.
-        assertEquals(51.8f, c2.copy(cajones = 2).altosDeCajones(20f).sum(), 0.01f)
-        // Libre: el espacio crece con el cajon.
+        // Un espacio de 80 con tres cajones de 18: se quedan en 18 y sobran 26 libres encima; el espacio sigue en 80.
+        val ochenta = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3, altosCajonesCm = listOf(18f, 18f, 18f), altoCajonesFijoCm = 80f))
+        ochenta.cuerpos[0].altosDeCajones(20f).forEach { assertEquals(18f, it, 0.01f) }
+        val els = RoperoGeometria.elementos(ochenta).filter { it.cuerpo == 0 }
+        val zona80 = els.first { it.tipo == TipoElemento.ZONA_CAJONES }
+        assertEquals(80f, zona80.y1 - zona80.y0, 0.01f)
+        assertEquals(zona80.y0 + 54f, els.filter { it.tipo == TipoElemento.CAJON }.maxOf { it.y1 }, 0.01f)
+        assertEquals(zona80.y1, els.first { it.tipo == TipoElemento.TAPA_CAJONES }.y0, 0.01f)
+        // Y un cajón a 30 en ese espacio: 30 + 18 + 18 = 66 < 80, se queda tal cual.
+        assertEquals(30f, ochenta.cuerpos[0].conAltoDeCajon(0, 30f, 20f).altosDeCajones(20f)[0], 0.01f)
+        // Libre: el espacio es lo que suman los cajones.
         val libre = c.copy(altoCajonesFijoCm = 0f).conAltoDeCajon(0, 30f, 20f)
         assertEquals(30f + 2 * 51.8f / 3f, libre.altosDeCajones(20f).sum(), 0.01f)
     }
