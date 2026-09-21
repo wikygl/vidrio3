@@ -56,6 +56,7 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
     private val dibujo = RoperoDibujo(dp)
     private val pCota = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1565C0"); style = Paint.Style.STROKE; strokeWidth = 1f * dp }
     private val pTexto = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1565C0"); textSize = 11f * dp; textAlign = Paint.Align.CENTER }
+    private val pFondoCota = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.FILL; alpha = 220 }
     private val pResalte = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1E88E5"); style = Paint.Style.STROKE; strokeWidth = 2.5f * dp }
 
     // La escala y el origen del último dibujo, para saber qué se tocó.
@@ -141,8 +142,10 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
                     canvas.drawLine(cx - 3 * dp, y0 - 1 * dp, cx + 3 * dp, y0 - 1 * dp, pCota)
                     val texto = fmt(el.y1 - el.y0)
                     val ty = (y0 + y1) / 2f + 3 * dp
-                    canvas.drawText(texto, cx - 3 * dp, ty, derecha)
                     val ancho = derecha.measureText(texto)
+                    // Un fondo blanco bajo el número, para que se lea sobre los cajones y el tubo.
+                    canvas.drawRect(cx - 4 * dp - ancho - 2 * dp, ty - 9 * dp, cx - 2 * dp, ty + 2 * dp, pFondoCota)
+                    canvas.drawText(texto, cx - 3 * dp, ty, derecha)
                     cotasDeTrozos.add(android.graphics.RectF(cx - 3 * dp - ancho - 6 * dp, ty - 14 * dp, cx + 6 * dp, ty + 6 * dp) to el)
                 }
                 else -> Unit
