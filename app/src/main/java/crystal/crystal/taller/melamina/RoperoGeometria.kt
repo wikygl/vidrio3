@@ -1,7 +1,7 @@
 package crystal.crystal.taller.melamina
 
 /** Qué es cada cosa que hay dentro del ropero. */
-enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO, TAPA_CAJONES, MALETERO }
+enum class TipoElemento { CUERPO, CAJON, ENTREPANO, REPISA_MALETERO, TUBO, CASILLERO, TAPA_CAJONES, MALETERO, COLGADOR }
 
 /**
  * Un elemento del ropero puesto en su sitio, en cm desde la esquina de abajo a la izquierda del
@@ -154,15 +154,15 @@ object RoperoGeometria {
             repisas.forEachIndexed { k, h ->
                 salen.add(ElementoRopero(TipoElemento.ENTREPANO, i, k, izq, piso + h, der, piso + h + e))
             }
-            // Los casilleros: el hueco entre el tope de los cajones (o el piso) y cada repisa, y
-            // el último hasta el tope. Se tocan para escribirles el alto. Sin repisas no hay
-            // casilleros: lo que queda sobre los cajones es el cuerpo.
+            // Lo libre del cuerpo, partido en casilleros: del tope de los cajones (o el piso) a
+            // cada repisa, y el último hasta el tope. El de arriba, si el cuerpo lleva tubo, es
+            // el colgador. Así todo el cuerpo se toca por trozos; el cuerpo entero, por su cota.
             var suelo = base
             repisas.forEachIndexed { k, h ->
                 salen.add(ElementoRopero(TipoElemento.CASILLERO, i, k, izq, suelo, der, piso + h))
                 suelo = piso + h + e
             }
-            if (repisas.isNotEmpty()) salen.add(ElementoRopero(TipoElemento.CASILLERO, i, repisas.size, izq, suelo, der, tope))
+            if (tope > suelo) salen.add(ElementoRopero(if (c.llevaTubo) TipoElemento.COLGADOR else TipoElemento.CASILLERO, i, repisas.size, izq, suelo, der, tope))
             if (c.llevaTubo) {
                 val t = tuboY(r, i)
                 salen.add(ElementoRopero(TipoElemento.TUBO, i, 0, izq, t - 2f, der, t + 2f))
@@ -171,11 +171,16 @@ object RoperoGeometria {
         return salen
     }
 
-    /** Lo que hay en ese punto: lo más chico primero (un cajón o una repisa antes que el casillero, y este antes que su cuerpo). */
+    /**
+     * Lo que hay en ese punto: lo más chico primero (un cajón o una repisa antes que el casillero
+     * o el colgador que lo contiene). El cuerpo entero nunca sale de aquí: se elige por su cota.
+     */
     fun elementoEn(r: Ropero, x: Float, y: Float): ElementoRopero? {
-        val todos = elementos(r).filter { it.contiene(x, y) }
-        return todos.firstOrNull { it.tipo != TipoElemento.CUERPO && it.tipo != TipoElemento.CASILLERO && it.tipo != TipoElemento.MALETERO }
-            ?: todos.firstOrNull { it.tipo == TipoElemento.CASILLERO || it.tipo == TipoElemento.MALETERO }
+        val todos = elementos(r).filter { it.contiene(x, y) && it.tipo != TipoElemento.CUERPO }
+        return todos.firstOrNull { it.tipo != TipoElemento.CASILLERO && it.tipo != TipoElemento.MALETERO && it.tipo != TipoElemento.COLGADOR }
             ?: todos.firstOrNull()
     }
+
+    /** El elemento "cuerpo entero" del cuerpo [i], el que se elige tocando su cota. */
+    fun cuerpo(r: Ropero, i: Int): ElementoRopero? = elementos(r).firstOrNull { it.tipo == TipoElemento.CUERPO && it.cuerpo == i }
 }

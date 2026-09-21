@@ -116,8 +116,11 @@ class DisenoRoperoActivityTest {
                 botones(mando).first { it.text == "Poner" }.performClick()
                 val primera = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.ENTREPANO && it.cuerpo == 1 && it.indice == 0 }
                 assertEquals(50f, primera.y0 - piso, 0.01f)
-                // El cuerpo 2 con su propio alto: 200.
-                val cuerpo = RoperoGeometria.elementos(vista.ropero).first { it.tipo == TipoElemento.CUERPO && it.cuerpo == 1 }
+                // El cuerpo 2 con su propio alto: 200. El cuerpo entero se elige tocando su cota de abajo.
+                val (cx, cy) = vista.puntoDeCotaDeCuerpo(1)
+                assertEquals(1, vista.cuerpoEnCota(cx, cy))
+                assertEquals(null, vista.cuerpoEnCota(cx, cy - 200f))
+                val cuerpo = RoperoGeometria.cuerpo(vista.ropero, 1)!!
                 vista.alTocarElemento?.invoke(cuerpo)
                 campos(mando)[1].setText("200")   // ancho, alto de este lado, repisas, cajones
                 botones(mando).first { it.text == "Aplicar al cuerpo" }.performClick()

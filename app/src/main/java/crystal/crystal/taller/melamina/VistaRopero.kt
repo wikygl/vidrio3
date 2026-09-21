@@ -167,7 +167,10 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
                 arrastrando = null
                 if (kotlin.math.hypot(event.x - xInicio, event.y - yInicio) > 12 * dp) return true
                 cuerpoEn(event.x)?.let { alTocarCuerpo?.invoke(it) }
-                alTocarElemento?.invoke(elementoEn(event.x, event.y))
+                // En la cota de un cuerpo se elige el cuerpo entero; dentro del mueble, lo que haya.
+                val cuerpoDeCota = cuerpoEnCota(event.x, event.y)
+                if (cuerpoDeCota != null) alTocarElemento?.invoke(RoperoGeometria.cuerpo(ropero, cuerpoDeCota))
+                else alTocarElemento?.invoke(elementoEn(event.x, event.y))
                 return true
             }
         }
@@ -178,6 +181,22 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
     fun elementoEn(px: Float, py: Float): ElementoRopero? {
         if (en3d) return null
         return RoperoGeometria.elementoEn(ropero, (px - origenX) / escala, (origenY - py) / escala)
+    }
+
+    /** Qué cuerpo tiene su cota (la de abajo, con su ancho) bajo ese punto; null si el punto no está en la franja de las cotas. */
+    fun cuerpoEnCota(px: Float, py: Float): Int? {
+        if (en3d) return null
+        val yB = y(0f) + 14f * dp
+        if (py < yB - 10f * dp || py > yB + 22f * dp) return null
+        return cuerpoEn(px)
+    }
+
+    /** Dónde cae en el lienzo la cota del cuerpo [i]: para las pruebas. */
+    @androidx.annotation.VisibleForTesting
+    fun puntoDeCotaDeCuerpo(i: Int): Pair<Float, Float> {
+        var cx = ropero.espesorCm
+        ropero.cuerpos.take(i).forEach { cx += it.anchoCm + ropero.espesorCm }
+        return x(cx + ropero.cuerpos[i].anchoCm / 2f) to y(0f) + 14f * dp
     }
 
     /** Qué cuerpo cae bajo esa x del lienzo; null fuera del mueble. */

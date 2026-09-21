@@ -88,7 +88,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
     }
 
     private fun descripcion(el: ElementoRopero?): String {
-        if (el == null) return "Toca un cajón, un casillero, una repisa, el tubo, un cuerpo o el maletero; arrastra repisas y cajones para moverlos"
+        if (el == null) return "Toca un cajón, un casillero, el colgador, una repisa, el tubo o el maletero; el cuerpo entero, en su cota de abajo"
         val c = ropero.cuerpos.getOrNull(el.cuerpo) ?: return ""
         val piso = RoperoGeometria.pisoY(ropero)
         return when (el.tipo) {
@@ -99,6 +99,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.TUBO -> "Tubo del colgador: a ${fmt(ropero.tuboBajoTopeCm)} bajo el tope, ${fmt(RoperoGeometria.tuboY(ropero, el.cuerpo) - piso)} del piso"
             TipoElemento.CASILLERO -> "Casillero ${el.indice + 1} del cuerpo ${el.cuerpo + 1}: ${fmt(el.y1 - el.y0)} de alto libre"
             TipoElemento.TAPA_CAJONES -> "Tapa sobre los cajones del cuerpo ${el.cuerpo + 1}: a ${fmt(el.y0 - piso)} del piso (sube con los cajones)"
+            TipoElemento.COLGADOR -> "Colgador del cuerpo ${el.cuerpo + 1}: ${fmt(el.y1 - el.y0)} libres, el tubo a ${fmt(ropero.tuboBajoTopeCm)} del tope"
             TipoElemento.MALETERO -> if (ropero.maleteroPropio) "Maletero, compartimento ${el.indice + 1} de ${ropero.maleteroCuerpos}: ${fmt(el.x1 - el.x0)} de ancho, ${fmt(ropero.maleteroCm)} libres"
                                      else "Maletero sobre el cuerpo ${el.cuerpo + 1}: ${fmt(ropero.maleteroCm)} libres (0 compartimentos = sigue a los cuerpos)"
         }
@@ -191,6 +192,13 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     },
                     boton("Repartir de nuevo") { aplicar(ropero.conCuerpo(el.cuerpo, c.copy(alturasEntrepanosCm = emptyList()))) }
                 ))
+                mando.addView(filaDeRepisas(el.cuerpo, c))
+            }
+            TipoElemento.COLGADOR -> {
+                // El colgador: el tubo, y las repisas que van debajo de la ropa.
+                val etTubo = campo("Tubo bajo el tope (cm)", fmt(ropero.tuboBajoTopeCm))
+                mando.addView(fila(etTubo, boton("Poner") { aplicar(ropero.copy(tuboBajoTopeCm = num(etTubo, ropero.tuboBajoTopeCm).coerceIn(2f, 40f))) }))
+                mando.addView(filaDeRepisas(el.cuerpo, c))
             }
             TipoElemento.REPISA_MALETERO, TipoElemento.MALETERO -> {
                 val et = campo("Alto libre del maletero (cm)", fmt(ropero.maleteroCm))
@@ -255,6 +263,15 @@ class DisenoRoperoActivity : AppCompatActivity() {
             }
         }
         mando.visibility = View.VISIBLE
+    }
+
+    /** Cuántas repisas lleva el cuerpo (los casilleros son una más): se reparten de nuevo al cambiarlas. */
+    private fun filaDeRepisas(i: Int, c: Cuerpo): View {
+        val et = campo("Repisas del cuerpo", c.entrepanosEfectivos.toString(), entero = true)
+        return fila(et, boton("Poner") {
+            val n = (et.text.toString().toIntOrNull() ?: c.entrepanosEfectivos).coerceIn(0, 12)
+            aplicar(ropero.conCuerpo(i, c.copy(entrepanos = n, alturasEntrepanosCm = emptyList())))
+        })
     }
 
     /** Un cambio: se guarda, se redibuja y se vuelve a elegir lo mismo (si sigue existiendo). */

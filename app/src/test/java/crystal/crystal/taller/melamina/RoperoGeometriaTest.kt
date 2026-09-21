@@ -58,8 +58,10 @@ class RoperoGeometriaTest {
         // Los tres casilleros con el mismo alto libre.
         cas.forEach { assertEquals(74.27f, it.y1 - it.y0, 0.05f) }
         assertEquals(RoperoGeometria.techoY(base, 1), cas[2].y1, 0.01f)
-        // El de los cajones no tiene casilleros; y bajo el dedo, en medio del hueco, sale el casillero.
-        assertTrue(RoperoGeometria.elementos(base).none { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 0 })
+        // Sobre los cajones queda un casillero solo (sin repisas); y bajo el dedo, en medio del hueco, sale el casillero.
+        val sobreCajones = RoperoGeometria.elementos(base).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 0 }
+        assertEquals(1, sobreCajones.size)
+        assertEquals(73.6f, sobreCajones[0].y0, 0.01f)   // sobre la tapa
         val tocado = RoperoGeometria.elementoEn(base, 180f, 150f)
         assertEquals(TipoElemento.CASILLERO, tocado!!.tipo)
         assertEquals(1, tocado.indice)
@@ -169,9 +171,15 @@ class RoperoGeometriaTest {
         assertNotNull(cajon)
         assertEquals(TipoElemento.CAJON, cajon!!.tipo)
         assertEquals(0, cajon.indice)
-        val cuerpo = RoperoGeometria.elementoEn(base, 50f, 150f)
-        assertEquals(TipoElemento.CUERPO, cuerpo!!.tipo)
-        assertEquals(0, cuerpo.cuerpo)
+        // Sobre los cajones se toca el casillero, nunca el cuerpo entero (ese va por su cota).
+        val sobre = RoperoGeometria.elementoEn(base, 50f, 150f)
+        assertEquals(TipoElemento.CASILLERO, sobre!!.tipo)
+        assertEquals(0, sobre.cuerpo)
+        assertEquals(TipoElemento.CUERPO, RoperoGeometria.cuerpo(base, 0)!!.tipo)
+        // En un colgador, la parte de la ropa es el colgador, y las repisas de debajo hacen casilleros.
+        val colgador = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR, entrepanos = 1))
+        assertEquals(TipoElemento.COLGADOR, RoperoGeometria.elementoEn(colgador, 180f, 150f)!!.tipo)
+        assertEquals(TipoElemento.CASILLERO, RoperoGeometria.elementoEn(colgador, 180f, 20f)!!.tipo)
         assertTrue(RoperoGeometria.elementoEn(base, 300f, 20f) == null)
     }
 
