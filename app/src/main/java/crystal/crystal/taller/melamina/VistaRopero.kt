@@ -130,8 +130,9 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         RoperoGeometria.elementos(r).forEach { el ->
             when (el.tipo) {
                 TipoElemento.CAJON -> canvas.drawText(fmt(el.y1 - el.y0), x(el.x0) + 3 * dp, y((el.y0 + el.y1) / 2f) + 3 * dp, chico)
-                TipoElemento.ENTREPANO -> canvas.drawText("↑" + fmt(el.y0 - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
-                TipoElemento.TUBO -> canvas.drawText("↑" + fmt((el.y0 + el.y1) / 2f - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
+                // La altura de repisas y tubo desde el piso, solo donde cabe (en las columnas angostas se pisaban con las cotas).
+                TipoElemento.ENTREPANO -> if ((el.x1 - el.x0) * escala > 70 * dp) canvas.drawText("↑" + fmt(el.y0 - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
+                TipoElemento.TUBO -> if ((el.x1 - el.x0) * escala > 70 * dp) canvas.drawText("↑" + fmt((el.y0 + el.y1) / 2f - piso), x(el.x0) + 3 * dp, y(el.y1) - 2 * dp, chico)
                 // El alto libre de cada trozo: una cota vertical pegada al canto derecho, que se toca para escribirla.
                 TipoElemento.CASILLERO, TipoElemento.COLGADOR, TipoElemento.MALETERO, TipoElemento.ZONA_CAJONES -> {
                     val cx = x(el.x1) - 9 * dp

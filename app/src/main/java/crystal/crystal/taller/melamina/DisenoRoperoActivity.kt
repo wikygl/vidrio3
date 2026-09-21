@@ -54,26 +54,27 @@ class DisenoRoperoActivity : AppCompatActivity() {
         // Arrastrar una repisa o un cajón: la repisa cambia de altura; el cajón cambia su alto
         // (se lleva el canto de arriba, el de abajo queda donde apoya).
         binding.vistaDiseno.alArrastrar = { el, _, yCm -> arrastrar(el, yCm) }
-        binding.vistaDiseno.alSoltarArrastre = { seleccion?.let { s -> seleccionar(RoperoGeometria.elementos(ropero).firstOrNull { it.tipo == s.tipo && it.cuerpo == s.cuerpo && it.indice == s.indice }) } }
+        binding.vistaDiseno.alSoltarArrastre = { seleccion?.let { s -> seleccionar(RoperoGeometria.elementos(ropero).firstOrNull { it.esElMismo(s) }) } }
     }
 
     private fun arrastrar(el: ElementoRopero, yCm: Float) {
-        val c = ropero.cuerpos.getOrNull(el.cuerpo) ?: return
-        val piso = RoperoGeometria.pisoY(ropero)
+        val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: return
+        val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: return
+        val piso = hueco.y0
         when (el.tipo) {
             TipoElemento.ENTREPANO -> {
-                val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c)
-                val nueva = (yCm - piso).coerceIn(5f, RoperoGeometria.topeBajo(ropero) - piso - ropero.espesorCm - 5f)
-                ropero = ropero.conCuerpo(el.cuerpo, c.conAlturaDeEntrepano(el.indice, redondear(nueva), repartidas))
+                val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c, hueco)
+                val nueva = (yCm - piso).coerceIn(5f, hueco.alto - ropero.espesorCm - 5f)
+                ropero = ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conAlturaDeEntrepano(el.indice, redondear(nueva), repartidas))
             }
             TipoElemento.CAJON -> {
                 val alto = (yCm - el.y0).coerceIn(8f, 80f)
-                ropero = ropero.conCuerpo(el.cuerpo, c.conAltoDeCajon(el.indice, redondear(alto), ropero.altoCajonCm))
+                ropero = ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conAltoDeCajon(el.indice, redondear(alto), ropero.altoCajonCm))
             }
             else -> return
         }
         binding.vistaDiseno.ropero = ropero
-        seleccion = RoperoGeometria.elementos(ropero).firstOrNull { it.tipo == el.tipo && it.cuerpo == el.cuerpo && it.indice == el.indice }
+        seleccion = RoperoGeometria.elementos(ropero).firstOrNull { it.esElMismo(el) }
         binding.vistaDiseno.elementoResaltado = seleccion
         binding.tvInfoSeleccion.text = descripcion(seleccion)
     }
@@ -90,18 +91,20 @@ class DisenoRoperoActivity : AppCompatActivity() {
 
     private fun descripcion(el: ElementoRopero?): String {
         if (el == null) return "Toca un cajón, un casillero, el colgador, una repisa, el tubo o el maletero; el cuerpo entero, en su cota de abajo"
-        val c = ropero.cuerpos.getOrNull(el.cuerpo) ?: return ""
-        val piso = RoperoGeometria.pisoY(ropero)
+        val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: return ""
+        val piso = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta)?.y0 ?: RoperoGeometria.pisoY(ropero)
+        val donde = if (el.ruta.isEmpty()) "del cuerpo ${el.cuerpo + 1}" else "de la columna ${el.ruta.last() + 1} (casillero ${el.ruta[el.ruta.size - 2] + 1}, cuerpo ${el.cuerpo + 1})"
         return when (el.tipo) {
             TipoElemento.CUERPO -> "Cuerpo ${el.cuerpo + 1}: ${c.tipo.etiqueta.lowercase()}, ${fmt(c.anchoCm)} de ancho"
-            TipoElemento.CAJON -> "Cajón ${el.indice + 1} del cuerpo ${el.cuerpo + 1}: ${fmt(el.y1 - el.y0)} de alto (arranca a ${fmt(el.y0 - piso)} del piso)"
-            TipoElemento.ENTREPANO -> "Repisa ${el.indice + 1} del cuerpo ${el.cuerpo + 1}: a ${fmt(el.y0 - piso)} del piso"
+            TipoElemento.CAJON -> "Cajón ${el.indice + 1} $donde: ${fmt(el.y1 - el.y0)} de alto (arranca a ${fmt(el.y0 - piso)} del piso)"
+            TipoElemento.ENTREPANO -> "Repisa ${el.indice + 1} $donde: a ${fmt(el.y0 - piso)} del piso"
             TipoElemento.REPISA_MALETERO -> "Repisa del maletero: ${fmt(ropero.maleteroCm)} libres arriba"
-            TipoElemento.TUBO -> "Tubo del colgador: a ${fmt(ropero.tuboBajoTopeCm)} bajo el tope, ${fmt(RoperoGeometria.tuboY(ropero, el.cuerpo) - piso)} del piso"
-            TipoElemento.CASILLERO -> "Casillero ${el.indice + 1} del cuerpo ${el.cuerpo + 1}: ${fmt(el.y1 - el.y0)} de alto libre"
-            TipoElemento.TAPA_CAJONES -> "Tapa sobre los cajones del cuerpo ${el.cuerpo + 1}: a ${fmt(el.y0 - piso)} del piso (sube con los cajones)"
-            TipoElemento.ZONA_CAJONES -> "Cajones del cuerpo ${el.cuerpo + 1}: ${c.cajonesEfectivos} en ${fmt(el.y1 - el.y0)} de alto"
-            TipoElemento.COLGADOR -> "Colgador del cuerpo ${el.cuerpo + 1}: ${fmt(el.y1 - el.y0)} libres, el tubo a ${fmt(ropero.tuboBajoTopeCm)} del tope"
+            TipoElemento.TUBO -> "Tubo del colgador $donde: a ${fmt(ropero.tuboBajoTopeCm)} bajo el tope, ${fmt((el.y0 + el.y1) / 2f - piso)} del piso"
+            TipoElemento.CASILLERO -> "Casillero ${el.indice + 1} $donde: ${fmt(el.y1 - el.y0)} de alto libre" + (if (c.columnasDe(el.indice).isNotEmpty()) ", partido en ${c.columnasDe(el.indice).size} columnas" else "")
+            TipoElemento.TAPA_CAJONES -> "Tapa sobre los cajones $donde: a ${fmt(el.y0 - piso)} del piso (sube con los cajones)"
+            TipoElemento.ZONA_CAJONES -> "Cajones $donde: ${c.cajonesEfectivos} en ${fmt(el.y1 - el.y0)} de alto"
+            TipoElemento.COLGADOR -> "Colgador $donde: ${fmt(el.y1 - el.y0)} libres, el tubo a ${fmt(ropero.tuboBajoTopeCm)} del tope"
+            TipoElemento.DIVISION_COLUMNA -> "División entre columnas del casillero ${el.ruta.last() + 1}, cuerpo ${el.cuerpo + 1}"
             TipoElemento.MALETERO -> if (ropero.maleteroPropio) "Maletero, compartimento ${el.indice + 1} de ${ropero.maleteroCuerpos}: ${fmt(el.x1 - el.x0)} de ancho, ${fmt(ropero.maleteroCm)} libres"
                                      else "Maletero sobre el cuerpo ${el.cuerpo + 1}: ${fmt(ropero.maleteroCm)} libres (0 compartimentos = sigue a los cuerpos)"
         }
@@ -144,17 +147,21 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val mando = binding.contenedorFlotante
         mando.removeAllViews()
         if (el == null) { mando.visibility = View.GONE; return }
-        val c = ropero.cuerpos.getOrNull(el.cuerpo) ?: run { mando.visibility = View.GONE; return }
-        val piso = RoperoGeometria.pisoY(ropero)
+        val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: run { mando.visibility = View.GONE; return }
+        val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: run { mando.visibility = View.GONE; return }
+        val piso = hueco.y0
+        /** El cuerpo o la columna de este elemento, cambiado. */
+        fun conEste(nuevo: Cuerpo) = ropero.conCuerpoEn(el.cuerpo, el.ruta, nuevo)
         when (el.tipo) {
+            TipoElemento.DIVISION_COLUMNA -> Unit
             TipoElemento.CAJON -> {
                 val etAlto = campo("Alto de este cajón (cm)", fmt(el.y1 - el.y0))
                 mando.addView(fila(
                     etAlto,
-                    boton("Este") { aplicar(ropero.conCuerpo(el.cuerpo, c.conAltoDeCajon(el.indice, num(etAlto, el.y1 - el.y0), ropero.altoCajonCm))) },
+                    boton("Este") { aplicar(conEste(c.conAltoDeCajon(el.indice, num(etAlto, el.y1 - el.y0), ropero.altoCajonCm))) },
                     boton("Todo el cuerpo") {
                         val alto = num(etAlto, el.y1 - el.y0).coerceIn(8f, 80f)
-                        aplicar(ropero.conCuerpo(el.cuerpo, c.copy(altosCajonesCm = List(c.cajonesEfectivos) { alto })))
+                        aplicar(conEste(c.copy(altosCajonesCm = List(c.cajonesEfectivos) { alto })))
                     },
                     boton("Todos") {
                         val alto = num(etAlto, el.y1 - el.y0).coerceIn(8f, 80f)
@@ -166,16 +173,16 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 val cbALaVista = CheckBox(this).apply { text = "A la vista"; textSize = 12f; isChecked = c.cajonesALaVista }
                 mando.addView(fila(etCuantos, cbALaVista, boton("Poner") {
                     val cuantos = (etCuantos.text.toString().toIntOrNull() ?: c.cajonesEfectivos).coerceIn(1, 10)
-                    aplicar(ropero.conCuerpo(el.cuerpo, c.copy(cajones = cuantos, cajonesALaVista = cbALaVista.isChecked)))
+                    aplicar(conEste(c.copy(cajones = cuantos, cajonesALaVista = cbALaVista.isChecked)))
                 }))
             }
             TipoElemento.ENTREPANO -> {
                 val etAltura = campo("Altura de esta repisa desde el piso (cm)", fmt(el.y0 - piso))
-                val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c)
+                val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c, hueco)
                 mando.addView(fila(
                     etAltura,
-                    boton("Poner") { aplicar(ropero.conCuerpo(el.cuerpo, c.conAlturaDeEntrepano(el.indice, num(etAltura, el.y0 - piso), repartidas))) },
-                    boton("Repartir de nuevo") { aplicar(ropero.conCuerpo(el.cuerpo, c.copy(alturasEntrepanosCm = emptyList()))) }
+                    boton("Poner") { aplicar(conEste(c.conAlturaDeEntrepano(el.indice, num(etAltura, el.y0 - piso), repartidas))) },
+                    boton("Repartir de nuevo") { aplicar(conEste(c.copy(alturasEntrepanosCm = emptyList()))) }
                 ))
             }
             TipoElemento.CASILLERO -> {
@@ -183,12 +190,10 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 // (los de abajo se quedan): así los de abajo salen chicos y el resto iguales.
                 // "Solo esta" mueve nada más la repisa de encima (o la de abajo en el último).
                 val etAlto = campo("Alto libre de este casillero (cm)", fmt(el.y1 - el.y0))
-                val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c)
+                val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c, hueco)
                 mando.addView(fila(
                     etAlto,
-                    boton("Poner") {
-                        aplicar(ropero.conCuerpo(el.cuerpo, RoperoGeometria.conAltoDeCasillero(ropero, el.cuerpo, el.indice, num(etAlto, el.y1 - el.y0))))
-                    },
+                    boton("Poner") { aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, num(etAlto, el.y1 - el.y0))) },
                     boton("Solo esta") {
                         val alto = num(etAlto, el.y1 - el.y0).coerceAtLeast(5f)
                         val nuevoCuerpo = if (el.indice < repartidas.size) {
@@ -196,11 +201,18 @@ class DisenoRoperoActivity : AppCompatActivity() {
                         } else if (el.indice > 0) {
                             c.conAlturaDeEntrepano(el.indice - 1, (el.y1 - alto - ropero.espesorCm - piso).coerceAtLeast(5f), repartidas)
                         } else c
-                        aplicar(ropero.conCuerpo(el.cuerpo, nuevoCuerpo))
+                        aplicar(conEste(nuevoCuerpo))
                     },
-                    boton("Repartir de nuevo") { aplicar(ropero.conCuerpo(el.cuerpo, c.copy(alturasEntrepanosCm = emptyList()))) }
+                    boton("Repartir de nuevo") { aplicar(conEste(c.copy(alturasEntrepanosCm = emptyList()))) }
                 ))
-                mando.addView(filaDeRepisas(el.cuerpo, c))
+                mando.addView(filaDeRepisas(el, c))
+                // El casillero partido en columnas, cada una un cuerpo con lo suyo.
+                val etColumnas = campo("Partir en columnas (1 = sin partir)", c.columnasDe(el.indice).size.coerceAtLeast(1).toString(), entero = true)
+                mando.addView(fila(etColumnas, boton("Partir") {
+                    val n = (etColumnas.text.toString().toIntOrNull() ?: 1).coerceIn(1, 6)
+                    aplicar(conEste(c.conCasilleroPartido(el.indice, n, el.x1 - el.x0, ropero.espesorCm)))
+                }))
+                if (el.ruta.isNotEmpty()) mando.addView(filaDeColumna(el, c))
             }
             TipoElemento.ZONA_CAJONES -> {
                 val etAlto = campo("Alto de todos los cajones (cm)", fmt(el.y1 - el.y0))
@@ -208,15 +220,17 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 val cbALaVista = CheckBox(this).apply { text = "A la vista"; textSize = 12f; isChecked = c.cajonesALaVista }
                 mando.addView(fila(etAlto, etCuantos, cbALaVista, boton("Poner") {
                     val cuantos = (etCuantos.text.toString().toIntOrNull() ?: c.cajonesEfectivos).coerceIn(1, 10)
-                    val conCuantos = ropero.conCuerpo(el.cuerpo, c.copy(cajones = cuantos, cajonesALaVista = cbALaVista.isChecked))
+                    val conCuantos = conEste(c.copy(cajones = cuantos, cajonesALaVista = cbALaVista.isChecked))
                     aplicar(RoperoGeometria.conAltoDeTrozo(conCuantos, el, num(etAlto, el.y1 - el.y0)))
                 }))
+                if (el.ruta.isNotEmpty()) mando.addView(filaDeColumna(el, c))
             }
             TipoElemento.COLGADOR -> {
                 // El colgador: el tubo, y las repisas que van debajo de la ropa.
                 val etTubo = campo("Tubo bajo el tope (cm)", fmt(ropero.tuboBajoTopeCm))
                 mando.addView(fila(etTubo, boton("Poner") { aplicar(ropero.copy(tuboBajoTopeCm = num(etTubo, ropero.tuboBajoTopeCm).coerceIn(2f, 40f))) }))
-                mando.addView(filaDeRepisas(el.cuerpo, c))
+                mando.addView(filaDeRepisas(el, c))
+                if (el.ruta.isNotEmpty()) mando.addView(filaDeColumna(el, c))
             }
             TipoElemento.REPISA_MALETERO, TipoElemento.MALETERO -> {
                 val et = campo("Alto libre del maletero (cm)", fmt(ropero.maleteroCm))
@@ -238,7 +252,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 val et = campo("Alto de cada cajón de este cuerpo (cm)", fmt(ropero.altoCajonCm))
                 mando.addView(fila(et, boton("Poner") {
                     val alto = num(et, ropero.altoCajonCm).coerceIn(8f, 80f)
-                    aplicar(ropero.conCuerpo(el.cuerpo, c.copy(altosCajonesCm = List(c.cajonesEfectivos) { alto })))
+                    aplicar(conEste(c.copy(altosCajonesCm = List(c.cajonesEfectivos) { alto })))
                 }))
             }
             TipoElemento.TUBO -> {
@@ -261,8 +275,11 @@ class DisenoRoperoActivity : AppCompatActivity() {
                     setSelection(c.hojasBatientes.coerceIn(0, 2))
                 }
                 val cbALaVista = CheckBox(this).apply { text = "Cajones a la vista"; textSize = 12f; isChecked = c.cajonesALaVista }
+                val spPuertas = desplegableDePuertas(c, "Puertas: las del ropero")
+                val cbPorCasillero = CheckBox(this).apply { text = "Puertas por casillero"; textSize = 12f; isChecked = c.puertasPorCasillero }
                 mando.addView(fila(spTipo, etAncho, etAltoLado))
                 mando.addView(fila(etRepisas, etCajones, spHojas, cbALaVista))
+                mando.addView(fila(spPuertas, cbPorCasillero))
                 mando.addView(fila(boton("Aplicar al cuerpo") {
                     val nuevo = c.copy(
                         tipo = tipos[spTipo.selectedItemPosition.coerceIn(0, tipos.lastIndex)],
@@ -271,7 +288,9 @@ class DisenoRoperoActivity : AppCompatActivity() {
                         hojasBatientes = spHojas.selectedItemPosition,
                         alturasEntrepanosCm = emptyList(),
                         altoCm = num(etAltoLado, 0f).let { if (it >= 30f) it else 0f },
-                        cajonesALaVista = cbALaVista.isChecked
+                        cajonesALaVista = cbALaVista.isChecked,
+                        puertasPropias = puertasElegidas(spPuertas),
+                        puertasPorCasillero = cbPorCasillero.isChecked
                     )
                     var r = ropero.conCuerpo(el.cuerpo, nuevo)
                     val ancho = num(etAncho, c.anchoCm)
@@ -295,13 +314,62 @@ class DisenoRoperoActivity : AppCompatActivity() {
             .show()
     }
 
-    /** Cuántas repisas lleva el cuerpo (los casilleros son una más): se reparten de nuevo al cambiarlas. */
-    private fun filaDeRepisas(i: Int, c: Cuerpo): View {
-        val et = campo("Repisas del cuerpo", c.entrepanosEfectivos.toString(), entero = true)
+    /** Cuántas repisas lleva el cuerpo o la columna (los casilleros son una más): se reparten de nuevo al cambiarlas. */
+    private fun filaDeRepisas(el: ElementoRopero, c: Cuerpo): View {
+        val et = campo(if (el.ruta.isEmpty()) "Repisas del cuerpo" else "Repisas de la columna", c.entrepanosEfectivos.toString(), entero = true)
         return fila(et, boton("Poner") {
             val n = (et.text.toString().toIntOrNull() ?: c.entrepanosEfectivos).coerceIn(0, 12)
-            aplicar(ropero.conCuerpo(i, c.copy(entrepanos = n, alturasEntrepanosCm = emptyList())))
+            aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(entrepanos = n, alturasEntrepanosCm = emptyList())))
         })
+    }
+
+    private val opcionesDePuertas = listOf(null, TipoPuertas.SIN, TipoPuertas.BATIENTES, TipoPuertas.CORREDIZAS)
+
+    /** Las puertas propias de un cuerpo o columna: las heredadas, ninguna, batientes o corredizas. */
+    private fun desplegableDePuertas(c: Cuerpo, heredadas: String) = Spinner(this).apply {
+        adapter = ArrayAdapter(this@DisenoRoperoActivity, android.R.layout.simple_spinner_dropdown_item, listOf(heredadas, "Sin puertas", "Batientes propias", "Corredizas propias"))
+        setSelection(opcionesDePuertas.indexOf(c.puertasPropias).coerceAtLeast(0))
+    }
+
+    private fun puertasElegidas(sp: Spinner): TipoPuertas? = opcionesDePuertas[sp.selectedItemPosition.coerceIn(0, 3)]
+
+    /**
+     * La columna en que está este elemento (dentro de un casillero partido): su tipo, ancho
+     * (que se fija), cajones, puertas… Lo que en un cuerpo entero se edita por su cota.
+     */
+    private fun filaDeColumna(el: ElementoRopero, c: Cuerpo): View {
+        val caja = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val k = el.ruta[el.ruta.size - 2]
+        val j = el.ruta.last()
+        val rutaPadre = el.ruta.dropLast(2)
+        val padre = ropero.cuerpoEn(el.cuerpo, rutaPadre) ?: return caja
+        val huecoPadre = RoperoGeometria.huecoDe(ropero, el.cuerpo, rutaPadre) ?: return caja
+        val casillero = RoperoGeometria.casilleros(ropero, padre, huecoPadre).getOrNull(k) ?: return caja
+        val tipos = TipoCuerpo.values()
+        val spTipo = Spinner(this).apply {
+            adapter = ArrayAdapter(this@DisenoRoperoActivity, android.R.layout.simple_spinner_dropdown_item, tipos.map { "Columna: ${it.etiqueta}" })
+            setSelection(tipos.indexOf(c.tipo))
+        }
+        val anchoHoy = RoperoGeometria.columnasDeCasillero(ropero, padre, casillero, k).getOrNull(j)?.ancho ?: c.anchoCm
+        val etAncho = campo("Ancho de la columna (cm)", fmt(anchoHoy))
+        val etCajones = campo("Cajones de la columna", c.cajones.toString(), entero = true)
+        val spPuertas = desplegableDePuertas(c, "Puertas: sin")
+        val cbPorCasillero = CheckBox(this).apply { text = "Por casillero"; textSize = 12f; isChecked = c.puertasPorCasillero }
+        caja.addView(fila(spTipo, etAncho, etCajones))
+        caja.addView(fila(spPuertas, cbPorCasillero, boton("Aplicar a la columna") {
+            val nueva = c.copy(
+                tipo = tipos[spTipo.selectedItemPosition.coerceIn(0, tipos.lastIndex)],
+                cajones = etCajones.text.toString().toIntOrNull() ?: 0,
+                alturasEntrepanosCm = emptyList(),
+                puertasPropias = puertasElegidas(spPuertas),
+                puertasPorCasillero = cbPorCasillero.isChecked
+            )
+            var padreNuevo = padre.conCuerpoEn(listOf(k, j), nueva)
+            val ancho = num(etAncho, anchoHoy)
+            if (kotlin.math.abs(ancho - anchoHoy) > 0.05f) padreNuevo = padreNuevo.conAnchoDeColumna(k, j, ancho, casillero.ancho, ropero.espesorCm)
+            aplicar(ropero.conCuerpoEn(el.cuerpo, rutaPadre, padreNuevo))
+        }))
+        return caja
     }
 
     /** Un cambio: se guarda, se redibuja y se vuelve a elegir lo mismo (si sigue existiendo). */
@@ -309,7 +377,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         ropero = nuevo
         binding.vistaDiseno.ropero = ropero
         val s = seleccion
-        seleccionar(if (s == null) null else RoperoGeometria.elementos(ropero).firstOrNull { it.tipo == s.tipo && it.cuerpo == s.cuerpo && it.indice == s.indice })
+        seleccionar(if (s == null) null else RoperoGeometria.elementos(ropero).firstOrNull { it.esElMismo(s) })
     }
 
     // ==================== OPCIONES GENERALES ====================
@@ -426,7 +494,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         binding.btnLimpiarDiseno.setOnClickListener {
             // Vuelve a lo de fábrica en lo fino; el hueco y los cuerpos se quedan.
             aplicar(ropero.copy(
-                cuerpos = ropero.cuerpos.map { it.copy(altosCajonesCm = emptyList(), alturasEntrepanosCm = emptyList(), hojasBatientes = 0, altoCm = 0f, cajonesALaVista = false) },
+                cuerpos = ropero.cuerpos.map { it.copy(altosCajonesCm = emptyList(), alturasEntrepanosCm = emptyList(), hojasBatientes = 0, altoCm = 0f, cajonesALaVista = false, anchoFijo = false, partes = emptyMap(), puertasPropias = null, puertasPorCasillero = false) },
                 hojasCorredizas = 0, tuboBajoTopeCm = 6f, tapacantoGrosorMm = 0.45f, tapacantoPuertasMm = 3f, espesorFondoMm = 3f, maleteroCuerpos = 0, maleteroHojas = 0
             ))
             Toast.makeText(this, "Lo fino vuelve a lo de fábrica", Toast.LENGTH_SHORT).show()

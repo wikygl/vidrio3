@@ -152,6 +152,81 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun un_casillero_se_parte_en_columnas_cada_una_con_lo_suyo() {
+        // El cuerpo 1 (117.3): dos cajones abajo y, encima, el casillero único partido en dos
+        // columnas: la izquierda con 3 repisas, la derecha con 2 cajones. Como el plano del taller.
+        val e = 1.8f
+        val sinRepisas = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2))
+        val cas = RoperoGeometria.casilleros(sinRepisas, sinRepisas.cuerpos[0], RoperoGeometria.huecoDeCuerpo(sinRepisas, 0))
+        assertEquals(1, cas.size)
+        assertEquals(11.8f + 40f + e, cas[0].y0, 0.01f)
+        var c = sinRepisas.cuerpos[0].conCasilleroPartido(0, 2, cas[0].ancho, e)
+        c = c.conCuerpoEn(listOf(0, 0), Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 3))
+        c = c.conCuerpoEn(listOf(0, 1), Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2))
+        val r = sinRepisas.conCuerpo(0, c)
+        // Las dos columnas se reparten 117.3 - 1.8 = 115.5: 57.75 cada una.
+        val columnas = RoperoGeometria.columnasDeCasillero(r, r.cuerpos[0], cas[0], 0)
+        assertEquals(2, columnas.size)
+        assertEquals(57.75f, columnas[0].ancho, 0.01f)
+        assertEquals(cas[0].x0 + 57.75f + e, columnas[1].x0, 0.01f)
+        // Lo de cada columna sale con su ruta: 3 repisas en la izquierda, 2 cajones en la derecha, y la división entre ellas.
+        val els = RoperoGeometria.elementos(r)
+        assertEquals(3, els.count { it.tipo == TipoElemento.ENTREPANO && it.ruta == listOf(0, 0) })
+        assertEquals(2, els.count { it.tipo == TipoElemento.CAJON && it.ruta == listOf(0, 1) })
+        assertEquals(1, els.count { it.tipo == TipoElemento.DIVISION_COLUMNA && it.cuerpo == 0 })
+        // Los cajones de la columna arrancan en el piso del casillero, no en el del ropero.
+        val cajonCol = els.first { it.tipo == TipoElemento.CAJON && it.ruta == listOf(0, 1) && it.indice == 0 }
+        assertEquals(cas[0].y0, cajonCol.y0, 0.01f)
+        // Bajo el dedo, dentro de la columna, sale lo de la columna antes que el casillero grande.
+        val tocado = RoperoGeometria.elementoEn(r, cas[0].x0 + 10f, cas[0].y0 + 5f)
+        assertEquals(TipoElemento.CASILLERO, tocado!!.tipo)
+        assertEquals(listOf(0, 0), tocado.ruta)
+        assertEquals(TipoElemento.CAJON, RoperoGeometria.elementoEn(r, columnas[1].x0 + 10f, cas[0].y0 + 5f)!!.tipo)
+        // Por ruta se llega al cuerpo y a su hueco.
+        assertEquals(TipoCuerpo.CAJONES, r.cuerpoEn(0, listOf(0, 1))!!.tipo)
+        assertEquals(columnas[1].x0, RoperoGeometria.huecoDe(r, 0, listOf(0, 1))!!.x0, 0.01f)
+        // Y en los materiales: la división del casillero, los entrepaños de 57.75 y los cajones de la columna.
+        val m = RoperoCalculo.calcular(r)
+        assertEquals(1, m.piezas.filter { it.nombre == "División de casillero" }.sumOf { it.cantidad })
+        assertEquals(3, m.piezas.filter { it.nombre == "Entrepaño" && it.anchoMm == 578 }.sumOf { it.cantidad })
+        assertEquals(4, m.piezas.filter { it.nombre == "Frente cajón" }.sumOf { it.cantidad })
+    }
+
+    @Test
+    fun el_ancho_escrito_se_fija_y_los_demas_se_reparten() {
+        val tres = base.conCuerposIguales(3)     // 236.4 - 3.6 = 232.8 libres: 77.6 cada uno
+        val a = tres.conAnchoDeCuerpo(0, 50f)
+        assertTrue(a.cuerpos[0].anchoFijo)
+        assertEquals(91.4f, a.cuerpos[1].anchoCm, 0.01f)
+        // Al escribir el segundo, el primero no se mueve: el resto va al tercero.
+        val b = a.conAnchoDeCuerpo(1, 60f)
+        assertEquals(50f, b.cuerpos[0].anchoCm, 0.01f)
+        assertEquals(60f, b.cuerpos[1].anchoCm, 0.01f)
+        assertEquals(122.8f, b.cuerpos[2].anchoCm, 0.01f)
+    }
+
+    @Test
+    fun puertas_propias_por_cuerpo_y_por_casillero() {
+        // Como el cuerpo verde del plano: dos casilleros, cada uno con sus corredizas interiores;
+        // el otro cuerpo con las batientes del ropero.
+        val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 1, puertasPropias = TipoPuertas.CORREDIZAS, puertasPorCasillero = true))
+        val puertas = RoperoPuertas.de(r)
+        val corredizas = puertas.hojas.filter { it.clase == ClaseDePuerta.HOJA_CORREDIZA }
+        assertEquals(4, corredizas.size)     // dos por casillero
+        assertEquals(4, puertas.rielesCm.size)
+        val cas = RoperoGeometria.casilleros(r, r.cuerpos[1], RoperoGeometria.huecoDeCuerpo(r, 1))
+        // Cada hoja: (117.3 + 5) / 2 = 61.15 de ancho, y el alto del casillero menos 3.5.
+        assertEquals(61.15f, corredizas[0].ancho, 0.01f)
+        assertEquals(cas[0].alto - 3.5f, corredizas[0].alto, 0.01f)
+        assertEquals(2, puertas.hojas.count { it.clase == ClaseDePuerta.PUERTA })   // las dos hojas del cuerpo 1
+        // Sin puertas propias en un cuerpo: no lleva; y con corredizas propias, lo de dentro pierde el carril.
+        val sin = base.conCuerpo(1, base.cuerpos[1].copy(puertasPropias = TipoPuertas.SIN))
+        assertEquals(2, RoperoPuertas.de(sin).hojas.size)
+        val m = RoperoCalculo.calcular(r)
+        assertTrue(m.piezas.filter { it.nombre == "Entrepaño" }.any { it.altoMm == 517 })
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]

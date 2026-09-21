@@ -203,4 +203,59 @@ class DisenoRoperoActivityTest {
             }
         }
     }
+    /** El plano de las columnas: casilleros partidos, cajones a todo lo ancho abajo, corredizas por casillero en el verde. */
+    @Test
+    fun guarda_captura_del_plano_de_columnas() {
+        val e = 1.8f
+        var plano = Ropero(anchoCm = 262f, altoCm = 236f, fondoCm = 60f, zocaloCm = 10.6f, puertas = TipoPuertas.SIN, puertasInteriores = true)
+            .conCuerposIguales(3)
+            .conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 2, altosCajonesCm = listOf(22f, 22.5f)))
+            .conCuerpo(1, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3, altosCajonesCm = listOf(16.2f, 15f, 17f)))
+            .conCuerpo(2, Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 1, alturasEntrepanosCm = listOf(51.8f), puertasPropias = TipoPuertas.CORREDIZAS, puertasPorCasillero = true))
+            .conAnchoDeCuerpo(0, 97.8f).conAnchoDeCuerpo(1, 59.8f)
+        // Cuerpo 1: el casillero sobre los cajones partido en dos (49 | 47); la izquierda con tres
+        // casilleros y el del medio partido otra vez (23.6 | el resto), con puerta batiente propia.
+        val casA = RoperoGeometria.casilleros(plano, plano.cuerpos[0], RoperoGeometria.huecoDeCuerpo(plano, 0))[0]
+        var a = plano.cuerpos[0].conCasilleroPartido(0, 2, casA.ancho, e).conAnchoDeColumna(0, 0, 49f, casA.ancho, e)
+        var gris = Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 2, puertasPropias = TipoPuertas.BATIENTES, hojasBatientes = 1)
+        a = a.conCuerpoEn(listOf(0, 0), gris)
+        a = a.conCuerpoEn(listOf(0, 1), Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 4))
+        plano = plano.conCuerpo(0, a)
+        val huecoGris = RoperoGeometria.huecoDe(plano, 0, listOf(0, 0))!!
+        gris = plano.cuerpoEn(0, listOf(0, 0))!!
+        val casGris = RoperoGeometria.casilleros(plano, gris, huecoGris)[1]
+        gris = gris.conCasilleroPartido(1, 2, casGris.ancho, e).conAnchoDeColumna(1, 0, 23.6f, casGris.ancho, e)
+        gris = gris.conCuerpoEn(listOf(1, 0), Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 2))
+        gris = gris.conCuerpoEn(listOf(1, 1), Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 2))
+        plano = plano.conCuerpoEn(0, listOf(0, 0), gris)
+        // Cuerpo 2: el casillero sobre los tres cajones partido en dos de 29, con cuatro repisas cada uno.
+        val casB = RoperoGeometria.casilleros(plano, plano.cuerpos[1], RoperoGeometria.huecoDeCuerpo(plano, 1))[0]
+        var b = plano.cuerpos[1].conCasilleroPartido(0, 2, casB.ancho, e)
+        b = b.conCuerpoEn(listOf(0, 0), Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 4))
+        b = b.conCuerpoEn(listOf(0, 1), Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 4))
+        plano = plano.conCuerpo(1, b)
+        // El paquete guarda y devuelve las columnas.
+        val vuelto = Ropero.desdeJson(plano.aJson())!!
+        assertEquals(2, vuelto.cuerpos[0].columnasDe(0).size)
+        assertEquals(2, vuelto.cuerpoEn(0, listOf(0, 0))!!.columnasDe(1).size)
+        assertEquals(TipoPuertas.CORREDIZAS, vuelto.cuerpos[2].puertasPropias)
+        assertEquals(49f, vuelto.cuerpos[0].columnasDe(0)[0].anchoCm, 0.05f)
+        val it = Intent(ApplicationProvider.getApplicationContext(), DisenoRoperoActivity::class.java)
+            .putExtra(DisenoRoperoActivity.EXTRA_ROPERO, plano.aJson())
+        ActivityScenario.launch<DisenoRoperoActivity>(it).use { esc ->
+            listOf(false, true).forEach { conPuertas ->
+                esc.onActivity { a2 -> a2.findViewById<VistaRopero>(R.id.vistaDiseno).mostrarPuertas = conPuertas }
+                Thread.sleep(600)
+                esc.onActivity { a2 ->
+                    val raiz = a2.window.decorView
+                    if (raiz.width == 0 || raiz.height == 0) return@onActivity
+                    val bmp = android.graphics.Bitmap.createBitmap(raiz.width, raiz.height, android.graphics.Bitmap.Config.ARGB_8888)
+                    raiz.draw(android.graphics.Canvas(bmp))
+                    val dir = a2.getExternalFilesDir(null) ?: return@onActivity
+                    val nombre = if (conPuertas) "plano2_puertas.png" else "plano2_interior.png"
+                    java.io.FileOutputStream(java.io.File(dir, nombre)).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, it) }
+                }
+            }
+        }
+    }
 }

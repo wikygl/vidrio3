@@ -205,7 +205,7 @@ class RoperoDibujo(private val dp: Float) {
         elementos.filter { it.cuerpo == i }.forEach { el ->
             when (el.tipo) {
                 TipoElemento.CUERPO, TipoElemento.CASILLERO, TipoElemento.MALETERO, TipoElemento.COLGADOR, TipoElemento.ZONA_CAJONES -> Unit
-                TipoElemento.REPISA_MALETERO, TipoElemento.ENTREPANO, TipoElemento.TAPA_CAJONES -> tablero(canvas, r, el.x0, el.x1, el.y0, el.y1)
+                TipoElemento.REPISA_MALETERO, TipoElemento.ENTREPANO, TipoElemento.TAPA_CAJONES, TipoElemento.DIVISION_COLUMNA -> tablero(canvas, r, el.x0, el.x1, el.y0, el.y1)
                 TipoElemento.CAJON -> {
                     // El frente gris, un poco metido, con el tirador pegado al canto derecho, como en el plano.
                     val rect = RectF(x(el.x0 + 1.5f), y(el.y1 - 1f), x(el.x1 - 1.5f), y(el.y0 + 1f))
@@ -245,75 +245,20 @@ class RoperoDibujo(private val dp: Float) {
             canvas.drawRect(rect, pPuerta)
             canvas.drawRect(rect, pLinea)
         }
-        when (r.puertas) {
-            TipoPuertas.SIN -> Unit
-            TipoPuertas.BATIENTES -> {
-                /** Una hoja (o un frente) con su tirador: vertical junto al canto de abrir, o tumbado al medio. */
-                fun hoja(px0: Float, px1: Float, y0: Float, y1: Float, tiradorTumbado: Boolean, tiradorX: Float) {
-                    val rect = RectF(x(px0), y(y1 - 0.3f), x(px1), y(y0 + 0.3f))
-                    canvas.drawRect(rect, pPuerta)
-                    canvas.drawRect(rect, pLinea)
-                    val ty = (y0 + y1) / 2f
-                    if (tiradorTumbado) canvas.drawRect(x((px0 + px1) / 2f - 6f), y(ty + 0.8f), x((px0 + px1) / 2f + 6f), y(ty - 0.8f), pTirador)
-                    else canvas.drawRect(x(tiradorX - 0.8f), y(ty + 6f), x(tiradorX + 0.8f), y(ty - 6f), pTirador)
-                }
-                val interior = r.puertasInteriores
-                var cx = e
-                r.cuerpos.forEachIndexed { i, c ->
-                    val luz = RoperoCalculo.luzDePuerta(r, c)
-                    val izqC = if (interior) cx else cx - e / 2f
-                    val hojas = RoperoCalculo.hojasDePuerta(r, c)
-                    val ancho = luz / hojas
-                    val alto = if (interior) RoperoGeometria.techoY(r, i) else r.altoDeCuerpo(i)
-                    val (desde, hasta) = RoperoCalculo.puertaBaja(r, i)
-                    val cortes = mutableListOf(desde to hasta)
-                    if (r.maleteroCm > 0f && !r.maleteroPropio) cortes.add((if (interior) hasta + e else hasta) to alto)
-                    cortes.forEach { (y0, y1) ->
-                        for (h in 0 until hojas) {
-                            val px0 = izqC + h * ancho + 0.3f
-                            val px1 = izqC + (h + 1) * ancho - 0.3f
-                            // El tirador junto al canto de abrir: en una hoja sola a la derecha; en dos, al medio.
-                            val tx = if (hojas == 1) px1 - 4f else if (h == 0) px1 - 3f else px0 + 3f
-                            hoja(px0, px1, y0, y1, tiradorTumbado = y1 - y0 < 40f, tiradorX = tx)
-                        }
-                    }
-                    // Los cajones a la vista: sus frentes en el plano de las puertas, con el tirador tumbado.
-                    if (c.cajonesALaVista) RoperoCalculo.frentesALaVista(r, c).forEach { (y0, y1) ->
-                        hoja(izqC + 0.3f, izqC + luz - 0.3f, y0, y1, tiradorTumbado = true, tiradorX = 0f)
-                    }
-                    cx += c.anchoCm + e
-                }
-                if (r.maleteroPropio) {
-                    val tope = RoperoGeometria.topeBajo(r) + e
-                    val techo = if (interior) RoperoGeometria.techoY(r) else r.altoCm
-                    RoperoGeometria.maleterosX(r).forEach { (x0, x1) ->
-                        val comp = Cuerpo(anchoCm = x1 - x0, hojasBatientes = r.maleteroHojas)
-                        val hojas = RoperoCalculo.hojasDePuerta(r, comp)
-                        val ancho = RoperoCalculo.luzDePuerta(r, comp) / hojas
-                        val izq = if (interior) x0 else x0 - e / 2f
-                        for (h in 0 until hojas) {
-                            hoja(izq + h * ancho + 0.3f, izq + (h + 1) * ancho - 0.3f, tope, techo, tiradorTumbado = true, tiradorX = 0f)
-                        }
-                    }
-                }
-            }
-            TipoPuertas.CORREDIZAS -> {
-                val hojas = RoperoCalculo.hojasCorredizas(r)
-                val ancho = (r.anchoInteriorCm + (hojas - 1) * 5f) / hojas
-                val y0 = r.zocaloCm + e + 1.5f
-                val y1 = r.altoCm - e - 2f
-                for (h in 0 until hojas) {
-                    val px0 = e + h * (ancho - 5f)
-                    val rect = RectF(x(px0), y(y1), x(px0 + ancho), y(y0))
-                    // Las hojas alternas van un tono más oscuro: se ve cuál corre por delante.
-                    pPuertaCorrediza.color = if (h % 2 == 0) Color.parseColor("#C9C9C9") else Color.parseColor("#ADADAD")
-                    pPuertaCorrediza.alpha = 235
-                    canvas.drawRect(rect, pPuertaCorrediza)
-                    canvas.drawRect(rect, pLinea)
-                    val tx = if (h % 2 == 0) px0 + ancho - 5f else px0 + 5f
-                    canvas.drawRect(x(tx - 0.8f), y((y0 + y1) / 2f + 7f), x(tx + 0.8f), y((y0 + y1) / 2f - 7f), pTirador)
-                }
-            }
+        // Cada hoja donde dice RoperoPuertas: lo mismo que se corta.
+        RoperoPuertas.de(r).hojas.forEach { h ->
+            val rect = RectF(x(h.x0), y(h.y1), x(h.x1), y(h.y0))
+            if (h.clase == ClaseDePuerta.HOJA_CORREDIZA) {
+                // Las hojas alternas van un tono más oscuro: se ve cuál corre por delante.
+                pPuertaCorrediza.color = if (h.delante) Color.parseColor("#ADADAD") else Color.parseColor("#C9C9C9")
+                pPuertaCorrediza.alpha = 235
+                canvas.drawRect(rect, pPuertaCorrediza)
+            } else canvas.drawRect(rect, pPuerta)
+            canvas.drawRect(rect, pLinea)
+            val ty = (h.y0 + h.y1) / 2f
+            val largo = if (h.clase == ClaseDePuerta.HOJA_CORREDIZA) 7f else 6f
+            if (h.tumbado) canvas.drawRect(x(h.tiradorX - largo), y(ty + 0.8f), x(h.tiradorX + largo), y(ty - 0.8f), pTirador)
+            else canvas.drawRect(x(h.tiradorX - 0.8f), y(ty + largo), x(h.tiradorX + 0.8f), y(ty - largo), pTirador)
         }
     }
 }

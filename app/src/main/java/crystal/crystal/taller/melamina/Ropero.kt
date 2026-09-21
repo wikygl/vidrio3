@@ -106,15 +106,32 @@ data class Ropero(
      */
     fun conAnchoDeCuerpo(indice: Int, anchoCm: Float): Ropero {
         if (indice !in cuerpos.indices) return this
-        val n = cuerpos.size
-        val libre = anchoInteriorCm - (n - 1) * espesorCm
-        val nuevo = anchoCm.coerceIn(10f, (libre - 10f * (n - 1)).coerceAtLeast(10f))
-        val restoCada = if (n > 1) (libre - nuevo) / (n - 1) else 0f
-        return copy(cuerpos = cuerpos.mapIndexed { i, c -> c.copy(anchoCm = if (i == indice) nuevo else restoCada) })
+        val libre = anchoInteriorCm - (cuerpos.size - 1) * espesorCm
+        return copy(cuerpos = Cuerpo.conAnchoFijado(cuerpos, indice, anchoCm, libre))
     }
 
     fun conCuerpo(indice: Int, cuerpo: Cuerpo): Ropero =
         if (indice !in cuerpos.indices) this else copy(cuerpos = cuerpos.mapIndexed { i, c -> if (i == indice) cuerpo.copy(anchoCm = c.anchoCm) else c })
+
+    /**
+     * El cuerpo que hay en la [ruta] dentro del cuerpo [indice]: la ruta va por pares
+     * (casillero, columna), y vacía es el cuerpo mismo.
+     */
+    fun cuerpoEn(indice: Int, ruta: List<Int> = emptyList()): Cuerpo? {
+        var c = cuerpos.getOrNull(indice) ?: return null
+        var i = 0
+        while (i + 1 < ruta.size) {
+            c = c.columnasDe(ruta[i]).getOrNull(ruta[i + 1]) ?: return null
+            i += 2
+        }
+        return c
+    }
+
+    /** El ropero con el cuerpo de esa [ruta] cambiado por [nuevo] (el ancho se conserva, como en [conCuerpo]). */
+    fun conCuerpoEn(indice: Int, ruta: List<Int>, nuevo: Cuerpo): Ropero {
+        val c = cuerpos.getOrNull(indice) ?: return this
+        return conCuerpo(indice, c.conCuerpoEn(ruta, nuevo))
+    }
 
     /** Las medidas del hueco cambiadas: si cambió el ancho, los cuerpos se reparten de nuevo. */
     fun conHueco(ancho: Float, alto: Float, fondo: Float): Ropero {
@@ -209,8 +226,50 @@ data class Cuerpo(
     /** El alto de este lado del ropero, si no es el general (bajo una escalera, un techo que baja): 0 = el general. */
     val altoCm: Float = 0f,
     /** Los cajones se ven desde fuera: sus frentes van en el plano de las puertas y la puerta del cuerpo arranca sobre ellos. */
-    val cajonesALaVista: Boolean = false
+    val cajonesALaVista: Boolean = false,
+    /** El ancho se escribió a mano: al mover otro cuerpo, este no se toca. */
+    val anchoFijo: Boolean = false,
+    /**
+     * Casilleros partidos en columnas: para el casillero [k], sus columnas, cada una un cuerpo
+     * con lo suyo (repisas, cajones, colgador… y más columnas). Los anchos de las columnas
+     * suman el ancho del casillero menos las divisiones entre ellas.
+     */
+    val partes: Map<Int, List<Cuerpo>> = emptyMap(),
+    /** Puertas de este cuerpo, si no son las del ropero (en una columna, si las lleva). */
+    val puertasPropias: TipoPuertas? = null,
+    /** Cada casillero (y el colgador) con sus propias puertas, dentro de su hueco. */
+    val puertasPorCasillero: Boolean = false
 ) {
+    /** Las columnas en que está partido el casillero [k]; vacío si no lo está. */
+    fun columnasDe(k: Int): List<Cuerpo> = partes[k].orEmpty()
+
+    /** Este cuerpo con el casillero [k] partido en [columnas] (vacío = sin partir). */
+    fun conColumnas(k: Int, columnas: List<Cuerpo>): Cuerpo =
+        copy(partes = if (columnas.isEmpty()) partes - k else partes + (k to columnas))
+
+    /** El casillero [k] partido en [n] columnas iguales (o sin partir con n < 2), de ancho total [anchoLibre] menos las divisiones. */
+    fun conCasilleroPartido(k: Int, n: Int, anchoLibre: Float, espesorCm: Float): Cuerpo {
+        if (n < 2) return conColumnas(k, emptyList())
+        val cada = ((anchoLibre - (n - 1) * espesorCm) / n).coerceAtLeast(5f)
+        val viejas = columnasDe(k)
+        return conColumnas(k, (0 until n).map { j -> (viejas.getOrNull(j) ?: Cuerpo(tipo = TipoCuerpo.ENTREPANOS)).copy(anchoCm = cada, partes = viejas.getOrNull(j)?.partes.orEmpty()) })
+    }
+
+    /** Este cuerpo con lo que hay en la [ruta] (pares casillero, columna) cambiado por [nuevo]; el ancho de esa columna se conserva. */
+    fun conCuerpoEn(ruta: List<Int>, nuevo: Cuerpo): Cuerpo {
+        if (ruta.size < 2) return nuevo.copy(anchoCm = anchoCm)
+        val k = ruta[0]; val j = ruta[1]
+        val columnas = columnasDe(k)
+        if (j !in columnas.indices) return this
+        return conColumnas(k, columnas.mapIndexed { jj, col -> if (jj == j) col.conCuerpoEn(ruta.drop(2), nuevo) else col })
+    }
+
+    /** Este cuerpo con la columna [j] del casillero [k] a [anchoCm], fijada; las demás se reparten lo que quede. */
+    fun conAnchoDeColumna(k: Int, j: Int, anchoCm: Float, anchoLibre: Float, espesorCm: Float): Cuerpo {
+        val columnas = columnasDe(k)
+        if (j !in columnas.indices) return this
+        return conColumnas(k, conAnchoFijado(columnas, j, anchoCm, anchoLibre - (columnas.size - 1) * espesorCm))
+    }
     val entrepanosEfectivos: Int get() = when (tipo) {
         TipoCuerpo.COLGAR -> entrepanos.coerceIn(0, 2)
         TipoCuerpo.ENTREPANOS -> entrepanos.coerceIn(0, 12)
@@ -248,11 +307,40 @@ data class Cuerpo(
     fun aJson(): JSONObject = JSONObject().apply {
         put("ancho", anchoCm); put("tipo", tipo.name); put("entrepanos", entrepanos); put("cajones", cajones)
         put("hojasBatientes", hojasBatientes); put("alto", altoCm); put("aLaVista", cajonesALaVista)
+        put("anchoFijo", anchoFijo); put("puertasPorCasillero", puertasPorCasillero)
+        puertasPropias?.let { put("puertasPropias", it.name) }
+        if (partes.isNotEmpty()) put("partes", JSONArray().apply {
+            partes.forEach { (k, columnas) -> put(JSONObject().apply { put("casillero", k); put("columnas", JSONArray().apply { columnas.forEach { put(it.aJson()) } }) }) }
+        })
         put("altosCajones", JSONArray().apply { altosCajonesCm.forEach { put(it.toDouble()) } })
         put("alturasEntrepanos", JSONArray().apply { alturasEntrepanosCm.forEach { put(it.toDouble()) } })
     }
 
     companion object {
+        /**
+         * Los cuerpos con el [indice] a [anchoCm], fijado, y lo que sobre o falte repartido entre
+         * los que no están fijados (o entre todos los demás si todos lo están), para que sigan
+         * sumando [libre].
+         */
+        fun conAnchoFijado(cuerpos: List<Cuerpo>, indice: Int, anchoCm: Float, libre: Float): List<Cuerpo> {
+            val n = cuerpos.size
+            if (indice !in cuerpos.indices) return cuerpos
+            val nuevo = anchoCm.coerceIn(5f, (libre - 5f * (n - 1)).coerceAtLeast(5f))
+            val otros = cuerpos.indices.filter { it != indice }
+            var sueltos = otros.filter { !cuerpos[it].anchoFijo }
+            if (sueltos.isEmpty()) sueltos = otros
+            val fijos = otros - sueltos.toSet()
+            val resto = libre - nuevo - fijos.sumOf { cuerpos[it].anchoCm.toDouble() }.toFloat()
+            val cadaSuelto = if (sueltos.isEmpty()) 0f else (resto / sueltos.size).coerceAtLeast(5f)
+            return cuerpos.mapIndexed { i, c ->
+                when (i) {
+                    indice -> c.copy(anchoCm = nuevo, anchoFijo = true)
+                    in sueltos -> c.copy(anchoCm = cadaSuelto)
+                    else -> c
+                }
+            }
+        }
+
         fun desdeJson(o: JSONObject): Cuerpo? = runCatching {
             Cuerpo(
                 anchoCm = o.optDouble("ancho", 60.0).toFloat(),
@@ -262,6 +350,16 @@ data class Cuerpo(
                 hojasBatientes = o.optInt("hojasBatientes", 0),
                 altoCm = o.optDouble("alto", 0.0).toFloat(),
                 cajonesALaVista = o.optBoolean("aLaVista", false),
+                anchoFijo = o.optBoolean("anchoFijo", false),
+                puertasPorCasillero = o.optBoolean("puertasPorCasillero", false),
+                puertasPropias = o.optString("puertasPropias", "").takeIf { it.isNotBlank() }?.let { runCatching { TipoPuertas.valueOf(it) }.getOrNull() },
+                partes = (o.optJSONArray("partes") ?: JSONArray()).let { arr ->
+                    (0 until arr.length()).mapNotNull { idx ->
+                        val p = arr.optJSONObject(idx) ?: return@mapNotNull null
+                        val cols = p.optJSONArray("columnas") ?: JSONArray()
+                        p.optInt("casillero") to (0 until cols.length()).mapNotNull { j -> cols.optJSONObject(j)?.let { desdeJson(it) } }
+                    }.filter { it.second.isNotEmpty() }.toMap()
+                },
                 altosCajonesCm = lista(o.optJSONArray("altosCajones")),
                 alturasEntrepanosCm = lista(o.optJSONArray("alturasEntrepanos"))
             )
