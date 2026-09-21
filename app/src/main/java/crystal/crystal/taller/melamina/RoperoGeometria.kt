@@ -80,16 +80,29 @@ object RoperoGeometria {
     // ==================== Lo de dentro de un hueco ====================
 
     /**
-     * El alto de cada cajón del hueco, de abajo arriba: los escritos (o el de por defecto), pero
-     * si entre todos se pasan de lo que hay (el hueco menos la tapa), se encogen a escala hasta
-     * caber: en un hueco de 51.8 dos cajones no pueden pasar de 25.9 cada uno.
+     * El alto de la CAJA de cada cajón del hueco, de abajo arriba: los escritos (o el de por
+     * defecto), pero si entre todos se pasan de lo que hay (el hueco menos la tapa), se encogen
+     * a escala hasta caber: en un hueco de 51.8 dos cajones no pueden pasar de 25.9 cada uno.
      */
-    fun altosDeCajones(r: Ropero, c: Cuerpo, h: Hueco): List<Float> {
+    fun altosDeCajas(r: Ropero, c: Cuerpo, h: Hueco): List<Float> {
         val altos = c.altosDeCajones(r.altoCajonCm)
         if (altos.isEmpty()) return altos
         val disponible = h.alto - (if (llevaTapa(r, c, h)) r.espesorCm else 0f)
         val suma = altos.sum()
         return if (suma <= disponible + 0.01f) altos else altos.map { it * disponible / suma }
+    }
+
+    /**
+     * El alto del FRENTE de cada cajón (lo que ocupa cada uno en el espacio), de abajo arriba.
+     * Con el espacio libre es el de su caja. Con el espacio fijo, los frentes rellenan el
+     * espacio: lo que sobra sobre las cajas se reparte a partes iguales entre ellos (tres cajas
+     * de 18 en 80 salen con frentes de 26.7; cajas de 17, 15 y 16.2 en 48.2 no sobran nada).
+     */
+    fun altosDeCajones(r: Ropero, c: Cuerpo, h: Hueco): List<Float> {
+        val cajas = altosDeCajas(r, c, h)
+        if (cajas.isEmpty() || c.altoCajonesFijoCm <= 0f) return cajas
+        val sobra = (altoDeZonaDeCajones(r, c, h) - cajas.sum()).coerceAtLeast(0f)
+        return cajas.map { it + sobra / cajas.size }
     }
 
     /**
@@ -109,7 +122,7 @@ object RoperoGeometria {
      */
     fun altoDeZonaDeCajones(r: Ropero, c: Cuerpo, h: Hueco): Float {
         if (c.cajonesEfectivos == 0) return 0f
-        val suma = altosDeCajones(r, c, h).sum()
+        val suma = altosDeCajas(r, c, h).sum()
         if (c.altoCajonesFijoCm <= 0f) return suma
         val disponible = h.alto - (if (llevaTapa(r, c, h)) r.espesorCm else 0f)
         return c.altoCajonesFijoCm.coerceIn(suma, disponible.coerceAtLeast(suma))

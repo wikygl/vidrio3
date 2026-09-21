@@ -447,14 +447,24 @@ class RoperoGeometriaTest {
         assertEquals(30f * 51.8f / 64.53f, c2.altosDeCajones(20f)[0], 0.05f)
         val zona2 = RoperoGeometria.elementos(r.conCuerpo(0, c2)).first { it.tipo == TipoElemento.ZONA_CAJONES && it.cuerpo == 0 }
         assertEquals(51.8f, zona2.y1 - zona2.y0, 0.01f)
-        // Un espacio de 80 con tres cajones de 18: se quedan en 18 y sobran 26 libres encima; el espacio sigue en 80.
+        // Un espacio de 80 con tres cajas de 18: las cajas se quedan en 18 y los FRENTES rellenan
+        // los 80, a 26.67 cada uno; el espacio sigue en 80 y la tapa arriba del todo.
         val ochenta = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3, altosCajonesCm = listOf(18f, 18f, 18f), altoCajonesFijoCm = 80f))
-        ochenta.cuerpos[0].altosDeCajones(20f).forEach { assertEquals(18f, it, 0.01f) }
+        val h80 = RoperoGeometria.huecoDeCuerpo(ochenta, 0)
+        RoperoGeometria.altosDeCajas(ochenta, ochenta.cuerpos[0], h80).forEach { assertEquals(18f, it, 0.01f) }
+        RoperoGeometria.altosDeCajones(ochenta, ochenta.cuerpos[0], h80).forEach { assertEquals(80f / 3f, it, 0.01f) }
         val els = RoperoGeometria.elementos(ochenta).filter { it.cuerpo == 0 }
         val zona80 = els.first { it.tipo == TipoElemento.ZONA_CAJONES }
         assertEquals(80f, zona80.y1 - zona80.y0, 0.01f)
-        assertEquals(zona80.y0 + 54f, els.filter { it.tipo == TipoElemento.CAJON }.maxOf { it.y1 }, 0.01f)
+        assertEquals(zona80.y1, els.filter { it.tipo == TipoElemento.CAJON }.maxOf { it.y1 }, 0.01f)
         assertEquals(zona80.y1, els.first { it.tipo == TipoElemento.TAPA_CAJONES }.y0, 0.01f)
+        // En los materiales: frentes de 26.67 - 0.4 (- 0.09 de canto fino) y cajas de 18 - 4 (- 0.05).
+        val m80 = RoperoCalculo.calcular(ochenta)
+        assertEquals(262, m80.piezas.first { it.nombre == "Frente cajón" && it.cantidad == 3 }.altoMm)
+        assertEquals(140, m80.piezas.first { it.nombre == "Lateral cajón" && it.cantidad == 6 }.altoMm)
+        // Cajas de 17, 15 y 16.2 en un espacio fijo de 48.2: no sobra nada, los frentes son las cajas.
+        val justo = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3, altosCajonesCm = listOf(17f, 15f, 16.2f), altoCajonesFijoCm = 48.2f))
+        assertEquals(listOf(17f, 15f, 16.2f), RoperoGeometria.altosDeCajones(justo, justo.cuerpos[0], RoperoGeometria.huecoDeCuerpo(justo, 0)))
         // Y un cajón a 30 en ese espacio: 30 + 18 + 18 = 66 < 80, se queda tal cual.
         assertEquals(30f, ochenta.cuerpos[0].conAltoDeCajon(0, 30f, 20f).altosDeCajones(20f)[0], 0.01f)
         // Libre: el espacio es lo que suman los cajones.

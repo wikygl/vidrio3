@@ -232,7 +232,9 @@ object RoperoCalculo {
                 accesorios.add(Accesorio("Tubo colgador", 1, largoCm = w))
                 accesorios.add(Accesorio("Soporte de tubo", 2))
             }
+            // El frente de cada cajón ocupa su tramo del espacio; la caja es la que se escribió (más baja si sobra sitio).
             val altosCajones = RoperoGeometria.altosDeCajones(r, c, h)
+            val altosCajas = RoperoGeometria.altosDeCajas(r, c, h)
             val cajones = altosCajones.size
             if (cajones > 0) {
                 // Cada cajón con su alto: el frente y la caja se cortan por cajón, y los iguales
@@ -240,7 +242,7 @@ object RoperoCalculo {
                 val cajaProf = (fondoUtil - CAJA_MAS_CORTA_CM).coerceAtLeast(20f)
                 // El cajón interior (tras la puerta) pierde además dos melaminas para el riel telescópico.
                 val cajaW = w - 2 * RIEL_CAJON_CM - (if (c.cajonesALaVista) 0f else 2 * e)
-                altosCajones.forEach { hc ->
+                altosCajas.forEach { hc ->
                     val cajaH = (hc - CAJA_MAS_BAJA_CM).coerceAtLeast(6f)
                     pieza("Lateral cajón", cajaProf, cajaH, 2, cantosEnAncho = 1)
                     pieza("Frente y trasera de caja", cajaW - 2 * e, cajaH, 2, cantosEnAncho = 1)
