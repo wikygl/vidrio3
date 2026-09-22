@@ -20,7 +20,7 @@ object AvisoDesarrollo {
 
     // Nombres simples de clase de las calculadoras en desarrollo.
     private val enDesarrollo = setOf(
-        "Muro", "Vitroven", "RejasActivity", "MamparaVidrioActivity",
+        "Muro", "Vitroven", "MamparaVidrioActivity",
         "PDuchaActivity", "DivisionBanoActivity", "BarandaActivity",
         "MamparaFC", "PivotAl"
     )

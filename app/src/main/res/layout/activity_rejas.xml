@@ -41,14 +41,14 @@
                     android:background="@drawable/corner2"
                     android:backgroundTint="@color/color"
                     android:gravity="center"
-                    android:text="@string/MuroCortina"
+                    android:text="Rejas"
                     android:textColor="@color/blanco"
                     tools:ignore="TextContrastCheck" />
 
                 <LinearLayout
                     android:id="@+id/fichaT_layout"
                     android:layout_width="match_parent"
-                    android:layout_height="90dp"
+                    android:layout_height="220dp"
                     android:layout_margin="1dp"
                     android:orientation="vertical">
 
@@ -181,7 +181,7 @@
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
                                 android:inputType="number"
-                                android:text="1"
+                                android:text="0"
                                 android:textColorHint="@color/sombra2"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,DuplicateSpeakableTextCheck" />
                         </LinearLayout>
@@ -208,7 +208,7 @@
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
                                 android:inputType="number"
-                                android:text="1"
+                                android:text="0"
                                 android:textColorHint="#A6A5A5"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TextContrastCheck" />
                         </LinearLayout>
@@ -235,7 +235,7 @@
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
                                 android:inputType="number|numberDecimal"
-                                android:text="2.5"
+                                android:text="3.8"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TextContrastCheck,TouchTargetSizeCheck" />
                         </LinearLayout>
 
@@ -261,7 +261,7 @@
                                 android:layout_weight="1"
                                 android:autofillHints="@string/todo"
                                 android:inputType="number|numberDecimal"
-                                android:text="0.8"
+                                android:text="0"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
                         </LinearLayout>
 
@@ -293,7 +293,7 @@
                                     android:layout_weight="1"
                                     android:autofillHints="@string/todo"
                                     android:inputType="number|numberDecimal"
-                                    android:text="2.2"
+                                    android:text="3.8"
                                     tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
                             </LinearLayout>
 
