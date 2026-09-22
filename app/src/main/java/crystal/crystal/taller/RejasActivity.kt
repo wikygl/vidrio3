@@ -581,7 +581,10 @@ class RejasActivity : AppCompatActivity() {
         val tubos = RejaCalculo.todos(r)
         binding.tvMarco.text = RejaCalculo.lineas(tubos, "Marco")
         binding.tvTubo.text = RejaCalculo.lineas(tubos, "Parante", "Travesaño", "Diagonal", "Diagonal partida")
-        binding.txReferencias.append("\nModelo: ${r.modelo.etiqueta}, paso ${df(r.pasoCm)}\nTubo: ${RejaCalculo.metros(tubos)} m")
+        val conIntermedios = r.intermedios > 0 && (r.modelo == ModeloReja.BARROTES_VERTICALES || r.modelo == ModeloReja.BARROTES_HORIZONTALES)
+        binding.txReferencias.text = "Reja anch ${df(r.anchoCm)} x alt ${df(r.altoCm)}\nModelo: ${r.modelo.etiqueta}, paso ${df(r.pasoCm)}" +
+            (if (conIntermedios) ", ${r.intermedios} intermedios" else "") +
+            "\nMarco y tubo ${df(r.marcoCm)} / ${df(r.tuboCm)}\nTubo total: ${RejaCalculo.metros(tubos)} m (ejes; diagonales cortadas a 45°)"
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
