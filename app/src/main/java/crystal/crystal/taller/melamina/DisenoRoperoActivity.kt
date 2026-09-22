@@ -92,9 +92,9 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private fun configurarToques() {
         binding.vistaDiseno.alTocarElemento = { el -> seleccionar(el) }
         binding.vistaDiseno.alTocarCota = { pedirAltoDeTrozo(it) }
-        binding.vistaDiseno.alSoltarMovimiento = { el, xCm ->
-            val (destino, _) = RoperoGeometria.destinoDeMovimiento(ropero, el, xCm)
-            aplicar(ropero.conMovido(el.cuerpo, el.ruta, destino))
+        binding.vistaDiseno.alSoltarMovimiento = { el, xCm, copia ->
+            val (destino, _) = RoperoGeometria.destinoDeMovimiento(ropero, el, xCm, copia)
+            aplicar(if (copia) ropero.conCopiado(el.cuerpo, el.ruta, destino) else ropero.conMovido(el.cuerpo, el.ruta, destino))
             binding.tvInfoSeleccion.text = descripcion(seleccion)
         }
         // Arrastrar una repisa o un cajón: la repisa cambia de altura; el cajón cambia su alto
@@ -510,12 +510,26 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val cbPorCasillero = CheckBox(this).apply { text = "Puertas por casillero"; textSize = 12f; isChecked = c.puertasPorCasillero }
         caja.addView(if (esColumna) fila(spTipo, etAncho) else fila(spTipo, etAncho, etAltoLado))
         caja.addView(fila(etRepisas, etCajones, spHojas, cbALaVista))
-        // Mover el cuerpo entero (o la columna) a otro sitio: el dedo lleva su sombra y al soltar se coloca.
-        caja.addView(fila(boton("Mover…") {
-            binding.vistaDiseno.moviendo = el
-            esconderMando()
-            binding.tvInfoSeleccion.text = "Arrastra la sombra hasta donde quieras ${if (esColumna) "la columna" else "el cuerpo"} y suelta"
-        }))
+        // Mover o copiar el cuerpo entero (o la columna): el dedo lleva su sombra y al soltar se coloca. Y eliminarlo.
+        val que = if (esColumna) "la columna" else "el cuerpo"
+        caja.addView(fila(
+            boton("Mover…") {
+                binding.vistaDiseno.copiando = false
+                binding.vistaDiseno.moviendo = el
+                esconderMando()
+                binding.tvInfoSeleccion.text = "Arrastra la sombra hasta donde quieras $que y suelta"
+            },
+            boton("Copiar…") {
+                binding.vistaDiseno.copiando = true
+                binding.vistaDiseno.moviendo = el
+                esconderMando()
+                binding.tvInfoSeleccion.text = "Arrastra la sombra hasta donde quieras la copia de $que y suelta"
+            },
+            boton("Eliminar") {
+                if (!esColumna && ropero.cuerpos.size <= 1) Toast.makeText(this, "Es el único cuerpo", Toast.LENGTH_SHORT).show()
+                else { seleccion = null; aplicar(ropero.conEliminado(el.cuerpo, el.ruta)) }
+            }
+        ))
         caja.addView(fila(spPuertas, cbPorCasillero, boton(if (esColumna) "Aplicar a la columna" else "Aplicar al cuerpo") {
             val tipo = tipos[spTipo.selectedItemPosition.coerceIn(0, tipos.lastIndex)]
             val repisas = etRepisas.text.toString().toIntOrNull() ?: 0

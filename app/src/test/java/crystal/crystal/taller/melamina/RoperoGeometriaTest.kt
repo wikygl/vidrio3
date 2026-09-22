@@ -502,6 +502,36 @@ class RoperoGeometriaTest {
     }
 
     @Test
+    fun copiar_y_eliminar_un_cuerpo_reparten_el_ancho_entre_los_que_no_estan_fijados() {
+        // Dos cuerpos de 117.3. Una copia del primero (cajones) metida al final: entra con sus
+        // 117.3 (fijada) y los otros dos, sueltos, se reparten lo que queda: (236.4 - 3.6 - 117.3) / 2.
+        val cuerpo0 = RoperoGeometria.cuerpo(base, 0)!!
+        val (destino, _) = RoperoGeometria.destinoDeMovimiento(base, cuerpo0, base.anchoCm, copia = true)
+        assertEquals(2, destino)
+        val copiado = base.conCopiado(0, emptyList(), destino)
+        assertEquals(3, copiado.cuerpos.size)
+        assertEquals(listOf(TipoCuerpo.CAJONES, TipoCuerpo.ENTREPANOS, TipoCuerpo.CAJONES), copiado.cuerpos.map { it.tipo })
+        assertEquals(117.3f, copiado.cuerpos[2].anchoCm, 0.01f)
+        assertEquals((236.4f - 3.6f - 117.3f) / 2f, copiado.cuerpos[0].anchoCm, 0.01f)
+        assertEquals(236.4f, copiado.cuerpos.sumOf { it.anchoCm.toDouble() }.toFloat() + 3.6f, 0.05f)
+        // Eliminar el del medio: los otros se reparten su sitio; y el único cuerpo no se quita.
+        val menos = copiado.conEliminado(1, emptyList())
+        assertEquals(2, menos.cuerpos.size)
+        assertEquals(236.4f, menos.cuerpos.sumOf { it.anchoCm.toDouble() }.toFloat() + 1.8f, 0.05f)
+        assertEquals(1, base.conEliminado(0, emptyList()).conEliminado(0, emptyList()).cuerpos.size)
+        // Una columna copiada y otra eliminada dentro de un casillero.
+        val liso = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.ENTREPANOS))
+        val cas = RoperoGeometria.casilleros(liso, liso.cuerpos[0], RoperoGeometria.huecoDeCuerpo(liso, 0))[0]
+        val r = liso.conCuerpo(0, liso.cuerpos[0].conCasilleroPartido(0, 2, cas.ancho, 1.8f))
+        val con3 = r.conCopiado(0, listOf(0, 0), 2)
+        assertEquals(3, con3.cuerpos[0].columnasDe(0).size)
+        assertEquals(cas.ancho - 3.6f, con3.cuerpos[0].columnasDe(0).sumOf { it.anchoCm.toDouble() }.toFloat(), 0.05f)
+        val con2 = con3.conEliminado(0, listOf(0, 2, 0, 0).take(2))
+        assertEquals(2, con2.cuerpos[0].columnasDe(0).size)
+        assertEquals(cas.ancho - 1.8f, con2.cuerpos[0].columnasDe(0).sumOf { it.anchoCm.toDouble() }.toFloat(), 0.05f)
+    }
+
+    @Test
     fun colgador_con_casilleros_reparte_las_repisas_bajo_la_ropa() {
         val r = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.COLGAR_CASILLEROS, entrepanos = 2))
         val c = r.cuerpos[1]

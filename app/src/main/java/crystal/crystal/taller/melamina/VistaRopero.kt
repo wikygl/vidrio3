@@ -40,8 +40,11 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
      */
     var moviendo: ElementoRopero? = null
         set(value) { field = value; sombraX = null; invalidate() }
+    /** Si lo que se lleva es una copia (la sombra deja el original en su sitio). */
+    var copiando: Boolean = false
     private var sombraX: Float? = null
-    var alSoltarMovimiento: ((ElementoRopero, Float) -> Unit)? = null
+    /** Avisa al soltar: el elemento, la x (cm) del centro de la sombra y si era una copia. */
+    var alSoltarMovimiento: ((ElementoRopero, Float, Boolean) -> Unit)? = null
 
     private val pSombra = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1E88E5"); style = Paint.Style.FILL; alpha = 70 }
     private val pDestino = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1E88E5"); style = Paint.Style.STROKE; strokeWidth = 3f * dp }
@@ -245,7 +248,7 @@ class VistaRopero @JvmOverloads constructor(context: Context, attrs: AttributeSe
         moviendo?.let { mov ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> { sombraX = (event.x - origenX) / escala; invalidate() }
-                MotionEvent.ACTION_UP -> { val sx = sombraX; moviendo = null; if (sx != null) alSoltarMovimiento?.invoke(mov, sx) }
+                MotionEvent.ACTION_UP -> { val sx = sombraX; val copia = copiando; moviendo = null; copiando = false; if (sx != null) alSoltarMovimiento?.invoke(mov, sx, copia) }
                 MotionEvent.ACTION_CANCEL -> moviendo = null
             }
             return true

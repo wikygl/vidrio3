@@ -165,6 +165,47 @@ data class Ropero(
         return conCuerpoEn(i, rutaPadre, padre.conColumnas(k, Cuerpo.movida(columnas, j, destino)))
     }
 
+    /**
+     * El ropero con una copia del cuerpo [i] (o de la columna de su [ruta]) metida en el hueco
+     * [destino] entre sus hermanas. La copia entra con su ancho (fijado) y las hermanas que no
+     * están fijadas ceden lo que haga falta; el hueco total no cambia.
+     */
+    fun conCopiado(i: Int, ruta: List<Int>, destino: Int): Ropero {
+        if (ruta.size < 2) {
+            val c = cuerpos.getOrNull(i) ?: return this
+            val lista = cuerpos.toMutableList().apply { add(destino.coerceIn(0, size), c.copy(anchoFijo = true)) }
+            val libre = anchoInteriorCm - (lista.size - 1) * espesorCm
+            return copy(cuerpos = Cuerpo.repartir(lista.map { it.copy(anchoFijo = it.anchoFijo) }, libre, espesorCm, obligadas = setOf(destino.coerceIn(0, lista.size - 1))))
+        }
+        val rutaPadre = ruta.dropLast(2)
+        val k = ruta[ruta.size - 2]; val j = ruta.last()
+        val padre = cuerpoEn(i, rutaPadre) ?: return this
+        val columnas = padre.columnasDe(k)
+        val col = columnas.getOrNull(j) ?: return this
+        val lista = columnas.toMutableList().apply { add(destino.coerceIn(0, size), col.copy(anchoFijo = true)) }
+        val libre = columnas.sumOf { it.anchoCm.toDouble() }.toFloat() - espesorCm
+        return conCuerpoEn(i, rutaPadre, padre.conColumnas(k, Cuerpo.repartir(lista, libre, espesorCm, obligadas = setOf(destino.coerceIn(0, lista.size - 1)))))
+    }
+
+    /** El ropero sin el cuerpo [i] (o sin la columna de su [ruta]): las hermanas no fijadas se reparten su sitio. Un cuerpo solo no se quita. */
+    fun conEliminado(i: Int, ruta: List<Int>): Ropero {
+        if (ruta.size < 2) {
+            if (cuerpos.size <= 1 || i !in cuerpos.indices) return this
+            val lista = cuerpos.filterIndexed { idx, _ -> idx != i }
+            val libre = anchoInteriorCm - (lista.size - 1) * espesorCm
+            return copy(cuerpos = Cuerpo.repartir(lista, libre, espesorCm))
+        }
+        val rutaPadre = ruta.dropLast(2)
+        val k = ruta[ruta.size - 2]; val j = ruta.last()
+        val padre = cuerpoEn(i, rutaPadre) ?: return this
+        val columnas = padre.columnasDe(k)
+        if (j !in columnas.indices) return this
+        val lista = columnas.filterIndexed { idx, _ -> idx != j }
+        if (lista.isEmpty()) return conCuerpoEn(i, rutaPadre, padre.conColumnas(k, emptyList()))
+        val libre = columnas.sumOf { it.anchoCm.toDouble() }.toFloat() + espesorCm
+        return conCuerpoEn(i, rutaPadre, padre.conColumnas(k, Cuerpo.repartir(lista, libre, espesorCm)))
+    }
+
     /** El ropero con el árbol de cada cuerpo aplanado (ver [Cuerpo.aplanado]). */
     fun aplanado(): Ropero = copy(cuerpos = cuerpos.map { it.aplanado() })
 
@@ -416,11 +457,13 @@ data class Cuerpo(
          * reparten el resto a partes iguales; si todas están fijadas, todas a escala. Las que
          * cambian reparten a su vez las suyas.
          */
-        fun repartir(columnas: List<Cuerpo>, libre: Float, espesorCm: Float): List<Cuerpo> {
+        fun repartir(columnas: List<Cuerpo>, libre: Float, espesorCm: Float, obligadas: Set<Int> = emptySet()): List<Cuerpo> {
             if (columnas.isEmpty()) return columnas
             val suma = columnas.sumOf { it.anchoCm.toDouble() }.toFloat()
             if (kotlin.math.abs(suma - libre) < 0.01f) return columnas
-            val sueltas = columnas.indices.filter { !columnas[it].anchoFijo }
+            // Las obligadas (una copia recién metida) se quedan como estén aunque las demás estén fijadas.
+            var sueltas = columnas.indices.filter { !columnas[it].anchoFijo && it !in obligadas }
+            if (sueltas.isEmpty() && obligadas.isNotEmpty()) sueltas = columnas.indices.filter { it !in obligadas }
             val nuevos: List<Float> = if (sueltas.isEmpty()) {
                 val factor = libre / suma.coerceAtLeast(1f)
                 columnas.map { it.anchoCm * factor }
