@@ -58,6 +58,14 @@
                         android:layout_height="match_parent"
                         android:background="@color/blanco">
 
+                        <!-- Los rombos y la espina se pintan aquí (la grilla no los sabe dibujar). -->
+                        <crystal.crystal.taller.rejas.VistaReja
+                            android:id="@+id/vistaReja"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:visibility="gone"
+                            tools:ignore="MissingConstraints" />
+
                         <crystal.crystal.taller.GridDrawingView
                             android:id="@+id/rectanguloView"
                             android:layout_width="wrap_content"
@@ -307,7 +315,7 @@
                             android:layout_marginEnd="9dp"
                             android:background="@drawable/corner"
                             android:gravity="center"
-                            android:text="Naves" />
+                            android:text="Modelo" />
 
                         <LinearLayout
                             android:id="@+id/lyNaves"
@@ -321,23 +329,72 @@
                                 android:layout_height="match_parent"
                                 android:orientation="horizontal">
 
+                                <Spinner
+                                    android:id="@+id/spModelo"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    tools:ignore="TouchTargetSizeCheck" />
+
+                                <EditText
+                                    android:id="@+id/etNaves"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:visibility="gone"
+                                    android:inputType="text"
+                                    tools:ignore="LabelFor" />
+                            </LinearLayout>
+
+                            <!-- El paso (hueco máximo entre tubos) y los travesaños o parantes intermedios de los barrotes. -->
+                            <LinearLayout
+                                android:id="@+id/lyPaso"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:orientation="horizontal">
+
                                 <TextView
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_marginStart="3dp"
                                     android:layout_weight="0.81"
                                     android:paddingStart="6dp"
-                                    android:text="Naves"
+                                    android:text="Paso"
                                     tools:ignore="RtlSymmetry,TextContrastCheck" />
 
                                 <EditText
-                                    android:id="@+id/etNaves"
+                                    android:id="@+id/etPaso"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:autofillHints="@string/todo"
-                                    android:inputType="text"
-                                    android:text="c1,f1"
+                                    android:inputType="number|numberDecimal"
+                                    android:text="15"
+                                    tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyIntermedios"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    android:layout_weight="0.81"
+                                    android:paddingStart="6dp"
+                                    android:text="Intermedios"
+                                    tools:ignore="RtlSymmetry,TextContrastCheck" />
+
+                                <EditText
+                                    android:id="@+id/etIntermedios"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:autofillHints="@string/todo"
+                                    android:inputType="number"
+                                    android:text="0"
                                     tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
                             </LinearLayout>
 

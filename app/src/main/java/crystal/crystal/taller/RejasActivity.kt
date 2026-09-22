@@ -20,6 +20,8 @@ import crystal.crystal.casilla.MapStorage
 import crystal.crystal.casilla.ProyectoManager
 import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityRejasBinding
+import crystal.crystal.taller.rejas.ModeloReja
+import crystal.crystal.taller.rejas.RejaCalculo
 import kotlin.math.ceil
 
 /**
@@ -48,6 +50,23 @@ class RejasActivity : AppCompatActivity() {
     private val MEDIDA_AUTOMATICA = 15f
     /** Lo de fábrica de la reja: tubo cuadrado de 3.8 para el marco y los tubos. */
     private val TUBO_REJA = 3.8f
+
+    /** El modelo elegido en el desplegable. */
+    private val modelo: ModeloReja get() = ModeloReja.values().getOrElse(binding.spModelo.selectedItemPosition) { ModeloReja.CUADRICULA }
+
+    /** ¿Este modelo se dibuja y se calcula con la grilla (cuadrícula y barrotes) o con la cuenta propia (rombos, espina)? */
+    private val conGrilla: Boolean get() = modelo == ModeloReja.CUADRICULA
+
+    /** La reja tal como está escrita en las casillas, para la cuenta propia. */
+    private fun rejaEscrita(): RejaCalculo.Reja = RejaCalculo.Reja(
+        anchoCm = binding.med1.text.toString().toFloatOrNull() ?: anchoTotal,
+        altoCm = binding.med2.text.toString().toFloatOrNull() ?: altoTotal,
+        marcoCm = binding.etMarco.text.toString().toFloatOrNull() ?: TUBO_REJA,
+        tuboCm = binding.etTubo.text.toString().toFloatOrNull() ?: TUBO_REJA,
+        pasoCm = binding.etPaso.text.toString().toFloatOrNull() ?: MEDIDA_AUTOMATICA,
+        modelo = modelo,
+        intermedios = binding.etIntermedios.text.toString().toIntOrNull() ?: 0
+    )
 
     private var aplicandoResultadoEdicion = false
     private var metaColorAluminio: String = ""
@@ -120,18 +139,22 @@ class RejasActivity : AppCompatActivity() {
         binding.lyAlnMarco.visibility = View.GONE
         binding.lyAlnTubo.visibility = View.GONE
         binding.lyGruna.visibility = View.GONE
-        binding.tvExp.visibility = View.GONE
-        binding.lyNaves.visibility = View.GONE
+        // El modelo de reja, y con él lo que se ve: columnas/filas para la cuadrícula; paso e
+        // intermedios para los demás.
+        binding.spModelo.adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, ModeloReja.values().map { it.etiqueta })
+        binding.spModelo.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) { modeloCambiado() }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
         disenoInicial()
         configurarActualizacionAutomatica()
+        modeloCambiado()
 
         // ==================== LISTENERS ====================
 
         binding.btnCalcular.setOnClickListener {
             if (!ProyectoUIHelper.verificarProyectoActivo(this, proyectoCallback)) return@setOnClickListener
-            actualizarReferenciasYDatosEntrada()
-            marcos()
-            tubos()
+            calcularTodo()
         }
 
         binding.btDisenar.setOnClickListener {
@@ -252,6 +275,19 @@ class RejasActivity : AppCompatActivity() {
         binding.nFilas.addTextChangedListener(textWatcher) // Número de filas
         binding.etMarco.addTextChangedListener(textWatcher) // Grueso del marco (se ve en el dibujo)
         binding.etTubo.addTextChangedListener(textWatcher)  // Grueso del tubo
+        binding.etPaso.addTextChangedListener(textWatcher)  // Paso entre tubos
+        binding.etIntermedios.addTextChangedListener(textWatcher)
+    }
+
+    /** Al cambiar de modelo: qué casillas se enseñan y qué lienzo pinta. */
+    private fun modeloCambiado() {
+        val m = modelo
+        binding.nFilasly.visibility = if (m == ModeloReja.CUADRICULA) View.VISIBLE else View.GONE
+        binding.ncolly.visibility = if (m == ModeloReja.CUADRICULA) View.VISIBLE else View.GONE
+        binding.lyIntermedios.visibility = if (m == ModeloReja.BARROTES_VERTICALES || m == ModeloReja.BARROTES_HORIZONTALES) View.VISIBLE else View.GONE
+        binding.rectanguloView.visibility = if (conGrilla) View.VISIBLE else View.GONE
+        binding.vistaReja.visibility = if (conGrilla) View.GONE else View.VISIBLE
+        actualizarDisenoAutomaticamente()
     }
 
     private fun actualizarDisenoAutomaticamente() {
@@ -259,15 +295,22 @@ class RejasActivity : AppCompatActivity() {
             val ancho = binding.med1.text.toString().toFloatOrNull() ?: anchoTotal
             val alto  = binding.med2.text.toString().toFloatOrNull() ?: altoTotal
             if (ancho <= 0f || alto <= 0f) return
+            if (!conGrilla) {
+                // Barrotes, rombos y espina: la cuenta propia pinta la reja tal como se corta.
+                anchoTotal = ancho; altoTotal = alto
+                binding.vistaReja.reja = rejaEscrita()
+                return
+            }
 
             // Columnas y filas en 0 significan "decídelo tú": se reparte cada medida en tramos de
             // 15 cm como mucho (ceil). Con un número escrito a mano manda ese, que para eso se escribió.
+            val paso = binding.etPaso.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: MEDIDA_AUTOMATICA
             val colum = binding.nCol.text.toString().toIntOrNull()
                 ?.takeIf { it > 0 }
-                ?: ceil(ancho / MEDIDA_AUTOMATICA).toInt().coerceAtLeast(1)
+                ?: ceil(ancho / paso).toInt().coerceAtLeast(1)
             val filas = binding.nFilas.text.toString().toIntOrNull()
                 ?.takeIf { it > 0 }
-                ?: ceil(alto / MEDIDA_AUTOMATICA).toInt().coerceAtLeast(1)
+                ?: ceil(alto / paso).toInt().coerceAtLeast(1)
 
             // >>> SIN LÍMITE A 10: usamos exactamente lo que ingrese el usuario <<<
             anchoTotal = ancho
@@ -434,9 +477,7 @@ class RejasActivity : AppCompatActivity() {
     // ==================== ARCHIVAR MAPAS (PROYECTOS) ====================
     @RequiresApi(Build.VERSION_CODES.N)
     private fun archivarMapas() {
-        actualizarReferenciasYDatosEntrada()
-        marcos()
-        tubos()
+        calcularTodo()
 
         val proyectoActivo = ProyectoManager.getProyectoActivo()
         if (proyectoActivo != null) {
@@ -531,6 +572,17 @@ class RejasActivity : AppCompatActivity() {
     }
 
     // ==================== CÁLCULOS ====================
+
+    /** Referencias, marco y tubos: con la grilla (cuadrícula) o con la cuenta propia del modelo. */
+    private fun calcularTodo() {
+        actualizarReferenciasYDatosEntrada()
+        if (conGrilla) { marcos(); tubos(); return }
+        val r = rejaEscrita()
+        val tubos = RejaCalculo.todos(r)
+        binding.tvMarco.text = RejaCalculo.lineas(tubos, "Marco")
+        binding.tvTubo.text = RejaCalculo.lineas(tubos, "Parante", "Travesaño", "Diagonal", "Diagonal partida")
+        binding.txReferencias.append("\nModelo: ${r.modelo.etiqueta}, paso ${df(r.pasoCm)}\nTubo: ${RejaCalculo.metros(tubos)} m")
+    }
 
     @RequiresApi(Build.VERSION_CODES.N)
     private fun actualizarReferenciasYDatosEntrada() {
