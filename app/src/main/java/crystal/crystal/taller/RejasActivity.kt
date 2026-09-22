@@ -284,7 +284,7 @@ class RejasActivity : AppCompatActivity() {
         val m = modelo
         binding.nFilasly.visibility = if (m == ModeloReja.CUADRICULA) View.VISIBLE else View.GONE
         binding.ncolly.visibility = if (m == ModeloReja.CUADRICULA) View.VISIBLE else View.GONE
-        binding.lyIntermedios.visibility = if (m == ModeloReja.BARROTES_VERTICALES || m == ModeloReja.BARROTES_HORIZONTALES) View.VISIBLE else View.GONE
+        binding.lyIntermedios.visibility = if (m == ModeloReja.BARROTES_VERTICALES || m == ModeloReja.BARROTES_HORIZONTALES || m == ModeloReja.TRABADO) View.VISIBLE else View.GONE
         binding.rectanguloView.visibility = if (conGrilla) View.VISIBLE else View.GONE
         binding.vistaReja.visibility = if (conGrilla) View.GONE else View.VISIBLE
         actualizarDisenoAutomaticamente()
@@ -581,7 +581,7 @@ class RejasActivity : AppCompatActivity() {
         val tubos = RejaCalculo.todos(r)
         binding.tvMarco.text = RejaCalculo.lineas(tubos, "Marco")
         binding.tvTubo.text = RejaCalculo.lineas(tubos, "Parante", "Travesaño", "Diagonal", "Diagonal partida")
-        val conIntermedios = r.intermedios > 0 && (r.modelo == ModeloReja.BARROTES_VERTICALES || r.modelo == ModeloReja.BARROTES_HORIZONTALES)
+        val conIntermedios = r.intermedios > 0 && (r.modelo == ModeloReja.BARROTES_VERTICALES || r.modelo == ModeloReja.BARROTES_HORIZONTALES || r.modelo == ModeloReja.TRABADO)
         binding.txReferencias.text = "Reja anch ${df(r.anchoCm)} x alt ${df(r.altoCm)}\nModelo: ${r.modelo.etiqueta}, paso ${df(r.pasoCm)}" +
             (if (conIntermedios) ", ${r.intermedios} intermedios" else "") +
             "\nMarco y tubo ${df(r.marcoCm)} / ${df(r.tuboCm)}\nTubo total: ${RejaCalculo.metros(tubos)} m (ejes; diagonales cortadas a 45°)"

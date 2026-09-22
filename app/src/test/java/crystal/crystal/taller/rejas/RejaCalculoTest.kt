@@ -91,6 +91,23 @@ class RejaCalculoTest {
     }
 
     @Test
+    fun el_trabado_alterna_los_travesanos_columna_a_columna() {
+        // 7 columnas, 3 tramos: las impares (1, 3, 5, 7) llevan 2 travesaños a 1/3 y 2/3; las pares (2, 4, 6) llevan 3, a 1/6, 3/6 y 5/6.
+        val d = RejaCalculo.interior(base.copy(modelo = ModeloReja.TRABADO, intermedios = 3))
+        assertEquals(6, d.count { it.nombre == "Parante" && kotlin.math.abs(it.largo - 152.4f) < 0.01f })
+        val travesanos = d.filter { it.nombre == "Travesaño" }
+        assertEquals(4 * 2 + 3 * 3, travesanos.size)
+        travesanos.forEach { assertEquals((92.4f - 6 * 3.8f) / 7f, it.largo, 0.01f) }
+        val paso = 152.4f / 3f
+        val primera = travesanos.filter { it.x0 < 3.9f }.map { it.y0 - 3.8f }.sorted()
+        assertEquals(listOf(paso, 2 * paso).map { RejaCalculo.fmt(it) }, primera.map { RejaCalculo.fmt(it) })
+        val segunda = travesanos.filter { it.x0 > 3.9f && it.x0 < 20f }.map { it.y0 - 3.8f }.sorted()
+        assertEquals(listOf(0.5f * paso, 1.5f * paso, 2.5f * paso).map { RejaCalculo.fmt(it) }, segunda.map { RejaCalculo.fmt(it) })
+        // Sin intermedios escritos, son 3 tramos.
+        assertEquals(travesanos.size, RejaCalculo.interior(base.copy(modelo = ModeloReja.TRABADO)).count { it.nombre == "Travesaño" })
+    }
+
+    @Test
     fun metros_y_lineas() {
         val todos = RejaCalculo.todos(base.copy(modelo = ModeloReja.BARROTES_VERTICALES))
         // Marco 2·160 + 2·92.4 = 504.8; barrotes 6·152.4 = 914.4 → 14.2 m.

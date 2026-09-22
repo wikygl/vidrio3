@@ -16,7 +16,13 @@ enum class ModeloReja(val etiqueta: String) {
     /** Dos familias de diagonales a 45° que se cruzan: una entera y la otra partida en los cruces. */
     ROMBOS("Rombos"),
     /** Un parante al medio y diagonales a 45° que suben hacia él desde los dos lados (chevron). */
-    ESPINA("Espina de pescado")
+    ESPINA("Espina de pescado"),
+    /**
+     * Parantes enteros y, entre ellos, travesaños cortos a distintas alturas alternando columna a
+     * columna, como ladrillos trabados: las columnas impares parten su alto en n tramos iguales y
+     * las pares van corridas medio tramo.
+     */
+    TRABADO("Trabado (ladrillo)")
 }
 
 /** Un tubo de la reja: dónde va (cm desde la esquina de abajo a la izquierda, ejes) y cómo se corta. */
@@ -53,7 +59,7 @@ object RejaCalculo {
         val tuboCm: Float = 3.8f,
         val pasoCm: Float = 15f,
         val modelo: ModeloReja = ModeloReja.CUADRICULA,
-        /** Travesaños intermedios en los barrotes verticales (o parantes en los horizontales). */
+        /** Travesaños intermedios en los barrotes verticales (o parantes en los horizontales); en el trabado, los tramos de las columnas impares (3 si es 0). */
         val intermedios: Int = 0
     ) {
         val interiorAncho: Float get() = anchoCm - 2 * marcoCm
@@ -81,6 +87,7 @@ object RejaCalculo {
         ModeloReja.BARROTES_HORIZONTALES -> cuadriculaHorizontal(r, tramos(r.interiorAlto, r.pasoCm), r.intermedios.coerceAtLeast(0) + 1)
         ModeloReja.ROMBOS -> rombos(r)
         ModeloReja.ESPINA -> espina(r)
+        ModeloReja.TRABADO -> trabado(r, tramos(r.interiorAncho, r.pasoCm), if (r.intermedios > 0) r.intermedios else 3)
     }
 
     fun todos(r: Reja): List<TuboReja> = marco(r) + interior(r)
@@ -128,6 +135,31 @@ object RejaCalculo {
                 val x = m + c * anchoTramo + (c - 0.5f) * t
                 salen.add(TuboReja("Parante", x, y0, x, y1))
             }
+        }
+        return salen
+    }
+
+    /**
+     * Trabado: parantes enteros (columnas − 1) y travesaños cortos entre ellos. Las columnas
+     * impares (1.ª, 3.ª…) llevan sus travesaños en los cortes de partir el alto en [tramos]
+     * iguales (tramos − 1 travesaños); las pares van corridas medio tramo (tramos travesaños),
+     * como las juntas de una pared de ladrillo.
+     */
+    private fun trabado(r: Reja, columnas: Int, tramos: Int): List<TuboReja> {
+        val m = r.marcoCm; val t = r.tuboCm
+        val w = r.interiorAncho; val h = r.interiorAlto
+        val salen = mutableListOf<TuboReja>()
+        val anchoTramo = (w - (columnas - 1) * t) / columnas
+        for (c in 1 until columnas) {
+            val x = m + c * anchoTramo + (c - 0.5f) * t
+            salen.add(TuboReja("Parante", x, m, x, r.altoCm - m))
+        }
+        val paso = h / tramos
+        for (c in 0 until columnas) {
+            val x0 = m + c * (anchoTramo + t)
+            val x1 = x0 + anchoTramo
+            val alturas = if (c % 2 == 0) (1 until tramos).map { it * paso } else (0 until tramos).map { (it + 0.5f) * paso }
+            alturas.forEach { y -> salen.add(TuboReja("Travesaño", x0, m + y, x1, m + y)) }
         }
         return salen
     }

@@ -27,14 +27,14 @@ class RejasActivityTest {
     fun rombos_y_espina_se_pintan_y_se_calculan_con_la_cuenta_propia() {
         ActivityScenario.launch<RejasActivity>(intent()).use { esc ->
             Thread.sleep(500)
-            listOf(3 to "rejas_rombos.png", 4 to "rejas_espina.png", 1 to "rejas_barrotes.png").forEach { (pos, nombre) ->
+            listOf(3 to "rejas_rombos.png", 4 to "rejas_espina.png", 1 to "rejas_barrotes.png", 5 to "rejas_trabado.png").forEach { (pos, nombre) ->
                 esc.onActivity { a -> a.findViewById<android.widget.Spinner>(R.id.spModelo).setSelection(pos) }
                 Thread.sleep(700)
                 esc.onActivity { a ->
                     assertEquals(android.view.View.VISIBLE, a.findViewById<android.view.View>(R.id.vistaReja).visibility)
                     a.findViewById<android.view.View>(R.id.btnCalcular).performClick()
                     val tubo = a.findViewById<TextView>(R.id.tvTubo).text.toString()
-                    if (pos != 1) assertTrue(tubo, tubo.contains("(45°)"))
+                    if (pos == 3 || pos == 4) assertTrue(tubo, tubo.contains("(45°)"))
                     assertTrue(a.findViewById<TextView>(R.id.tvMarco).text.toString().lines().contains("160 = 2"))
                     val raiz = a.window.decorView
                     if (raiz.width > 0 && raiz.height > 0) {
