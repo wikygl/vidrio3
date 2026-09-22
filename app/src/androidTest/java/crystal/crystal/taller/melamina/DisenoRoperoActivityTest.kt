@@ -251,8 +251,19 @@ class DisenoRoperoActivityTest {
                 assertEquals(0, vista.moviendo?.cuerpo)
                 // Se suelta con el centro en el borde derecho del cuerpo 2: pasa al final.
                 val huecos = RoperoGeometria.hermanasDe(vista.ropero, RoperoGeometria.cuerpo(vista.ropero, 0)!!)
-                vista.alSoltarMovimiento?.invoke(RoperoGeometria.cuerpo(vista.ropero, 0)!!, huecos[1].x1 - 3f)
+                vista.alSoltarMovimiento?.invoke(RoperoGeometria.cuerpo(vista.ropero, 0)!!, huecos[1].x1 - 3f, false)
                 assertEquals(listOf(TipoCuerpo.ENTREPANOS, TipoCuerpo.CAJONES), vista.ropero.cuerpos.map { it.tipo })
+                // Copiar: la sombra deja el original y al soltar hay tres; eliminar el del medio deja dos.
+                vista.alTocarElemento?.invoke(RoperoGeometria.cuerpo(vista.ropero, 1))
+                botones(mando).first { it.text == "Copiar…" }.performClick()
+                assertTrue(vista.copiando)
+                vista.copiando = false; vista.moviendo = null
+                vista.alSoltarMovimiento?.invoke(RoperoGeometria.cuerpo(vista.ropero, 1)!!, 0f, true)
+                assertEquals(3, vista.ropero.cuerpos.size)
+                assertEquals(TipoCuerpo.CAJONES, vista.ropero.cuerpos[0].tipo)
+                vista.alTocarElemento?.invoke(RoperoGeometria.cuerpo(vista.ropero, 1))
+                botones(mando).first { it.text == "Eliminar" }.performClick()
+                assertEquals(2, vista.ropero.cuerpos.size)
             }
         }
     }
