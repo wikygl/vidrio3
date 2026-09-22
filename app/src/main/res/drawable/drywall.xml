@@ -1,0 +1,8 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="64dp" android:height="64dp" android:viewportWidth="64" android:viewportHeight="64">
+    <!-- Un tabique de drywall: los rieles arriba y abajo, los parantes cada tanto, y una plancha puesta a medias. -->
+    <path android:fillColor="#FFFFFF" android:pathData="M4,6 L60,6 L60,58 L4,58 Z" android:strokeColor="#3A3A3A" android:strokeWidth="2"/>
+    <path android:fillColor="#00000000" android:pathData="M6,10 L58,10 M6,54 L58,54" android:strokeColor="#5A6470" android:strokeWidth="3"/>
+    <path android:fillColor="#00000000" android:pathData="M12,10 L12,54 M24,10 L24,54 M36,10 L36,54 M48,10 L48,54" android:strokeColor="#7A8590" android:strokeWidth="2.5"/>
+    <path android:fillColor="#E8E2D2" android:pathData="M30,8 L58,8 L58,56 L30,56 Z" android:strokeColor="#9A8E78" android:strokeWidth="1.5"/>
+    <path android:fillColor="#00000000" android:pathData="M34,14 L34,50 M40,14 L40,50 M46,14 L46,50 M52,14 L52,50" android:strokeColor="#C9C2B0" android:strokeWidth="1"/>
+</vector>

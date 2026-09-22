@@ -1,0 +1,676 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".taller.drywall.DrywallActivity">
+
+    <LinearLayout
+        android:id="@+id/layout2"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="500dp"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <!-- LEFT PANEL: Inputs -->
+            <LinearLayout
+                android:id="@+id/lyPanelIzquierdo"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginStart="9dp"
+                android:layout_marginTop="9dp"
+                android:layout_marginEnd="4.5dp"
+                android:layout_weight="1"
+                android:background="@drawable/corner"
+                android:orientation="vertical"
+                tools:ignore="NestedWeights">
+
+                <TextView
+                    android:id="@+id/tvTitulo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/corner2"
+                    android:backgroundTint="@color/color"
+                    android:gravity="center"
+                    android:text="Drywall"
+                    android:textColor="@color/blanco"
+                    tools:ignore="TextContrastCheck" />
+
+                <!-- La ficha: el drywall dibujado, la estructura o las planchas. -->
+                <LinearLayout
+                    android:id="@+id/fichaT_layout"
+                    android:layout_width="match_parent"
+                    android:layout_height="150dp"
+                    android:background="@drawable/cornere"
+                    android:baselineAligned="false">
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+
+                        <crystal.crystal.taller.drywall.VistaDrywall
+                            android:id="@+id/vistaDrywall"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_marginStart="4dp"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginEnd="4dp"
+                            android:layout_marginBottom="4dp"
+                            app:layout_constraintBottom_toBottomOf="parent"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent" />
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+                </LinearLayout>
+
+                <!-- Cómo mirarlo: la estructura o las planchas. -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btVerEstructura"
+                        android:layout_width="0dp"
+                        android:layout_height="30dp"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/color"
+                        android:padding="0dp"
+                        android:text="Estructura"
+                        android:textAllCaps="false"
+                        android:textColor="@color/blanco"
+                        android:textSize="10sp"
+                        tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                    <Button
+                        android:id="@+id/btVerPlanchas"
+                        android:layout_width="0dp"
+                        android:layout_height="30dp"
+                        android:layout_marginStart="3dp"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/color"
+                        android:padding="0dp"
+                        android:text="Planchas"
+                        android:textAllCaps="false"
+                        android:textColor="@color/blanco"
+                        android:textSize="10sp"
+                        tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvMedidas"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="@string/medidas_y_cantidad"
+                    android:textColor="@color/color"
+                    tools:ignore="TextContrastCheck" />
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:fadingEdge="horizontal"
+                    tools:ignore="UselessParent">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <!-- Qué se arma -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Tipo"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spTipo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                tools:ignore="TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Largo del muro (o del techo), en metros -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Largo (m)"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAncho"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Alto (o el otro lado del techo) -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Alto (m)"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAlto"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Vanos: puertas y ventanas que se descuentan -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Vanos (m²)"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etVanos"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:text="0"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Cuántos vanos son -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="N.° de vanos"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etNumVanos"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number"
+                                android:text="0"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Separación entre parantes -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Parantes cada"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spSeparacion"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                tools:ignore="TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- La plancha -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Plancha"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spPlancha"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                tools:ignore="TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- El perfil -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Perfil"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spPerfil"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                tools:ignore="TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Esquinas vivas con esquinero -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Esquinas"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etEsquinas"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number"
+                                android:text="0"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- Lana de vidrio entre parantes -->
+                        <CheckBox
+                            android:id="@+id/cbLana"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:text="Lana de vidrio"
+                            android:textSize="12sp"
+                            tools:ignore="TouchTargetSizeCheck" />
+
+                    </LinearLayout>
+                </ScrollView>
+
+            </LinearLayout>
+
+            <!-- RIGHT PANEL: Results -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="0.81"
+                android:orientation="vertical">
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_marginTop="9dp"
+                    android:layout_marginEnd="9dp">
+
+                    <LinearLayout
+                        android:id="@+id/linearLayout21"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="0.25"
+                        android:background="@drawable/corner"
+                        android:orientation="vertical"
+                        android:paddingBottom="4.5dp"
+                        app:layout_constraintBottom_toTopOf="@+id/tvProyectoActivo"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent"
+                        tools:ignore="NestedWeights">
+
+                        <TextView
+                            android:id="@+id/textView28"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/corner2"
+                            android:backgroundTint="@color/color"
+                            android:gravity="center"
+                            android:text="@string/referencias_y_c_lculos"
+                            android:textColor="@color/blanco"
+                            tools:ignore="TextContrastCheck" />
+
+                        <ScrollView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical">
+
+                                <!-- Referencias -->
+                                <LinearLayout
+                                    android:id="@+id/lyReferencias"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/cornere"
+                                    android:orientation="vertical">
+
+                                    <TextView
+                                        android:id="@+id/tvReferencias"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:layout_weight="1"
+                                        android:gravity="start"
+                                        android:text="@string/referencias"
+                                        android:visibility="gone"
+                                        tools:ignore="InefficientWeight" />
+
+                                    <TextView
+                                        android:id="@+id/txReferencias"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:layout_weight="1"
+                                        android:gravity="start"
+                                        android:paddingTop="1dp"
+                                        android:paddingBottom="1dp"
+                                        tools:ignore="InefficientWeight" />
+                                </LinearLayout>
+
+                                <TextView
+                                    android:id="@+id/textView33"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="center"
+                                    android:text="@string/c_lculos"
+                                    android:textColor="@color/color"
+                                    tools:ignore="TextContrastCheck" />
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="vertical"
+                                    tools:ignore="ExtraText">
+
+                                    <!-- Planchas -->
+                                    <LinearLayout
+                                        android:id="@+id/lyPlanchas"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvPlanchas"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Plancha" />
+
+                                        <TextView
+                                            android:id="@+id/txPlanchas"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Perfiles: parantes, rieles, ángulo -->
+                                    <LinearLayout
+                                        android:id="@+id/lyPerfiles"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/sombra"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvPerfiles"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Perfiles" />
+
+                                        <TextView
+                                            android:id="@+id/txPerfiles"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Fijaciones: tornillos, anclajes, alambre -->
+                                    <LinearLayout
+                                        android:id="@+id/lyFijaciones"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvFijaciones"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Fijaciones" />
+
+                                        <TextView
+                                            android:id="@+id/txFijaciones"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Acabado: cinta, masilla, esquineros, lana -->
+                                    <LinearLayout
+                                        android:id="@+id/lyAcabado"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/sombra"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/tvAcabado"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Acabado" />
+
+                                        <TextView
+                                            android:id="@+id/txAcabado"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- El detalle de cada material (de dónde sale la cantidad): solo para leer, no se archiva -->
+                                    <TextView
+                                        android:id="@+id/tvCorte"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:gravity="center"
+                                        android:text="Detalle"
+                                        android:textColor="@color/color"
+                                        tools:ignore="TextContrastCheck" />
+
+                                    <TextView
+                                        android:id="@+id/txCorte"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:textSize="12sp" />
+
+                                </LinearLayout>
+
+                            </LinearLayout>
+                        </ScrollView>
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvProyectoActivo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="#F5F5F5"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:padding="7dp"
+                        android:text="⚠️ Sin proyecto activo"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        app:layout_constraintBottom_toTopOf="@+id/linearLayout20"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent" />
+
+                    <LinearLayout
+                        android:id="@+id/linearLayout20"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom|end"
+                        android:layout_weight="0.8"
+                        android:orientation="vertical"
+                        app:layout_constraintBottom_toBottomOf="parent">
+
+                        <!-- La lista de materiales por mensaje. -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btCompartir"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/azul"
+                                android:text="Compartir"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btArchivar"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/naranja"
+                                android:text="@string/archivar"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+
+                            <Button
+                                android:id="@+id/btCalcular"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/rosa"
+                                android:text="@string/calcular"
+                                android:textColor="@color/blanco"
+                                tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/linearLayout2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

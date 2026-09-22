@@ -604,6 +604,7 @@ class Taller : AppCompatActivity() {
         }
         binding.btDivisionBano.setOnClickListener { lanzarCalculadora(DivisionBanoActivity::class.java) }
         binding.btRopero.setOnClickListener { lanzarCalculadora(crystal.crystal.taller.melamina.RoperoActivity::class.java) }
+        binding.btDrywall.setOnClickListener { lanzarCalculadora(crystal.crystal.taller.drywall.DrywallActivity::class.java) }
         binding.btBaranda.setOnClickListener { lanzarCalculadora(BarandaActivity::class.java) }
     }
 
