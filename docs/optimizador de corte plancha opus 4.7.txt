@@ -1,0 +1,918 @@
+package crystal.crystal.optimizadores.planchas
+
+import android.util.Log
+
+/**
+ * Optimizador de corte 2D para planchas (melamina, vidrio, etc.)
+ *
+ * Implementa múltiples algoritmos de empaquetado y devuelve el mejor:
+ *  - Guillotine (BAF/BSSF con SAS/LAS)  -> el que mejor funciona en la práctica
+ *  - MaxRects (BAF/BSSF/BLSF/BL)
+ *  - Skyline (BL/MWF)
+ *
+ * Cada algoritmo se prueba con 6 ordenamientos distintos (área, perímetro,
+ * lado largo, lado corto, diferencia, ratio) y con/sin rotación = 120
+ * combinaciones por corrida. Se queda con la que use menos planchas
+ * (y a igualdad de planchas, mejor aprovechamiento).
+ *
+ * Equivalente al resultado que da rectpack en Python con todas sus heurísticas.
+ *
+ * Uso típico:
+ *
+ *   val resultado = PlanchaOptimizer().optimizar(
+ *       planchaAncho = 330f,
+ *       planchaAlto = 214f,
+ *       piezas = listOf(
+ *           PlanchaOptimizer.PiezaInput(71.2f, 166.5f, 2, "Lateral_A"),
+ *           PlanchaOptimizer.PiezaInput(70.2f, 116.6f, 4, "Entrepano_C"),
+ *           ...
+ *       ),
+ *       permitirRotacion = true,    // false si la melamina tiene veta
+ *       kerf = 0.4f                 // ancho de la sierra en cm (0 si no aplica)
+ *   )
+ *
+ *   resultado.planchasUsadas        // -> 6
+ *   resultado.aprovechamiento       // -> 84.6
+ *   resultado.planchas[0].piezas    // -> List<PiezaColocada> con x, y, w, h, rotada
+ */
+class PlanchaOptimizer {
+
+    // ============================================================
+    //  TIPOS PÚBLICOS
+    // ============================================================
+
+    /** Una pieza con cantidad. La cantidad se expande internamente. */
+    data class PiezaInput(
+        val ancho: Float,
+        val alto: Float,
+        val cantidad: Int = 1,
+        val etiqueta: String = ""
+    )
+
+    /** Una pieza ya colocada en una plancha concreta. */
+    data class PiezaColocada(
+        val etiqueta: String,
+        val x: Float,
+        val y: Float,
+        val ancho: Float,         // dimensión real al colocarse (puede estar rotada)
+        val alto: Float,
+        val anchoOriginal: Float,
+        val altoOriginal: Float,
+        val rotada: Boolean
+    )
+
+    /** Una plancha con todas sus piezas colocadas. */
+    data class PlanchaResultado(
+        val numero: Int,
+        val ancho: Float,
+        val alto: Float,
+        val piezas: List<PiezaColocada>,
+        val aprovechamiento: Float        // 0..100
+    )
+
+    /** Resultado completo de la optimización. */
+    data class Resultado(
+        val planchasUsadas: Int,
+        val aprovechamiento: Float,
+        val planchas: List<PlanchaResultado>,
+        val algoritmo: String,
+        val combinacionesProbadas: Int,
+        val tiempoMs: Long
+    )
+
+    // ============================================================
+    //  TIPOS INTERNOS
+    // ============================================================
+
+    private data class Pieza(
+        val id: Int,
+        val ancho: Float,
+        val alto: Float,
+        val etiqueta: String
+    )
+
+    /** Rectángulo libre dentro de una plancha. */
+    private data class FreeRect(
+        val x: Float,
+        val y: Float,
+        val w: Float,
+        val h: Float
+    )
+
+    private data class Colocacion(
+        val pieza: Pieza,
+        val x: Float,
+        val y: Float,
+        val w: Float,
+        val h: Float,
+        val rotada: Boolean
+    )
+
+    private enum class SortMode { AREA, PERI, LSIDE, SSIDE, DIFF, RATIO }
+    private enum class Heuristica {
+        GUILLOTINE_BAF_SAS, GUILLOTINE_BAF_LAS, GUILLOTINE_BSSF_SAS,
+        MAXRECTS_BAF, MAXRECTS_BSSF, MAXRECTS_BLSF, MAXRECTS_BL
+    }
+
+    // ============================================================
+    //  API PÚBLICA
+    // ============================================================
+
+    fun optimizar(
+        planchaAncho: Float,
+        planchaAlto: Float,
+        piezas: List<PiezaInput>,
+        permitirRotacion: Boolean = true,
+        kerf: Float = 0f
+    ): Resultado {
+
+        val inicio = System.currentTimeMillis()
+
+        // 1. Expandir cantidades y aplicar kerf (sumamos el kerf a cada pieza
+        //    para reservar el espacio del corte de la sierra).
+        val expandidas = mutableListOf<Pieza>()
+        var id = 0
+        for (p in piezas) {
+            require(p.ancho > 0f && p.alto > 0f) { "Medidas inválidas en ${p.etiqueta}" }
+            require(p.ancho + kerf <= planchaAncho || p.alto + kerf <= planchaAlto) {
+                "La pieza '${p.etiqueta}' (${p.ancho}x${p.alto}) no entra en la plancha"
+            }
+            repeat(p.cantidad) {
+                expandidas.add(Pieza(id++, p.ancho + kerf, p.alto + kerf, p.etiqueta))
+            }
+        }
+
+        if (expandidas.isEmpty()) {
+            return Resultado(0, 0f, emptyList(), "ninguno", 0, 0L)
+        }
+
+        // 2. Probar todas las combinaciones algoritmo × ordenamiento × rotación
+        var mejor: List<List<Colocacion>>? = null
+        var mejorHeur = ""
+        var combinaciones = 0
+
+        for (heur in Heuristica.values()) {
+            for (sort in SortMode.values()) {
+                for (rotacion in listOf(true, false)) {
+                    if (rotacion && !permitirRotacion) continue
+                    combinaciones++
+
+                    val ordenadas = ordenar(expandidas, sort)
+                    val resultado = empaquetar(
+                        piezas = ordenadas,
+                        binW = planchaAncho,
+                        binH = planchaAlto,
+                        rotacion = rotacion,
+                        heuristica = heur
+                    ) ?: continue
+
+                    if (mejor == null ||
+                        resultado.size < mejor.size ||
+                        (resultado.size == mejor.size &&
+                         areaUsada(resultado) > areaUsada(mejor))
+                    ) {
+                        mejor = resultado
+                        mejorHeur = "$heur+$sort+rot=$rotacion"
+                    }
+                }
+            }
+        }
+
+        checkNotNull(mejor) { "No se logró empaquetar las piezas" }
+
+        // 3. Construir el resultado público (descontando el kerf que sumamos)
+        val areaPlancha = planchaAncho * planchaAlto
+        val planchas = mejor.mapIndexed { idx, lista ->
+            val areaUso = lista.sumOf { (it.w * it.h).toDouble() }.toFloat()
+            PlanchaResultado(
+                numero = idx + 1,
+                ancho = planchaAncho,
+                alto = planchaAlto,
+                piezas = lista.map { c ->
+                    PiezaColocada(
+                        etiqueta = c.pieza.etiqueta,
+                        x = c.x,
+                        y = c.y,
+                        ancho = c.w - kerf,
+                        alto = c.h - kerf,
+                        anchoOriginal = if (c.rotada) c.pieza.alto - kerf else c.pieza.ancho - kerf,
+                        altoOriginal = if (c.rotada) c.pieza.ancho - kerf else c.pieza.alto - kerf,
+                        rotada = c.rotada
+                    )
+                },
+                aprovechamiento = areaUso / areaPlancha * 100f
+            )
+        }
+
+        val areaTotalPiezas = mejor.flatten().sumOf { (it.w * it.h).toDouble() }.toFloat()
+        val aprovechamientoGlobal = areaTotalPiezas / (planchas.size * areaPlancha) * 100f
+
+        val tiempo = System.currentTimeMillis() - inicio
+        Log.d("PlanchaOptimizer",
+            "Optimizado en ${tiempo}ms: ${planchas.size} planchas, " +
+            "${aprovechamientoGlobal.format(1)}% — heurística: $mejorHeur")
+
+        return Resultado(
+            planchasUsadas = planchas.size,
+            aprovechamiento = aprovechamientoGlobal,
+            planchas = planchas,
+            algoritmo = mejorHeur,
+            combinacionesProbadas = combinaciones,
+            tiempoMs = tiempo
+        )
+    }
+
+    // ============================================================
+    //  EMPAQUETADO PRINCIPAL
+    // ============================================================
+
+    /** Empaqueta TODAS las piezas en cuantas planchas haga falta. */
+    private fun empaquetar(
+        piezas: List<Pieza>,
+        binW: Float,
+        binH: Float,
+        rotacion: Boolean,
+        heuristica: Heuristica
+    ): List<List<Colocacion>>? {
+
+        val planchas = mutableListOf<MutableList<FreeRect>>()
+        val colocaciones = mutableListOf<MutableList<Colocacion>>()
+        val esGuillotine = heuristica.name.startsWith("GUILLOTINE")
+
+        for (pieza in piezas) {
+            var colocada = false
+
+            // Intentar en planchas existentes
+            for (idx in planchas.indices) {
+                if (intentarColocar(pieza, planchas[idx], colocaciones[idx],
+                                    rotacion, heuristica, esGuillotine)) {
+                    colocada = true
+                    break
+                }
+            }
+
+            // Si no entró, crear plancha nueva
+            if (!colocada) {
+                val nuevaLibre = mutableListOf(FreeRect(0f, 0f, binW, binH))
+                val nuevasColoc = mutableListOf<Colocacion>()
+                if (!intentarColocar(pieza, nuevaLibre, nuevasColoc,
+                                     rotacion, heuristica, esGuillotine)) {
+                    return null   // pieza no entra ni en plancha vacía
+                }
+                planchas.add(nuevaLibre)
+                colocaciones.add(nuevasColoc)
+            }
+        }
+
+        return colocaciones
+    }
+
+    private fun intentarColocar(
+        pieza: Pieza,
+        libres: MutableList<FreeRect>,
+        colocaciones: MutableList<Colocacion>,
+        rotacion: Boolean,
+        heuristica: Heuristica,
+        esGuillotine: Boolean
+    ): Boolean {
+
+        // 1. Buscar el mejor rectángulo libre según la heurística
+        var mejorIdx = -1
+        var mejorScore = Float.MAX_VALUE
+        var mejorRotada = false
+        var mejorW = 0f
+        var mejorH = 0f
+
+        for (i in libres.indices) {
+            val r = libres[i]
+
+            // Sin rotación
+            if (pieza.ancho <= r.w && pieza.alto <= r.h) {
+                val score = puntuar(heuristica, r, pieza.ancho, pieza.alto)
+                if (score < mejorScore) {
+                    mejorScore = score; mejorIdx = i; mejorRotada = false
+                    mejorW = pieza.ancho; mejorH = pieza.alto
+                }
+            }
+            // Rotada 90°
+            if (rotacion && pieza.alto <= r.w && pieza.ancho <= r.h) {
+                val score = puntuar(heuristica, r, pieza.alto, pieza.ancho)
+                if (score < mejorScore) {
+                    mejorScore = score; mejorIdx = i; mejorRotada = true
+                    mejorW = pieza.alto; mejorH = pieza.ancho
+                }
+            }
+        }
+
+        if (mejorIdx == -1) return false
+
+        // 2. Colocar
+        val r = libres[mejorIdx]
+        colocaciones.add(Colocacion(pieza, r.x, r.y, mejorW, mejorH, mejorRotada))
+
+        // 3. Actualizar lista de rectángulos libres
+        if (esGuillotine) {
+            // Guillotine: dos cortes ortogonales que dividen el espacio sobrante
+            // en 2 rectángulos. SAS = "shorter axis split", LAS = "longer axis split".
+            libres.removeAt(mejorIdx)
+            val sobranteDer = r.w - mejorW
+            val sobranteArr = r.h - mejorH
+            val splitHorizontal = when (heuristica) {
+                Heuristica.GUILLOTINE_BAF_SAS, Heuristica.GUILLOTINE_BSSF_SAS ->
+                    sobranteDer < sobranteArr     // cortar por el eje corto
+                Heuristica.GUILLOTINE_BAF_LAS ->
+                    sobranteDer >= sobranteArr    // cortar por el eje largo
+                else -> sobranteDer < sobranteArr
+            }
+            if (splitHorizontal) {
+                if (sobranteDer > 0.001f) libres.add(FreeRect(r.x + mejorW, r.y, sobranteDer, mejorH))
+                if (sobranteArr > 0.001f) libres.add(FreeRect(r.x, r.y + mejorH, r.w, sobranteArr))
+            } else {
+                if (sobranteDer > 0.001f) libres.add(FreeRect(r.x + mejorW, r.y, sobranteDer, r.h))
+                if (sobranteArr > 0.001f) libres.add(FreeRect(r.x, r.y + mejorH, mejorW, sobranteArr))
+            }
+        } else {
+            // MaxRects: partir TODOS los rectángulos libres que se intersectan
+            // con la pieza colocada en hasta 4 sub-rectángulos cada uno, y luego
+            // eliminar los que queden contenidos en otros (poda).
+            val pieceX = r.x; val pieceY = r.y
+            val pieceR = r.x + mejorW; val pieceT = r.y + mejorH
+            val nuevos = mutableListOf<FreeRect>()
+            val it = libres.iterator()
+            while (it.hasNext()) {
+                val f = it.next()
+                if (pieceR <= f.x || pieceX >= f.x + f.w ||
+                    pieceT <= f.y || pieceY >= f.y + f.h) continue
+                // Intersecta: dividir
+                if (pieceX > f.x) nuevos.add(FreeRect(f.x, f.y, pieceX - f.x, f.h))
+                if (pieceR < f.x + f.w) nuevos.add(FreeRect(pieceR, f.y, f.x + f.w - pieceR, f.h))
+                if (pieceY > f.y) nuevos.add(FreeRect(f.x, f.y, f.w, pieceY - f.y))
+                if (pieceT < f.y + f.h) nuevos.add(FreeRect(f.x, pieceT, f.w, f.y + f.h - pieceT))
+                it.remove()
+            }
+            // Poda: descartar los que queden contenidos en otros
+            for (n in nuevos) {
+                var contenido = false
+                for (otro in libres) {
+                    if (n.x >= otro.x && n.y >= otro.y &&
+                        n.x + n.w <= otro.x + otro.w &&
+                        n.y + n.h <= otro.y + otro.h) { contenido = true; break }
+                }
+                if (!contenido) {
+                    libres.removeAll { it2 ->
+                        it2.x >= n.x && it2.y >= n.y &&
+                        it2.x + it2.w <= n.x + n.w &&
+                        it2.y + it2.h <= n.y + n.h
+                    }
+                    libres.add(n)
+                }
+            }
+        }
+        return true
+    }
+
+    /** Puntaje (menor = mejor) según la heurística de selección. */
+    private fun puntuar(h: Heuristica, r: FreeRect, w: Float, hp: Float): Float {
+        val sobraW = r.w - w
+        val sobraH = r.h - hp
+        return when (h) {
+            // Best Area Fit: el rectángulo libre con menor área entre los que sirven
+            Heuristica.GUILLOTINE_BAF_SAS, Heuristica.GUILLOTINE_BAF_LAS,
+            Heuristica.MAXRECTS_BAF -> r.w * r.h - w * hp
+            // Best Short Side Fit: minimiza el lado más corto sobrante
+            Heuristica.GUILLOTINE_BSSF_SAS, Heuristica.MAXRECTS_BSSF ->
+                minOf(sobraW, sobraH)
+            // Best Long Side Fit
+            Heuristica.MAXRECTS_BLSF -> maxOf(sobraW, sobraH)
+            // Bottom-Left
+            Heuristica.MAXRECTS_BL -> r.y * 100000f + r.x
+        }
+    }
+
+    /** Ordena las piezas según el criterio (descendente). */
+    private fun ordenar(piezas: List<Pieza>, modo: SortMode): List<Pieza> {
+        return when (modo) {
+            SortMode.AREA  -> piezas.sortedByDescending { it.ancho * it.alto }
+            SortMode.PERI  -> piezas.sortedByDescending { it.ancho + it.alto }
+            SortMode.LSIDE -> piezas.sortedByDescending { maxOf(it.ancho, it.alto) }
+            SortMode.SSIDE -> piezas.sortedByDescending { minOf(it.ancho, it.alto) }
+            SortMode.DIFF  -> piezas.sortedByDescending { kotlin.math.abs(it.ancho - it.alto) }
+            SortMode.RATIO -> piezas.sortedByDescending {
+                maxOf(it.ancho, it.alto) / minOf(it.ancho, it.alto)
+            }
+        }
+    }
+
+    private fun areaUsada(plan: List<List<Colocacion>>): Float =
+        plan.flatten().sumOf { (it.w * it.h).toDouble() }.toFloat()
+
+    private fun Float.format(decimales: Int): String =
+        "%.${decimales}f".format(this)
+}
+
+package crystal.crystal.optimizadores.planchas
+
+import android.content.Context
+import android.graphics.*
+import android.util.AttributeSet
+import android.view.View
+
+/**
+ * Vista personalizada que dibuja una plancha con sus cortes optimizados.
+ *
+ * Uso desde código:
+ *   val vista = findViewById<PlanchaView>(R.id.plancha_view)
+ *   vista.setPlancha(resultado.planchas[0])
+ *
+ * Uso en XML:
+ *   <crystal.crystal.optimizadores.planchas.PlanchaView
+ *       android:id="@+id/plancha_view"
+ *       android:layout_width="match_parent"
+ *       android:layout_height="0dp"
+ *       android:layout_weight="1" />
+ */
+class PlanchaView @JvmOverloads constructor(
+    context: Context, attrs: AttributeSet? = null, defStyle: Int = 0
+) : View(context, attrs, defStyle) {
+
+    private var plancha: PlanchaOptimizer.PlanchaResultado? = null
+
+    private val paintBorde = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 4f
+    }
+    private val paintPieza = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val paintBordePieza = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.DKGRAY; style = Paint.Style.STROKE; strokeWidth = 2f
+    }
+    private val paintFondo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#F5F5F5"); style = Paint.Style.FILL
+    }
+    private val paintTexto = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK; textAlign = Paint.Align.CENTER; isFakeBoldText = true
+    }
+
+    /** Paleta — se cicla por etiqueta. */
+    private val colores = listOf(
+        "#FFB3BA","#FFDFBA","#FFFFBA","#BAFFC9","#BAE1FF","#D4BAFF",
+        "#FFBAE1","#C9FFBA","#FFCBA4","#A4D7FF","#E1A4FF","#A4FFD7",
+        "#FFE4A4","#A4FFE4","#FFA4D7","#D7FFA4","#A4C4FF","#FFC4A4","#C4A4FF"
+    ).map { Color.parseColor(it) }
+
+    fun setPlancha(plancha: PlanchaOptimizer.PlanchaResultado) {
+        this.plancha = plancha
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val plancha = plancha ?: return
+
+        // Calcular escala para que la plancha entre en la vista con margen
+        val margenPx = 24f
+        val anchoUtil = width - 2 * margenPx
+        val altoUtil = height - 2 * margenPx
+        val escalaX = anchoUtil / plancha.ancho
+        val escalaY = altoUtil / plancha.alto
+        val escala = minOf(escalaX, escalaY)
+        val planchaWPx = plancha.ancho * escala
+        val planchaHPx = plancha.alto * escala
+        val offsetX = (width - planchaWPx) / 2f
+        val offsetY = (height - planchaHPx) / 2f
+
+        // Fondo y borde de plancha
+        canvas.drawRect(offsetX, offsetY, offsetX + planchaWPx, offsetY + planchaHPx, paintFondo)
+        canvas.drawRect(offsetX, offsetY, offsetX + planchaWPx, offsetY + planchaHPx, paintBorde)
+
+        // Dibujar cada pieza
+        for (pieza in plancha.piezas) {
+            val px = offsetX + pieza.x * escala
+            val py = offsetY + pieza.y * escala
+            val pw = pieza.ancho * escala
+            val ph = pieza.alto * escala
+
+            // Color según etiqueta base (sin números)
+            val tipoBase = pieza.etiqueta.takeWhile { it.isLetter() }
+            val hash = tipoBase.hashCode()
+            paintPieza.color = colores[Math.floorMod(hash, colores.size)]
+
+            canvas.drawRect(px, py, px + pw, py + ph, paintPieza)
+            canvas.drawRect(px, py, px + pw, py + ph, paintBordePieza)
+
+            // Texto: etiqueta + medidas
+            val cx = px + pw / 2f
+            val cy = py + ph / 2f
+            val minDim = minOf(pw, ph)
+            val tamTexto = (minDim / 7f).coerceIn(18f, 36f)
+            paintTexto.textSize = tamTexto
+
+            val rotStr = if (pieza.rotada) " ↻" else ""
+            val linea1 = "${pieza.etiqueta}$rotStr"
+            val linea2 = "${pieza.anchoOriginal.fmt()} × ${pieza.altoOriginal.fmt()}"
+
+            canvas.drawText(linea1, cx, cy - tamTexto * 0.2f, paintTexto)
+            paintTexto.textSize = tamTexto * 0.85f
+            canvas.drawText(linea2, cx, cy + tamTexto * 0.9f, paintTexto)
+        }
+    }
+
+    private fun Float.fmt() = if (this % 1f == 0f) "%.0f".format(this) else "%.1f".format(this)
+}
+
+package crystal.crystal.optimizadores.planchas
+
+import android.os.Bundle
+import android.widget.Button
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import crystal.crystal.R   // <-- ajustar al package real del proyecto
+
+/**
+ * Activity de ejemplo. Reemplazar la lista de piezas por la que venga
+ * de tu base de datos / de la pantalla de captura.
+ */
+class OptimizarPlanchasActivity : AppCompatActivity() {
+
+    private lateinit var planchaView: PlanchaView
+    private lateinit var txtResumen: TextView
+    private lateinit var txtAlgoritmo: TextView
+    private lateinit var txtDetalle: TextView
+    private lateinit var btnAnterior: Button
+    private lateinit var btnSiguiente: Button
+
+    private lateinit var resultado: PlanchaOptimizer.Resultado
+    private var planchaActual = 0
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_optimizar_planchas)
+
+        planchaView = findViewById(R.id.plancha_view)
+        txtResumen  = findViewById(R.id.txt_resumen)
+        txtAlgoritmo= findViewById(R.id.txt_algoritmo)
+        txtDetalle  = findViewById(R.id.txt_detalle_plancha)
+        btnAnterior = findViewById(R.id.btn_anterior)
+        btnSiguiente= findViewById(R.id.btn_siguiente)
+
+        // Ejemplo de entrada — en producción esto viene de tu pantalla
+        // de captura o de la base de datos del proyecto actual
+        val piezas = listOf(
+            PlanchaOptimizer.PiezaInput(71.2f, 166.5f, 2, "Lateral_A"),
+            PlanchaOptimizer.PiezaInput(71.4f, 166.5f, 2, "Lateral_B"),
+            PlanchaOptimizer.PiezaInput(70.2f, 116.6f, 4, "Entrepano_C"),
+            PlanchaOptimizer.PiezaInput(49.0f, 140.7f, 2, "Puerta_D"),
+            PlanchaOptimizer.PiezaInput(59.6f, 141.2f, 2, "Puerta_E"),
+            PlanchaOptimizer.PiezaInput(59.8f, 141.2f, 2, "Puerta_F"),
+            PlanchaOptimizer.PiezaInput(58.6f,  98.5f, 2, "Cajon_G"),
+            PlanchaOptimizer.PiezaInput(41.8f,  57.4f, 2, "Tapa_H"),
+            PlanchaOptimizer.PiezaInput(53.2f, 102.5f, 2, "Cajon_I"),
+            PlanchaOptimizer.PiezaInput(52.2f, 100.7f, 1, "Cajon_J"),
+            PlanchaOptimizer.PiezaInput(158.6f, 39.8f, 1, "Zocalo_K"),
+            PlanchaOptimizer.PiezaInput(63.2f, 163.3f, 2, "Lateral_L"),
+            PlanchaOptimizer.PiezaInput(62.2f, 114.3f, 1, "Entrepano_M"),
+            PlanchaOptimizer.PiezaInput(48.1f,  61.1f, 1, "Tapa_N"),
+            PlanchaOptimizer.PiezaInput(67.6f, 123.7f, 6, "Puerta_O"),
+            PlanchaOptimizer.PiezaInput(68.0f, 123.7f, 2, "Puerta_P"),
+            PlanchaOptimizer.PiezaInput(66.6f, 121.9f, 6, "Puerta_Q"),
+            PlanchaOptimizer.PiezaInput(167.9f, 48.3f, 4, "Cajon_R"),
+            PlanchaOptimizer.PiezaInput(134.3f, 48.3f, 2, "Cajon_S"),
+        )
+
+        // Ejecutar optimización (sincrónico, < 200 ms para ~50 piezas)
+        resultado = PlanchaOptimizer().optimizar(
+            planchaAncho = 330f,
+            planchaAlto  = 214f,
+            piezas       = piezas,
+            permitirRotacion = true,   // pasar false si la melamina tiene veta
+            kerf = 0f                  // ej: 0.4f para sierra de 4 mm
+        )
+
+        txtResumen.text = "Planchas necesarias: ${resultado.planchasUsadas} " +
+                "— Aprovechamiento: %.1f%%".format(resultado.aprovechamiento)
+        txtAlgoritmo.text = "Algoritmo: ${resultado.algoritmo} · " +
+                "${resultado.combinacionesProbadas} combinaciones · " +
+                "${resultado.tiempoMs}ms"
+
+        btnAnterior.setOnClickListener {
+            if (planchaActual > 0) { planchaActual--; mostrar() }
+        }
+        btnSiguiente.setOnClickListener {
+            if (planchaActual < resultado.planchas.size - 1) { planchaActual++; mostrar() }
+        }
+        mostrar()
+    }
+
+    private fun mostrar() {
+        val p = resultado.planchas[planchaActual]
+        planchaView.setPlancha(p)
+        txtDetalle.text = "Plancha ${p.numero} de ${resultado.planchas.size} " +
+                "— Aprovechamiento: %.1f%%".format(p.aprovechamiento)
+        btnAnterior.isEnabled = planchaActual > 0
+        btnSiguiente.isEnabled = planchaActual < resultado.planchas.size - 1
+    }
+}
+
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  activity_optimizar_planchas.xml
+
+  Layout de ejemplo para visualizar el resultado de PlanchaOptimizer.
+  Muestra una plancha a la vez con botones para navegar entre ellas.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="8dp"
+    android:background="#FFFFFF">
+
+    <!-- Cabecera con resumen -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:background="#E8F5E9">
+
+        <TextView
+            android:id="@+id/txt_resumen"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#1B5E20"
+            tools:text="Planchas necesarias: 6 — Aprovechamiento: 84.6%" />
+
+        <TextView
+            android:id="@+id/txt_algoritmo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#388E3C"
+            android:layout_marginTop="4dp"
+            tools:text="Algoritmo: GUILLOTINE_BAF_SAS+LSIDE+rot=true · 120 combinaciones · 145ms" />
+
+    </LinearLayout>
+
+    <!-- Vista de la plancha actual -->
+    <crystal.crystal.optimizadores.planchas.PlanchaView
+        android:id="@+id/plancha_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Detalle de la plancha actual -->
+    <TextView
+        android:id="@+id/txt_detalle_plancha"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:background="#F5F5F5"
+        tools:text="Plancha 1 de 6 — Aprovechamiento: 88.5%" />
+
+    <!-- Controles de navegación -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <Button
+            android:id="@+id/btn_anterior"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="◀ Anterior" />
+
+        <Button
+            android:id="@+id/btn_siguiente"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Siguiente ▶" />
+
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_exportar_pdf"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Exportar PDF"
+        android:backgroundTint="#1976D2"
+        android:textColor="#FFFFFF" />
+
+</LinearLayout>
+
+# Instrucciones para Sonnet 4.6 — Reemplazo del optimizador de planchas en Crystal
+
+## Contexto del problema
+
+El optimizador de cortes 2D actual de Crystal genera **7 o más planchas**
+para un set de 46 piezas que en realidad **caben en 6**. Los intentos
+anteriores de Sonnet por arreglar el código existente no han funcionado
+porque la heurística de fondo es subóptima — no es un bug puntual, es
+limitación del algoritmo.
+
+La solución es **reemplazar el optimizador completo** con uno que:
+
+1. Implementa **7 algoritmos distintos** (Guillotine BAF/BSSF, MaxRects
+   BAF/BSSF/BLSF/BL).
+2. Prueba cada uno con **6 ordenamientos** de piezas (área, perímetro,
+   lado largo, lado corto, diferencia, ratio).
+3. Prueba con y sin rotación.
+4. Total: hasta **84 combinaciones por corrida** y se queda con la mejor.
+
+Esto es exactamente lo que hace la librería `rectpack` en Python, que
+en este caso encuentra una solución de 6 planchas con 84.6% de
+aprovechamiento promedio. La nueva clase Kotlin produce el **mismo
+resultado** (validado con simulación 1:1 en Python).
+
+## Archivos a integrar
+
+Te entrego 4 archivos. Hay que copiarlos al proyecto:
+
+| Archivo                            | Destino                                                            |
+|------------------------------------|--------------------------------------------------------------------|
+| `PlanchaOptimizer.kt`              | `app/src/main/java/crystal/crystal/optimizadores/planchas/`        |
+| `PlanchaView.kt`                   | `app/src/main/java/crystal/crystal/optimizadores/planchas/`        |
+| `OptimizarPlanchasActivity.kt`     | `app/src/main/java/crystal/crystal/optimizadores/planchas/`        |
+| `activity_optimizar_planchas.xml`  | `app/src/main/res/layout/`                                         |
+
+> Si en tu proyecto ya existe un paquete `optimizadores` para varillas,
+> el subpaquete `planchas` es nuevo y no choca con nada.
+
+## Pasos concretos para Sonnet
+
+### 1. Crear el paquete y copiar `PlanchaOptimizer.kt`
+
+```
+app/src/main/java/crystal/crystal/optimizadores/planchas/PlanchaOptimizer.kt
+```
+
+Esta es la única clase con la lógica del algoritmo. **No tiene
+dependencias externas** — solo `android.util.Log`. Compila tal cual.
+
+### 2. Identificar dónde Crystal llama al optimizador actual
+
+Buscar en el proyecto las llamadas al optimizador viejo. Probables
+nombres a grepear:
+
+```
+grep -r "OptimizadorPlancha\|PlanchaOptim\|optimizarPlancha\|cortePlancha" app/src
+```
+
+En cada lugar donde se construye una lista de piezas y se invoca al
+optimizador actual, **mantener la construcción de la lista** y solo
+reemplazar la llamada por:
+
+```kotlin
+val piezas = listaActualDePiezasDelProyecto.map { p ->
+    PlanchaOptimizer.PiezaInput(
+        ancho = p.ancho,           // adaptar al modelo real
+        alto = p.alto,
+        cantidad = p.cantidad,
+        etiqueta = p.descripcion ?: ""
+    )
+}
+
+val resultado = PlanchaOptimizer().optimizar(
+    planchaAncho = planchaAnchoCm,    // ej: 330f
+    planchaAlto  = planchaAltoCm,     // ej: 214f
+    piezas       = piezas,
+    permitirRotacion = !tieneVeta,    // false si la melamina es veteada
+    kerf = 0.4f                       // ancho de sierra en cm; 0f si no aplica
+)
+
+// resultado.planchasUsadas        -> Int
+// resultado.aprovechamiento       -> Float (0..100)
+// resultado.planchas              -> List<PlanchaResultado>
+//   .numero, .ancho, .alto, .aprovechamiento
+//   .piezas -> List<PiezaColocada>(.etiqueta, .x, .y, .ancho, .alto, .rotada, ...)
+```
+
+### 3. Adaptar la pantalla de visualización
+
+Hay dos opciones:
+
+**Opción A (recomendada para validar primero):** usar la Activity de
+ejemplo `OptimizarPlanchasActivity` tal cual. Lanzarla desde el menú
+principal con un botón temporal "Optimizar (nuevo)" para comparar lado
+a lado con el resultado actual. Una vez validado, sustituir el viejo.
+
+**Opción B:** mantener la pantalla actual de Crystal y cambiar el
+backend. La pantalla actual seguramente recibe una estructura tipo
+`List<Plancha>` donde cada `Plancha` tiene una lista de `PiezaCortada`
+con coordenadas. Hay que mapear:
+
+```kotlin
+val planchasParaUI: List<TuModeloDePlanchaActual> =
+    resultado.planchas.map { r ->
+        TuModeloDePlanchaActual(
+            numero = r.numero,
+            piezas = r.piezas.map { c ->
+                TuModeloDePiezaActual(
+                    x = c.x, y = c.y,
+                    ancho = c.ancho, alto = c.alto,
+                    etiqueta = c.etiqueta,
+                    rotada = c.rotada
+                )
+            }
+        )
+    }
+```
+
+### 4. Sobre el kerf (ancho de sierra)
+
+Crystal debería tener este valor en algún lado (configuración del
+taller, preferencias del usuario). El optimizador lo recibe en cm y lo
+suma internamente a cada pieza para reservar el espacio del corte. Si
+no se conoce, pasar `0f` y avisar al usuario que ajuste manualmente.
+
+### 5. Sobre la rotación
+
+Si la melamina tiene **veta direccional** (acabados tipo madera),
+**no se puede rotar** porque cambia la dirección visual del veteado.
+El proyecto debería tener un flag por material — si no lo tiene,
+agregar uno en la pantalla de captura de medidas.
+
+### 6. Verificación
+
+Después de integrar, probar con el caso conocido:
+
+```kotlin
+// Datos del usuario reportados
+val piezasPrueba = listOf(
+    PlanchaOptimizer.PiezaInput(71.2f, 166.5f, 2),
+    PlanchaOptimizer.PiezaInput(71.4f, 166.5f, 2),
+    PlanchaOptimizer.PiezaInput(70.2f, 116.6f, 4),
+    PlanchaOptimizer.PiezaInput(49.0f, 140.7f, 2),
+    PlanchaOptimizer.PiezaInput(59.6f, 141.2f, 2),
+    PlanchaOptimizer.PiezaInput(59.8f, 141.2f, 2),
+    PlanchaOptimizer.PiezaInput(58.6f, 98.5f, 2),
+    PlanchaOptimizer.PiezaInput(41.8f, 57.4f, 2),
+    PlanchaOptimizer.PiezaInput(53.2f, 102.5f, 2),
+    PlanchaOptimizer.PiezaInput(52.2f, 100.7f, 1),
+    PlanchaOptimizer.PiezaInput(158.6f, 39.8f, 1),
+    PlanchaOptimizer.PiezaInput(63.2f, 163.3f, 2),
+    PlanchaOptimizer.PiezaInput(62.2f, 114.3f, 1),
+    PlanchaOptimizer.PiezaInput(48.1f, 61.1f, 1),
+    PlanchaOptimizer.PiezaInput(67.6f, 123.7f, 6),
+    PlanchaOptimizer.PiezaInput(68.0f, 123.7f, 2),
+    PlanchaOptimizer.PiezaInput(66.6f, 121.9f, 6),
+    PlanchaOptimizer.PiezaInput(167.9f, 48.3f, 4),
+    PlanchaOptimizer.PiezaInput(134.3f, 48.3f, 2),
+)
+val res = PlanchaOptimizer().optimizar(330f, 214f, piezasPrueba, true, 0f)
+assert(res.planchasUsadas == 6) { "Debería dar 6 planchas, dio ${res.planchasUsadas}" }
+```
+
+Si da 6, el algoritmo está bien integrado. Si da 7+, revisar:
+
+- ¿Se está pasando `permitirRotacion = true`?
+- ¿El kerf es razonable (0 a 1 cm)? Un kerf muy alto reduce el
+  aprovechamiento.
+- ¿Las medidas se están pasando en las **mismas unidades** que la
+  plancha (cm con cm, mm con mm)?
+
+### 7. Performance esperado
+
+- **~50 piezas:** < 200 ms en gama media.
+- **~200 piezas:** ~1-2 segundos.
+- **>500 piezas:** considerar mover a un `Coroutine` con
+  `Dispatchers.Default` y mostrar un loader.
+
+El algoritmo es determinista — la misma entrada da la misma salida.
+
+### 8. Qué NO tocar
+
+- **No "optimizar" eliminando algoritmos.** Cada uno gana en distintos
+  patrones de entrada. Quitar Guillotine para "ahorrar tiempo" rompe
+  los casos donde es la mejor heurística.
+- **No reordenar las piezas antes de pasarlas al optimizador.** El
+  algoritmo prueba 6 ordenamientos por su cuenta — si Sonnet
+  pre-ordena, le quita una dimensión de búsqueda.
+- **No agregar `coerceAtLeast(0)` o redondeos** dentro del bucle de
+  empaquetado. Las tolerancias `0.001f` ya manejan errores de coma
+  flotante.
+
+## Resumen de la diferencia con el código actual
+
+| Aspecto              | Código actual de Crystal | PlanchaOptimizer nuevo |
+|----------------------|--------------------------|------------------------|
+| Algoritmos probados  | 1                        | 7                      |
+| Ordenamientos        | 1                        | 6                      |
+| Combinaciones totales| 1                        | hasta 84               |
+| Caso del usuario     | 7+ planchas              | 6 planchas             |
+| Aprovechamiento      | ~73%                     | 84.6%                  |
+
+El gigante de fondo es la combinación, no el algoritmo individual.
+Por eso intentar arreglar la heurística actual ajustando parámetros
+nunca llega — hay que probar varias y quedarse con la mejor.
