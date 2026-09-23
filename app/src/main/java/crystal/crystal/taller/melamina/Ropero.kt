@@ -19,6 +19,13 @@ data class Ropero(
     val fondoCm: Float = 60f,
     /** Espesor de la melamina del armazón y las puertas: 18 o 15 mm. */
     val espesorMm: Int = 18,
+    /**
+     * El zócalo, del suelo a la cara de arriba del piso: el piso es parte del zócalo. Con zócalo
+     * 7 y melamina 18 el piso va de 5.2 a 7 y el casillero arranca en 7. Delante (con las
+     * puertas encima) llega a medio piso, 6.1, y se sujeta en él; las puertas y los frentes tapan
+     * la otra mitad y topan en el piso. Metido, es la tabla
+     * bajo el piso, de 7 - 1.8 = 5.2.
+     */
     val zocaloCm: Float = 10f,
     /** Alto interior del maletero (el compartimento de arriba). 0 = sin maletero. */
     val maleteroCm: Float = 0f,
@@ -46,7 +53,7 @@ data class Ropero(
     val zocaloDelante: Boolean = true,
     /** Puertas interiores (dentro del armazón, cada una en su hueco) o frontales (encima del armazón, tapando medias divisiones). */
     val puertasInteriores: Boolean = false,
-    /** Lo de dentro en melamina blanca y solo lo que se ve sin abrir (puertas, frentes a la vista, zócalo delante) del color elegido. */
+    /** Lo de dentro en melamina blanca y solo lo que se ve sin abrir (puertas, frentes a la vista, laterales por su cara de fuera y el zócalo, delante o metido) del color elegido. */
     val interiorBlanco: Boolean = true,
     /** Hojas de cada puerta del maletero propio: 0 = las que tocan (1 hasta 60, 2 si es más ancho), 1 o 2. */
     val maleteroHojas: Int = 0,
@@ -55,7 +62,17 @@ data class Ropero(
     /** Cuántas hojas corredizas; 0 = las que tocan por el ancho (2 hasta 240, 3 más allá). */
     val hojasCorredizas: Int = 0,
     /** A cuánto del tope va el tubo del colgador. */
-    val tuboBajoTopeCm: Float = 6f
+    val tuboBajoTopeCm: Float = 6f,
+    // ---- Lo de producción, que se pide al archivar ----
+    /** El color de la melamina de fuera (puertas, frentes, laterales, zócalo): "Cedro", "Marbella"… */
+    val colorExterior: String = "",
+    /** Si la melamina de fuera tiene veta (el cedro sí; el blanco, el azul o el celeste no). */
+    val vetaExterior: Boolean = true,
+    /** El color de la melamina de dentro: lo corriente, blanco. */
+    val colorInterior: String = "Blanco",
+    val vetaInterior: Boolean = false,
+    /** El color del tapacanto de fuera; vacío = el mismo de la melamina de fuera. */
+    val colorTapacanto: String = ""
 ) {
     val espesorCm: Float get() = espesorMm / 10f
     val tapacantoCm: Float get() = tapacantoGrosorMm / 10f
@@ -68,11 +85,27 @@ data class Ropero(
     /** El ancho libre entre los dos laterales. */
     val anchoInteriorCm: Float get() = anchoCm - 2 * espesorCm
 
-    /** Lo que queda entre el piso y el techo. */
-    val altoInteriorCm: Float get() = altoCm - zocaloCm - 2 * espesorCm
+    /** La cara de arriba del piso, desde el suelo: el zócalo (sin zócalo, el piso en el suelo). */
+    val pisoArribaCm: Float get() = maxOf(zocaloCm, espesorCm)
 
-    /** El fondo de las piezas del armazón: el hueco menos el nordex de atrás. */
-    val fondoArmazonCm: Float get() = fondoCm - fondoNordexCm
+    /** Lo que queda bajo el piso: la tabla del zócalo metido y las patas. */
+    val bajoPisoCm: Float get() = pisoArribaCm - espesorCm
+
+    /** Lo que queda entre el piso y el techo. */
+    val altoInteriorCm: Float get() = altoCm - pisoArribaCm - espesorCm
+
+    /**
+     * Lo que las puertas se comen del fondo: las batientes encima del armazón (no las
+     * interiores, ni las corredizas, que corren por dentro) ponen su espesor delante.
+     */
+    val puertasDelanteCm: Float get() = if (puertas == TipoPuertas.BATIENTES && !puertasInteriores) espesorCm else 0f
+
+    /**
+     * El fondo de las piezas del armazón: el hueco menos el nordex de atrás y las puertas que
+     * van delante, para que el mueble entero mida el fondo apuntado (60 con fondo de 3 y
+     * batientes de 18: laterales de 57.9).
+     */
+    val fondoArmazonCm: Float get() = fondoCm - fondoNordexCm - puertasDelanteCm
 
     /** El fondo útil de entrepaños y cajones: con corredizas, las hojas corren por dentro y se comen su carril. */
     val fondoInteriorCm: Float get() = fondoArmazonCm - (if (puertas == TipoPuertas.CORREDIZAS) CARRIL_CORREDIZAS_CM else 0f)
@@ -230,6 +263,8 @@ data class Ropero(
         put("maleteroCuerpos", maleteroCuerpos); put("maleteroHojas", maleteroHojas)
         put("zocaloDelante", zocaloDelante); put("puertasInteriores", puertasInteriores); put("interiorBlanco", interiorBlanco)
         put("hojasCorredizas", hojasCorredizas); put("tuboBajoTope", tuboBajoTopeCm)
+        put("colorExterior", colorExterior); put("vetaExterior", vetaExterior)
+        put("colorInterior", colorInterior); put("vetaInterior", vetaInterior); put("colorTapacanto", colorTapacanto)
         put("cuerpos", JSONArray().apply { cuerpos.forEach { put(it.aJson()) } })
     }.toString()
 
@@ -263,7 +298,12 @@ data class Ropero(
                 interiorBlanco = o.optBoolean("interiorBlanco", true),
                 espesorFondoMm = o.optDouble("espesorFondo", 3.0).toFloat(),
                 hojasCorredizas = o.optInt("hojasCorredizas", 0),
-                tuboBajoTopeCm = o.optDouble("tuboBajoTope", 6.0).toFloat()
+                tuboBajoTopeCm = o.optDouble("tuboBajoTope", 6.0).toFloat(),
+                colorExterior = o.optString("colorExterior", ""),
+                vetaExterior = o.optBoolean("vetaExterior", true),
+                colorInterior = o.optString("colorInterior", "Blanco"),
+                vetaInterior = o.optBoolean("vetaInterior", false),
+                colorTapacanto = o.optString("colorTapacanto", "")
             )
         }.getOrNull()
     }

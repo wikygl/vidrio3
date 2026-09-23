@@ -198,6 +198,12 @@ class FichaActivity : AppCompatActivity() {
 
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Al volver de editar un producto en su calculadora, Productos muestra lo que quedó archivado.
+        if (vistaActual == "Productos") binding.btAbrir.performClick()
+    }
+
     private fun mostrarSelectorProyectos(onSeleccionados: (List<String>) -> Unit) {
         val proyectos = MapStorage.obtenerListaProyectos(this)
         if (proyectos.isEmpty()) {
@@ -487,7 +493,9 @@ class FichaActivity : AppCompatActivity() {
 
             // Ordenar: Grados primero (para rotación), luego Referencias, luego el resto
             var tieneDisenoPaquete = false
-            val sortedListas = listas?.sortedWith(compareBy {
+            // Los muebles de melamina (ropero, drywall) ordenan sus materiales como su calculadora.
+            val esMelamina = listas?.any { it.first == crystal.crystal.taller.melamina.RoperoActivity.CLAVE_DISENO || it.first == crystal.crystal.taller.drywall.DrywallActivity.CLAVE_DISENO } == true
+            val sortedListas = listas?.sortedWith(compareBy<Pair<String, List<Pair<String, String>>>> {
                 when {
                     it.first == "Grados" -> 0
                     it.first == "Referencias" -> 1
@@ -503,7 +511,7 @@ class FichaActivity : AppCompatActivity() {
                     it.first == "Pedido" -> 7
                     else -> 2 // Perfiles de aluminio y demás materiales
                 }
-            })
+            }.thenBy { if (esMelamina) ordenDeMaterial(it.first) else 0 })
 
             sortedListas?.forEach { (nombreLista, datos) ->
                 var contieneLetra = false // Bandera para saber si la lista contiene letras después del igual
@@ -761,6 +769,32 @@ class FichaActivity : AppCompatActivity() {
                 holder.tvOrdenModulos.visibility = View.GONE
                 holder.tvOrdenModulos.setOnClickListener(null)
             }
+
+            // Tocar el producto lo vuelve a abrir en su calculadora para editarlo; al archivar,
+            // reemplaza a este mismo número. Se pregunta antes: al pasar la lista se toca sin querer.
+            val destino = ReaperturaProducto.destinoDe(ventana)
+            if (destino != null && listas != null) {
+                holder.view.setOnClickListener {
+                    androidx.appcompat.app.AlertDialog.Builder(context)
+                        .setTitle("Editar $numeroProd")
+                        .setMessage("Se abre en ${destino.nombre}. Al archivar, reemplaza a $numeroProd en vez de crear uno nuevo.")
+                        .setPositiveButton("Abrir") { _, _ -> ReaperturaProducto.abrir(context, ventana, listas) }
+                        .setNegativeButton("Cancelar", null)
+                        .apply {
+                            // Un ropero archivado también se ve como plano técnico, sin abrir la calculadora.
+                            val ropero = listas.firstOrNull { it.first == crystal.crystal.taller.melamina.RoperoActivity.CLAVE_DISENO }
+                                ?.second?.firstOrNull()?.first?.let { crystal.crystal.taller.melamina.Ropero.desdeJson(it.trim()) }
+                            if (ropero != null) setNeutralButton("Plano técnico") { _, _ ->
+                                val cliente = listas.firstOrNull { it.first == "Cliente" }?.second?.firstOrNull()?.first.orEmpty()
+                                crystal.crystal.taller.melamina.PlanoRoperoActivity.abrir(context, ropero, numeroProd, proyectoActivo, cliente)
+                            }
+                        }
+                        .show()
+                }
+            } else {
+                holder.view.setOnClickListener(null)
+                holder.view.isClickable = false
+            }
         }
 
         // Diálogo con el orden de colocación de módulos por tramo (una imagen por tramo, etiquetada).
@@ -789,6 +823,25 @@ class FichaActivity : AppCompatActivity() {
                 .setView(android.widget.ScrollView(context).apply { addView(box) })
                 .setPositiveButton("Cerrar", null)
                 .show()
+        }
+
+        /**
+         * El orden de los materiales dentro de un producto: el de su calculadora (melamina blanca,
+         * de color, MDF o nordex, tapacantos, tubo, riel, accesorios). Sin esto salen en el orden
+         * en que cada lista se creó en el proyecto, y una lista con nombre nuevo cae al final. Lo
+         * que no se reconoce (perfiles de aluminio…) conserva su orden.
+         */
+        private fun ordenDeMaterial(nombre: String): Int {
+            val n = nombre.lowercase()
+            return when {
+                n.startsWith("melamina") -> if (n.contains("color")) 1 else 0
+                n.contains("nordex") || n.startsWith("mdf") -> 2
+                n.startsWith("tapacanto") -> when { n.contains("puertas") -> 5; n.contains("color") -> 4; else -> 3 }
+                n.startsWith("tubo") -> 6
+                n.startsWith("riel") -> 7
+                n.startsWith("accesorios") -> 8
+                else -> 0
+            }
         }
 
         // Extrae un campo de los metadatos de producción "-MAT<alu:..;vid:..;...>" del paquete.

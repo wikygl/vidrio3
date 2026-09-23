@@ -67,6 +67,8 @@ class DrywallActivity : AppCompatActivity() {
 
         // Lo último que se armó, para seguir donde se quedó.
         Drywall.desdeJson(getSharedPreferences(PREFS, MODE_PRIVATE).getString(CLAVE_ULTIMO, null))?.let { drywall = it }
+        // Abierto desde Productos para editar uno archivado: ese, tal como se guardó.
+        crystal.crystal.casilla.EdicionProducto.disenoDe(this)?.let { Drywall.desdeJson(it) }?.let { drywall = it }
         volcarEnPantalla()
 
         // Pre-carga desde presupuesto (en metros; si llega en cm, se pasa).

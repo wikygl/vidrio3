@@ -595,7 +595,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val etFondoCm = campo("Fondo (cm)", fmt(ropero.fondoCm))
         val etCuerpos = campo("Cuerpos", ropero.cuerpos.size.toString(), entero = true)
         // ---- Zócalo ----
-        val etZocalo = campo("Zócalo (cm)", fmt(ropero.zocaloCm))
+        val etZocalo = campo("Zócalo, con el piso (cm)", fmt(ropero.zocaloCm))
         val spZocalo = desplegable(listOf("Zócalo delante (plano de puertas)", "Zócalo bajo el piso"), if (ropero.zocaloDelante) 0 else 1)
         // ---- Maletero ----
         val etMaletero = campo("Maletero (cm, 0 = sin)", fmt(ropero.maleteroCm))

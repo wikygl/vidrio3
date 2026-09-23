@@ -6,12 +6,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Dónde cae cada cosa dentro del ropero de prueba (240 x 240 x 60, zócalo 10, dos cuerpos), y
+ * Dónde cae cada cosa dentro del ropero de prueba (240 x 240 x 60, zócalo 11.8 hasta la cara de arriba del piso, dos cuerpos), y
  * lo fino de la pantalla de diseño: el alto de cada cajón, la altura de cada repisa, las hojas.
  */
 class RoperoGeometriaTest {
 
-    private val base = Ropero(anchoCm = 240f, altoCm = 240f, fondoCm = 60f, zocaloCm = 10f)
+    private val base = Ropero(anchoCm = 240f, altoCm = 240f, fondoCm = 60f, zocaloCm = 11.8f)
         .conCuerposIguales(2)
         .conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3))
         .conCuerpo(1, Cuerpo(tipo = TipoCuerpo.ENTREPANOS, entrepanos = 2))
@@ -20,7 +20,7 @@ class RoperoGeometriaTest {
     fun los_cajones_se_apilan_desde_el_piso_con_su_alto() {
         val cajones = RoperoGeometria.elementos(base).filter { it.tipo == TipoElemento.CAJON }
         assertEquals(3, cajones.size)
-        assertEquals(11.8f, cajones[0].y0, 0.01f)     // piso: zócalo 10 + 1.8
+        assertEquals(11.8f, cajones[0].y0, 0.01f)     // piso: el zócalo llega a su cara de arriba
         assertEquals(31.8f, cajones[0].y1, 0.01f)
         assertEquals(51.8f, cajones[1].y1, 0.01f)
         // Un cajón con otro alto empuja a los de arriba.
@@ -76,16 +76,23 @@ class RoperoGeometriaTest {
         assertEquals(200f - 1.8f, RoperoGeometria.techoY(escalera, 1), 0.01f)
         val cuerpos = RoperoGeometria.elementos(escalera).filter { it.tipo == TipoElemento.CUERPO }
         assertEquals(198.2f, cuerpos[1].y1, 0.01f)
-        // Los materiales: cada lateral a su alto, la división al mayor, el techo por cuerpos.
+        // Los materiales: cada lateral a su alto; con 240 de ancho la división es pasante (el piso
+        // pasaría de 180), del alto mayor, y cada techo llega a su cara.
         val m = RoperoCalculo.calcular(escalera)
         val laterales = m.piezas.filter { it.nombre == "Lateral" }.map { it.altoMm }.sorted()
         assertEquals(listOf(2000, 2400), laterales)
-        val division = m.piezas.first { it.nombre == "División" }
-        assertEquals(2400 - 100 - 36, division.altoMm)
-        val techos = m.piezas.filter { it.nombre == "Techo" }
-        assertEquals(2, techos.sumOf { it.cantidad })
-        // Cada trozo: 117.3 de cuerpo + media división = 118.2; los dos suman el ancho interior.
-        assertEquals(236.4f, RoperoCalculo.tramosDeTechoPorCuerpo(escalera).sum(), 0.05f)
+        assertEquals(2400, m.piezas.first { it.nombre == "División pasante" }.altoMm)
+        assertEquals(listOf(117.3f, 117.3f), RoperoGeometria.tramosDeTecho(escalera).map { kotlin.math.round((it.x1 - it.x0) * 10f) / 10f })
+        // Uno de 170 (sin pasante): la división llega al techo más alto, el techo alto la tapa
+        // (82.3 + 1.8 = 84.1) y el bajo llega a su cara (82.3); los dos suman el ancho interior.
+        val angosto = base.conHueco(170f, 240f, 60f).let { it.conCuerpo(1, it.cuerpos[1].copy(altoCm = 200f)) }
+        val mA = RoperoCalculo.calcular(angosto)
+        assertEquals(2400 - 118 - 18, mA.piezas.first { it.nombre == "División" }.altoMm)
+        assertEquals(2, mA.piezas.filter { it.nombre == "Techo" }.sumOf { it.cantidad })
+        val trozos = RoperoGeometria.tramosDeTecho(angosto).map { it.x1 - it.x0 }
+        assertEquals(84.1f, trozos[0], 0.05f)
+        assertEquals(82.3f, trozos[1], 0.05f)
+        assertEquals(166.4f, trozos.sum(), 0.05f)
         // Un alto menor de 30 no cuenta.
         assertTrue(!base.conCuerpo(1, base.cuerpos[1].copy(altoCm = 10f)).altosDesiguales)
     }
@@ -247,7 +254,8 @@ class RoperoGeometriaTest {
         val sin = base.conCuerpo(1, base.cuerpos[1].copy(puertasPropias = TipoPuertas.SIN))
         assertEquals(2, RoperoPuertas.de(sin).hojas.size)
         val m = RoperoCalculo.calcular(r)
-        assertTrue(m.piezas.filter { it.nombre == "Entrepaño" }.any { it.altoMm == 517 })
+        // 57.9 del armazón (las batientes del ropero van delante) - 8 del carril - 0.045 de canto.
+        assertTrue(m.piezas.filter { it.nombre == "Entrepaño" }.any { it.altoMm == 499 })
     }
 
     @Test
@@ -458,10 +466,10 @@ class RoperoGeometriaTest {
         assertEquals(80f, zona80.y1 - zona80.y0, 0.01f)
         assertEquals(zona80.y1, els.filter { it.tipo == TipoElemento.CAJON }.maxOf { it.y1 }, 0.01f)
         assertEquals(zona80.y1, els.first { it.tipo == TipoElemento.TAPA_CAJONES }.y0, 0.01f)
-        // En los materiales: frentes de 26.67 - 0.4 (- 0.09 de canto fino) y cajas de 18 - 4 (- 0.05).
+        // En los materiales: frentes de 26.67 - 0.4 (- 0.09 de canto fino) y cajas de las 18 escritas (- 0.05).
         val m80 = RoperoCalculo.calcular(ochenta)
         assertEquals(262, m80.piezas.first { it.nombre == "Frente cajón" && it.cantidad == 3 }.altoMm)
-        assertEquals(140, m80.piezas.first { it.nombre == "Lateral cajón" && it.cantidad == 6 }.altoMm)
+        assertEquals(180, m80.piezas.first { it.nombre == "Lateral cajón" && it.cantidad == 6 }.altoMm)
         // Cajas de 17, 15 y 16.2 en un espacio fijo de 48.2: no sobra nada, los frentes son las cajas.
         val justo = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3, altosCajonesCm = listOf(17f, 15f, 16.2f), altoCajonesFijoCm = 48.2f))
         assertEquals(listOf(17f, 15f, 16.2f), RoperoGeometria.altosDeCajones(justo, justo.cuerpos[0], RoperoGeometria.huecoDeCuerpo(justo, 0)))

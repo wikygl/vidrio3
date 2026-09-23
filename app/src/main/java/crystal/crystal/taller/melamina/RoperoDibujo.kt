@@ -140,20 +140,17 @@ class RoperoDibujo(private val dp: Float) {
             canvas.drawRect(x(izq - e), y(alto), x(der + e), y(0f), pInterior)
         }
         // Con el zócalo delante, bajo el piso no hay nada por dentro; metido, es un tablero bajo el piso.
-        if (!r.zocaloDelante && r.zocaloCm > 0.5f) canvas.drawRect(x(e), y(r.zocaloCm), x(r.anchoCm - e), y(0f), pTablero)
-        tablero(canvas, r, e, r.anchoCm - e, r.zocaloCm, r.zocaloCm + e)
-        cuerposX.forEachIndexed { i, (izq, der) ->
-            val alto = r.altoDeCuerpo(i)
-            // El techo de este cuerpo: hasta la mitad de cada división, y hasta el lateral en las puntas.
-            val x0 = if (i == 0) e else izq - e / 2f
-            val x1 = if (i == n - 1) r.anchoCm - e else der + e / 2f
-            tablero(canvas, r, x0, x1, alto - e, alto)
-        }
+        if (!r.zocaloDelante && r.bajoPisoCm > 0.5f) canvas.drawRect(x(e), y(r.bajoPisoCm), x(r.anchoCm - e), y(0f), pTablero)
+        // El piso es parte del zócalo: su cara de arriba está a la altura del zócalo.
+        tablero(canvas, r, e, r.anchoCm - e, r.bajoPisoCm, r.pisoArribaCm)
+        // El techo por trozos, los mismos que se cortan (partido en las pasantes y donde cambia el alto).
+        RoperoGeometria.tramosDeTecho(r).forEach { t -> tablero(canvas, r, t.x0, t.x1, t.alto - e, t.alto) }
         tablero(canvas, r, 0f, e, 0f, r.altoDeCuerpo(0))
         tablero(canvas, r, r.anchoCm - e, r.anchoCm, 0f, r.altoDeCuerpo(n - 1))
 
         val pisoY = RoperoGeometria.pisoY(r)
         val elementos = RoperoGeometria.elementos(r)
+        val pasantes = RoperoGeometria.divisionesPasantes(r).toSet()
         cuerposX.forEachIndexed { i, (izqC, derC) ->
             val techoY = RoperoGeometria.techoY(r, i)
             // Lo de dentro se queda dentro del cuerpo: los ganchos no asoman por las divisiones.
@@ -166,7 +163,7 @@ class RoperoDibujo(private val dp: Float) {
             }
             // La división sube hasta el techo más alto de los dos cuerpos que separa; con el
             // maletero propio, solo hasta su repisa.
-            if (i < n - 1) {
+            if (i < n - 1 && i !in pasantes) {
                 val hasta = if (r.maleteroPropio) RoperoGeometria.topeBajo(r, i) else maxOf(techoY, RoperoGeometria.techoY(r, i + 1))
                 tablero(canvas, r, derC, derC + e, pisoY, hasta)
             }
@@ -177,6 +174,11 @@ class RoperoDibujo(private val dp: Float) {
             tablero(canvas, r, e, r.anchoCm - e, tope, tope + e)
             RoperoGeometria.maleterosX(r).dropLast(1).forEach { (_, der) -> tablero(canvas, r, der, der + e, tope + e, RoperoGeometria.techoY(r)) }
         }
+        // Las pasantes, del suelo arriba como los laterales: por encima de piso, techo y maletero.
+        pasantes.forEach { d ->
+            val derC = cuerposX[d].second
+            tablero(canvas, r, derC, derC + e, 0f, maxOf(r.altoDeCuerpo(d), r.altoDeCuerpo(d + 1)))
+        }
         if (mostrarPuertas) dibujarPuertas(canvas, r)
         if (conRotulos) {
             // El rótulo de cada cuerpo va en el zócalo, que ahí no tapa nada; solo si cabe.
@@ -185,7 +187,7 @@ class RoperoDibujo(private val dp: Float) {
             cuerposX.forEachIndexed { i, (izq, der) ->
                 val c = r.cuerpos[i]
                 if (p.measureText(c.tipo.etiqueta) < (c.anchoCm - 4f) * escala) {
-                    canvas.drawText(c.tipo.etiqueta, x((izq + der) / 2f), y(r.zocaloCm / 2f) + 4f * dp, p)
+                    canvas.drawText(c.tipo.etiqueta, x((izq + der) / 2f), y(r.bajoPisoCm / 2f) + 4f * dp, p)
                 }
             }
         }
@@ -249,10 +251,10 @@ class RoperoDibujo(private val dp: Float) {
 
     private fun dibujarPuertas(canvas: Canvas, r: Ropero) {
         val e = r.espesorCm
-        // El zócalo delante, en el plano de las puertas y de su color: de medio lateral a medio
-        // lateral, con su canto grueso arriba y la gruña hasta las puertas.
+        // El zócalo delante, en el plano de las puertas y de su color: de punta a punta, tapando
+        // los laterales, con su canto grueso arriba y la gruña hasta las puertas.
         if (r.zocaloCm > 0.5f && r.zocaloDelante) {
-            val rect = RectF(x(e / 2f), y(RoperoCalculo.altoZocalo(r) + r.tapacantoPuertasCm), x(r.anchoCm - e / 2f), y(0f))
+            val rect = RectF(x(0f), y(RoperoCalculo.altoZocalo(r) + r.tapacantoPuertasCm), x(r.anchoCm), y(0f))
             canvas.drawRect(rect, pPuerta)
             canvas.drawRect(rect, pLinea)
         }

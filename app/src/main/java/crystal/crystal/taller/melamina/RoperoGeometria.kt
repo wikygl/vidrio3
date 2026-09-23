@@ -50,8 +50,8 @@ object RoperoGeometria {
         return r.cuerpos.map { c -> val izq = cx; cx += c.anchoCm + r.espesorCm; izq to izq + c.anchoCm }
     }
 
-    /** La cara de arriba del piso. */
-    fun pisoY(r: Ropero): Float = r.zocaloCm + r.espesorCm
+    /** La cara de arriba del piso: el zócalo, que llega hasta ahí (el piso es parte de él). */
+    fun pisoY(r: Ropero): Float = r.pisoArribaCm
 
     /** La cara de abajo del techo del cuerpo [i] (cada lado puede tener su alto). */
     fun techoY(r: Ropero, i: Int = 0): Float = r.altoDeCuerpo(i) - r.espesorCm
@@ -72,9 +72,112 @@ object RoperoGeometria {
     fun maleterosX(r: Ropero): List<Pair<Float, Float>> {
         if (!r.maleteroPropio) return cuerposX(r)
         val e = r.espesorCm
+        // Cada división pasante sube por el maletero: se queda con la división del maletero que
+        // tenga a menos de 2 cm (que se corre a ella), y si no hay ninguna, hace una más.
+        val caras = maleterosIgualesX(r).dropLast(1).map { it.second }.toMutableList()
+        val xs = cuerposX(r)
+        divisionesPasantes(r).forEach { d ->
+            val p = xs[d].second
+            val k = caras.indices.minByOrNull { kotlin.math.abs(caras[it] - p) }
+            if (k != null && kotlin.math.abs(caras[k] - p) <= COINCIDE_MALETERO_CM) caras[k] = p else caras.add(p)
+        }
+        caras.sort()
+        var izq = e
+        return caras.map { c -> val t = izq to c; izq = c + e; t } + (izq to r.anchoCm - e)
+    }
+
+    /** Los compartimentos del maletero propio a partes iguales, sin contar las divisiones pasantes. */
+    private fun maleterosIgualesX(r: Ropero): List<Pair<Float, Float>> {
+        val e = r.espesorCm
         val m = r.maleteroCuerpos
         val ancho = (r.anchoInteriorCm - (m - 1) * e) / m
         return (0 until m).map { k -> val izq = e + k * (ancho + e); izq to izq + ancho }
+    }
+
+    /** A cuánto de una división pasante una división del maletero se da por la misma. */
+    private const val COINCIDE_MALETERO_CM = 2f
+
+    // ==================== El armazón partido ====================
+
+    /**
+     * El largo máximo de un trozo de lo que va a lo ancho del mueble (piso, techo, repisa del
+     * maletero, zócalo): el ancho de la plancha chica (183) menos 3 cm para escuadrar y la sierra.
+     * Así cada trozo entra en la plancha tanto a lo largo como atravesado, con la veta a lo alto
+     * o a lo ancho.
+     */
+    const val TRAMO_MAXIMO_CM = 180f
+
+    /**
+     * Las divisiones (la d separa los cuerpos d y d+1) que van del suelo arriba, como un
+     * lateral, porque el piso, el techo, la repisa del maletero o el zócalo pasarían de
+     * [TRAMO_MAXIMO_CM] y hay que partirlos. Nunca se juntan dos piezas a tope: cada trozo llega
+     * a la cara de la división pasante y se atornilla a ella.
+     *
+     * Se prueban todas las combinaciones (hay 7 divisiones como mucho) y gana: la de menos
+     * pasantes; después la de trozos más parejos (la pasante lo más centrada posible, que además
+     * reparte el peso que el piso solo no aguanta); con maletero propio, la que caiga en sus
+     * divisiones (así no le añade otra). Cada trozo se mide de punta a punta como el zócalo de
+     * delante (con el lateral y media pasante), que es la pieza más larga de las que se parten.
+     */
+    fun divisionesPasantes(r: Ropero): List<Int> {
+        val n = r.cuerpos.size
+        if (r.anchoCm <= TRAMO_MAXIMO_CM + 0.01f || n < 2) return emptyList()
+        val e = r.espesorCm
+        val xs = cuerposX(r)
+        val centros = (0 until n - 1).map { d -> xs[d].second + e / 2f }
+        val centrosMaletero = if (r.maleteroPropio) maleterosIgualesX(r).dropLast(1).map { it.second + e / 2f } else emptyList()
+        data class Opcion(val divisiones: List<Int>, val mayor: Float, val dispar: Float, val enMaletero: Int)
+        val opciones = (1 until (1 shl (n - 1))).map { mask ->
+            val ds = (0 until n - 1).filter { mask and (1 shl it) != 0 }
+            val bordes = listOf(0f) + ds.map { centros[it] } + r.anchoCm
+            val trozos = bordes.zipWithNext { a, b -> b - a }
+            Opcion(ds, trozos.max(), trozos.max() - trozos.min(),
+                ds.count { d -> centrosMaletero.any { kotlin.math.abs(it - centros[d]) <= COINCIDE_MALETERO_CM } })
+        }
+        val caben = opciones.filter { it.mayor <= TRAMO_MAXIMO_CM + 0.01f }
+        // Si un cuerpo solo ya pasa del largo, no hay reparto que alcance: el que deje el trozo mayor más corto.
+        val elegida = if (caben.isNotEmpty())
+            caben.minWithOrNull(compareBy<Opcion> { it.divisiones.size }.thenBy { kotlin.math.round(it.mayor) }.thenByDescending { it.enMaletero }.thenBy { it.dispar })
+        else opciones.minWithOrNull(compareBy<Opcion> { kotlin.math.round(it.mayor) }.thenBy { it.divisiones.size })
+        return elegida?.divisiones.orEmpty()
+    }
+
+    /** Los trozos del piso (y de la repisa del maletero propio), de cara a cara: de lateral a división pasante. */
+    fun tramosDePiso(r: Ropero): List<Pair<Float, Float>> {
+        val e = r.espesorCm
+        val xs = cuerposX(r)
+        var desde = e
+        val salen = divisionesPasantes(r).map { d -> val t = desde to xs[d].second; desde = xs[d].second + e; t }
+        return salen + (desde to r.anchoCm - e)
+    }
+
+    /** Un trozo de techo: de [x0] a [x1] y con la cara de arriba a [alto]. */
+    data class TramoTecho(val x0: Float, val x1: Float, val alto: Float)
+
+    /**
+     * Los trozos del techo. Se parte en las divisiones pasantes (cada lado llega a su cara) y,
+     * bajo una escalera, donde cambia el alto: la división sube hasta el techo más alto, el techo
+     * bajo llega a su cara y el alto la tapa por encima. Los cuerpos seguidos del mismo alto
+     * llevan un solo techo.
+     */
+    fun tramosDeTecho(r: Ropero): List<TramoTecho> {
+        val e = r.espesorCm
+        val xs = cuerposX(r)
+        val pasantes = divisionesPasantes(r).toSet()
+        val salen = mutableListOf<TramoTecho>()
+        var desde = e
+        for (d in 0 until r.cuerpos.size - 1) {
+            val a = r.altoDeCuerpo(d); val b = r.altoDeCuerpo(d + 1)
+            val cara = xs[d].second
+            when {
+                d in pasantes -> { salen.add(TramoTecho(desde, cara, a)); desde = cara + e }
+                kotlin.math.abs(a - b) <= 0.05f -> Unit
+                a < b -> { salen.add(TramoTecho(desde, cara, a)); desde = cara }
+                else -> { salen.add(TramoTecho(desde, cara + e, a)); desde = cara + e }
+            }
+        }
+        salen.add(TramoTecho(desde, r.anchoCm - e, r.altoDeCuerpo(r.cuerpos.size - 1)))
+        return salen
     }
 
     // ==================== Lo de dentro de un hueco ====================

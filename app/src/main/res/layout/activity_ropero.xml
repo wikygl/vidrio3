@@ -120,6 +120,32 @@
                         android:textColor="@color/blanco"
                         android:textSize="10sp"
                         tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                    <Button
+                        android:id="@+id/btPlano"
+                        android:layout_width="0dp"
+                        android:layout_height="30dp"
+                        android:layout_marginStart="3dp"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/azul"
+                        android:padding="0dp"
+                        android:text="Plano"
+                        android:textAllCaps="false"
+                        android:textColor="@color/blanco"
+                        android:textSize="10sp"
+                        tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+                    <Button
+                        android:id="@+id/btPiezas"
+                        android:layout_width="0dp"
+                        android:layout_height="30dp"
+                        android:layout_marginStart="3dp"
+                        android:layout_weight="1"
+                        android:backgroundTint="@color/verde"
+                        android:padding="0dp"
+                        android:text="Piezas"
+                        android:textAllCaps="false"
+                        android:textColor="@color/blanco"
+                        android:textSize="10sp"
+                        tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
                 </LinearLayout>
 
                 <TextView
@@ -524,10 +550,36 @@
                                             android:layout_width="match_parent"
                                             android:layout_height="wrap_content"
                                             android:layout_weight="1"
-                                            android:text="Nordex 3 mm" />
+                                            android:text="MDF o nordex 3 mm" />
 
                                         <TextView
                                             android:id="@+id/txNordex"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- MDF de 5.5, si el fondo del mueble va de 5.5 (los cajones siguen en 3) -->
+                                    <LinearLayout
+                                        android:id="@+id/lyMdf"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/blanco"
+                                        android:orientation="horizontal"
+                                        android:visibility="gone">
+
+                                        <TextView
+                                            android:id="@+id/tvMdf"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="MDF 5.5 mm" />
+
+                                        <TextView
+                                            android:id="@+id/txMdf"
                                             android:layout_width="match_parent"
                                             android:layout_height="wrap_content"
                                             android:layout_weight="0.72"
@@ -579,6 +631,32 @@
 
                                         <TextView
                                             android:id="@+id/txTapacantoPuertas"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Tapacanto fino de color (los cantos de los laterales, que se ven por fuera) -->
+                                    <LinearLayout
+                                        android:id="@+id/lyTapacantoColor"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/blanco"
+                                        android:orientation="horizontal"
+                                        android:visibility="gone">
+
+                                        <TextView
+                                            android:id="@+id/tvTapacantoColor"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Tapacanto 22 x 0.45 mm de color" />
+
+                                        <TextView
+                                            android:id="@+id/txTapacantoColor"
                                             android:layout_width="match_parent"
                                             android:layout_height="wrap_content"
                                             android:layout_weight="0.72"

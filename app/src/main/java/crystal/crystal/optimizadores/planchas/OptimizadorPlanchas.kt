@@ -401,7 +401,7 @@ object OptimizadorPlanchas {
                 iter++
                 val base = mejorSol ?: break
                 val candidato = rellenarPlanchasBajas(
-                    base, stock, material, umbral, true, objetivo, sep, margen, rellenoDeadline
+                    base, piezas, stock, material, umbral, true, objetivo, sep, margen, rellenoDeadline
                 ) ?: break
                 if (candidato.score < base.score && esResultadoCortable(candidato.bins)) {
                     Log.d("OptimizadorPlanchas",
@@ -461,6 +461,7 @@ object OptimizadorPlanchas {
 
     private fun rellenarPlanchasBajas(
         base: Solucion,
+        piezas: List<PiezaExp>,
         stock: List<PlanchaStock>,
         material: String,
         umbral: Float,
@@ -505,12 +506,15 @@ object OptimizadorPlanchas {
                 e.copy(cantidad = (e.cantidad - consumidas[i]).coerceAtLeast(0))
             }
 
+            // Cada pieza vuelve tal como entró, con su permiso de rotación: antes se rearmaba con la
+            // rotación permitida a la fuerza y en este paso el bloqueo de rotación no servía.
+            val porId = piezas.associateBy { it.id }
             val piezasARecolocar = mutableListOf<PiezaExp>()
             for (i in conservarN until binsOriginales.size) {
                 for (c in binsOriginales[i].cortes) {
                     val anchoOrig = if (c.rotada) c.altoMm else c.anchoMm
                     val altoOrig  = if (c.rotada) c.anchoMm else c.altoMm
-                    piezasARecolocar.add(PiezaExp(
+                    piezasARecolocar.add(porId[c.piezaId] ?: PiezaExp(
                         c.piezaId, c.descripcion, anchoOrig, altoOrig, c.material, true
                     ))
                 }

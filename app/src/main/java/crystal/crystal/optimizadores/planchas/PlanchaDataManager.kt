@@ -43,12 +43,15 @@ class PlanchaDataManager(context: Context) {
     fun recuperarEspesorDisco(): Float =
         prefs.getFloat("espesor_disco_cm", 0f)
 
-    fun guardarRestringirRotacion(valor: Boolean) {
-        prefs.edit().putBoolean("restringir_rotacion", valor).apply()
+    fun guardarVeta(veta: VetaPlanchas) {
+        prefs.edit().putString("veta_planchas", veta.name).apply()
     }
 
-    fun recuperarRestringirRotacion(): Boolean =
-        prefs.getBoolean("restringir_rotacion", false)
+    /** La veta elegida; quien tenía marcada la vieja casilla "restringir rotación" pasa a veta a lo ancho (sin girar). */
+    fun recuperarVeta(): VetaPlanchas {
+        prefs.getString("veta_planchas", null)?.let { return VetaPlanchas.desde(it) }
+        return if (prefs.getBoolean("restringir_rotacion", false)) VetaPlanchas.ANCHO else VetaPlanchas.LIBRE
+    }
 
     fun guardarResultado(resultado: ResultadoOptimizacionPlanchas) {
         prefs.edit().putString("resultado_planchas", gson.toJson(resultado)).apply()

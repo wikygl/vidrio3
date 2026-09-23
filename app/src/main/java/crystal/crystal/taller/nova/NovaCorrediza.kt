@@ -368,6 +368,8 @@ class NovaCorrediza : AppCompatActivity() {
         configurarArrastreDiseno()
         // Cola de medidas que viene de MedidaActivity: mostrar el gráfico original.
         inicializarDesdeMedidas()
+        // Abierta desde Productos para editar una ventana archivada: su diseño, tal como se guardó.
+        crystal.crystal.casilla.EdicionProducto.disenoDe(this)?.let { cargarDesdePaqueteDiseno(it) }
     }
 
     // ==================== TOGGLE MODO ====================

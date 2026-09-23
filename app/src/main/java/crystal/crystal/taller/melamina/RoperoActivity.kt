@@ -106,6 +106,13 @@ class RoperoActivity : AppCompatActivity() {
      * su plantilla): se toma tal cual y se calcula, en vez de quedarse con el ancho y el alto.
      */
     private fun cargarRoperoDeLaMedida() {
+        // Abierto desde Productos para editar un ropero archivado: viene entero, como se guardó.
+        crystal.crystal.casilla.EdicionProducto.disenoDe(this)?.let { Ropero.desdeJson(it) }?.let { archivado ->
+            ropero = archivado
+            volcarEnPantalla()
+            calcular()
+            return
+        }
         if (!ColaCalculadoras.desdeMedidas(this)) return
         val json = ColaCalculadoras.cola(this).getOrNull(ColaCalculadoras.indice(this))?.disenoRopero
         val deLaMedida = Ropero.desdeJson(json) ?: return
@@ -203,6 +210,19 @@ class RoperoActivity : AppCompatActivity() {
         binding.btVerInterior.setOnClickListener { binding.vistaRopero.mostrarPuertas = false; binding.vistaRopero.en3d = false }
         binding.btVerPuertas.setOnClickListener { binding.vistaRopero.mostrarPuertas = true; binding.vistaRopero.en3d = false }
         binding.btVer3d.setOnClickListener { binding.vistaRopero.mostrarPuertas = false; binding.vistaRopero.en3d = true }
+        // Producción: corte con código y marcas y agujeros de cada tablero, con buscador y CSV.
+        binding.btPiezas.setOnClickListener {
+            ProduccionRoperoActivity.abrir(this, ropero, intent.getStringExtra(crystal.crystal.casilla.EdicionProducto.EXTRA_ID).orEmpty())
+        }
+        // El plano técnico: conjunto con cotas, despiece con cantos y veta, y lista de corte; a PDF.
+        binding.btPlano.setOnClickListener {
+            PlanoRoperoActivity.abrir(
+                this, ropero,
+                codigo = intent.getStringExtra(crystal.crystal.casilla.EdicionProducto.EXTRA_ID).orEmpty(),
+                proyecto = ProyectoManager.getProyectoActivo().orEmpty(),
+                cliente = intent.extras?.getString("rcliente").orEmpty()
+            )
+        }
         // El dibujo sigue a las casillas: al cambiar el hueco, los cuerpos, el zócalo, el maletero
         // o las puertas se rehace solo, sin esperar a Calcular (que es el que saca los materiales).
         val alEscribir = object : android.text.TextWatcher {
@@ -315,11 +335,16 @@ class RoperoActivity : AppCompatActivity() {
         binding.txMelamina.text = m.lineasDePiezas(melamina)
         binding.tvMelaminaColor.text = melColor.etiqueta
         ponerFila(binding.lyMelaminaColor, binding.txMelaminaColor, if (melColor == melamina) "" else m.lineasDePiezas(melColor))
-        val fondoMat = if (ropero.espesorFondoMm >= 5f) MaterialPlancha.MDF_55 else MaterialPlancha.NORDEX_3
-        binding.tvNordex.text = fondoMat.etiqueta
-        ponerFila(binding.lyNordex, binding.txNordex, m.lineasDePiezas(fondoMat))
+        // El MDF o nordex de 3: el fondo del mueble (si es de 3) y los fondos de los cajones, juntos.
+        binding.tvNordex.text = MaterialPlancha.NORDEX_3.etiqueta
+        ponerFila(binding.lyNordex, binding.txNordex, m.lineasDePiezas(MaterialPlancha.NORDEX_3))
+        // Si el fondo del mueble va de 5.5, en su fila.
+        binding.tvMdf.text = MaterialPlancha.MDF_55.etiqueta
+        ponerFila(binding.lyMdf, binding.txMdf, m.lineasDePiezas(MaterialPlancha.MDF_55))
         binding.tvTapacanto.text = RoperoCalculo.nombreTapacanto(ropero)
         binding.txTapacanto.text = m.lineasDeTapacanto()
+        binding.tvTapacantoColor.text = RoperoCalculo.nombreTapacantoColor(ropero)
+        ponerFila(binding.lyTapacantoColor, binding.txTapacantoColor, m.lineasDeTapacantoColor())
         binding.tvTapacantoPuertas.text = RoperoCalculo.nombreTapacantoPuertas(ropero)
         ponerFila(binding.lyTapacantoPuertas, binding.txTapacantoPuertas, m.lineasDeTapacantoPuertas())
         ponerFila(binding.lyTubo, binding.txTubo, m.lineasConLargo("Tubo colgador"))
@@ -397,7 +422,50 @@ class RoperoActivity : AppCompatActivity() {
             devolverResultadoMasivo()
             return
         }
-        archivarMapas()
+        // Antes de archivar, lo que necesita la producción: los colores y si llevan veta.
+        pedirColores { archivarMapas(); despuesDeArchivar() }
+    }
+
+    /**
+     * Los colores del ropero para la hoja de corte: la melamina de fuera y la de dentro, si cada
+     * una tiene veta (el cedro sí; el blanco, el azul o el celeste no), y el tapacanto de fuera,
+     * que si no se escribe es del color de la melamina de fuera.
+     */
+    private fun pedirColores(alContinuar: () -> Unit) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        fun campo(pista: String, valor: String) = EditText(this).apply { hint = pista; setText(valor); setSingleLine() }
+        fun marca(t: String, v: Boolean) = android.widget.CheckBox(this).apply { text = t; isChecked = v }
+        val etFuera = campo("Color de la melamina de fuera (ej: Cedro)", ropero.colorExterior)
+        val cbVetaFuera = marca("La de fuera tiene veta", ropero.vetaExterior)
+        val etCanto = campo("Color del tapacanto de fuera (vacío = el mismo)", ropero.colorTapacanto)
+        val etDentro = campo("Color de la melamina de dentro", ropero.colorInterior)
+        val cbVetaDentro = marca("La de dentro tiene veta", ropero.vetaInterior)
+        val caja = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, 0)
+            listOf(etFuera, cbVetaFuera, etCanto, etDentro, cbVetaDentro).forEach { addView(it) }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Colores para producción")
+            .setView(caja)
+            .setPositiveButton("Guardar y archivar") { _, _ ->
+                ropero = ropero.copy(
+                    colorExterior = etFuera.text.toString().trim(),
+                    vetaExterior = cbVetaFuera.isChecked,
+                    colorTapacanto = etCanto.text.toString().trim(),
+                    colorInterior = etDentro.text.toString().trim().ifBlank { "Blanco" },
+                    vetaInterior = cbVetaDentro.isChecked
+                )
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(CLAVE_ULTIMO, ropero.aJson()).apply()
+                alContinuar()
+            }
+            .setNeutralButton("Omitir") { _, _ -> alContinuar() }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** Lo que sigue a archivar: el proyecto al día, las casillas limpias y la siguiente medida de la cola. */
+    private fun despuesDeArchivar() {
         refrescarProyectoActivoUI()
         binding.etAncho.setText("")
         controladorCola.ofrecerSiguiente()
@@ -418,7 +486,9 @@ class RoperoActivity : AppCompatActivity() {
                 fila(binding.lyMelamina, binding.tvMelamina, binding.txMelamina),
                 fila(binding.lyMelaminaColor, binding.tvMelaminaColor, binding.txMelaminaColor),
                 fila(binding.lyNordex, binding.tvNordex, binding.txNordex),
+                fila(binding.lyMdf, binding.tvMdf, binding.txMdf),
                 fila(binding.lyTapacanto, binding.tvTapacanto, binding.txTapacanto),
+                fila(binding.lyTapacantoColor, binding.tvTapacantoColor, binding.txTapacantoColor),
                 fila(binding.lyTapacantoPuertas, binding.tvTapacantoPuertas, binding.txTapacantoPuertas),
                 fila(binding.lyTubo, binding.tvTubo, binding.txTubo),
                 fila(binding.lyRiel, binding.tvRiel, binding.txRiel),
@@ -439,7 +509,9 @@ class RoperoActivity : AppCompatActivity() {
             ModoMasivoHelper.texto(binding.tvMelamina) to ModoMasivoHelper.texto(binding.txMelamina),
             ModoMasivoHelper.texto(binding.tvMelaminaColor) to ModoMasivoHelper.texto(binding.txMelaminaColor),
             ModoMasivoHelper.texto(binding.tvNordex) to ModoMasivoHelper.texto(binding.txNordex),
+            ModoMasivoHelper.texto(binding.tvMdf) to ModoMasivoHelper.texto(binding.txMdf),
             ModoMasivoHelper.texto(binding.tvTapacanto) to ModoMasivoHelper.texto(binding.txTapacanto),
+            ModoMasivoHelper.texto(binding.tvTapacantoColor) to ModoMasivoHelper.texto(binding.txTapacantoColor),
             ModoMasivoHelper.texto(binding.tvTapacantoPuertas) to ModoMasivoHelper.texto(binding.txTapacantoPuertas),
             ModoMasivoHelper.texto(binding.tvTubo) to ModoMasivoHelper.texto(binding.txTubo),
             ModoMasivoHelper.texto(binding.tvRiel) to ModoMasivoHelper.texto(binding.txRiel)
@@ -493,6 +565,7 @@ class RoperoActivity : AppCompatActivity() {
             append(m.referencias).append("\n\n")
             append("LISTA DE CORTE (cm)\n").append(m.listaDeCorte()).append("\n\n")
             append("TAPACANTO INTERIOR (cm = cantidad)\n").append(m.lineasDeTapacanto()).append("\n\n")
+            if (m.tapacantoColor.isNotEmpty()) append("TAPACANTO FINO DE COLOR (cm = cantidad)\n").append(m.lineasDeTapacantoColor()).append("\n\n")
             if (m.tapacantoPuertas.isNotEmpty()) append("TAPACANTO PUERTAS (cm = cantidad)\n").append(m.lineasDeTapacantoPuertas()).append("\n\n")
             m.nombresConLargo().forEach { append(it.uppercase()).append(" (cm = cantidad)\n").append(m.lineasConLargo(it)).append("\n\n") }
             append("ACCESORIOS\n").append(m.lineasDeAccesorios())

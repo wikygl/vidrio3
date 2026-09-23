@@ -117,10 +117,13 @@ object ProyectoManager {
      * identificador: con cantidad 2 quedaba una sola Vna3 en vez de Vna3 y Vna4, y la siguiente
      * ventana arrancaba en Vna4 en lugar de Vna5.
      */
-    fun reservarNumerosPorPrefijo(context: Context, prefijo: String, cantidad: Int): List<Int> {
-        val base = obtenerSiguienteContadorPorPrefijo(context, prefijo)
-        return (0 until cantidad.coerceAtLeast(1)).map { base + it }
-    }
+    fun reservarNumerosPorPrefijo(context: Context, prefijo: String, cantidad: Int): List<Int> =
+        // Si la calculadora se abrió a editar un producto de este prefijo, la primera copia se
+        // queda con su número y reemplaza al archivado (ver EdicionProducto).
+        EdicionProducto.numerosConEdicion(context, prefijo, cantidad.coerceAtLeast(1)) { n ->
+            val base = obtenerSiguienteContadorPorPrefijo(context, prefijo)
+            (0 until n).map { base + it }
+        }
 
     private fun obtenerContadorPorPrefijo(context: Context, prefijo: String): Int {
         val sharedPreferences = context.getSharedPreferences("MapStorage", Context.MODE_PRIVATE)

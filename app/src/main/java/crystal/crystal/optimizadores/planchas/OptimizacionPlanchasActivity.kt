@@ -50,7 +50,8 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
     private lateinit var listManager: PlanchaListManager
 
     private var espesorDiscoCm = 0f
-    private var restringirRotacion = false
+    /** Hacia dónde corre la veta: libre (se giran), a lo alto o a lo ancho. */
+    private var veta = VetaPlanchas.LIBRE
     private var proyectoOptimizadorActual: String = ""
     private var nombreListaActual: String = ""
     private var bloqueandoCargaSpinner = false
@@ -373,9 +374,8 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
                 descripcion = v.info,
                 anchoMm = (v.ancho * 10).toInt(),
                 altoMm = (v.alto * 10).toInt(),
-                cantidad = v.cantidad,
-                // Si el usuario restringe la rotación, ninguna pieza puede rotar; si no, todas pueden.
-                rotacionPermitida = !restringirRotacion
+                cantidad = v.cantidad
+                // Si gira o no lo decide la veta (VetaPlanchas.preparar).
             )
         }
 
@@ -410,12 +410,15 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
         Thread {
             // Los cortes que no entran salen del propio cálculo (no de un recorte posterior): el
             // optimizador solo abre unidades que existen en el inventario.
-            val resultado = OptimizadorPlanchas.optimizar(
-                piezas = piezas,
-                stock = stock,
+            // Con veta, las piezas no se giran y cada una va con su alto (o su ancho) a lo largo
+            // de la plancha; al volver, cada pieza se lee otra vez como ancho x alto.
+            val (piezasVeta, stockVeta) = VetaPlanchas.preparar(veta, piezas, stock)
+            val resultado = VetaPlanchas.devolver(veta, OptimizadorPlanchas.optimizar(
+                piezas = piezasVeta,
+                stock = stockVeta,
                 intensidad = intensidad,
                 separacionCorteMm = espesorDiscoMm
-            )
+            ))
 
             runOnUiThread {
                 binding.btOpti.isEnabled = true
@@ -605,7 +608,7 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
         lista = soloPiezasPlanchas(items).toMutableList()
         lista2 = planchas
         espesorDiscoCm = dataManager.recuperarEspesorDisco()
-        restringirRotacion = dataManager.recuperarRestringirRotacion()
+        veta = dataManager.recuperarVeta()
     }
 
     private fun soloPiezasPlanchas(items: List<ItemListaPlanchas>): List<ItemListaPlanchas> =
@@ -959,23 +962,10 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
         android.widget.PopupMenu(this, binding.btnCatalogo).apply {
             menu.add("Seleccionar medidas iguales")
             menu.add("Descargar SVC (CSV)")
-            menu.add(0, 1, 2, "Restringir rotación (no rotar piezas)").apply {
-                isCheckable = true
-                isChecked = restringirRotacion
-            }
+            menu.add(0, 1, 2, "Veta: ${veta.etiqueta.lowercase()}")
             setOnMenuItemClickListener { item ->
                 when {
-                    item.itemId == 1 -> {
-                        restringirRotacion = !restringirRotacion
-                        dataManager.guardarRestringirRotacion(restringirRotacion)
-                        Toast.makeText(
-                            this@OptimizacionPlanchasActivity,
-                            if (restringirRotacion) "Rotación restringida: las piezas NO se rotarán"
-                            else "Rotación permitida: las piezas pueden rotar para acomodar mejor",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        true
-                    }
+                    item.itemId == 1 -> { elegirVeta(); true }
                     item.title == "Seleccionar medidas iguales" -> { mostrarDialogoMedidasIgualesPlanchas(); true }
                     item.title == "Descargar SVC (CSV)" -> { descargarSvcPlanchas(); true }
                     else -> false
@@ -983,6 +973,25 @@ class OptimizacionPlanchasActivity : AppCompatActivity() {
             }
             show()
         }
+    }
+
+    /**
+     * Hacia dónde corre la veta de las piezas. Las piezas se escriben ancho x alto; con veta no se
+     * giran y cada una va con su alto (o su ancho) a lo largo de la plancha. Sin veta (vidrio), se
+     * giran para acomodar mejor.
+     */
+    private fun elegirVeta() {
+        val opciones = VetaPlanchas.values()
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Veta de las piezas")
+            .setSingleChoiceItems(opciones.map { "${it.etiqueta}\n${it.descripcion}" }.toTypedArray(), opciones.indexOf(veta)) { d, i ->
+                veta = opciones[i]
+                dataManager.guardarVeta(veta)
+                Toast.makeText(this, veta.etiqueta, Toast.LENGTH_SHORT).show()
+                d.dismiss()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private data class GrupoMedidaIgualPlancha(val ancho: Float, val alto: Float, val indices: List<Int>)

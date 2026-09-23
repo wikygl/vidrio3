@@ -99,6 +99,8 @@ object MapStorage {
                 "Archivar es una función de pago. Renueva para guardar tus proyectos."
             )
         ) return
+        // Si se está editando un producto archivado, sus filas viejas salen antes de guardar.
+        EdicionProducto.aplicarReemplazo(context, mapListas)
         val proyectoActivo = ProyectoManager.getProyectoActivo()
         if (proyectoActivo != null) {
             guardarProyecto(context, proyectoActivo, mapListas)
