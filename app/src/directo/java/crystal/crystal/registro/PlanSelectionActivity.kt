@@ -35,6 +35,21 @@ class PlanSelectionActivity : AppCompatActivity() {
     private var esAmpliacion = false
     private var terminalesActuales = 0
 
+    /**
+     * La pantalla se abrió desde un candado de pago (el aviso de "hazte FULL") y no desde el
+     * arranque de sesión. En ese caso, al terminar hay que DEVOLVER al usuario a donde estaba: se
+     * quedó a medio cálculo, y mandarlo a MainActivity le obliga a empezar de cero.
+     */
+    private val volverAtras: Boolean by lazy {
+        intent.getBooleanExtra(crystal.crystal.pagos.CanalPagos.EXTRA_VOLVER_ATRAS, false)
+    }
+
+    /** Salida tras activar un plan: a la pantalla que lo pidió, o a MainActivity si no la hay. */
+    private fun salirTrasActivar() {
+        if (!volverAtras) startActivity(Intent(this, MainActivity::class.java))
+        finish()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (crystal.crystal.FeaturesV1.OCULTAR_WALLET) {
@@ -377,8 +392,7 @@ class PlanSelectionActivity : AppCompatActivity() {
                 "Plan VENTAS activado: $numTerminales terminal${if (numTerminales > 1) "es" else ""}",
                 Toast.LENGTH_LONG
             ).show()
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+            salirTrasActivar()
         }.addOnFailureListener { e ->
             if (e.message?.contains("SALDO_INSUFICIENTE") == true) {
                 Toast.makeText(
@@ -503,7 +517,7 @@ class PlanSelectionActivity : AppCompatActivity() {
     // Diálogo llamativo de confirmación con la hora EXACTA de corte (usa full_until del servidor).
     private fun mostrarDialogoSuscripcionActiva(tipo: String, fullUntilMillis: Long?) {
         if (isFinishing || isDestroyed) {
-            startActivity(Intent(this, MainActivity::class.java)); finish(); return
+            salirTrasActivar(); return
         }
         try {
             val vista = layoutInflater.inflate(crystal.crystal.R.layout.dialog_suscripcion_activa, null)
@@ -545,13 +559,12 @@ class PlanSelectionActivity : AppCompatActivity() {
             )
             vista.findViewById<android.view.View>(crystal.crystal.R.id.btnEntendido).setOnClickListener {
                 dialog.dismiss()
-                startActivity(Intent(this, MainActivity::class.java))
-                finish()
+                salirTrasActivar()
             }
             dialog.show()
         } catch (e: Exception) {
             Toast.makeText(this, "Plan $tipo activado.", Toast.LENGTH_LONG).show()
-            startActivity(Intent(this, MainActivity::class.java)); finish()
+            salirTrasActivar()
         }
     }
 }

@@ -19,6 +19,9 @@ object CanalPagos {
     /** No hay pantallas de pago en esta build; la UI oculta los accesos que llevarían a ellas. */
     const val DISPONIBLE_EN_LA_APP = false
 
+    /** Existe por simetría con la build directa: aquí no hay pantalla de planes que devolver. */
+    const val EXTRA_VOLVER_ATRAS = "volver_atras"
+
     fun abrirRecarga(ctx: Context, vararg extras: Pair<String, Any?>) = avisar(ctx)
 
     fun abrirPlanes(ctx: Context, vararg extras: Pair<String, Any?>) = avisar(ctx)

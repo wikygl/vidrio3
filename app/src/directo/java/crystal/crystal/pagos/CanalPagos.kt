@@ -25,6 +25,12 @@ object CanalPagos {
     /** Hay pantallas de pago dentro de la app. La UI la consulta para mostrar u ocultar accesos. */
     const val DISPONIBLE_EN_LA_APP = true
 
+    /**
+     * Extra de [abrirPlanes]: la pantalla de planes se abrió desde un candado de pago y, al
+     * terminar, debe DEVOLVER al usuario a donde estaba en vez de mandarlo a MainActivity.
+     */
+    const val EXTRA_VOLVER_ATRAS = "volver_atras"
+
     fun abrirRecarga(ctx: Context, vararg extras: Pair<String, Any?>) {
         ctx.startActivity(Intent(ctx, WalletActivity::class.java).putExtras(bundleOf(*extras)))
     }
