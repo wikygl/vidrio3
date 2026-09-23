@@ -37,3 +37,8 @@ gcm-diagnose.log
 
 # Caché local de la CLI de Firebase (no versionar)
 .firebase/
+
+# Recursos sacados de un APK (Jose.jose) y respaldos de Android Studio tras un cierre forzado:
+# no son del proyecto; quedan en la PC.
+/Jose.jose/
+/.idea/crash-clean-backup/
