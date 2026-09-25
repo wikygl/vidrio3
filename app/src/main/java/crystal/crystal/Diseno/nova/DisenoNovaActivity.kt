@@ -208,6 +208,9 @@ class DisenoNovaActivity : AppCompatActivity() {
         //   sistema lo cancelaba y el segundo toque —el que elige el módulo— no llegaba nunca.
         // Por eso se cierra al levantar, y el mando lo gestiona la propia selección.
         binding.vistaDiseno.setOnTouchListener { _, event ->
+            // Con la herramienta Mover encendida, el dedo arrastra parantes y puentes o pone uno
+            // nuevo donde se toca; la selección de franjas y módulos queda para cuando se apaga.
+            if (modoMover) return@setOnTouchListener manejarToqueMover(event)
             if (event.action == android.view.MotionEvent.ACTION_UP &&
                 binding.panelCotasPlanos.visibility == View.VISIBLE
             ) {
@@ -240,6 +243,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarInfoSeleccion()
         actualizarVista()
         instalarChip3D()
+        instalarChipsHerramientas()
     }
 
     // ===================================== MENÚ EDITAR =====================================
@@ -2344,6 +2348,9 @@ class DisenoNovaActivity : AppCompatActivity() {
         }.getOrElse { emptyList() }
         val enBlanco = "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
         if (vano.size < 3) return enBlanco
+        // Limpiar deja la hoja en blanco de verdad: un tramo, un fijo, y la silueta del vano para
+        // dibujar encima (decidido por el usuario el 2026-09-25). Lo demás lo pone el usuario con las
+        // herramientas Mover e Imán.
         return runCatching {
             DisenoNova.desdePaquete(enBlanco)?.conContornoVano(vano)?.aPaquete()
         }.getOrNull() ?: enBlanco
@@ -2420,6 +2427,274 @@ class DisenoNovaActivity : AppCompatActivity() {
         chip.elevation = 8 * dp
         chip3D = chip
     }
+    // ==================== HERRAMIENTAS: MOVER E IMÁN ====================
+    // Pedido del usuario (2026-09-25): poner un parante o un puente justo donde hace falta,
+    // moverlos con el dedo y que se peguen solos al borde de un escalón, a otro puente o a otro
+    // parante. Las cuentas están en HerramientasDiseno; aquí solo el dedo y la pantalla.
+
+    private var modoMover = false
+    private var imanActivo = true
+    private var chipMover: TextView? = null
+    private var chipIman: TextView? = null
+
+    /** Lo que se está arrastrando: un parante (por su índice) o un puente (tramo y límite). */
+    private sealed class Arrastre {
+        data class DeParante(val indice: Int) : Arrastre()
+        data class DePuente(val tramo: Int, val limite: Int) : Arrastre()
+    }
+    private var arrastre: Arrastre? = null
+    private var toqueX = 0f
+    private var toqueY = 0f
+    private var valorArrastreCm: Float? = null
+
+    private fun textoMover() = if (modoMover) "✋ mover: sí" else "✋ mover: no"
+    private fun textoIman() = if (imanActivo) "🧲 imán: sí" else "🧲 imán: no"
+
+    private fun instalarChipsHerramientas() {
+        if (chipMover != null) return
+        val dp = resources.displayMetrics.density
+        fun chip(texto: String, arribaDp: Int, alTocar: () -> Unit): TextView {
+            val c = TextView(this).apply {
+                setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+                setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+                textSize = 14f
+                text = texto
+                setOnClickListener { alTocar() }
+            }
+            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                topMargin = (arribaDp * dp).toInt()
+                marginEnd = (12 * dp).toInt()
+            }
+            binding.root.addView(c, lp)
+            c.elevation = 8 * dp
+            return c
+        }
+        chipMover = chip(textoMover(), 62) {
+            modoMover = !modoMover
+            refrescarChipsHerramientas()
+            if (modoMover) {
+                Toast.makeText(
+                    this,
+                    "Mover: arrastre un parante o un puente. Toque un punto para poner uno ahí.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+        chipIman = chip(textoIman(), 112) { imanActivo = !imanActivo; refrescarChipsHerramientas() }
+    }
+
+    private fun refrescarChipsHerramientas() {
+        chipMover?.text = textoMover()
+        chipIman?.text = textoIman()
+    }
+
+    private fun modeloEnPantalla(): DisenoNova? =
+        runCatching { DisenoNova.desdePaquete(paqueteActualLectura()) }.getOrNull()
+
+    private fun manejarToqueMover(event: android.view.MotionEvent): Boolean {
+        val d = modeloEnPantalla() ?: return false
+        val vista = binding.vistaDiseno
+        val dp = resources.displayMetrics.density
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                toqueX = event.x; toqueY = event.y
+                valorArrastreCm = null
+                arrastre = agarreEn(d, event.x, event.y, 22 * dp)
+            }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                when (val a = arrastre) {
+                    is Arrastre.DeParante -> {
+                        val cm = xCmDesdePx(d, event.x) ?: return true
+                        val guias = HerramientasDiseno.guiasVerticales(d, anchoParanteCm, sinParante = a.indice)
+                        val p = HerramientasDiseno.pegar(cm, guias, imanActivo, toleranciaIman(d))
+                        valorArrastreCm = p.valor
+                        vista.mostrarGuia(xPxDesdeCm(d, p.valor), null, p.guia != null)
+                        chipMover?.text = "✋ ${df1(p.valor)} cm"
+                    }
+                    is Arrastre.DePuente -> {
+                        val cm = yCmDesdePx(d, a.tramo, event.y) ?: return true
+                        val guias = HerramientasDiseno.guiasHorizontales(d, sinPuente = a.tramo to a.limite)
+                        val p = HerramientasDiseno.pegar(cm, guias, imanActivo, toleranciaIman(d))
+                        valorArrastreCm = p.valor
+                        vista.mostrarGuia(null, yPxDesdeCm(d, a.tramo, p.valor), p.guia != null)
+                        chipMover?.text = "✋ ${df1(p.valor)} cm"
+                    }
+                    null -> Unit
+                }
+            }
+            android.view.MotionEvent.ACTION_UP -> {
+                val a = arrastre
+                arrastre = null
+                vista.mostrarGuia(null, null, false)
+                refrescarChipsHerramientas()
+                val valor = valorArrastreCm
+                when {
+                    a is Arrastre.DeParante && valor != null -> {
+                        if (aplicarAlModelo { HerramientasDiseno.conParanteMovido(it, a.indice, valor, anchoParanteCm) }) {
+                            bloquearTramos(a.indice, a.indice + 1)
+                        }
+                    }
+                    a is Arrastre.DePuente && valor != null ->
+                        aplicarAlModelo { HerramientasDiseno.conPuenteMovido(it, a.tramo, a.limite, valor) }
+                    a == null && kotlin.math.hypot(event.x - toqueX, event.y - toqueY) < 12 * dp ->
+                        dialogoPonerAqui(d, event.x, event.y)
+                }
+            }
+            android.view.MotionEvent.ACTION_CANCEL -> {
+                arrastre = null
+                vista.mostrarGuia(null, null, false)
+                refrescarChipsHerramientas()
+            }
+        }
+        return true
+    }
+
+    /** Qué hay bajo el dedo para arrastrar: primero los parantes, después los puentes del tramo. */
+    private fun agarreEn(d: DisenoNova, x: Float, y: Float, umbral: Float): Arrastre? {
+        val vista = binding.vistaDiseno
+        for (i in 0 until d.tramos.size - 1) {
+            val a = vista.anchoDeTramo(i) ?: continue
+            val b = vista.anchoDeTramo(i + 1) ?: continue
+            if (kotlin.math.abs(x - (a.second + b.first) / 2f) <= umbral) return Arrastre.DeParante(i)
+        }
+        val t = d.tramos.indices.firstOrNull { i ->
+            vista.anchoDeTramo(i)?.let { (x0, x1) -> x in x0..x1 } == true
+        } ?: return null
+        val bandas = d.tramos[t].franjas.indices.mapNotNull { vista.bandaDeFranja(t, it) }
+        if (bandas.size != d.tramos[t].franjas.size) return null
+        // Las bandas van de abajo arriba: el borde de arriba de la banda k es el puente k.
+        for (k in 0 until bandas.size - 1) {
+            if (kotlin.math.abs(y - bandas[k].first) <= umbral) return Arrastre.DePuente(t, k)
+        }
+        return null
+    }
+
+    /** Parante o puente nuevo donde se tocó, ya pasado por el imán. */
+    private fun dialogoPonerAqui(d: DisenoNova, px: Float, py: Float) {
+        val xCm = xCmDesdePx(d, px) ?: return
+        val tramo = HerramientasDiseno.tramoEnX(d, xCm, anchoParanteCm) ?: return
+        val yCm = yCmDesdePx(d, tramo, py) ?: return
+        val x = HerramientasDiseno.pegar(xCm, HerramientasDiseno.guiasVerticales(d, anchoParanteCm), imanActivo, toleranciaIman(d)).valor
+        val y = HerramientasDiseno.pegar(yCm, HerramientasDiseno.guiasHorizontales(d), imanActivo, toleranciaIman(d)).valor
+        val conMocheta = d.tramos[tramo].franjas.size >= 2
+        val opciones = listOfNotNull(
+            "Parante aquí (a ${df1(x)} cm del canto izquierdo)",
+            "Puente aquí (a ${df1(y)} cm del dintel, en el tramo ${tramo + 1})",
+            if (conMocheta) "Invertir el tramo ${tramo + 1} (sistema ↔ mocheta)" else null
+        ).toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Poner aquí")
+            .setItems(opciones) { _, cual ->
+                when (cual) {
+                    0 -> {
+                        val antes = modeloEnPantalla()?.tramos?.size ?: 0
+                        if (aplicarAlModelo { HerramientasDiseno.conParanteEn(it, x, anchoParanteCm) } &&
+                            (modeloEnPantalla()?.tramos?.size ?: 0) > antes
+                        ) {
+                            // El tramo partido: su lugar en la lista de bloqueos se abre en dos, y los
+                            // dos trozos quedan fijos para que el reparto no mueva el parante puesto.
+                            while (tramosBlockeados.size < antes) tramosBlockeados.add(false)
+                            tramosBlockeados.add((tramo + 1).coerceAtMost(tramosBlockeados.size), false)
+                            bloquearTramos(tramo, tramo + 1)
+                        }
+                    }
+                    1 -> aplicarAlModelo { HerramientasDiseno.conPuenteEn(it, tramo, y) }
+                    // Mocheta abajo y sistema arriba, o al revés: cada franja del tramo cambia de tipo.
+                    2 -> aplicarAlModelo { m ->
+                        m.tramos[tramo].franjas.indices.fold(m) { acc, k -> acc.conTipoDeFranjaCambiado(tramo, k) }
+                    }
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /**
+     * Hasta dónde atrae el imán: 3 cm, o lo que mide medio dedo (16 dp) en el dibujo si eso es más.
+     * Con la ventana entera en pantalla, 3 cm son cuatro píxeles y el dedo nunca acertaba.
+     */
+    private fun toleranciaIman(d: DisenoNova): Float {
+        val (x0, x1) = binding.vistaDiseno.anchoDeTramo(0) ?: return HerramientasDiseno.IMAN_CM
+        val ancho = d.tramos.firstOrNull()?.ancho ?: return HerramientasDiseno.IMAN_CM
+        if (x1 - x0 < 1f || ancho <= 0f) return HerramientasDiseno.IMAN_CM
+        val cmPorPx = ancho / (x1 - x0)
+        return maxOf(HerramientasDiseno.IMAN_CM, 16 * resources.displayMetrics.density * cmPorPx)
+    }
+
+    /** Deja fijos esos tramos (N-85): lo que se haga en los demás no mueve lo que se puso a mano. */
+    private fun bloquearTramos(vararg indices: Int) {
+        val n = modeloEnPantalla()?.tramos?.size ?: return
+        while (tramosBlockeados.size < n) tramosBlockeados.add(false)
+        indices.filter { it in 0 until n }.forEach { tramosBlockeados[it] = true }
+    }
+
+    // --- De la pantalla a centímetros y de vuelta, con lo que el dibujo guardó de cada tramo ---
+
+    /** x en cm desde el canto izquierdo; fuera de los tramos, se estira el más cercano. */
+    private fun xCmDesdePx(d: DisenoNova, px: Float): Float? {
+        val vista = binding.vistaDiseno
+        val inicios = HerramientasDiseno.iniciosDeTramos(d, anchoParanteCm)
+        val i = d.tramos.indices.minByOrNull { k ->
+            val (x0, x1) = vista.anchoDeTramo(k) ?: return@minByOrNull Float.MAX_VALUE
+            if (px in x0..x1) 0f else minOf(kotlin.math.abs(px - x0), kotlin.math.abs(px - x1))
+        } ?: return null
+        val (x0, x1) = vista.anchoDeTramo(i) ?: return null
+        if (x1 - x0 < 1f) return null
+        return inicios[i] + (px - x0) / (x1 - x0) * d.tramos[i].ancho
+    }
+
+    private fun xPxDesdeCm(d: DisenoNova, cm: Float): Float? {
+        val vista = binding.vistaDiseno
+        val inicios = HerramientasDiseno.iniciosDeTramos(d, anchoParanteCm)
+        val i = d.tramos.indices.minByOrNull { k ->
+            val a = inicios[k]; val b = a + d.tramos[k].ancho
+            if (cm in a..b) 0f else minOf(kotlin.math.abs(cm - a), kotlin.math.abs(cm - b))
+        } ?: return null
+        val (x0, x1) = vista.anchoDeTramo(i) ?: return null
+        val ancho = d.tramos[i].ancho
+        if (ancho <= 0f) return null
+        return x0 + (cm - inicios[i]) / ancho * (x1 - x0)
+    }
+
+    /** Las bandas de las franjas del tramo en pantalla y en cm (y desde el dintel), de abajo arriba. */
+    private fun bandasDelTramo(d: DisenoNova, tramo: Int): List<Pair<Pair<Float, Float>, Pair<Float, Float>>>? {
+        val vista = binding.vistaDiseno
+        val t = d.tramos.getOrNull(tramo) ?: return null
+        val px = t.franjas.indices.mapNotNull { vista.bandaDeFranja(tramo, it) }
+        if (px.size != t.franjas.size || px.isEmpty()) return null
+        val alturas = HerramientasDiseno.alturasDeFranjas(d, tramo)
+        var abajoCm = d.caidaDeTramo(tramo) + d.altoDeTramo(tramo)
+        return px.indices.map { k ->
+            val arribaCm = abajoCm - alturas[k]
+            val par = px[k] to (arribaCm to abajoCm)
+            abajoCm = arribaCm
+            par
+        }
+    }
+
+    private fun yCmDesdePx(d: DisenoNova, tramo: Int, py: Float): Float? {
+        val bandas = bandasDelTramo(d, tramo) ?: return null
+        val (px, cm) = bandas.minByOrNull { (p, _) ->
+            if (py in p.first..p.second) 0f else minOf(kotlin.math.abs(py - p.first), kotlin.math.abs(py - p.second))
+        } ?: return null
+        if (px.second - px.first < 1f) return null
+        return cm.first + (py - px.first) / (px.second - px.first) * (cm.second - cm.first)
+    }
+
+    private fun yPxDesdeCm(d: DisenoNova, tramo: Int, cm: Float): Float? {
+        val bandas = bandasDelTramo(d, tramo) ?: return null
+        val (px, rango) = bandas.minByOrNull { (_, c) ->
+            if (cm in c.first..c.second) 0f else minOf(kotlin.math.abs(cm - c.first), kotlin.math.abs(cm - c.second))
+        } ?: return null
+        if (rango.second - rango.first <= 0f) return null
+        return px.first + (cm - rango.first) / (rango.second - rango.first) * (px.second - px.first)
+    }
+
     // ==================== LA VENTANA DE ESQUINA SE EDITA LADO A LADO ====================
     // Una ventana en L (o en C, o con una pared curva) no se edita entera: se parte en sus lados
     // y se edita cada uno de FRENTE, como una ventana normal. Mientras se edita no hay esquina

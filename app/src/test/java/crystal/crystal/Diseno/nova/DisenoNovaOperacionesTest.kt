@@ -119,10 +119,18 @@ class DisenoNovaOperacionesTest {
     }
 
     @Test
-    fun `con todos los tramos bloqueados no se reparte nada`() {
+    fun `con todos los tramos bloqueados ningun tramo cambia de ancho`() {
         val todos = abel.tramos.indices.toSet()
-        val d = abel.conAnchosRepartidos(bloqueados = todos)
-        assertSame(abel, d)
+        assertEquals(
+            abel.tramos.map { it.ancho },
+            abel.conAnchosRepartidos(bloqueados = todos).tramos.map { it.ancho }
+        )
+        // Un módulo más en un tramo bloqueado (lo que deja el parante puesto con la herramienta):
+        // el tramo no se mueve, y el nuevo y los de antes se reparten su ancho. Antes el primero
+        // se quedaba con el ancho del tramo entero y el nuevo sin medida.
+        val d = abel.conModuloAgregado(1, 1, despuesDe = 0, tipo = 'f', bloqueados = todos)
+        assertEquals(abel.tramos.map { it.ancho }, d.tramos.map { it.ancho })
+        assertEquals(listOf(87.95f, 87.95f), d.tramos[1].franjas[1].modulos.map { it.ancho!! })
     }
 
     @Test

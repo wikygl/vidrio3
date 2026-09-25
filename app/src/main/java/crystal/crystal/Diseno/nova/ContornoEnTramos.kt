@@ -153,19 +153,65 @@ object ContornoEnTramos {
         xFin: Float
     ): Float {
         if (puntos.size < 3 || xFin <= xIni) return (xFin - xIni).coerceAtLeast(0f)
-        // El vidrio de la franja llega hasta donde el hueco da de sí: su borde más ancho.
-        val arriba = anchoEnAltura(puntos, yArriba, xIni, xFin)
-        val abajo = anchoEnAltura(puntos, yAbajo, xIni, xFin)
-        return maxOf(arriba, abajo)
+        val trozo = trozoDelVanoEnFranja(puntos, yArriba, yAbajo, xIni, xFin) ?: return 0f
+        return (trozo.second - trozo.first).coerceAtLeast(0f)
     }
 
-    /** Lo que mide el hueco en esa horizontal, recortado al trozo del tramo. */
-    private fun anchoEnAltura(
+    /**
+     * Desde dónde hasta dónde llega el vano en una franja, dentro del trozo [xIni]..[xFin] de su
+     * tramo: es lo que se reparten sus módulos.
+     *
+     * - Con lados inclinados (un triángulo), el borde de la franja donde el hueco es más ancho.
+     * - En un vano escalonado —todos sus lados rectos, con [DESCUADRE_ESCALON] de tolerancia—, lo
+     *   que mide el hueco POR DENTRO de la franja. Sus bordes no sirven: un puente puesto a ras de
+     *   un escalón cae en el escalón de al lado y medía ese. En Formas (338.3 de ancho, escalón a la
+     *   izquierda y recorte abajo a la derecha), la franja del medio salía de 256.3 —cinco módulos
+     *   de 51.2— cuando tiene los 338.3 enteros.
+     *
+     * Null si a esa altura no hay vano en el tramo.
+     */
+    fun trozoDelVanoEnFranja(
+        puntos: List<Pair<Float, Float>>,
+        yArriba: Float,
+        yAbajo: Float,
+        xIni: Float,
+        xFin: Float
+    ): Pair<Float, Float>? {
+        if (puntos.size < 3 || xFin <= xIni) return null
+        val alturas = if (esEscalonado(puntos) && yAbajo - yArriba > 2 * TOLERANCIA) {
+            // Por dentro: la mitad de cada trozo entre los quiebres del contorno, sin llegar a
+            // los bordes de la franja.
+            val margen = min(DESCUADRE_ESCALON, (yAbajo - yArriba) / 4f)
+            val desde = yArriba + margen
+            val hasta = yAbajo - margen
+            val cortes = (listOf(desde, hasta) + puntos.map { it.second }.filter { it > desde && it < hasta })
+                .sorted()
+            cortes.zipWithNext { a, b -> (a + b) / 2f }.ifEmpty { listOf((yArriba + yAbajo) / 2f) }
+        } else {
+            listOf(yArriba, yAbajo)
+        }
+        return alturas.mapNotNull { trozoEnAltura(puntos, it, xIni, xFin) }
+            .maxByOrNull { it.second - it.first }
+    }
+
+    /** Dos centímetros y medio: hasta ahí un lado se lee recto, como el descuadre de la obra. */
+    const val DESCUADRE_ESCALON = 2.5f
+
+    /** Todos los lados horizontales o verticales, dentro del descuadre: un vano escalonado. */
+    fun esEscalonado(puntos: List<Pair<Float, Float>>): Boolean =
+        puntos.size >= 3 && puntos.indices.all { i ->
+            val (ax, ay) = puntos[i]
+            val (bx, by) = puntos[(i + 1) % puntos.size]
+            abs(bx - ax) <= DESCUADRE_ESCALON || abs(by - ay) <= DESCUADRE_ESCALON
+        }
+
+    /** Lo que ocupa el hueco en esa horizontal, recortado al trozo del tramo. */
+    private fun trozoEnAltura(
         puntos: List<Pair<Float, Float>>,
         y: Float,
         xIni: Float,
         xFin: Float
-    ): Float {
+    ): Pair<Float, Float>? {
         var izq = Float.MAX_VALUE
         var der = -Float.MAX_VALUE
         var hubo = false
@@ -183,10 +229,10 @@ object ContornoEnTramos {
             izq = min(izq, x); der = max(der, x)
             hubo = true
         }
-        if (!hubo) return 0f
+        if (!hubo) return null
         val a = max(izq, xIni)
         val b = min(der, xFin)
-        return (b - a).coerceAtLeast(0f)
+        return if (b > a) a to b else null
     }
 
     /**

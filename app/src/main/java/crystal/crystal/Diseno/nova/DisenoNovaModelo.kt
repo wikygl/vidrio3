@@ -414,8 +414,10 @@ data class DisenoNova(
      * Es la regla de siempre: los tramos y las medidas salen de contar módulos.
      *
      * [bloqueados] son los tramos cuyo ancho el vidriero fijó y no se tocan: conservan su medida
-     * y el resto absorbe la diferencia, repartiéndose lo que queda. Si se bloquean todos no hay
-     * nada que repartir y el diseño se devuelve tal cual.
+     * y el resto absorbe la diferencia, repartiéndose lo que queda. Si se bloquean todos, ningún
+     * tramo cambia de ancho, pero los módulos de cada uno se siguen repartiendo su tramo: antes el
+     * diseño se devolvía tal cual, y el módulo recién puesto se quedaba sin medida mientras el
+     * primero conservaba el ancho del tramo entero.
      */
     fun conAnchosRepartidos(
         anchoParante: Float = 2.5f,
@@ -425,7 +427,6 @@ data class DisenoNova(
         if (totalModulos <= 0) return this
         val fijos = bloqueados.filter { it in tramos.indices }.toSet()
         val libres = tramos.indices.filter { it !in fijos }
-        if (libres.isEmpty()) return this
 
         val anchoFijo = fijos.sumOf { tramos[it].ancho.toDouble() }.toFloat()
         val disponible = (anchoUtil(anchoParante) - anchoFijo).coerceAtLeast(0f)

@@ -189,6 +189,9 @@ class VistaDiseno @JvmOverloads constructor(
     // valian para todos: con franjas distintas por tramo, la de arriba del segundo no se podia
     // tocar porque su banda no existia.
     private val rangosFranjaPorTramo = mutableListOf<MutableList<Pair<Float, Float>>>()
+    // Las divisiones de módulos tal como se dibujaron, por (tramo, franja). El toque elige el
+    // módulo con ellas: en un vano escalonado los módulos no se reparten el tramo entero.
+    private val divisionesDeFranja = mutableMapOf<Pair<Int, Int>, FloatArray>()
     /** Dónde cae el dibujo dentro de la vista, para poder pegarle cosas al lado. */
     private val rectDiseno = RectF()
     private var ultimaVentanaX0 = 0f
@@ -1087,6 +1090,37 @@ class VistaDiseno @JvmOverloads constructor(
                 dibujarCotasDePoligono(canvas, s.contornoCm, s.x0, s.y0, s.escala, anchoLado, altoLado)
             }
         }
+        dibujarGuiaDelIman(canvas)
+    }
+
+    // ================== Guía de lo que se mueve (herramienta Mover) ==================
+    // Mientras se arrastra un parante o un puente, una línea marca dónde va a quedar: continua y
+    // de color cuando el imán la pegó a algo (el borde de un escalón, otro puente), punteada y
+    // gris cuando va suelta.
+
+    private var guiaVerticalPx: Float? = null
+    private var guiaHorizontalPx: Float? = null
+    private var guiaPegada = false
+    private val pGuiaPegada = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(233, 30, 99); strokeWidth = 4f; style = Paint.Style.STROKE
+    }
+    private val pGuiaSuelta = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.GRAY; strokeWidth = 3f; style = Paint.Style.STROKE
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(18f, 12f), 0f)
+    }
+
+    /** Muestra la línea guía en [verticalPx] o [horizontalPx] (coordenadas de la vista); null la quita. */
+    fun mostrarGuia(verticalPx: Float?, horizontalPx: Float?, pegada: Boolean) {
+        guiaVerticalPx = verticalPx
+        guiaHorizontalPx = horizontalPx
+        guiaPegada = pegada
+        invalidate()
+    }
+
+    private fun dibujarGuiaDelIman(canvas: Canvas) {
+        val p = if (guiaPegada) pGuiaPegada else pGuiaSuelta
+        guiaVerticalPx?.let { canvas.drawLine(it, 0f, it, height.toFloat(), p) }
+        guiaHorizontalPx?.let { canvas.drawLine(0f, it, width.toFloat(), it, p) }
     }
 
     /** Recorta el dibujo de una pared con su silueta y traza su borde, como [enmascararVano]. */
@@ -1121,6 +1155,33 @@ class VistaDiseno @JvmOverloads constructor(
      * un solo tramo rectangular y aun así verse el hueco de verdad: el triángulo, el escalón o el
      * dintel caído. Sin esto, limpiar el diseño para dibujarlo a mano devolvía un rectángulo.
      */
+    /**
+     * El trozo horizontal (en px) que ocupa el vano dentro de la banda [yTopPx]..[yBotPx] de un
+     * tramo que va de [xIniPx] a [xFinPx]. Solo con un vano escalonado: con lados inclinados los
+     * módulos siguen repartiéndose el tramo y la silueta recorta. Null si no aplica.
+     *
+     * Usa la misma escala y origen que [enmascararVano], que es donde se ve la silueta.
+     */
+    private fun trozoDelVanoPx(xIniPx: Float, xFinPx: Float, yTopPx: Float, yBotPx: Float): Pair<Float, Float>? {
+        if (contornoVanoCm.size < 3 || anchoCm <= 0f || altoCm <= 0f) return null
+        if (modoArcoCurvo || modoCircular) return null
+        if (!ContornoEnTramos.esEscalonado(contornoVanoCm)) return null
+        val anchoDisp = width - 2 * margenPx
+        val altoDisp = height - 2 * margenPx
+        if (anchoDisp <= 0f || altoDisp <= 0f) return null
+        val anchoTotalCm = anchoEfectivoCm()
+        val escala = min(anchoDisp / anchoTotalCm, altoDisp / altoCm)
+        if (escala <= 0f) return null
+        val x0 = (width - anchoTotalCm * escala) / 2f
+        val y0 = (height - altoCm * escala) / 2f
+        val cm = ContornoEnTramos.trozoDelVanoEnFranja(
+            contornoVanoCm,
+            (yTopPx - y0) / escala, (yBotPx - y0) / escala,
+            (xIniPx - x0) / escala, (xFinPx - x0) / escala
+        ) ?: return null
+        return (x0 + cm.first * escala) to (x0 + cm.second * escala)
+    }
+
     private fun enmascararVano(canvas: Canvas) {
         if (contornoVanoCm.size < 3 || anchoCm <= 0f || altoCm <= 0f) return
         // El arco y el círculo traen su propio contorno: recortarlos con el polígono los partiría.
@@ -1334,6 +1395,7 @@ class VistaDiseno @JvmOverloads constructor(
         // Limpiar rangos de franjas para este frame
         rangosFranjaY.clear()
         rangosFranjaPorTramo.clear()
+        divisionesDeFranja.clear()
 
         val anchoVentPx = xVentFin - xVentIni
         construirRangosTramoX(xVentIni, xVentFin, anchoVentPx)
@@ -1515,6 +1577,7 @@ class VistaDiseno @JvmOverloads constructor(
         rangosFranjaY.clear()
 
         rangosFranjaPorTramo.clear()
+        divisionesDeFranja.clear()
         rangosFranjaY.add(Pair(top, bottom))
         ultimaVentanaX0 = left
         ultimaVentanaX1 = right
@@ -1673,6 +1736,7 @@ class VistaDiseno @JvmOverloads constructor(
         if (segmentosNs.isEmpty()) return
         rangosFranjaY.clear()
         rangosFranjaPorTramo.clear()
+        divisionesDeFranja.clear()
         var xCursor = xInicio
         var yTopPlanoActual = yTop
         var yBottomPlanoActual = yBottom
@@ -1804,7 +1868,10 @@ class VistaDiseno @JvmOverloads constructor(
                             escalaPxPorCm = escalaLocal,
                             populateRangosFranjas = esPrimerPlano,
                             segmentoIndex = segIdx,
-                            altoTramoCm = segmento.altoCm
+                            altoTramoCm = segmento.altoCm,
+                            // El paño que gira se dibuja aparte y doblado: ahí la silueta del
+                            // vano no está en las mismas coordenadas.
+                            recortarAlVano = !curvo
                         )
                     } else {
                         dibujarINASoloFranja(
@@ -2401,14 +2468,20 @@ class VistaDiseno @JvmOverloads constructor(
                 yAbajo = yArriba
                 return@forEachIndexed
             }
+            // En un vano escalonado, una franja sin parantes se reparte lo que hay de vano a su
+            // altura, no la ventana entera: la mocheta de encima del escalón empieza en el escalón.
+            val sinParantes = franja.parantePosiciones.none { it in 1 until n }
+            val (xModIni, xModFin) =
+                (if (sinParantes) trozoDelVanoPx(xIni, xFin, yTop, yBottom) else null) ?: (xIni to xFin)
             val xs = posicionesModulosConTramos(
-                xIni = xIni,
-                xFin = xFin,
+                xIni = xModIni,
+                xFin = xModFin,
                 nModulos = n,
                 parantePosiciones = franja.parantePosiciones,
                 parantesXPx = parantesXPx,
                 anchosMod = franja.anchosMod
             )
+            divisionesDeFranja[0 to idx] = xs
             val parantesSet = franja.parantePosiciones.toSet()
             for (i in 1 until n) {
                 if (i in parantesSet) continue
@@ -2814,7 +2887,8 @@ class VistaDiseno @JvmOverloads constructor(
         escalaPxPorCm: Float,
         populateRangosFranjas: Boolean = false,
         segmentoIndex: Int = -1,
-        altoTramoCm: Float = 0f
+        altoTramoCm: Float = 0f,
+        recortarAlVano: Boolean = false
     ) {
         if (franjas.isEmpty()) return
         val alturasCm = distribuirAlturas(franjas, if (altoTramoCm > 0f) altoTramoCm else altoCm)
@@ -2839,7 +2913,13 @@ class VistaDiseno @JvmOverloads constructor(
             canvas.drawLine(xIni, yTop, xFin, yTop, pLinea)
             canvas.drawLine(xIni, yBottom, xFin, yBottom, pLinea)
             val n = franja.modulos.size.coerceAtLeast(1)
-            val xPos = calcularPosicionesX(xIni, anchoVentPx, n, franja.anchosMod)
+            // En un vano escalonado los módulos se reparten lo que hay de vano en la franja, no
+            // el tramo entero: una mocheta encima del escalón empieza donde empieza el vano.
+            val (xModIni, xModFin) =
+                (if (recortarAlVano) trozoDelVanoPx(xIni, xIni + anchoVentPx, yTop, yBottom) else null)
+                    ?: (xIni to xIni + anchoVentPx)
+            val xPos = calcularPosicionesX(xModIni, xModFin - xModIni, n, franja.anchosMod)
+            if (segmentoIndex >= 0) divisionesDeFranja[segmentoIndex to idx] = xPos
             val parantesSet = franja.parantePosiciones.toSet()
             for (i in 1 until n) {
                 if (i in parantesSet) continue
@@ -4169,8 +4249,15 @@ class VistaDiseno @JvmOverloads constructor(
                             val x0Tramo = segInfo?.first ?: ultimaVentanaX0
                             val x1Tramo = segInfo?.second ?: ultimaVentanaX1
                             val anchoVentPx = x1Tramo - x0Tramo
-                            val m = ((x - x0Tramo) / (anchoVentPx / n))
-                                .toInt().coerceIn(0, n - 1)
+                            // Con las divisiones que se dibujaron, si las hay: en un vano
+                            // escalonado los módulos no se reparten el tramo entero.
+                            val xs = divisionesDeFranja[tramo.coerceAtLeast(0) to i]
+                                ?.takeIf { modo == ModoEnsamble.APA && it.size == n + 1 }
+                            val m = if (xs != null) {
+                                (1 until n).count { x >= xs[it] }
+                            } else {
+                                ((x - x0Tramo) / (anchoVentPx / n)).toInt()
+                            }.coerceIn(0, n - 1)
                             indiceModuloResaltado = m
                             // franjaConfirmadaPorToque se mantiene: siguiente click también va a módulo
                             invalidate()

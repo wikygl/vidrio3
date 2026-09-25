@@ -1,0 +1,368 @@
+package crystal.crystal.Diseno.nova
+
+import kotlin.math.abs
+
+/**
+ * Las herramientas para diseñar a mano en novaDiseño (pedido del usuario el 2026-09-25): poner un
+ * parante o un puente justo donde hace falta, moverlos, y que se peguen solos a lo que tienen
+ * cerca —el borde de un escalón, otro puente, otro parante— con el imán.
+ *
+ * El caso que las pide es el vano escalonado: la calculadora propone un diseño, pero hay otros
+ * igual de buenos. Por ejemplo, un parante en el borde del primer escalón, un puente en el segundo
+ * hasta ese parante con la mocheta abajo y el sistema invertido, y el último trozo como un sistema
+ * largo de cinco hojas. Para armarlo rápido hace falta poner y quitar tramos, puentes y módulos
+ * sin cuentas, y que todo se alinee solo.
+ *
+ * Coordenadas en centímetros, como el contorno del vano: **x** desde el canto izquierdo de la
+ * ventana y **y** desde el dintel hacia abajo. Todas las operaciones devuelven un diseño nuevo; si
+ * no se puede, el mismo sin tocar.
+ */
+object HerramientasDiseno {
+
+    /** Hasta dónde atrae el imán: 3 cm de la medida real. */
+    const val IMAN_CM = 3f
+
+    /** Lo mínimo que puede quedar de un tramo o de una franja al mover o partir. */
+    const val MINIMO_CM = 5f
+
+    /** Hasta dónde un desnivel es descuadre y no pendiente (N-06: una pulgada). */
+    const val DESCUADRE_CM = 2.5f
+
+    // ==================== EL IMÁN ====================
+
+    /** Un valor ya pasado por el imán: [guia] es la línea a la que se pegó, o null si quedó suelto. */
+    data class Pegado(val valor: Float, val guia: Float?)
+
+    /** Pega [valor] a la guía más cercana si está a [tolerancia] o menos. Con el imán apagado, nada. */
+    fun pegar(valor: Float, guias: List<Float>, activo: Boolean = true, tolerancia: Float = IMAN_CM): Pegado {
+        if (!activo) return Pegado(valor, null)
+        val cerca = guias.minByOrNull { abs(it - valor) } ?: return Pegado(valor, null)
+        return if (abs(cerca - valor) <= tolerancia) Pegado(cerca, cerca) else Pegado(valor, null)
+    }
+
+    /**
+     * Las líneas verticales que atraen: los cantos de la ventana, los vértices del vano (el borde de
+     * un escalón) y los ejes de los parantes. [sinParante] deja fuera el que se está moviendo.
+     */
+    fun guiasVerticales(d: DisenoNova, anchoParante: Float = 2.5f, sinParante: Int? = null): List<Float> {
+        val (x0, _) = origenDelVano(d)
+        val vano = d.contornoVano.map { it.first - x0 }
+        val parantes = ejesDeParantes(d, anchoParante).filterIndexed { i, _ -> i != sinParante }
+        return (listOf(0f, d.ancho) + vano + parantes).distinctBy { Math.round(it * 10) }
+    }
+
+    /**
+     * Las líneas horizontales que atraen: el dintel y el alféizar de la ventana, los vértices del
+     * vano y todos los puentes de todos los tramos. [sinPuente] (tramo, límite) deja fuera el que se
+     * está moviendo.
+     */
+    fun guiasHorizontales(d: DisenoNova, sinPuente: Pair<Int, Int>? = null): List<Float> {
+        val (_, y0) = origenDelVano(d)
+        val vano = d.contornoVano.map { it.second - y0 }
+        val puentes = d.tramos.indices.flatMap { i ->
+            limitesDePuente(d, i).mapIndexedNotNull { k, y -> if (sinPuente == i to k) null else y }
+        }
+        return (listOf(0f, d.alto) + vano + puentes).distinctBy { Math.round(it * 10) }
+    }
+
+    // ==================== DÓNDE ESTÁ CADA COSA ====================
+
+    /** Dónde empieza cada tramo, en x. Entre tramo y tramo va un parante. */
+    fun iniciosDeTramos(d: DisenoNova, anchoParante: Float = 2.5f): List<Float> {
+        val out = mutableListOf<Float>()
+        var x = 0f
+        d.tramos.forEach { t -> out.add(x); x += t.ancho + anchoParante }
+        return out
+    }
+
+    /** El eje de cada parante entre tramos: el del parante i está entre el tramo i y el i + 1. */
+    fun ejesDeParantes(d: DisenoNova, anchoParante: Float = 2.5f): List<Float> {
+        val inicios = iniciosDeTramos(d, anchoParante)
+        return (0 until d.tramos.size - 1).map { i -> inicios[i] + d.tramos[i].ancho + anchoParante / 2f }
+    }
+
+    /** El tramo que ocupa esa x, o null si cae en un parante o fuera. */
+    fun tramoEnX(d: DisenoNova, x: Float, anchoParante: Float = 2.5f): Int? {
+        val inicios = iniciosDeTramos(d, anchoParante)
+        return d.tramos.indices.firstOrNull { i -> x >= inicios[i] && x <= inicios[i] + d.tramos[i].ancho }
+    }
+
+    /**
+     * Las alturas de las franjas del tramo, de abajo arriba, sumando el alto del tramo. Las que
+     * están en 0 ("se reparte sola") se llevan a partes iguales lo que dejan las demás.
+     */
+    fun alturasDeFranjas(d: DisenoNova, indiceTramo: Int): List<Float> {
+        val t = d.tramos.getOrNull(indiceTramo) ?: return emptyList()
+        val altoT = d.altoDeTramo(indiceTramo)
+        val fijas = t.franjas.filter { it.alto > 0f }.sumOf { it.alto.toDouble() }.toFloat()
+        val libres = t.franjas.count { it.alto <= 0f }
+        val porLibre = if (libres > 0) ((altoT - fijas) / libres).coerceAtLeast(0f) else 0f
+        val alturas = t.franjas.map { if (it.alto > 0f) it.alto else porLibre }
+        // Si no suman el alto del tramo, se estiran en proporción: así los puentes caen donde se ven.
+        val suma = alturas.sum()
+        return if (suma > 0f && abs(suma - altoT) > 0.05f) alturas.map { it * altoT / suma } else alturas
+    }
+
+    /** La y (desde el dintel) de cada división entre franjas del tramo, de abajo arriba. */
+    fun limitesDePuente(d: DisenoNova, indiceTramo: Int): List<Float> {
+        val alturas = alturasDeFranjas(d, indiceTramo)
+        if (alturas.size < 2) return emptyList()
+        val piso = d.caidaDeTramo(indiceTramo) + d.altoDeTramo(indiceTramo)
+        var desdeAbajo = 0f
+        return (0 until alturas.size - 1).map { k -> desdeAbajo += alturas[k]; piso - desdeAbajo }
+    }
+
+    // ==================== PARANTES ====================
+
+    /**
+     * Un parante con el eje en [x]: parte el tramo que está ahí en dos. Cada módulo queda del lado
+     * donde está su centro (con al menos uno por lado), y los anchos se ajustan a cada trozo.
+     */
+    fun conParanteEn(d: DisenoNova, x: Float, anchoParante: Float = 2.5f): DisenoNova {
+        val i = tramoEnX(d, x, anchoParante) ?: return d
+        val t = d.tramos[i]
+        val inicio = iniciosDeTramos(d, anchoParante)[i]
+        val anchoIzq = x - inicio - anchoParante / 2f
+        val anchoDer = t.ancho - anchoIzq - anchoParante
+        if (anchoIzq < MINIMO_CM || anchoDer < MINIMO_CM) return d
+        val corte = x - inicio   // en coordenadas del tramo
+        val izq = mutableListOf<NovaFranja>()
+        val der = mutableListOf<NovaFranja>()
+        t.franjas.forEach { fr ->
+            val (a, b) = partirModulos(fr.modulos, t.ancho, corte)
+            izq.add(fr.copy(modulos = ajustar(a, anchoIzq), parantes = emptyList()))
+            der.add(fr.copy(modulos = ajustar(b, anchoDer), parantes = emptyList()))
+        }
+        val nuevos = d.tramos.toMutableList()
+        nuevos[i] = t.copy(ancho = anchoIzq, franjas = izq, altoDer = null, caidaDer = null)
+        nuevos.add(i + 1, t.copy(ancho = anchoDer, franjas = der, pliegue = null, contorno = emptyList(), altoDer = null, caidaDer = null))
+        return conFormaDelVano(d.copy(tramos = nuevos), anchoParante)
+    }
+
+    /**
+     * Mueve el parante [indice] (entre el tramo [indice] y el siguiente) para que su eje quede en
+     * [x]. Los dos tramos cambian de ancho y sus módulos se reajustan; el resto no se toca.
+     */
+    fun conParanteMovido(d: DisenoNova, indice: Int, x: Float, anchoParante: Float = 2.5f): DisenoNova {
+        val a = d.tramos.getOrNull(indice) ?: return d
+        val b = d.tramos.getOrNull(indice + 1) ?: return d
+        val inicio = iniciosDeTramos(d, anchoParante)[indice]
+        val total = a.ancho + b.ancho
+        val anchoA = x - inicio - anchoParante / 2f
+        val anchoB = total - anchoA
+        if (anchoA < MINIMO_CM || anchoB < MINIMO_CM) return d
+        val nuevos = d.tramos.toMutableList()
+        nuevos[indice] = a.copy(ancho = anchoA, franjas = a.franjas.map { it.copy(modulos = ajustar(it.modulos, anchoA)) })
+        nuevos[indice + 1] = b.copy(ancho = anchoB, franjas = b.franjas.map { it.copy(modulos = ajustar(it.modulos, anchoB)) })
+        return conFormaDelVano(d.copy(tramos = nuevos), anchoParante)
+    }
+
+    // ==================== PUENTES ====================
+
+    /**
+     * Un puente a la altura [y] en el tramo [indiceTramo]. Si el tramo no tiene mocheta, nace una:
+     * arriba si el puente queda en la mitad de arriba (sistema abajo, modelo normal) o abajo si
+     * queda en la de abajo (sistema arriba, invertido). Si ya tiene, se mueve el puente más cercano.
+     */
+    fun conPuenteEn(d: DisenoNova, indiceTramo: Int, y: Float): DisenoNova {
+        val t = d.tramos.getOrNull(indiceTramo) ?: return d
+        val limites = limitesDePuente(d, indiceTramo)
+        if (limites.isNotEmpty()) {
+            val k = limites.indices.minByOrNull { abs(limites[it] - y) } ?: return d
+            return conPuenteMovido(d, indiceTramo, k, y)
+        }
+        val techo = d.caidaDeTramo(indiceTramo)
+        val altoT = d.altoDeTramo(indiceTramo)
+        val desdeAbajo = techo + altoT - y
+        if (desdeAbajo < MINIMO_CM || altoT - desdeAbajo < MINIMO_CM) return d
+        val sistema = t.franjas.firstOrNull { it.esSistema } ?: t.franjas.first()
+        val mocheta = NovaFranja(false, 0f, listOf(NovaModulo('f', t.ancho)))
+        val arriba = desdeAbajo > altoT / 2f
+        val franjas = if (arriba) {
+            listOf(sistema.copy(alto = desdeAbajo), mocheta.copy(alto = altoT - desdeAbajo))
+        } else {
+            listOf(mocheta.copy(alto = desdeAbajo), sistema.copy(alto = altoT - desdeAbajo))
+        }
+        val nuevos = d.tramos.toMutableList()
+        nuevos[indiceTramo] = t.copy(franjas = franjas)
+        return d.copy(tramos = nuevos)
+    }
+
+    /**
+     * Mueve el puente [indiceLimite] del tramo (la división entre la franja [indiceLimite] y la de
+     * encima, contando de abajo arriba) para que quede a la altura [y]. Solo cambian esas dos
+     * franjas; las demás conservan su alto.
+     */
+    fun conPuenteMovido(d: DisenoNova, indiceTramo: Int, indiceLimite: Int, y: Float): DisenoNova {
+        val t = d.tramos.getOrNull(indiceTramo) ?: return d
+        val alturas = alturasDeFranjas(d, indiceTramo).toMutableList()
+        if (indiceLimite !in 0 until alturas.size - 1) return d
+        val piso = d.caidaDeTramo(indiceTramo) + d.altoDeTramo(indiceTramo)
+        val debajo = alturas.take(indiceLimite).sum()
+        val par = alturas[indiceLimite] + alturas[indiceLimite + 1]
+        val abajo = (piso - y) - debajo
+        val arriba = par - abajo
+        if (abajo < MINIMO_CM || arriba < MINIMO_CM) return d
+        alturas[indiceLimite] = abajo
+        alturas[indiceLimite + 1] = arriba
+        val nuevos = d.tramos.toMutableList()
+        nuevos[indiceTramo] = t.copy(franjas = t.franjas.mapIndexed { k, fr -> fr.copy(alto = alturas[k]) })
+        return d.copy(tramos = nuevos)
+    }
+
+    // ==================== LA FORMA DEL VANO ====================
+
+    /**
+     * Cada tramo toma el alto del vano en su ancho (N-66): dónde está el dintel y dónde el alféizar
+     * sobre ese trozo. Un tramo que cruza un escalón se lleva el trozo más grande —el sistema tiene
+     * que quedar en el rectángulo que entra (ver [rectanguloDelSistema]) y lo irregular es mocheta,
+     * que admite cualquier forma—. Sin contorno, el diseño no cambia.
+     */
+    fun conFormaDelVano(d: DisenoNova, anchoParante: Float = 2.5f): DisenoNova {
+        val vano = d.contornoVano
+        if (vano.size < 3) return d
+        val (x0, y0) = origenDelVano(d)
+        val puntos = vano.map { (x, y) -> (x - x0) to (y - y0) }
+        val inicios = iniciosDeTramos(d, anchoParante)
+        val nuevos = d.tramos.mapIndexed { i, t ->
+            val bordes = bordesEnTramo(puntos, inicios[i], inicios[i] + t.ancho) ?: return@mapIndexed t
+            val (techo, piso) = bordes.first
+            val altoTramo = piso - techo
+            val entero = techo <= 0.15f && abs(altoTramo - d.alto) <= 0.15f
+            val alto = if (entero) 0f else altoTramo
+            val antes = d.altoDeTramo(i)
+            val despues = if (alto > 0f) alto else d.alto
+            // Las franjas se estiran con el tramo, como en DisenoNova.conAltoDeTramo.
+            val k = if (antes > 0f) despues / antes else 1f
+            t.copy(
+                alto = alto, caida = if (entero) 0f else techo, altoDer = null, caidaDer = null,
+                franjas = t.franjas.map { if (it.alto > 0f) it.copy(alto = it.alto * k) else it }
+            )
+        }
+        return d.copy(tramos = nuevos)
+    }
+
+    /**
+     * El rectángulo donde entra el sistema del tramo (N-66): del dintel más bajo al alféizar más alto
+     * sobre su ancho, como (techo, piso) en y desde el dintel. Null si el vano no tiene forma.
+     */
+    fun rectanguloDelSistema(d: DisenoNova, indiceTramo: Int, anchoParante: Float = 2.5f): Pair<Float, Float>? {
+        val vano = d.contornoVano
+        val t = d.tramos.getOrNull(indiceTramo) ?: return null
+        if (vano.size < 3) return null
+        val (x0, y0) = origenDelVano(d)
+        val puntos = vano.map { (x, y) -> (x - x0) to (y - y0) }
+        val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        return bordesEnTramo(puntos, inicio, inicio + t.ancho)?.second
+    }
+
+    /**
+     * El diseño limpio que respeta la forma: un tramo por escalón del vano, cada uno con su alto y
+     * un solo fijo, en lugar de un rectángulo con la silueta encima. Para un vano recto, un tramo.
+     */
+    fun limpioConForma(
+        acabado: String, ancho: Float, alto: Float, vano: List<Pair<Float, Float>>, anchoParante: Float = 2.5f
+    ): DisenoNova {
+        val enBlanco = DisenoNova(acabado, ancho, alto,
+            listOf(NovaTramo(ancho, listOf(NovaFranja(true, 0f, listOf(NovaModulo('f', ancho)))))))
+        if (vano.size < 3) return enBlanco
+        val bandas = ContornoEnTramos.bandas(vano)
+        // Solo el escalonado (lados rectos) se parte por escalones. Lo inclinado —triángulos,
+        // dinteles en pendiente— sigue limpiando a un tramo con su silueta: esas formas se
+        // desarrollan aparte, con pruebas (N-67, N-68). Un desnivel de hasta 2.5 cm es descuadre,
+        // no pendiente (N-06): el recorte de Formas baja 0.9 y sigue siendo un escalón.
+        fun inclinada(b: ContornoEnTramos.Banda) =
+            abs(b.altoDerCm - b.altoCm) > DESCUADRE_CM || abs(b.caidaDerCm - b.caidaCm) > DESCUADRE_CM
+        if (bandas.size < 2 || bandas.any { inclinada(it) }) return enBlanco.conContornoVano(vano)
+        val altoVano = vano.maxOf { it.second } - vano.minOf { it.second }
+        val tramos = bandas.mapIndexed { i, b ->
+            // Descuadre de hasta 2.5: manda la medida mayor (N-06). El tramo queda recto.
+            val altoB = maxOf(b.altoCm, b.altoDerCm)
+            val caidaB = minOf(b.caidaCm, b.caidaDerCm)
+            val entero = caidaB <= 0.15f && abs(altoB - altoVano) <= 0.15f
+            // Cada escalón deja medio parante a cada lado del corte: así el eje del parante cae
+            // justo en el borde del escalón, igual que uno puesto a mano con el imán.
+            val lados = (if (i > 0) 1 else 0) + (if (i < bandas.lastIndex) 1 else 0)
+            val anchoTramo = (b.anchoCm - lados * anchoParante / 2f).coerceAtLeast(1f)
+            NovaTramo(
+                ancho = anchoTramo,
+                franjas = listOf(NovaFranja(true, 0f, listOf(NovaModulo('f', anchoTramo)))),
+                alto = if (entero) 0f else altoB,
+                caida = if (entero) 0f else caidaB,
+                altoDer = null,
+                caidaDer = null
+            )
+        }
+        return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(vano)
+    }
+
+    // ==================== AUXILIARES ====================
+
+    private fun origenDelVano(d: DisenoNova): Pair<Float, Float> {
+        val v = d.contornoVano
+        return if (v.isEmpty()) 0f to 0f else v.minOf { it.first } to v.minOf { it.second }
+    }
+
+    /**
+     * Dónde está el vano sobre el trozo [xIni]..[xFin]: el alcance entero (dintel más alto, alféizar
+     * más bajo) y el rectángulo interior (dintel más bajo, alféizar más alto).
+     */
+    private fun bordesEnTramo(
+        puntos: List<Pair<Float, Float>>, xIni: Float, xFin: Float
+    ): Pair<Pair<Float, Float>, Pair<Float, Float>>? {
+        if (xFin <= xIni) return null
+        val margen = ((xFin - xIni) * 0.02f).coerceAtMost(0.5f)
+        // Se mide en los bordes (un pelo hacia dentro) y en cada vértice que cae dentro del trozo.
+        val xs = (listOf(xIni + margen, xFin - margen) +
+            puntos.map { it.first }.filter { it > xIni + margen && it < xFin - margen }
+                .flatMap { listOf(it - 0.05f, it + 0.05f) }).sorted()
+        val cortes = xs.mapNotNull { bordesEn(puntos, it) }
+        if (cortes.isEmpty()) return null
+        val entero = cortes.minOf { it.first } to cortes.maxOf { it.second }
+        val interior = cortes.maxOf { it.first } to cortes.minOf { it.second }
+        return entero to interior
+    }
+
+    /** Dónde empieza y acaba el vano en esa vertical (como ContornoEnTramos.bordesEn). */
+    private fun bordesEn(puntos: List<Pair<Float, Float>>, x: Float): Pair<Float, Float>? {
+        var arriba = Float.MAX_VALUE
+        var abajo = -Float.MAX_VALUE
+        var hubo = false
+        for (i in puntos.indices) {
+            val (ax, ay) = puntos[i]
+            val (bx, by) = puntos[(i + 1) % puntos.size]
+            if (x < minOf(ax, bx) || x > maxOf(ax, bx)) continue
+            if (abs(bx - ax) <= 0.15f) continue
+            val t = (x - ax) / (bx - ax)
+            val y = ay + t * (by - ay)
+            arriba = minOf(arriba, y); abajo = maxOf(abajo, y); hubo = true
+        }
+        return if (hubo) arriba to abajo else null
+    }
+
+    /** Reparte los módulos a un lado y otro del [corte] según dónde cae su centro. */
+    private fun partirModulos(mods: List<NovaModulo>, anchoTramo: Float, corte: Float): Pair<List<NovaModulo>, List<NovaModulo>> {
+        if (mods.isEmpty()) return listOf(NovaModulo('f')) to listOf(NovaModulo('f'))
+        val w = mods.map { it.ancho ?: (anchoTramo / mods.size) }
+        var x = 0f
+        val izq = mutableListOf<NovaModulo>()
+        val der = mutableListOf<NovaModulo>()
+        mods.forEachIndexed { k, m ->
+            val centro = x + w[k] / 2f
+            if (centro < corte) izq.add(m) else der.add(m)
+            x += w[k]
+        }
+        if (izq.isEmpty()) izq.add(NovaModulo('f'))
+        if (der.isEmpty()) der.add(NovaModulo('f'))
+        return izq to der
+    }
+
+    /** Ajusta los anchos de los módulos para que llenen [ancho], en la proporción que tenían. */
+    private fun ajustar(mods: List<NovaModulo>, ancho: Float): List<NovaModulo> {
+        if (mods.isEmpty()) return mods
+        val sinAncho = mods.any { it.ancho == null || it.ancho <= 0f }
+        if (sinAncho) return mods.map { it.copy(ancho = ancho / mods.size) }
+        val suma = mods.sumOf { (it.ancho ?: 0f).toDouble() }.toFloat()
+        return mods.map { it.copy(ancho = (it.ancho ?: 0f) * ancho / suma) }
+    }
+}
