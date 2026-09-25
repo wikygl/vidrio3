@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew :app:testDebugUnitTest --tests "crystal.crystal.SomeTestClass" # Single test class
 ```
 
-Java 17 is required. Gradle uses `-Xmx4g` and Kotlin daemon uses `-Xmx2g` (configured in `gradle.properties`). Configuration cache is disabled.
+Java 17 is required. Gradle uses `-Xmx2560m` and Kotlin daemon uses `-Xmx1536m` (configured in `gradle.properties`; lowered from 4g/2g on 2026-09-25 because the 8 GB PC ran out of memory). Configuration cache is disabled.
 
 ## What This App Does
 
