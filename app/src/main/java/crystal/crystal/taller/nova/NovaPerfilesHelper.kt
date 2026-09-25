@@ -293,7 +293,11 @@ object NovaPerfilesHelper {
             lineas.entries.joinToString("\n") { "${it.key} = ${it.value}" }
         } else ""
 
-        val topeTxt = if (divisiones == 2) "${NovaCalculos.df1(altoHoja - 0.9f)} = 1" else ""
+        // N-56: 1 tope por cada corrediza que colinda con pared o parante (antes, solo con 2
+        // divisiones). Aquí el orden clásico; ncfc, full corredizas y doble/triple corrediza los
+        // resuelve NovaCorrediza con NovaCalculos.anguloTopeCantidad.
+        val nTope = if (nCorredizas > 0) NovaCalculos.anguloTopeCantidad(ancho, divisiones, "nn") else 0
+        val topeTxt = if (nTope > 0) "${NovaCalculos.df1(altoHoja - 0.9f)} = $nTope" else ""
         val hacheTxt = if (nCorredizas > 0) "${NovaCalculos.df1(uFijos)} = $nCorredizas" else ""
 
         return OtrosAparenteResult(
@@ -308,7 +312,7 @@ object NovaPerfilesHelper {
             teeTxt = teeTxt,
             mostrarTee = teeTxt.isNotBlank(),
             topeTxt = topeTxt,
-            mostrarTope = divisiones == 2,
+            mostrarTope = topeTxt.isNotBlank(),
             hacheTxt = hacheTxt,
             mostrarHache = nCorredizas > 0
         )

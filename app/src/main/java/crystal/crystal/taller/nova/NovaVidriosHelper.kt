@@ -36,11 +36,12 @@ object NovaVidriosHelper {
         if (divisiones <= 0) return ""
 
         // Full fijos: todos los paños son fijos e iguales; una sola línea con cantidad = divisiones.
-        if (modelo == "nff") {
-            return "${NovaCalculos.df1(uFijos - 0.4f)} x ${NovaCalculos.df1(altoVidrio)} = $divisiones"
+        // Cada vidrio descuenta una gruña (N-87, N-91). Un solo fijo (1 división) es full fijos de uno.
+        if (modelo == "nff" || divisiones == 1) {
+            return "${NovaCalculos.df1(uFijos - NovaCalculos.GRUNA)} x ${NovaCalculos.df1(altoVidrio)} = $divisiones"
         }
 
-        // ncfc: ancho de cada fijo por COLINDANCIA (pared/parante 0.4, fijo 0.2, corrediza 0, por
+        // ncfc: ancho de cada fijo por COLINDANCIA (pared/parante 0.5, fijo 0.2, corrediza 0, por
         // lado). Un fijo entre dos corredizas queda lleno; pegado a otro fijo descuenta 0.2; etc.
         if (modelo == "ncfc") {
             val tramos = NovaCalculos.patronModulosNcfc(ancho, divisiones)
@@ -49,27 +50,28 @@ object NovaVidriosHelper {
             }
         }
 
+        // Clásico: en cada tramo los fijos van de pared (o parante) a corrediza, así que descuentan
+        // una colindancia de pared (N-61); en el tramo de 5 el fijo del centro va entre dos
+        // corredizas y queda con la U de fijos entera.
         val grupos = NovaCalculos.gruposDivisionesPorTramo(ancho, divisiones)
         var cantidadUfijos = 0
-        var cantidadUfijosMenos04 = 0
+        var cantidadUfijosMenosPared = 0
 
         for (nDivTramo in grupos) {
-            val fijosTramo = if (modelo == "nff") nDivTramo else {
-                NovaCalculos.ordenDivis(nDivTramo, nDivTramo.toFloat()).count { it == 'f' }
-            }
+            val fijosTramo = NovaCalculos.ordenDivis(nDivTramo, nDivTramo.toFloat()).count { it == 'f' }
             if (nDivTramo == 5) {
                 if (fijosTramo > 0) {
                     cantidadUfijos += 1
-                    cantidadUfijosMenos04 += (fijosTramo - 1).coerceAtLeast(0)
+                    cantidadUfijosMenosPared += (fijosTramo - 1).coerceAtLeast(0)
                 }
             } else {
-                cantidadUfijosMenos04 += fijosTramo
+                cantidadUfijosMenosPared += fijosTramo
             }
         }
 
         val lineas = mutableListOf<String>()
-        if (cantidadUfijosMenos04 > 0) {
-            lineas.add("${NovaCalculos.df1(uFijos - 0.4f)} x ${NovaCalculos.df1(altoVidrio)} = $cantidadUfijosMenos04")
+        if (cantidadUfijosMenosPared > 0) {
+            lineas.add("${NovaCalculos.df1(uFijos - NovaCalculos.COLINDANCIA_PARED)} x ${NovaCalculos.df1(altoVidrio)} = $cantidadUfijosMenosPared")
         }
         if (cantidadUfijos > 0) {
             lineas.add("${NovaCalculos.df1(uFijos)} x ${NovaCalculos.df1(altoVidrio)} = $cantidadUfijos")
@@ -156,10 +158,12 @@ object NovaVidriosHelper {
             val anchMotaTramo = NovaCalculos.anchMota(anchoSeccion)
             val anchoVidrio = (anchoSeccion / anchMotaTramo) - holguraAncho
             for (altoMocheta in alturasMochetas) {
+                // N-63: con Múltiple o gorrito, mocheta − 0.5; con los demás puentes, mocheta − u
+                // + 0.3 ("es más, no menos"; hasta el 2026-09-25 restaba 0.3).
                 val vAltoMocheta = if (puente == "Múltiple" || puente == "gorrito") {
                     altoMocheta - (holguraAlto+0.2f)
                 } else {
-                    altoMocheta - us - holguraAlto
+                    altoMocheta - us + holguraAlto
                 }
                 val key = "${NovaCalculos.df1(anchoVidrio)} x ${NovaCalculos.df1(vAltoMocheta)}"
                 lineas[key] = (lineas[key] ?: 0) + anchMotaTramo

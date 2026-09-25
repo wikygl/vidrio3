@@ -1,476 +1,615 @@
 # Reglas de Nova corrediza
 
-Extraído del código (`app/src/main/java/crystal/crystal/taller/nova/`) para tener las reglas en un
-solo sitio y dejar de deducirlas en cada cambio.
+El documento de referencia de Nova, **para todas sus variantes**. Todo lo que se programe, se
+corrija o se diseñe en Nova tiene que salir de aquí; si algo no está, primero se escribe aquí.
 
-**Cómo leerlo:**
+**Estado de cada regla:**
 
-- ✔ = leído directamente en el código; es lo que la app hace hoy.
-- ❓ = no está claro si lo que hace es lo correcto, o falta el dato. **Estas son las que hay que
-  corregir primero.**
-
-Que algo esté marcado ✔ significa que *así está programado*, no que esté bien. Si una regla ✔ está
-equivocada, corregirla aquí y luego en el código.
-
----
-
-## 1. Los tres ejes
-
-Son **independientes** y se confunden con facilidad porque los tres se guardan como cadenas
-parecidas. Pasar uno donde se espera otro hace que una rama entera no se ejecute nunca, sin error
-visible. ✔
-
-| Eje | Variable | Valores | Qué decide |
-|---|---|---|---|
-| **Acabado** | `tipoNova` | `APA`, `INA`, `PIV` | Aparente / inaparente / pivotante |
-| **Modulación** | `texto` / `textoModelo` | `nn`, `nfc`, `nff`, `ncfc`, `ncc`, `n3c`, `nl`, `nu`, `ns`, `ncu`, `nci` | El patrón de hojas y la geometría |
-| **Remate** | `modeloRemate` | `nn`, `nr`, `np` | Las mochetas (normal, invertido, doble puente) |
-
-Varias funciones reciben los dos últimos por separado: `modelo` = modulación, `remate` = mochetas.
-
-En el eje de modulación se mezclan dos cosas distintas: el **patrón de hojas** (`nn`, `nfc`, `nff`,
-`ncfc`, `ncc`, `n3c`) y la **geometría** (`nl` en L, `nu` en C, `ns` serie, `ncu` curvo, `nci`
-circular). ❓ *¿Deberían ser dos ejes separados?*
-
----
-
-## 2. Formato de números
-
-- `df1` **trunca** a un decimal, no redondea: `floor(x * 10) / 10`. 119.99 → 119.9. ✔
-- Si el resultado es entero se muestra sin decimales: 120.0 → `120`. ✔
-- Las líneas de material son siempre `medida = cantidad`, una por línea. ✔
-- Material con un decimal; dinero con dos. (Regla general de la app.)
-
----
-
-## 3. Divisiones (cuántas hojas)
-
-**Regla de los 60:** `divisionesAuto = ceil(ancho / 60)`, mínimo 1. Un ancho de 120 da 2; 120.1 da
-3. ✔
-
-`divisiones(ancho, divisManual, tipo)`: ✔
-
-- Si `divisManual > 0`, **manda ese valor** y el ancho no participa.
-- Si es 0, se aplica la regla de los 60.
-- `tipo` conocido: `nn`, `nl`, `nff`, `nfc` → automático o manual; `ncc` → 2; `n3c` y `ncfc` → 3.
-- **Trampa:** cualquier otro tipo devuelve **0**. Por eso no se le puede pasar `textoModelo` a
-  ciegas: `nu`, `ns`, `ncu` y `nci` darían 0 divisiones. Hoy `NovaCorrediza` nunca le pasa el tipo.
-  ❓ *¿Debería el `else` devolver el automático en vez de 0?*
-
-**En L y en C:** la cantidad de hojas sale de la regla de los 60 sobre la **medida que se midió**,
-no sobre el ancho útil. El descuento de esquina cambia las medidas de corte, no cuántas hojas lleva
-la ventana. Si corresponden menos, se escriben a mano. Lo fija `conDivisionesDeLaMedidaReal`. ✔
-*(cambiado el 2026-09-07; antes se contaba sobre el útil)*
-
-**Desde el diseño:** al volver de novaDiseño, el diseño escribe la cantidad en el campo
-(`etPartes`), así que pasa a ser un valor manual y manda sobre todo lo demás. ✔
-
-**Límite:** full corredizas inaparente admite máximo 6 divisiones. ✔
-
----
-
-## 4. Fijos y corredizas
-
-El patrón clásico (`nn`, `nl`) es una tabla fija por número de divisiones: ✔
-
-| div | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| fijos | 1 | 1 | 2 | 2 | 3 | 4 | 4 | 4 | 5 | 6 | 6 | 6 | 7 | 8 | 8 |
-| corredizas | 0 | 1 | 1 | 2 | 2 | 2 | 3 | 4 | 4 | 4 | 5 | 6 | 6 | 6 | 7 |
-
-Por encima de 15 se calcula: corredizas = `div/2` (menos 1 si `div ≥ 6` y `div % 4 == 2`). ✔
-
-El orden de las hojas sale de `ordenDivis`: 2 → `fc`, 3 → `fcf`, 4 → `fccf`, 5 → `fcfcf`,
-6 → `fcffcf`, 7 → `fcfcfcf`, 8 → `fccffccf`… ✔
-
-Por modelo: ✔
-
-| modelo | fijos | corredizas |
-|---|---|---|
-| `ncc` (doble corrediza) | 0 | 2 |
-| `n3c` (triple corrediza) | 0 | 3 |
-| `nff` (full fijos) | todas | 0 |
-| `nfc` (full corredizas) | 0 | todas |
-| `ncfc` | el inverso del clásico (fijo ↔ corrediza); con 1 división es fijo | |
-
----
-
-## 5. Descuentos: aparente sí, inaparente no
-
-**Regla dura: en INA no se descuenta nada.** Ni el parante ni los puentes. ✔
-
-| Descuento | Función | APA | INA / PIV |
-|---|---|---|---|
-| Lado lateral al vacío | `descuentoAnchoLateralApa` | resta el parante por cada lado al vacío | 0 |
-| Sin pared arriba/abajo | `descuentoAltoVertical` | resta el falso puente | 0 |
-| Esquina en L y en C | `medidasCalculoNlApa` | resta el esquinero | 0 *(corregido 2026-09-07)* |
-| Altura de mocheta | `alturasMochetasPorModelo` | descuenta el perfil de puente | no descuenta |
-
-**Descuento de esquina en APA** (`medidasCalculoNlApa`): el perfil lo define el **esquinero**, no el
-puente; "ninguno" = sin descuento. Reparto **invertido**: la ventana más ancha recibe la parte
-**menor** del aluminio y la más angosta la mayor. Si los dos valores del perfil son iguales, cada
-lado descuenta lo mismo. ✔
-
-**Encuentro en ángulo en INA:** en vez de restar hay que **sumar**. La U de abajo y del techo de
-cada lado debe ser `medida + u` (la u normalmente 1, la u-3/8 que va por defecto de marco): con
-lados de 120 y 150, 121 y 151, para que una monte sobre la otra. ❓ **Sin implementar.** Aplica al
-caso de **doble puente**, donde no hay división por corrediza. Falta decidir en qué líneas de U
-va (ver §9) y con qué cantidad.
-
----
-
-## 6. Remate y mochetas
-
-`siNoMoch` = 1 si `hoja < alto` (hay mocheta), 0 si no. ✔
-
-`altoHoja(alto, hoja)`: si `hoja == 0` → `alto / 7 * 5`; si `hoja >= alto` → `alto`; si no,
-`hoja`. ✔
-
-`altoMocheta(alto, altoHoja, tubo)` = `alto - (altoHoja + tubo)`. ✔
-
-| Remate | Mochetas |
+| Marca | Significa |
 |---|---|
-| `nn` normal | una mocheta arriba: `s(sistema); m(mocheta)` |
-| `nr` invertido | la mocheta ocupa `alto - altoHoja` y va delante del sistema |
-| `np` doble puente | dos mochetas, arriba y abajo: `m(inferior); s(sistema); m(superior)` |
+| ✅ | **Dictada por el usuario.** Es la regla. |
+| ⚙️ | **Así lo hace el código hoy**, pero nadie la confirmó. |
+| ❓ | **Falta el dato** o hay una duda sobre lo dictado (sección 17). |
+| 🐞 | **El código no cumple la regla** (sección 16). |
 
-**Doble puente (`np`):** ✔
+Cada regla lleva un número (**N-xx**; las generales **G-xx**) para dictarla o corregirla por
+número. Lo que cambia en el código sale de aquí, con su prueba.
 
-- El disponible se reparte en dos mitades iguales; si se escribe una **mocheta inferior** > 0, esa
-  se respeta y la superior toma el resto.
-- En **APA** el disponible descuenta los DOS puentes (`altoMocheta` con `2 × alturaPuente`); en
-  **INA** el disponible es `alto - altoHoja` completo.
-- Lleva **dos corridas de puente**. Se duplica **solo la medida horizontal**: el parante vertical
-  entre tramos va de piso a techo y no se duplica, y el **riel y la U felpero siguen en 1** por
-  tramo (el riel va en el puente de abajo y el felpero en el de arriba).
-- El ×2 se hace con `escalarCantidadesTexto` (texto sin parantes verticales) o con el parámetro
-  `filasPuente` dentro de `NovaInaCalculos.puentes` (texto que sí los trae). Hay tests que fijan
-  la frontera: `PuenteDobleEscaladoTest`.
+**Fuentes:** el documento del usuario *Revisión de reglas* (Google Docs, 2026-09-25), las respuestas
+en conversación, `diseño simbólico nova.txt` y la revisión del código del 2026-09-23.
 
----
+Última revisión: 2026-09-25 (se incorporaron las respuestas de *Revisión de reglas*).
 
-## 7. Puentes, tramos y parantes
-
-`nPuentes(divisiones)`: 1 hasta 5 divisiones; a partir de 6, `ceil(divisiones / 5)`. ✔
-
-La medida del puente (`mPuentes1`) depende del acabado y del número de divisiones. Con divisiones
-impares y hasta 5 es el ancho completo; con 6, 8 (y 10 en INA) es `(ancho - 2.5) / 2`; con 12 es
-`(ancho - 5) / 3`; con 10 y 14 hay repartos propios. Por encima de 15 se reparte
-`(ancho - 2.5 × (puentes - 1)) / puentes`. ✔ ❓ *La tabla parece histórica; conviene revisarla.*
-
-**Tramos** (`gruposDivisionesMochetaPorModelo`): ✔
-
-- `ncc` / `n3c`: un tramo cada 2 (o 3) corredizas.
-- `nfc`: en INA un solo tramo; si el usuario elige "cada cuántas corredizas" en el diálogo de
-  `ivModelo`, se corta cada N; si no, reparto balanceado del clásico.
-- `ncfc`: en INA un solo tramo.
-- El resto: reparto por ancho.
-
-`anchMota(medida)` = `ceil(medida / 180)`: cuántos paños lleva la mocheta de un tramo (el vidrio de
-mocheta no pasa de 180). ✔
-
-**Cruce:** por defecto 0.7 si no se escribe otro valor. ✔ ❓ *En doble puente se vio 0.9; ¿el
-defecto depende de algo?*
+**Vocabulario.** *Modelo* = dónde van las mochetas (normal, invertido, bandera, compuesto); en el
+código se llama `modeloRemate`. *Modulación* = el patrón de hojas (clásico, full corredizas…); en el
+código, `textoModelo`. *Forma* = rectangular, circular, poligonal. *Mocheta* = el **espacio**; sus
+vidrios, U y tees son otra cosa (G-05).
 
 ---
 
-## 8. Perfiles U
+## 0. El flujo en el que vive Nova ✅
 
-`us` es cuánto se mete la pieza dentro de la U: 1 → `u-3/8`, 1.5 → `u-13`. ✔
+1. **Medida** en casa del cliente: medida exacta (→ MedidaActivity → proforma en MainActivity), o
+   medida para proforma que, si hay contrato, vuelve a MedidaActivity como medida técnica.
+2. **Entrada a la calculadora**: a mano, desde el carrito de MainActivity (simple) o desde
+   MedidaActivity (forma, volumen, descuadres, cantidades, alféizar…).
+3. **Cálculo** y **archivo** en el proyecto (local; a Firebase al compartir por la mensajería).
+4. Lo archivado lo leen los **optimizadores** y, en el futuro, las **guías de fabricación e
+   instalación** (meta: la mecanización).
 
-**Inaparente** (`calcularTextoU`): ✔
+---
 
-| Línea | Fórmula | Orientación |
+## 1. Reglas generales (todas las calculadoras) ✅
+
+- **G-01 Orden: ancho, diagonal, alto.** Vale para el ingreso de medidas, la presentación de
+  resultados, los cálculos y la jerarquía: primero lo horizontal, después lo diagonal, al final lo
+  vertical.
+  - Rectángulo 50 × 50 sin parante, U-3/8: `50 = 2`, `48 = 2` (los horizontales enteros; los
+    verticales, alto − 2 × alto de U).
+  - Triángulo 70 (horizontal) × 99 (diagonal) × 70 (vertical), U-3/8: `70 = 1`, `98 = 1`, `68 = 1`.
+- **G-02 Perfiles U** (ancho y alto de la U, en cm):
+
+  | U | Ancho | Alto | Espesor máximo del vidrio |
+  |---|---|---|---|
+  | U-3/8 | 1 | 1 | 8 mm |
+  | U-13 | 1 | 1.5 | 8 mm |
+  | U-1/2 | 1.2 | 1.2 | |
+  | U-3/4 | 1.2 | 1.9 | |
+
+  En Nova y en todas las calculadoras se descuenta el **alto** de la U (1.5 en U-13). El **ancho**
+  solo se usa en INA, en las esquinas **en ángulo** de L, C y serie (G-09). La lista debe ser
+  editable, para que el usuario agregue perfiles (N-40).
+- **G-03 La decisión del usuario manda.** Lo automático (regla de los 60, máximo por tramo,
+  repartos, cruce) es solo el valor preestablecido. Si el usuario pone una división de 5 m, 10
+  hojas en un tramo o un tramo de 1000 cm, se respeta.
+- **G-04 La forma decide qué código se usa.** Rectangular, circular o poligonal no es un detalle
+  del dibujo: elige la lógica de cálculo.
+- **G-05 La mocheta es un espacio; sus materiales son otra cosa.** La mocheta mide lo mismo en APA
+  y en INA (N-31). Lo que cambia entre acabados es cómo se calculan sus vidrios y sus U.
+- **G-06 Nulos.**
+  - No pueden ser nulos: ancho, alto, volumen, geometría.
+  - La altura de puente **puede entrar en 0** (activa los 5/7), **pero no puede salir en 0**: sale
+    la altura calculada. "Sin puente" es un sí/no: cuando la hoja es mayor o igual al alto.
+  - Material y accesorios pueden ser nulos (N-79).
+- **G-07 Cada calculadora es independiente** y guarda su propia configuración (SharedPreferences
+  propias). Nada de estado compartido entre calculadoras.
+- **G-08 Altura de puente por ergonomía** (con alféizar): el puente debe quedar **entre 70 y 120
+  cm del piso; 90 por defecto**. Altura de puente = 90 − alféizar (alféizar 20 → puente a 70 de la
+  base de la ventana). Ver N-90 para cuándo el modelo pasa a invertido o bandera.
+- **G-09 Esquinas.** APA descuenta y INA **aumenta** (el ancho de la U) en cada esquina en ángulo;
+  en una esquina **curva** no se aumenta ni se descuenta. Aparte de eso, APA e INA calculan igual
+  (N-83).
+- **G-10 Configuración guardada.** El usuario podrá guardar alturas, cruces, materiales, etc. y
+  usarlos en los cálculos siguientes. Existe en otra calculadora; en Nova falta.
+
+---
+
+## 2. Las variantes: los ejes
+
+| Eje | En el código | Valores | Qué decide |
+|---|---|---|---|
+| **Acabado** | `tipoNova` | `a` aparente · `i` inaparente | Descuentos y fórmulas de vidrio |
+| **Tipología** | | `c` corrediza (pivotante, batiente y fija sin desarrollar) | El mecanismo |
+| **Volumen** | `texto` | plano · esquinero (L, C, serie) · curvo | Cuántos lados y cómo se unen |
+| **Forma** | (mezclada en `textoModelo` como `nci`) | rectangular · circular · poligonal | Qué código de cálculo se usa (G-04) |
+| **Encuentro** | máscara de lados | muro · acople · libre, por lado | Parante, falso puente o acople (N-78) |
+| **Modelo** | `modeloRemate` | normal · invertido · bandera (doble puente) · compuesto | Dónde van las mochetas |
+| **Modulación** | `textoModelo` | clásico · full corredizas · full fijos · ncfc · doble corrediza · triple corrediza | El patrón de hojas |
+
+- N-01 ✅ **Circular es una forma, no una modulación.** Admite cualquier modelo y cualquier
+  modulación, tramos, franjas y módulos. Su encuentro **solo puede ser muro**. 🐞 Hoy está metida
+  en la modulación (`nci`) y se dibuja siempre como bandera.
+- N-01b ✅ **Poligonal** es todo lo que no es rectangular ni circular: escalonado, tramo
+  inclinado, vano triangular, etc. Lo que se puede hacer en rectangular o circular se puede hacer
+  en poligonal, según el caso. En volúmenes distintos de plano, **cada lado** puede tener su propia
+  forma poligonal. Hoy solo se diseña; los materiales se desarrollarán con pruebas (sección 12).
+- N-02 ✅ **Pivotante es una tipología**, no un acabado. Pivotante, Nova mampara y Nova puerta
+  **quedan sin desarrollar** por ahora (mampara y puerta, versión 2). 🐞 El código que trata
+  pivotante como acabado (`PIV`) se elimina (C-01).
+- N-03 ✅ **Puente por defecto: tubo 2⅜ x 1, en todos los casos** (hecho, C-02; antes bandera y
+  full corredizas usaban tubo 2 x 1). Invertido y bandera siguen sin admitir Múltiple ⚙️.
+  Excepciones por resistencia que siguen: INA ncfc → paflón 1; full corredizas con más de 4 por
+  tramo → paflón 1.
+- N-04 ✅ Mampara y puerta Nova: versión 2.
+
+---
+
+## 3. Qué entra (las medidas)
+
+| Origen | Qué trae |
+|---|---|
+| A mano | ancho, alto, altura de hoja, divisiones, cruce, U, tipo de puente |
+| Carrito de MainActivity | ancho, alto, cantidad, cliente, producto |
+| MedidaActivity | lo anterior **más** contorno del vano, esquina (lados, ángulos, puente y parantes por lado), alféizar, boceto |
+
+- N-05 ✅ **Esquina con descuadre**: manda la medida **mayor** y se avisa. En versiones futuras
+  cada lado se calculará con su propia medida.
+- N-06 ✅ **Descuadre**: si pasa de **2.5 cm (una pulgada)**, la ventana pasa a **forma poligonal**
+  y cada lado se trata con su medida; si no, manda la medida mayor.
+- N-07 ✅ **Contorno** (escalón, inclinado, triángulo): es forma poligonal; dentro se puede hacer
+  todo (tramos, franjas…). Se desarrolla después de cerrar las reglas.
+- N-08 ✅ **Curva**: el ancho es el **arco o desarrollo**; con cuerda, flecha o ambas se calcula
+  lo demás.
+- N-09 ✅ **Alféizar y dintel**: el alféizar ya llega de Medidas; hay que incorporar el **dintel,
+  0 por defecto**, en Nova y en todas las calculadoras. El alféizar fija la altura de puente por
+  ergonomía (G-08). El dintel es información para el usuario y para su configuración (G-10).
+- N-78 ✅ **Encuentro** (transición): llega de Medidas, **por lado**, y en la calculadora activa la
+  lógica de máscaras (los checks del diálogo de ivDiseño), que decide puente o parante:
+  - **Libre a un lado** (lo más común: puerta-ventana sin puerta todavía): lleva **parante** para
+    sostener el puente.
+  - **Acople** (la puerta ya existe, del material que sea): la ventana se **acopla** a la puerta.
+  - **Libre arriba**: lleva **falso puente**.
+  - Nunca libre en los cuatro lados; **como máximo tres**.
+
+---
+
+## 4. Formato de números
+
+- N-10 ✅ `df1` **trunca** a un decimal: 119.99 → 119.9.
+- N-11 ✅ Entero sin decimales (120.0 → `120`).
+- N-12 ✅ Líneas de material: `medida = cantidad`, una por línea, en el orden de G-01.
+- N-13 ✅ Material con un decimal; dinero con dos; dos decimales solo en cotas de plano.
+- N-14 ✅ **Vidrios siempre ancho x alto.** El vidrio de mocheta de INA salía alto x ancho;
+  corregido (C-03).
+
+---
+
+## 5. Divisiones, orden de hojas y tramos
+
+- N-15 ✅ **Regla de los 60**: `ceil(ancho / 60)`, mínimo 1. 120 → 2; 120.1 → 3.
+- N-16 ✅ Si el usuario las escribe, **mandan** (G-03).
+- N-17 ✅ En L y en C se cuentan sobre la medida medida; el usuario puede dejarlo así o editarlo.
+- N-18 ✅ Al volver de novaDiseño se respeta el diseño que eligió el usuario.
+- N-19 ✅ **Máximo automático: 5 hojas por tramo**, en APA y en INA, también en full corredizas.
+  Si el usuario pone 10 o 20, se respeta. 🐞 Hoy full corredizas INA tiene tope 6 (C-04).
+- N-20 ✅ Por modulación: doble corrediza 2, triple 3, ncfc 3; el resto automático o manual. En
+  volúmenes distintos de plano, la misma lógica **por lado**. En circular, la misma lógica con la
+  de la forma. Lo que falte se completa.
+- N-21 ✅ 189.6 con 3 divisiones era error del ejemplo o decisión del usuario (G-03).
+- N-22 ✅ **Orden preestablecido**: 2 `fc` · 3 `fcf` · 4 `fccf` · 5 `fcfcf` · 6 `fcffcf` · 7
+  `fcfcfcf` · 8 `fccffccf`…; lo demás depende de la modulación.
+- N-23 ✅ Por modulación (fijos / corredizas): clásico según el orden · full fijos todas/0 · full
+  corredizas 0/todas · doble corrediza 0/2 · triple 0/3 · ncfc el inverso del clásico. Las
+  combinaciones de nfc, n3c, etc. están en el diálogo.
+- N-24 ✅ **Máximo 5 módulos por tramo**, en automático. Un módulo grande no parte la ventana, y dos
+  tramos de 10 cm siguen siendo dos tramos (G-03).
+- N-25 ✅ Repartos iniciales: 6 → [3,3] · 8 → [4,4] · 10 → [5,5] · 12 → [4,4,4] · 14 → [5,4,5].
+  Deslizando ivModelo se eligen otros.
+- N-26 ✅ doble / triple corrediza y full corredizas: igual en APA e INA; los tramos por ventana se
+  eligen en el diálogo de ivModelo. Las limitaciones de INA las dictará el usuario más adelante.
+- N-27 ✅ **Parante entre tramos: 2.5 por defecto**, pero depende del puente elegido. El ancho útil
+  de los tramos es `ancho − parante × (tramos − 1)`.
+- N-28 ✅ **Tramos dentro del tramo**: se pueden poner parantes que parten **solo la mocheta o solo
+  el sistema**, nunca de piso a techo (eso sería otro tramo).
+- N-85 ✅ **Tramo bloqueado / libre.** Con tramos libres, al agregar o quitar módulos pueden variar
+  las medidas de los tramos y de sus módulos. Un tramo **bloqueado** (congelado) no cambia por lo
+  que se haga en otro tramo; y lo que se cambie dentro de él solo afecta a sus módulos, nunca a su
+  ancho, su alto ni a nada de fuera. Ejemplo: 360 de ancho, dos tramos de 178.7.
+
+---
+
+## 6. Modelo y mochetas
+
+- N-29 ✅ **Altura de hoja**: si no se escribe, `alto × 5/7`; si es mayor o igual al alto, no hay
+  mocheta.
+- N-30 ✅ Hay mocheta si `hoja < alto`.
+- N-31 ✅ **La mocheta** = `alto − (altoHoja + puente)`, **igual en APA e INA**. Solo cambian el
+  cálculo de sus vidrios y el dibujo.
+- N-32 ✅ En INA, los **vidrios** y las U de la mocheta se calculan directo desde `alto − altoHoja`
+  (atajo equivalente); la mocheta sigue siendo la misma (G-05, N-86).
+- N-33 ✅ Orden de franjas, de abajo arriba: normal → sistema, mocheta · invertido → mocheta,
+  sistema · bandera → mocheta, sistema, mocheta. **Compuesto (`x`)**: cualquier otro orden por tramo
+  (mocheta abajo, otra mocheta, sistema…); se usará mucho en poligonales, casi siempre diseñadas a
+  mano.
+- N-34 ✅ **Bandera (doble puente)**: la mocheta inferior más la altura de hoja definen la
+  superior; si la inferior es 0, se reparte en dos mitades. Igual en APA e INA.
+  - Alto 160, puente 2.5, hoja 110, inferior 0 → cada mocheta `(160 − 110 − 2 × 2.5) / 2 = 22.5`.
+  - Vidrio APA: 22.5 − alto de la U.
+  - Vidrio INA: `(160 − 110) / 2 + 1` arriba, `− 0.5` abajo.
+- N-35 ✅ Bandera lleva dos corridas de puente (solo la horizontal se duplica); el parante vertical
+  entre tramos no se duplica; riel y U felpero siguen en 1 por tramo.
+- N-36 ✅ **El dibujo** muestra la mocheta con los puentes descontados y dibuja cada puente con su
+  valor: lo que hace hoy es correcto. (Nova todavía no genera planos.)
+- N-80 ✅ El dibujo es solo visual; basta con aproximar.
+- N-90 ✅ **Qué modelo sale en automático** (con alféizar y altura); siempre prevalece lo que decida
+  el usuario:
+  - Alféizar **dentro del rango** (el puente cae entre 70 y 120 del piso): **normal**, mocheta
+    arriba sin límite de altura.
+  - Alféizar **por debajo del rango**: hay que subir la corrediza (G-08): **invertido** si la ventana
+    mide hasta 180, **bandera** (partida en dos) si mide más de 180.
+  - Casos difíciles (muy alta con alféizar en el rango): decide el usuario. Compuesto: según el
+    diseño.
+
+---
+
+## 7. Descuentos y esquinas
+
+- N-37 ✅ **INA no descuenta** parante, puentes ni esquina. En esquinas **en ángulo** INA
+  **aumenta** el ancho de la U (G-09). Sería bueno indicar el ángulo de corte de esas U (sin
+  urgencia). En esquina curva, ni aumento ni descuento.
+
+  | Descuento | APA | INA |
+  |---|---|---|
+  | Lado al vacío | resta el parante por cada lado | 0 |
+  | Sin pared arriba o abajo | resta el falso puente | 0 |
+  | Esquina en ángulo (L, C, serie) | resta el **esquinero** | **suma** el ancho de la U |
+  | Esquina curva | 0 | 0 |
+
+- N-38 ✅ **Esquina en APA**: el perfil lo define el esquinero. Reparto invertido: la ventana más
+  ancha recibe la parte menor del aluminio.
+- N-39 ✅ **El aumento de INA en esquina**: misma cantidad de piezas; no se muestra en las
+  referencias (es interno). 🐞 Sin implementar (C-09).
+- N-75 ✅ **En INA la estructura descuenta los parantes de cada tramo, incluido el de esquina; el
+  vidrio no.** Se entiende así: el reparto de los tramos (su ancho en el diseño) resta los
+  parantes, igual que en APA (N-27); lo que no se descuenta en INA son los vidrios y las U de
+  fijos (N-37, N-42).
+- ⚙️✅ Algunos perfiles se retiran en el parante; Nova ya lo hace.
+
+**Ejemplo dictado: L inaparente con U-13** (G-02, N-42, N-43, N-44, N-46). Es incompleto, solo
+para entender: lado 1 de 120, lado 2 de 40, alto 100 en ambos, hoja 80, modelo normal, modulación
+`c f P<90> f`, mocheta `m(f)`, cruce 0.7. La corrediza del lado 1 topa la pared; el fijo del lado 1
+va a la esquina; el fijo del lado 2 topa la pared.
+
+| Pieza | Cálculo | Resultado |
 |---|---|---|
-| U de fijos | `uFijos(ancho, divisiones, cruce)`, agrupando fijos adyacentes | horizontal, por módulo |
-| U parante | `alto - 2×us` | vertical, de piso a techo |
-| U parante de mocheta | `(alto - altoHoja) - us + 1.5` | vertical |
-| U superior | `ancho` (1 pieza) | horizontal, ancho completo |
+| U de fijo, lado 1 | (120 + 0.7 cruce + 1 ancho de U) / 2 | 60.8 = 1 |
+| U superior, lado 1 | 120 + 1 ancho de U (entera; con mocheta es 1, en bandera sería 2) | 121 = 1 |
+| U del fijo, lado 2 | 40 + 1 | 41 = 2 |
+| U parante | 100 − 2 × 1.5; solo el fijo del lado 2 topa pared | 97 = 1 |
+| U parante de mocheta | (100 − 80) − 1.5 + 1.5; la corrediza del lado 1 topa pared | 20 = 1 |
 
-Con 1 división: U de fijos ×2 y U parante ×2, sin las otras. Con 2 divisiones aparece además la U
-parante de mocheta ×1. ❓ *La U superior sale en **una** pieza; si es "la de abajo y la del techo"
-deberían ser dos.*
+Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de esquina usa el
+**ancho** de la U (1), por eso 121 y no 121.5.
 
-**Aparente:** la U se arma por tramos con `textoUMochetaPorTramosAparente`; en full fijos la U
-horizontal es el marco continuo del tramo (2 piezas por tramo, arriba y abajo). ✔
+---
+
+## 8. Perfiles
+
+### 8.1 Puentes ⚙️
+
+| Puente | Altura (cm) | Esquinero (cm) |
+|---|---|---|
+| Múltiple | 1.5 | 5 |
+| tubo 2 x 1 | 2.5 | 5 |
+| **tubo 2⅜ x 1** (por defecto, N-03) | 2.5 | 6 |
+| tubo.c 1½ | 3.8 | 3.8 |
+| tubo.c 1 | 2.5 | 2.5 |
+| paflón 1½ | 3.8 | 8.25 |
+| paflón 1 | 2.5 | 8.25 |
+| tubo 2 x 2 | 5.0 | 5 |
+| gorrito | 2.5 | 2.5 |
+
+- N-40 ✅ **U**: la tabla de G-02, como **lista editable** donde el usuario agregue perfiles (C-10).
+  El aumento de esquina en INA usa el **ancho** de la U elegida (U-13 → 1).
+- N-41 ✅ **Cruce: 0.7 por defecto** (el espesor de la portafelpa); decide el usuario.
+- N-71 ✅ El cruce es el mismo para fijos y corredizas: 0.7, o el que ponga el usuario, para todos.
+- N-83 ✅ Ya no hay tablas de cruce ni de divisiones distintas por acabado: INA es igual a APA salvo
+  las esquinas. 🐞 `cruce()` de INA todavía usa la tabla vieja (C-15).
+
+### 8.2 U
+
+- N-42 ✅ **U de fijos**: APA `(ancho − parantes + cruces × cruce) / divisiones`; INA
+  `(ancho + cruces × cruce) / divisiones`, **más un ancho de U por cada esquina** en ángulo, que se
+  reparte entre las hojas como el cruce (`(120 + 0.7 + 1) / 2 = 60.8`). Los fijos seguidos van en
+  una sola U. ✅ (2026-09-25) **Con tramos automáticos y ninguno bloqueado, todos los módulos son
+  iguales**: el cruce se reparte en toda la ventana, aunque los tramos tengan distinto número de hojas
+  (420 en 4 + 3 hojas: hache `60 = 3`).
+- N-43 ✅ **U parante**: APA `altoHoja − (u + 0.2)`; INA `alto − 2u`. **Cantidad**:
+  - APA: una por cada colindancia de fijo con pared o parante.
+  - INA: una por cada fijo que colinda con **pared o con otro material de acople**; **no** con
+    parante ni en la esquina (ahí colinda con otro vidrio). Una L con un fijo contra pared en cada
+    lado, de igual altura, lleva 2. Cuenta también el lado libre. Corregido el 2026-09-25: antes
+    contaba por tramo, con los parantes (12 hojas en tres tramos daba 6 en lugar de 2).
+- N-44 ✅ **U parante de mocheta** (INA), **una por cada corrediza que topa pared o acople**, cuando
+  hay mocheta:
+  - Normal (mocheta arriba): `(alto − altoHoja) − u + 1.5`. Con U-13 el −1.5 y el +1.5 se anulan:
+    100 − 80 → 20; con U-3/8, (20 − 1) + 1.5 = 20.5.
+  - Invertido: `(alto − altoHoja) − u` (sin el +1.5). Hecho (C-21).
+  - Bandera: la mocheta de arriba como normal (+1.5) y la de abajo como invertido (sin él).
+- N-45 ✅ **U de mocheta** (APA): `altoMocheta − 2u` por tramos; con Múltiple o gorrito 1 por
+  tramo, con los demás 2. (La mocheta es una superficie: ancho de mocheta × alto de mocheta.)
+- N-46 ✅ **U superior** (INA): el ancho, 1 pieza; **en bandera, 2**. Con esquina: ancho del lado +
+  ancho de la U.
+- N-47 ✅ **Full fijos**: U horizontal = ancho del tramo, 2 piezas; con esquina en INA, más el ancho
+  de la U.
+- N-48 ✅ Con 1 división: U de fijos × 2 y U parante × 2.
+
+### 8.3 Puente, riel, felpero y los demás
+
+- N-49 ✅ **Puente = ancho del tramo.** Una corrida si no es bandera ni compuesto; 2 en bandera; en
+  compuesto, según el diseño.
+- N-50 ✅ Cantidad de puentes según el modelo y la cantidad de tramos. (Se abandonó la función que
+  solo llegaba a 15 divisiones.)
+- N-51 ✅ **Riel** = puente − 0.06; sin mocheta, `ancho − 0.06`. Solo si hay corredizas. En APA e
+  INA, **doble corrediza (ncc) lleva 2 rieles, triple corrediza (n3c) 3**, y así sucesivamente.
+- N-52 ✅ **U felpero** (INA) y **fijo corredizo** (APA) = la medida del riel. U felpero en INA con
+  mocheta; fijo corredizo en APA cuando el puente superior no es Múltiple o no hay puente superior.
+  (Revisar en código, C-19.)
+- N-52b ✅ **Perfil doble corrediza**: en las modulaciones doble y triple corrediza **reemplaza** a
+  la U felpero (INA) y al fijo corredizo (APA). Cantidad: **1 por cada 2 corredizas** (3 corredizas
+  → 2). Doble corrediza, fijo corredizo y U felpero son **rieles superiores**: miden **igual que
+  el riel** (puente − 0.06; confirmado el 2026-09-25). Ejemplo dictado, solo para entender: en la L, el lado de 120 (el mayor) resta el ancho
+  del parante de esquina (2.5 por defecto), en APA y en INA → `117.5 = 2`. 🐞 C-22.
+- N-53 ✅ **Tubo** (APA con mocheta) = el ancho, **1 por mocheta**.
+- N-54 ✅ **Hache** = la U de fijos, **1 por corrediza**. En Nova desigual hay una excepción que ya
+  funciona: hay que ubicarla y documentarla aquí (C-11).
+- N-55 ✅ **Portafelpa** = `altoHoja − 1.6`; 2 por corrediza + 1 por cada lado de fijo que toca una
+  corrediza.
+- N-56 ✅ **Tope** = `altoHoja − 0.9`, **1 por cada corrediza que colinda con pared o parante** (ncfc
+  → 2). Hecho (C-05); antes solo salía con 2 divisiones.
+- N-57 ✅ **Tee** (APA, mocheta) = `altoMocheta − u` (Múltiple o gorrito) o `− 2u`; una por unión
+  entre paños de mocheta.
 
 ---
 
 ## 9. Vidrios
 
-- **Corrediza:** ancho = `hache - 1.4`; alto = `altoHoja - 3.5`. ✔
-- **Mocheta:** holgura de 0.5 en ancho y 0.3 en alto; el ancho del tramo se reparte entre los paños
-  que dé `anchMota`. ✔
-- En INA la altura del vidrio de mocheta no descuenta el puente (§5). ✔
+### 9.1 Corrediza
+
+- N-58 ✅ `hache − 1.4` x `altoHoja − 3.5`.
+- N-59 ✅ **Full corredizas**: `U de fijos` x `altoHoja − 3.5`, sin el −1.4, porque se coloca en otro
+  sentido (contra el polvo y la lluvia).
+
+### 9.2 Fijo
+
+- N-60 ✅ **Alto**: `alto − (u + holgura)`, holgura 0.2 con U y 1 sin U. En APA el alto es la hoja;
+  en INA el alto completo.
+- N-61 ✅ **Ancho** = U de fijos menos la colindancia de cada lado: **pared o parante 0.5** · otro fijo
+  0.2 · corrediza 0. Igual en APA e INA. Hecho (C-06); antes pared o parante descontaba 0.4.
+  Full fijos y el fijo solo (1 división) no van por colindancia: cada vidrio descuenta una gruña
+  (0.4, N-87, N-91).
+
+### 9.3 Mocheta
+
+- N-62 ✅ **Paños por tramo**: `ceil(ancho del tramo / 180)`; el ancho del tramo se reparte.
+- N-63 ✅ **APA**: ancho del paño − 0.5; alto = mocheta − 0.5 (Múltiple o gorrito) o **mocheta − u
+  + 0.3** (los demás). Hecho (C-07), también en Nova desigual; antes restaba 0.3.
+- N-64 ✅ **INA**: alto = `alto − altoHoja + 1` la de arriba, `− 0.5` la de abajo en bandera (N-34);
+  invertido `alto − altoHoja − 0.5`. **Los vidrios de mocheta superior e inferior deben tener el
+  mismo ancho** (C-08). ✅ (2026-09-25) **Ancho**: lo que dejan las U de fijos ya cortadas (con su
+  medida de la lista, truncada) menos una gruña de **0.3 a cada lado**. Ejemplo dictado: 140 en fcf,
+  U de fijo 47.1 → `140 − 2 × 47.1 − 0.6 = 45.2`. Sobre dos o más corredizas juntas, lo mismo: un solo
+  vidrio con 0.3 a cada lado.
+- N-86 ✅ En INA la mocheta sigue siendo un espacio; el cálculo directo desde `alto − altoHoja` es un
+  atajo. En INA el **vidrio** de mocheta superior es **+ 1** y la **U parante de mocheta + 1.5**
+  (N-44).
+- N-87 ✅ **Ancho del módulo de mocheta**, APA: con corrediza, como sistema; solo con fijos, como
+  full fijos, o la lógica que existe: descontar las **gruñas** del ancho del tramo y dividir en n
+  partes. INA: como está en Nova con ceil.
+- N-91 ✅ **Gruña** = el espacio de separación entre vidrios. Lo recomendable es 0.3 en ventanas
+  pequeñas y 0.4 en grandes; **por ahora se sigue usando 0.4**, que es el máximo: la gruña no debe
+  ser demasiada. (Es el mismo 0.2 + 0.2 de dos fijos que colindan, N-61.) En la mocheta de INA se
+  usa 0.3 a cada lado (N-64).
+- N-88 ✅ **Corrediza en mocheta**: solo APA (INA no la admite). Esa mocheta **se convierte en
+  sistema**, con toda su lógica. No se admite sistema donde hay deformaciones (poligonal,
+  circular).
 
 ---
 
-## 10. Geometrías compuestas
+## 10. Volumen: L, C, serie y curva
 
-| Geometría | Modelo | Cómo se calcula |
+| Caso | Dibujo | Materiales |
 |---|---|---|
-| En L | `nl` | 2 lados; una esquina; un parante de esquina en la lista |
-| En C | `nu` | 3 lados; dos esquinas; el central descuenta las dos (en APA) |
-| Serie | `ns` | N lados encadenados |
-| Curvo | `ncu` | el ancho es el **arco**: con cuerda y flecha se calcula, si no el ancho escrito |
-| Circular | `nci` | dibujo con tag `O<1>` |
+| Plana | ✔ | ✔ |
+| En L, en C, serie | ✔ | ✔ cada lado aparte; esquina según G-09 |
+| Curva | ✔ | ✔ el ancho es el arco (N-08) |
 
-En L y en C cada lado se calcula por separado y los materiales se **combinan** sumando las
-cantidades de las medidas iguales. ✔
+- En esquinero **cada lado es otro tramo**, unido por un parante de esquina `P<90>` (N-84).
+- En una esquina curva, al empezar y al terminar el arco van parantes: el arco es otro tramo (N-84).
 
 ---
 
-## 11. Nova desigual
+## 11. Forma circular (primer dictado, N-65) ✅
 
-Es una rama **excluyente**: si hay módulos desiguales cargados, `calcularDesigual()` reemplaza todo
-el cálculo normal. ✔
+- **INA**: la U es el **perímetro** (la circunferencia) = 1.
+- **APA** en automático: el modelo pasa a **bandera** aunque se haya elegido otro (correcto).
+- **Puente** (primordial en esta forma): en un círculo de 180 × 180 se calculan las mochetas como
+  en rectangular, o se usa la altura de hoja. Mocheta + puente es una **flecha**; la cuerda trazada
+  en esa flecha es la **medida del puente**.
+- **U felpero, fijo corredizo, riel**: dependen del puente (su misma medida).
+- **U de mocheta**: el arco entre donde empiezan y terminan los puentes.
+- **U de fijo**: desde donde empieza el fijo contra la pared hasta donde empieza el puente. La U de
+  fijos por ceil vale solo para el vidrio. **U parante**: el arco entre el puente inferior y el
+  superior. Con 5 divisiones, la U del vidrio del centro va con ceil.
+- **Hache**: la división por ceil. **Portafelpa**: sin cambio.
+- **Tee**: cambia de altura. Con 2 paños de mocheta vale la lógica rectangular; con 3 o más también
+  (sale algo más larga y se recorta en obra), o mejor calcularla geométricamente, lo que servirá
+  también para circular y compuesto.
 
-- El **diseño manda**: cada módulo lleva el ancho exacto del dibujo. No hay regla de los 60 ni
-  reparto por ancho.
-- **Ajuste por módulo:** dentro de cada tramo, `ajuste = (nº de transiciones f↔c) × cruce / (nº de
-  módulos)`, y ese mismo ajuste se suma a todos los módulos del tramo. Ejemplo: `f<100> c<50> f<50>`
-  con cruce 0.9 → 2 transiciones / 3 módulos = 0.6 → U de fijos `100.6 = 1` y `50.6 = 1`. ✔
-- La U de fijos combina **rachas** de fijos adyacentes en un solo perfil. En INA el parante es
-  transparente y la racha lo atraviesa; en APA el parante la corta. ✔
-- ❓ `calcularDesigual()` usa el ancho **crudo**: no pasa por `arcoCurvo` ni por ninguna función de
-  descuento. En una L con diseño editado, los materiales no descuentan el esquinero.
-- ❓ El cargador de diseños no entiende `A<90>` (el separador entre lados de L y de C): un diseño de
-  L vuelve como una lista plana con los módulos de los dos lados juntos.
+## 12. Forma poligonal (se desarrolla con pruebas)
 
----
-
-## 12. Referencias
-
-Formato: ✔
-
-```
-An: <ancho>  x  Al: <alto>
-Altura de puente: <altoHoja | "sin puente">
-mocheta inf: <n>
-mocheta sup: <n>
-Divisiones: <n> -> fjs: <n>;czs: <n>
-[Puntos: ...]        (solo con más de 4 divisiones)
-```
-
-- `An:` y `Al:` muestran **la medida que se midió**, no la útil. Es a propósito: al archivar se
-  compara con lo que hay en el campo, y así no se archiva por error ni se duplica. ✔
-- Los conteos (divisiones, fijos, corredizas) salen del mismo número que usan el diseño y los
-  materiales. ✔
-- En doble puente la mocheta se reparte entre inferior y superior; en el resto va todo en la
-  inferior y la superior queda en 0. ✔
+- N-66 ✅ En Nova **no existe jamba** (es de ventanas estructuradas). Primero se evalúa la forma:
+  - Rectangular con un solo corte en cualquier lado → lógica rectangular.
+  - En la **mocheta** se acepta cualquier forma (inclinada, recortada…).
+  - El **sistema** tiene que ser un rectángulo perfecto, con descuadre máximo de 2.5 en altura.
+  - **Escalonado**: cada escalón es un tramo.
+- N-67 ✅ Vano triangular o tramo inclinado: la corrediza va donde queda **entera**.
+- N-68 ✅ Cada cálculo se aproxima al rectángulo.
+- N-69 ✅ Lo que no se sabe calcular se resuelve con pruebas, caso por caso.
+- **Orden de trabajo dictado**: primero dejar bien Nova con ceil y Nova desigual; después las
+  formas, con pruebas.
 
 ---
 
-## 13. Diseño simbólico
+## 13. Nova desigual y el diseño
 
-Hay **tres formatos distintos** y conviene no confundirlos:
+- N-70 ✅ **El diseño manda**: cada módulo lleva el ancho exacto del dibujo.
+- N-71 ✅ Ajuste por módulo: `(transiciones f↔c) × cruce / módulos`, con el mismo cruce para
+  todos. Se reparte en toda la ventana, igual que en Nova con ceil (N-42, decidido el 2026-09-25):
+  así el diseño automático, leído como diseño, da lo mismo. Un tramo **bloqueado** (N-85) queda
+  pendiente de implementar.
+- N-72 ✅ **Es momento de generar el nuevo diseño simbólico desde novaDiseño** (editarlo y
+  crearlo ahí). El dibujo está bien; el simbólico hace falta para los cálculos.
+- N-89 ✅ **Si el diseño se edita, el modelo pasa a compuesto (`x`) o desigual.** Para eso existe la
+  edición; si no, todo se resuelve en Nova.
+- N-73 ✔ Resuelto en el motor: el doble puente ya no se pierde en el camino desigual.
+- N-74 ✔ Resuelto en el motor: el diseño lo lee el lector único, con mochetas, modelo y esquinas.
+- N-81 ✅ **Un solo lector** del diseño simbólico (`DisenoNova`), y no solo para Nova: Medidas
+  alimenta a todas las calculadoras (C-13). Nova ya lo usa (2026-09-25).
 
-1. La **especificación** de `diseño simbólico nova.txt` (raíz del proyecto), con tokens compactos:
-   `Cliente - medidas - Vnic1 - prmn - Tb<210>(s(fccf)m(ff)) - aluminio - vidrios - accesorios`.
-2. Lo que la app **emite al calcular** (V2, `disenoSimbolicoV2`): los mismos datos en el mismo
-   orden, pero en campos etiquetados.
-3. El **paquete técnico** de dentro (`{nova,…}`, `disenoSimbolico`), que es lo que parsea
-   `DisenoNovaActivity`.
+### 13.1 Diseño compuesto (2026-09-25)
 
-### 13.0 Estructura oficial (la autoridad)
+Lo que ya hace el motor, sacado de las reglas N-31, N-33, N-35, N-49, N-72, N-88 y N-89:
 
-**Orden acordado, y por qué cada campo está donde está:**
+- **Cada tramo se calcula con sus propias franjas.** La franja de sistema da la altura de hoja de
+  ese tramo: un tramo con el puente a 130 junto a otro con el puente a 100, o sin puente.
+- **Las alturas dibujadas de las mochetas valen como proporción.** El editor las guarda con el
+  puente incluido y el diseño automático sin él. El espacio de cada tramo es su alto menos la hoja,
+  repartido entre sus mochetas como en el dibujo. Cada mocheta pierde el puente que la separa del
+  sistema (N-31); en inaparente, el vidrio usa el atajo sin descontar (N-86).
+- **Puente: una corrida por cada mocheta del tramo.** Normal o invertido 1, bandera 2, sin mocheta
+  ninguno. Ejemplo, la Dora editada (tramo de 210 normal y tramo de 157.5 en bandera): `210 = 1`,
+  `157.5 = 2`.
+- **Se archiva el diseño editado.** Antes se regeneraba el automático y lo editado se perdía. Si los
+  tramos tienen franjas distintas, el modelo se archiva como `x`.
 
-| # | Campo | Para qué sirve ese orden |
-|---|---|---|
-| 1 | **Cliente** | Un contrato suele tener varios productos: primero se reconoce de quién es y a dónde se envía |
-| 2 | **Producto** (producto, línea, acabado, tipo, numeración) | Decide **a qué calculadora** se manda desde MedidaActivity o MainActivity, y permite comparar con los otros productos del mismo cliente para numerarlos |
-| 3 | **Geometría** (volumen, forma, encuentro, modelo) | Ya dentro de la calculadora, decide **cómo tratar los datos** |
-| 4 | **Medidas** (ancho1, ancho2…, alto1, alto2…, hPuente, alféizar, dintel, cantidad) | Con qué calcular |
-| 5 | **Diseño** (tramo, condición (franja (alto), módulo (ancho))) | El dibujo técnico |
-| 6 | **Material** (aluminio, vidrio) | |
-| 7 | **Accesorios** | |
+Dictado por el usuario el 2026-09-25:
 
-Cómo usa la calculadora el campo 3: ✔
+- ✅ **Toda división entre franjas es un tubo** (una corrida de puente, del ancho del tramo). Entre
+  dos mochetas, se le descuenta a la de arriba. Entre sistema y mocheta sigue N-31 (la mocheta
+  pierde el puente), así normal, invertido y bandera no cambian. Ejemplo: sistema de 100 y dos
+  mochetas de 30 encima, en 160 → 2 corridas y dos mochetas de 27.5.
+- ✅ **La mocheta con corrediza se convierte en franja de sistema** (N-88), con un puente normal que
+  se le descuenta a la de arriba. Se calcula como sistema propio: riel, riel superior, hache,
+  portafelpa, tope, U y vidrios con su altura. Ejemplo: mocheta de 60 con corrediza sobre un
+  sistema de 100 → hoja de 57.5, riel `199.9 = 2`, portafelpas `98.4 = 3` y `55.9 = 3`.
+- ✅ **U superior e inferior de inaparente:** albergan el vidrio que va delante de la estructura, así
+  que no las afectan los tramos: siempre el ancho entero (420 en dos tramos de 4 y 3 sigue siendo
+  420). Va la superior si algún tramo tiene mocheta arriba y la inferior si alguno la tiene abajo.
 
-- **Volumen** esquinero → en Nova corrediza toca L, C o S; **la decisión final sale de contar los
-  anchos de `M<>`**: 2 lados → L, 3 → C, más → serie. Curvo → `ncu`.
-- **Forma** → normal (`nn`, `ncc`…), circular o poligonal (esta última sin desarrollar).
-- **Encuentro** → si algún lado va desmarcado en el diálogo, o sea si lleva un parante más.
-- **Modelo** → normal, invertido o **bandera**. **Bandera = doble puente** (decidido el
-  2026-09-08; antes la palabra se usaba para otra cosa).
+---
 
-La tabla de siglas de abajo es de **Nova ventana**; Nova también tiene mampara y puerta.
+## 14. Lo que sale
 
-| Nivel | Segmento | Sigla | Valores |
-|---|---|---|---|
-| 0 | Id / Cliente | `C` | nombre completo |
-| 1 | Producto | `V` | ventana |
-| 2 | Numeración | | nº de ventana |
-| 3 | Línea / sistema | `n` | sistema nova |
-| 4 | Acabado | `a` / `i` / `p` | aparente, inaparente, pivotante |
-| 5 | Tipología / mecanismo | `c` / `b` / `p` / `f` | corrediza, batiente, pivotante, fija |
-| 6 | Volumen | `p` / `e` / `c` | plano, esquinero, curvo |
-| 7 | Forma | `r` / `c` / `p` | rectangular, circular, poligonal |
-| 8 | Encuentro / transición | `m` / `a` / `l` | muro, acople, borde libre |
-| 9 | Modelo / integración | `n` / `i` / `b` / `x` | normal, invertido, bandera, compuesto |
-| 10 | Módulo / modulación | `f` / `c` / `p` / `P` | fijo, corrediza, pivotante, **parante** |
-| 11 | Franja | `s` / `m` | sistema, mocheta |
-| 12 | Tramo / condición | `B` / `L` | bloqueado, libre |
-| 13 | Medida | `a` / `h` / `hp` / `c` / `a` / `d` | ancho, alto, altura de puente, cantidad, alféizar, dintel |
-| 14 | Aluminio | | color, espesor, descripción |
-| 15 | Vidrio | | tipo, color, espesor, descripción |
-| 16 | Accesorio | | descripción |
+### 14.1 Referencias
 
-### 13.1 Formato V2 (lo que se ve al calcular) ✔
+- N-76 ✅ `An:` y `Al:` muestran la medida medida; todo lo demás es interno.
+- N-77 ✅ Divisiones, fijos y corredizas salen del mismo número que usan el diseño y el corte.
+
+### 14.2 El diseño simbólico
+
+- N-84 ✅ **Grupos, en este orden**: cliente, producto, geometría, medidas, diseño, material,
+  accesorios (el que ya emite la app: `C<>-P<>-G<>-M<>-T<>-MAT<>-ACC<>`). El orden de
+  `diseño simbólico nova.txt` queda superado.
+  - En volumen esquinero, cada lado es otro tramo y el parante de esquina lleva su ángulo:
+    **`P<90>`** (hoy se escribe `A<90>`, C-16).
+  - En esquina curva, el arco es otro tramo entre parantes, con **su propia información**: su
+    desarrollo y su flecha. Cada módulo curvo se escribe **`f<80,5>`**: 80 es el ancho (desarrollo o
+    arco) y 5 la flecha. En los resultados de la calculadora solo se muestra el desarrollo; arco,
+    flecha y cuerda se guardan para el curvado (pendiente, pero previsto). 🐞 Hoy la flecha va en
+    una marca `U<flecha>` en la primera franja (C-23).
+  - Poligonal y compuesto: con pruebas.
+- N-79 ✅ **Material**: al archivar, un diálogo pregunta los materiales; si no se ponen, van nulos y
+  la lista muestra solo el nombre del material, sin color ni espesor.
+- G-06 aplica: la altura de puente nunca sale en 0 (C-16).
+- La comparación entre el formato original y el de hoy está en `diseño simbólico nova actual.txt`.
+
+### 14.3 Lo que emite hoy (V2) ⚙️
 
 ```
-C<cliente>-M<ancho,alto,hp,null,null,cantidad>-P<V,n,acabado,mecanismo,nº>-G<volumen,forma,encuentro,modelo>-T<L{paquete}>-MAT<alu:…;vid:…>-ACC<…>
+C<cliente>-P<V,n,acabado,tipología,nº>-G<volumen,forma,encuentro,modelo>-M<anchos…,altos…,hp,alféizar,dintel,cantidad>-T<tramos>-MAT<alu:…;vid:…>-ACC<…>
 ```
 
-| Campo | Contenido |
+Dentro de `T<>`: `<`→`(`, `>`→`)`, `-`→`_`.
+
+### 14.4 El paquete técnico ⚙️
+
+```
+{nova,<acabado>,[<ancho>,<alto>: Tl<w>(franja;franja;…) P<2.5> Tl<w>(…) A<90> Tl<w>(…)]}
+```
+
+| Pieza | Significa |
 |---|---|
-| `C<>` | Cliente (o "sin cliente") |
-| `M<>` | ancho, alto, altura de puente, **alféizar**, **dintel**, cantidad |
-| `P<>` | `V` producto, `n` sistema nova, acabado `a`/`i`/`p`, mecanismo `c`/`p`, nº de producto |
-| `G<>` | volumen `p`/`e`/`c`, forma `r`/`c`/`p`, encuentro, modelo |
-| `T<>` | condición + `{paquete técnico}` |
-| `MAT<>` | `alu:<color>;vid:<tipo>` |
-| `ACC<>` | `acabado_sup:… \| obs:…` o `null` |
+| `Tl<w>` / `Tb<w>` | tramo libre / bloqueado (N-85) |
+| `P<2.5>` | parante entre tramos (`P<90>` en esquina, N-84) |
+| `H<alto>` / `H<izq,der>` | alto propio del tramo (escalón / inclinado) |
+| `s<alto>( … )` / `m<alto>( … )` | franja de sistema / mocheta, de abajo arriba, separadas por `;` |
+| `f<w>` / `c<w>` | módulo fijo / corrediza |
+| `U<flecha>` | curva · `O<1>` circular |
 
-**Estado respecto de la estructura oficial (§13.0):**
+---
 
-| # | Punto | Estado |
+## 15. Trampas conocidas
+
+1. Pasar la modulación donde se espera el modelo: la rama de bandera no se ejecuta (N-73).
+2. El puente se escribe por dos caminos (por tramos con mocheta, y `NovaInaCalculos.puentes` sin
+   ella): un arreglo toca los dos.
+3. `divisiones(…, tipo)` devuelve 0 para un tipo que no conoce.
+4. `df1` trunca: comparar con tolerancia da falsos iguales.
+5. `NovaCalculos` guarda en memoria el reparto manual y "cada cuántas corredizas", y lo leen otras
+   calculadoras (contra G-07, C-14).
+6. Lo editado en el diseño no llega a la cadena archivada (C-16).
+
+---
+
+## 16. Cambios de código que salen de estas reglas (pendientes, sin hacer)
+
+Orden dictado: **primero Nova con ceil y Nova desigual**; después diseño simbólico desde
+novaDiseño; después formas.
+
+| # | Cambio | Regla |
 |---|---|---|
-| a | Orden de los campos: cliente → producto → geometría → medidas → diseño → material → accesorios | ✔ **hecho** (2026-09-08) |
-| b | `M<>` con un ancho y un alto **por lado**, y la cantidad de anchos como señal de L / C / serie | ✔ **hecho**: `medidasDeLaGeometria()` |
-| c | `T<>` sin el paquete legado dentro: solo los tramos, sin repetir sistema, acabado ni medidas | ✔ **hecho**: `tramosDelPaquete()` |
-| d | La condición del tramo ya va en `Tl<…>`; sobraba la `L` fija envolviendo todo | ✔ **hecho** |
-| e | El número de ventana va al final de `P<>` (`V,n,a,c,1`) | ✔ correcto: así lo pide el orden acordado |
-| f | La cantidad va al final de `M<>`, tras alféizar y dintel | ✔ correcto: así lo pide el orden acordado |
-| g | `modelo` = `b` para doble puente | ✔ correcto: **bandera = doble puente** |
-| h | `encuentro` sale como máscara de 4 dígitos (`1011`, ARBL: 1 = colinda, 0 = vacío) en vez de `m`/`a`/`l` | ❓ la máscara dice *qué lado* va al vacío, que es lo que hace falta para saber si lleva un parante más; la letra sola no alcanza. Falta decidir si la estructura adopta la máscara |
-| i | El **parante** es un módulo (nivel 10) y debería poder ir dentro de la franja; hoy `P<2.5>` va suelto entre tramos | ❓ pendiente, ligado a poder añadir y quitar parantes dentro de un tramo (§16) |
-| j | `14 aluminio` = color, espesor, descripción; `15 vidrio` = tipo, color, espesor, descripción | ❓ hoy `MAT<alu:…;vid:…>` lleva un solo valor cada uno |
-| k | Alféizar y dintel siguen escritos a fuego como `null` | ❓ nadie los llena todavía |
-
-Ejemplo de la cadena que emite hoy (ventana plana, aparente, doble puente):
-
-```
-C<Jorge>-P<V,n,a,c,1>-G<p,r,m,b>-M<385.9,246.8,150,null,null,1>
--T<Tl(219)(m(48.4)(f(109.5)f(109.5));s(150)(f(54.7)c(54.7)c(54.7)f(54.7));m(48.4)(f(109.5)f(109.5)))
-   P(2.5) Tl(164.3)(m(48.4)(f(164.3));s(150)(f(54.7)c(54.7)f(54.7));m(48.4)(f(164.3)))>
--MAT<alu:null;vid:null>-ACC<null>
-```
-
-En una L el mismo campo llevaría los dos lados: `M<385.9,122,246.8,246.8,150,null,null,1>`. Como al
-final hay cuatro campos fijos (hp, alféizar, dintel, cantidad), el número de lados es
-`(total − 4) / 2`.
-
-**Quién lee esta cadena hoy:** solo tres copias del regex `-MAT<([^>]*)>` (en
-`casilla/MetadatosProduccion` y dos en `FichaActivity`). Nadie la lee por posición, por eso
-reordenar no rompió lo ya archivado. El paquete `{nova,…}` que sí se parsea viaja aparte, por
-`EXTRA_PAQUETE`, y no cambió. ✔
-
-Otro detalle: `dfV2` trunca a un decimal, igual que `df1`. ✔
-
-### 13.2 Escapado ✔
-
-`escaparCampoV2` transforma lo que va dentro de un campo: `<`→`(`, `>`→`)`, `-`→`_`, salto de
-línea→` / `. Por eso el paquete técnico aparece con paréntesis (`Tl(219)`, `m(48.4)`, `P(2.5)`) y
-hay que deshacerlo para leerlo como paquete. El `L{{nova,…}}` con doble llave es `L{` + un paquete
-que ya empieza por `{`.
-
-### 13.3 Paquete técnico ✔
-
-```
-{nova,<acabado>,[<ancho>,<alto>: Tl<w>(franja;franja;…) P<2.5> Tl<w>(…) ]}
-```
-
-- `Tl<w>` = tramo libre de ancho `w`; `P<2.5>` = parante entre tramos; `A<90>` = giro entre lados
-  en L, C y serie.
-- Franjas separadas por `;`: `s<alto>` sistema, `m<alto>` mocheta.
-- Módulos dentro de la franja: `f<w>` fijo, `c<w>` corrediza.
-- Orden de franjas según el remate: `nn` → `s;m` · `nr` → `m;s` · `np` → `m;s;m`.
-
-**Ejemplo real desarmado** (385.9 × 246.8, puente 150, aparente, doble puente):
-
-```
-Tl<219>( m<48.4>(f<109.5>f<109.5>) ; s<150>(f<54.7>c<54.7>c<54.7>f<54.7>) ; m<48.4>(f<109.5>f<109.5>) )
-P<2.5>
-Tl<164.3>( m<48.4>(f<164.3>) ; s<150>(f<54.7>c<54.7>f<54.7>) ; m<48.4>(f<164.3>) )
-```
-
-- 385.9 → `ceil(385.9/60)` = 7 divisiones, repartidas [4, 3].
-- Ancho útil = 385.9 − 2.5 = 383.4 → 54.77 por hoja → tramos de 219 y 164.3.
-- `ordenDivis(4)` = `fccf`, `ordenDivis(3)` = `fcf`; 54.7 porque `df1` trunca.
-- `anchMota(219)` = 2 paños de 109.5; `anchMota(164.3)` = 1 paño de 164.3.
-
-### 13.4 El dibujo usa la medida real ✔
-
-El diseño usa la **medida real**, no la útil: es visual, muestra cómo va a quedar la ventana y no
-alimenta los materiales. *No hay que "corregirlo" para que use el útil.*
-
-Consecuencia visible en el ejemplo: las mochetas suman 48.4 + 150 + 48.4 = 246.8, el alto exacto,
-porque el dibujo reparte `alto − altoHoja` **sin descontar los puentes**. En aparente la lista de
-materiales sí los descuenta y daría 45.9. ❓ *Diferencia de 2.5 por mocheta entre plano y corte.*
+| C-01 | Quitar pivotante como acabado (`PIV`) | N-02 |
+| C-02 | ✔ Hecho 2026-09-25. Puente por defecto tubo 2⅜ x 1 en todos los casos | N-03 |
+| C-03 | ✔ Hecho 2026-09-25. Vidrio de mocheta INA en ancho x alto | N-14 |
+| C-04 | Full corredizas INA: máximo automático 5 por tramo (hoy 6). No es solo un número: hoy full corredizas INA solo sabe hacer **un** tramo (puente, riel y felpero al ancho total); hay que enseñarle a partir en tramos | N-19 |
+| C-05 | ✔ Hecho 2026-09-25. Tope: 1 por corrediza que colinda con pared o parante (clásico, ncfc, full, doble y triple corrediza) | N-56 |
+| C-06 | ✔ Hecho 2026-09-25. Vidrio fijo: colindancia con pared o parante 0.5, en APA, INA y desigual | N-61 |
+| C-07 | ✔ Hecho 2026-09-25. Vidrio de mocheta APA (puentes que no son Múltiple ni gorrito): mocheta − u + 0.3, también en desigual | N-63 |
+| C-08 | Vidrios de mocheta superior e inferior del mismo ancho | N-64 |
+| C-09 | INA: sumar el ancho de U en cada esquina en ángulo (U de fijos, U superior, full fijos) | G-09, N-39, N-42, N-46, N-47 |
+| C-10 | Lista de U editable (ancho, alto, espesor máximo) | G-02, N-40 |
+| C-11 | Ubicar y documentar la excepción de hache en Nova desigual | N-54 |
+| C-12 | Camino desigual: doble puente, mochetas, modelo, esquinas y descuentos APA | N-73, N-74, N-75 |
+| C-13 | Un solo lector del diseño simbólico | N-81 |
+| C-14 | Estado de `NovaCalculos` propio de cada calculadora | G-07 |
+| C-15 | `cruce()` de INA sin la tabla vieja de divisiones | N-83 |
+| C-16 | Cadena archivada: altura de puente calculada (no 0), `P<90>` en esquinas, `Tb` bloqueado. ✔ Hecho 2026-09-25: lo editado se conserva y el modelo pasa a `x` | G-06, N-84, N-85, N-89 |
+| C-17 | Dintel (0 por defecto) y altura de puente por ergonomía desde el alféizar | N-09, G-08, N-90 |
+| C-18 | Orden de las líneas de material: horizontal, diagonal, vertical (revisar) | G-01 |
+| C-19 | Revisar U felpero en APA, cantidad de rieles en ncc/n3c y cantidad de U parante contra lo dictado | N-43, N-51, N-52 |
+| C-20 | Circular como forma, no como modulación | N-01 |
+| C-21 | U parante de mocheta INA. ✔ Invertido sin el +1.5 (hecho 2026-09-25). Falta bandera: hoy la U de INA en bandera se calcula como si fuera de 1 división (viene del código original, `932353b`) y no lleva U parante de mocheta | N-44 |
+| C-22 | Perfil doble corrediza en ncc/n3c (1 por cada 2 corredizas) en lugar de U felpero / fijo corredizo; rieles 2 en ncc, 3 en n3c | N-51, N-52b |
+| C-23 | Módulo curvo `f<desarrollo,flecha>` en el diseño simbólico; en resultados solo el desarrollo | N-84 |
 
 ---
 
-## 14. Trampas conocidas
+## 17. Preguntas que quedan
 
-1. **Pasar la modulación donde se espera el remate** hace que la rama `np` no se ejecute nunca. Ya
-   pasó en `generarReferencias`.
-2. **El puente se escribe por dos caminos**: la rama "por tramos" cuando `alto > altoHoja`, y
-   `NovaInaCalculos.puentes` cuando no. Un arreglo tiene que tocar los dos.
-3. **`divisiones(..., tipo)` devuelve 0** para los tipos que no conoce.
-4. **La cuenta de hojas y el ancho de las piezas son cosas distintas** en L y en C.
-5. **`df1` trunca**: comparar medidas con tolerancia da falsos iguales.
+Ninguna abierta. P-01 a P-11 quedaron respondidas el 2026-09-25 (cada respuesta está en su
+regla). "Una" en las respuestas del usuario es **INA** (el teclado lo corrige).
+
+Lo que falte saldrá con las pruebas de cada cambio de sección 16.
 
 ---
 
-## 15. Pendientes por confirmar
+## Anexo A. Los ejemplos de `siglas crystal.txt`
 
-| # | Qué | Dónde |
-|---|---|---|
-| 1 | El `+u` del encuentro en ángulo en INA con doble puente: en qué líneas de U y con qué cantidad | §5, §8 |
-| 2 | La U superior de INA sale en 1 pieza; ¿deberían ser 2 (abajo y techo)? | §8 |
-| 3 | `calcularDesigual()` trabaja con el ancho crudo, sin descuentos | §11 |
-| 4 | El cargador de diseños no entiende `A<90>` en L y en C | §11 |
-| 5 | La tabla de medida de puente por número de divisiones | §7 |
-| 6 | El cruce por defecto (0.7); en doble puente se vio 0.9 | §7 |
-| 7 | ¿Separar el eje de modulación del de geometría? | §1 |
-| 8 | `divisiones(..., tipo)` con `else -> 0` | §3 |
-| 9 | ¿El encuentro adopta la máscara de 4 dígitos, o se queda en `m`/`a`/`l`? | §13.1 h |
-| 10 | El parante como módulo dentro de la franja | §13.1 i, §16 |
-| 11 | Subcampos de aluminio y vidrio en `MAT<>`; alféizar y dintel sin llenar | §13.1 j, k |
-| 12 | El plano reparte la mocheta sin descontar puentes; en aparente el corte sí los descuenta (2.5 por mocheta) | §13.4 |
+Se compararon con el código el 2026-09-23. El usuario confirmó el 2026-09-25 que **tienen errores
+y no son fuente de reglas**:
 
----
+- El cruce es 0.7 (N-41), no el ≈ 1 que implicaban.
+- La hache va 1 por corrediza (N-54).
+- 189.6 con 3 divisiones fue error o decisión del usuario (N-21).
 
-## 16. Hacia dónde va (por qué importa la estructura)
-
-La cadena no es solo un registro: es el formato con el que se quiere trabajar más adelante. Por eso
-vale la pena ordenarla ahora, antes de seguir tocando reglas de cálculo.
-
-- **Calcular por cliente, no medida por medida.** Elegir un cliente y mandar a calcular todos sus
-  productos: cada cadena ya dice a qué calculadora va (`P<>`), cómo tratar los datos (`G<>`) y con
-  qué medidas (`M<>`). La calculadora devuelve el resultado sin pasar por la pantalla.
-- **Diseños mixtos y modulares.** Poder poner, por ejemplo, un vitroven dentro de una ventana de
-  aluminio ocupando un espacio, y que las calculadoras lean ese diseño y saquen los materiales.
-- **Una sola actividad de diseño**, en vez de una por producto como ahora.
-- **El parante pasa a tener un papel de primera.** Hay que poder **añadirlo y quitarlo dentro de un
-  tramo**, no solo al generar el tramo como hoy. Lo mismo con los **puentes dentro de una franja**.
-
-De ahí que las reglas de las calculadoras —divisiones, holguras, descuentos, aumentos, orden de
-módulos— haya que dejarlas escritas y ordenadas: son las que tendrán que aplicarse sin que nadie
-mire la pantalla.
-
----
+Mandan las reglas de este documento.
 
 ## Historia útil
 
-- `932353b` — punto de control antes del refactor del diseño simbólico. **No existía ningún
-  descuento de esquina.** Es la referencia buena para comparar.
-- `64c2251` — entró el refactor de nova desiguales. Trajo los descuentos de esquina (aplicados a los
-  dos acabados, que era incorrecto) y la regresión de la mocheta de INA.
+- `932353b` — punto de control antes del refactor del diseño simbólico; sin descuentos de esquina.
+- `64c2251` — refactor de Nova desigual; trajo los descuentos de esquina a los dos acabados
+  (incorrecto) y la regresión de la mocheta de INA.
+- `bdeef44` — el doble puente lleva dos corridas y en INA la mocheta no descuenta el puente.
+- `3535749` — INA deja de descontar la esquina.
+- `c5da2e5`, `0291240` (2026-09-08) — orden de la cadena V2 y una sola función para armarla.
 
-## Tests que fijan reglas
+## Pruebas que fijan reglas
 
-- `PuenteDobleEscaladoTest` — qué se duplica y qué no en el doble puente.
-- `DivisionesAnchoUtilTest` — la regla de los 60 y la diferencia entre medida real y ancho útil.
+- `ReglasDictadasVidriosYPerfilesTest` (N-14, N-44, N-56, N-61, N-63, N-87).
+- `PuenteDobleEscaladoTest` (N-35) · `DivisionesAnchoUtilTest` (N-15, N-17) ·
+  `RepartosPosiblesTest`, `RepartoSegunLosArcosTest` (N-25) · `TramosYUMochetaTest` (N-45) ·
+  `ContornoEnTramosTest`, `PiezasDelEscalonTest` (sección 12).
+- **Faltan**: listas de materiales completas de ventanas reales (plana APA, plana INA, la L
+  dictada en sección 7, una bandera) y pruebas del camino desigual. Cada cambio de sección 16 entra con su
+  prueba.

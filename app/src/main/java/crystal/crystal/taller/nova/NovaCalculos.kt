@@ -17,11 +17,16 @@ object NovaCalculos {
     var nfcUnTramo: Boolean = false
 
     // ==================== FUNCIONES DE FORMATO ====================
+    private const val MARGEN_TRUNCADO = 0.001f
+
     fun df1(defo: Float): String {
+        // Trunca a un decimal (N-10). El margen de 0.001 décimas es para los restos de la cuenta
+        // en coma flotante: 48.8 − 1.4 da 47.39999 y, sin margen, salía 47.3 en lugar de 47.4
+        // (un vidrio un milímetro corto).
         val truncado = if (defo >= 0f) {
-            floor(defo * 10f) / 10f
+            floor(defo * 10f + MARGEN_TRUNCADO) / 10f
         } else {
-            kotlin.math.ceil(defo * 10f) / 10f
+            kotlin.math.ceil(defo * 10f - MARGEN_TRUNCADO) / 10f
         }
 
         return if (truncado % 1 == 0f) {
@@ -151,7 +156,7 @@ object NovaCalculos {
         return (0 until grupos).map { idx -> if (idx < extra) base + 1 else base }
     }
 
-    private fun repartirDivisionesEnTramos(divisiones: Int, tramos: Int): List<Int> {
+    internal fun repartirDivisionesEnTramos(divisiones: Int, tramos: Int): List<Int> {
         if (tramos <= 1) return listOf(divisiones.coerceAtLeast(1))
         val base = divisiones / tramos
         val extra = divisiones % tramos
@@ -613,13 +618,56 @@ object NovaCalculos {
      */
     /**
      * Descuento de vidrio de UN fijo por colindancia, por lado: pared/parante (borde del tramo)
-     * 0.4, otro fijo 0.2, corrediza 0. Total = izquierda + derecha; un fijo entre dos corredizas
-     * da 0. Primitivo compartido por el motor igual y el desigual.
+     * [COLINDANCIA_PARED], otro fijo [COLINDANCIA_FIJO], corrediza 0. Total = izquierda + derecha;
+     * un fijo entre dos corredizas da 0. Primitivo compartido por el motor igual y el desigual.
+     * Ver docs/REGLAS_NOVA.md, N-61.
      */
     fun descuentoColindanciaFijo(tramo: List<Char>, i: Int): Float {
-        val izq = if (i == 0) 0.4f else if (tramo[i - 1] == 'c') 0f else 0.2f
-        val der = if (i == tramo.size - 1) 0.4f else if (tramo[i + 1] == 'c') 0f else 0.2f
+        val izq = if (i == 0) COLINDANCIA_PARED else if (tramo[i - 1] == 'c') 0f else COLINDANCIA_FIJO
+        val der = if (i == tramo.size - 1) COLINDANCIA_PARED else if (tramo[i + 1] == 'c') 0f else COLINDANCIA_FIJO
         return izq + der
+    }
+
+    /** Vidrio fijo contra pared o parante (N-61). Fue 0.4 hasta el 2026-09-25. */
+    const val COLINDANCIA_PARED = 0.5f
+
+    /** Vidrio fijo contra otro fijo (N-61). */
+    const val COLINDANCIA_FIJO = 0.2f
+
+    /**
+     * Gruña: el espacio de separación entre vidrios (N-91). Lo recomendable es 0.3 en ventanas
+     * pequeñas y 0.4 en grandes; por ahora se usa 0.4. Es lo que descuenta cada vidrio en full fijos
+     * (y el fijo solo, con 1 división, que es full fijos de uno).
+     */
+    const val GRUNA = 0.4f
+
+    /**
+     * Los tramos del orden clásico (N-22) como letras f/c, partidos por los parantes. Sirve para
+     * contar por colindancia igual que en ncfc.
+     */
+    fun patronModulosClasico(ancho: Float, divisiones: Int): List<List<Char>> {
+        if (divisiones <= 0) return emptyList()
+        return ordenDivisConParantes(divisiones, ancho)
+            .split(";P;")
+            .map { tramo -> tramo.filter { it == 'f' || it == 'c' }.toList() }
+            .filter { it.isNotEmpty() }
+    }
+
+    /**
+     * Ángulo tope (N-56): 1 por cada corrediza que colinda con pared o parante, según la
+     * modulación. Clásico: sale del orden (2 divisiones → 1; fcf → 0). Doble y triple corrediza y
+     * full corredizas: todos los módulos son corredizas, 2 por tramo.
+     */
+    fun anguloTopeCantidad(ancho: Float, divisiones: Int, modulacion: String): Int {
+        if (divisiones <= 0) return 0
+        return when (modulacion) {
+            "nff" -> 0
+            "ncfc" -> anguloTopeCorredizasNcfc(ancho, divisiones)
+            "nfc", "ncc", "n3c" -> anguloTopeBordes(
+                gruposDivisionesMochetaPorModelo(ancho, divisiones, modulacion).map { n -> List(n) { 'c' } }
+            )
+            else -> anguloTopeBordes(patronModulosClasico(ancho, divisiones))
+        }
     }
 
     fun descuentosVidrioFijos(tramos: List<List<Char>>): Map<Float, Int> {

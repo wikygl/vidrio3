@@ -347,7 +347,7 @@ object NovaCalculosDesiguales {
                 if (seg[i].tipo == 'f') {
                     // Descuento por COLINDANCIA. INA: el parante es transparente → se mira sobre
                     // TODA la ventana (un fijo junto a un parante ve el fijo del otro lado → 0.2,
-                    // no 0.4). APA: por tramo (el parante actúa como muro → 0.4 en el borde).
+                    // no 0.5). APA: por tramo (el parante actúa como muro → 0.5 en el borde).
                     val descuento = if (esIna) NovaCalculos.descuentoColindanciaFijo(patronGlobal, g)
                                     else NovaCalculos.descuentoColindanciaFijo(patronSeg, i)
                     vidriosFijos.add(Pair(seg[i].ancho + ajustes[g] - descuento, altoVidrioFijo))
@@ -388,12 +388,12 @@ object NovaCalculosDesiguales {
                     } else {
                         alturaMocheta.valor + 1f
                     }
-                    // APA: mismo alto que el motor igual → altoMocheta − us − 0.3 (normal)
+                    // APA: mismo alto que el motor igual → altoMocheta − us + 0.3 (N-63)
                     // o altoMocheta − 0.5 con puente múltiple/gorrito.
                     else -> if (esPuenteMultipleOGorrito(puente)) {
                         (alturaMocheta.valor - 0.5f).coerceAtLeast(0f)
                     } else {
-                        (alturaMocheta.valor - us - 0.3f).coerceAtLeast(0f)
+                        (alturaMocheta.valor - us + 0.3f).coerceAtLeast(0f)
                     }
                 }
                 if (tipo != "apa") {

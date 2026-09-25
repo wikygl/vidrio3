@@ -1,0 +1,249 @@
+Estructura de Denominación (como la genera hoy la app)
+
+Mismo orden que "diseño simbólico nova.txt", para compararlos lado a lado.
+Estado del código al 2026-09-24 (rama refactor-nova). La cadena la arma PaqueteV2.construir
+(taller/PaqueteV2.kt) con los datos de NovaCorrediza.disenoSimbolicoV2().
+Al final están las diferencias con el original, punto por punto y en el mismo orden.
+
+
+
+
+Segmento
+	Nivel de Jerarquía
+	Sigla
+	Opciones y Valores (lo que escribe la app)
+	Grupo en la cadena
+	Cliente
+	0.Id
+	C
+	Nombre completo; si está vacío, "sin cliente"
+	C<>
+
+
+
+
+Producto
+	1.producto
+	V
+	Ventana (siempre V en Nova)
+	P<>, 1.er valor
+	Línea
+	2.sistema
+	n
+	sistema nova (siempre n)
+	P<>, 2.º valor
+	Estético
+	3. Acabado
+	a / i / p
+	aparente, inaparente, pivotante
+	P<>, 3.er valor
+	Mecanismo
+	4. Tipología
+	c / p
+	corrediza; p solo cuando el acabado es pivotante (b y f no se generan)
+	P<>, 4.º valor
+	Numeración
+	5. número
+	1, 2, 3…
+	nº del producto dentro del proyecto (pasó al final del grupo)
+	P<>, 5.º valor
+
+
+
+
+Geometría
+	6. Volumen
+7. forma
+	p / e / c
+r / c / p
+	plano, esquinero (L, C o serie), curvo
+rectangular, circular, poligonal
+	G<>, 1.er y 2.º valor
+	Transición
+	8. Encuentro
+	m / a / 4 dígitos
+	muro; si algún lado queda al vacío, una máscara de 4 dígitos, uno por lado (1 = colinda, 0 = vacío), p. ej. 1011
+	G<>, 3.er valor
+	Integración
+	9. Modelo
+	n / i / b / x
+	normal, invertido, bandera (= doble puente), x (no se genera nunca)
+	G<>, 4.º valor
+
+
+
+
+Medidas
+	10. Medida
+	anchos, altos, hp, alféizar, dintel, cantidad
+	un ancho por lado y un alto por lado (la cantidad de anchos dice si es plana, L, C o serie), altura de puente, alféizar y dintel (siempre null), cantidad
+	M<>
+
+
+
+
+Diseño
+	11. Tramo
+	T / P / A
+	tramo, parante P<2.5>, esquina A<90> entre lados
+	T<>
+	Condición
+	12. condición
+	l
+	siempre libre (Tl); bloqueado (Tb) no se genera
+	T<>
+	Franjas
+	13. franja
+	s / m
+	sistema, mocheta; se escriben de abajo arriba
+	T<>
+	Modulación
+	14. Módulo
+	f / c
+	fijo, corrediza; el parante va como P<2.5> entre tramos (pivotante p no se genera)
+	T<>
+
+
+
+
+materiales
+	15. aluminio
+16. vidrio
+
+
+	alu:<color>
+vid:<tipo de vidrio>
+	MAT<>
+	accesorios
+	17.accesorio
+
+
+	acabado_sup:<…> | obs:<…>  (acabado superficial y observaciones)
+	ACC<>
+
+
+
+
+
+
+Orden de Siglas
+C<Cliente> - P<producto,sistema,acabado,tipología,número> - G<volumen,forma,encuentro,modelo> - M<ancho1,ancho2…,alto1,alto2…,hpuente,alféizar,dintel,cantidad> - T<Tramo,condición<medida>(franja<medida>(módulo<medida>módulo<medida>…x módulos);…x franjas) P<2.5> …x tramos> - MAT<alu:…;vid:…> - ACC<…>
+
+Dentro de T<> los < > se escriben ( ) y los guiones _, para no romper los grupos.
+
+
+Ejemplos
+
+Se usa la misma ventana del original: Dora, nova inaparente corrediza, 370 x 140,
+altura de puente 100, 1 unidad. Por la regla de los 60 salen 7 hojas, repartidas en dos
+tramos de 4 y 3.
+
+
+* ejemplo de ingreso de datos completos (generado en MedidaActivity o disenoActivity)
+
+Hoy no existe una cadena de ingreso. Cada origen entrega campos sueltos:
+
+  MedidaActivity:  producto, ancho 370, alto 140, cantidad 1, cliente Dora, boceto,
+                   contorno del vano, esquina (lados, ángulos, puente y parantes por lado)
+  Carrito (MainActivity):  ancho, alto, cantidad, cliente, producto
+  DisenoNovaActivity:  el paquete técnico, por ejemplo
+                   {nova,ina,[370,140:Tl<210>(s<100>(fccf);m<37.5>(ff)) P<2.5> Tl<157.5>(s<100>(fcf);m<37.5>(f))]}
+
+La altura de puente, las divisiones, el cruce, el puente y el modelo se escriben en la
+calculadora.
+
+
+
+
+* ejemplo de ingreso de datos con nulos
+
+Cliente vacío, altura de puente vacía (0), sin material:
+
+  ancho 370, alto 140, cantidad 1, cliente "", altura de puente 0
+
+
+
+
+   * ejemplo de salida completo sin edición
+
+
+C<Dora>-P<V,n,i,c,1>-G<p,r,m,n>-M<370,140,100,null,null,1>-T<Tl(210)(s(100)(f(52.5)c(52.5)c(52.5)f(52.5));m(37.5)(f(105)f(105))) P(2.5) Tl(157.5)(s(100)(f(52.5)c(52.5)f(52.5));m(37.5)(f(157.5)))>-MAT<alu:negro;vid:piro 6mm>-ACC<null>
+
+
+   * ejemplo de salida con edición
+
+La misma ventana editada en DisenoNova como en el original (una corrediza en la mocheta
+del primer tramo; el segundo tramo en bandera con tres corredizas):
+
+C<Dora>-P<V,n,i,c,1>-G<p,r,m,n>-M<370,140,100,null,null,1>-T<Tl(210)(s(100)(f(52.5)c(52.5)c(52.5)f(52.5));m(37.5)(f(105)f(105))) P(2.5) Tl(157.5)(s(100)(f(52.5)c(52.5)f(52.5));m(37.5)(f(157.5)))>-MAT<alu:negro;vid:piro 6mm>-ACC<null>
+
+Sale IGUAL que sin edición. Al volver del diseño, la calculadora solo recoge el ancho, el
+alto, la altura de la primera franja de sistema y la cantidad de hojas. Al archivar vuelve a
+armar T<> desde esos campos. La edición se usa para calcular los materiales mientras la
+pantalla está abierta, pero no queda en la cadena archivada. Ver la diferencia 11.
+
+
+   * ejemplo de salida con nulos
+
+
+C<sin cliente>-P<V,n,i,c,1>-G<p,r,m,n>-M<370,140,0,null,null,1>-T<Tl(210)(s(100)(f(52.5)c(52.5)c(52.5)f(52.5));m(37.5)(f(105)f(105))) P(2.5) Tl(157.5)(s(100)(f(52.5)c(52.5)f(52.5));m(37.5)(f(157.5)))>-MAT<alu:null;vid:null>-ACC<null>
+
+Con la altura de puente en 0, la hoja toma 5/7 del alto (100). M<> muestra el 0 escrito y
+T<> la hoja que se usó.
+
+
+
+
+Diferencias con "diseño simbólico nova.txt" (en el mismo orden)
+
+1. Grupos con etiqueta. Cada grupo lleva su letra y va entre < >: C<> P<> G<> M<> T<> MAT<> ACC<>.
+   En el original iban separados solo por guiones.
+
+2. Orden de los grupos. Las medidas pasaron del 2.º lugar al 4.º, detrás de la geometría:
+   cliente, producto, geometría, medidas, diseño, material, accesorios. Es el orden acordado
+   el 2026-09-08, igual para Nova, Mampara paflón y Puertas.
+
+3. Producto. En lugar de "Vnic1" pegado, va separado por comas: V,n,i,c,1. El número pasó al
+   final. Sigla, sistema, acabado y tipología son los mismos.
+
+4. Geometría. En lugar de "prmn" pegado, va separado por comas: p,r,m,n. El encuentro admite
+   ahora una máscara de 4 dígitos cuando algún lado queda al vacío. El modelo x (compuesto)
+   existe en la tabla pero nunca se genera.
+
+5. Medidas. Esquinero con un ancho y un alto por lado (en L: dos anchos y dos altos). Se sumó
+   la cantidad al final. Alféizar y dintel están previstos pero salen siempre null (el
+   original traía 90 y 10).
+
+6. Condición del tramo. Siempre sale Tl (libre); Tb (bloqueado) no se genera.
+
+7. Parante. Se escribe con su medida, P<2.5>, en vez de P solo.
+
+8. Franjas. Se separan con punto y coma (s(…);m(…)). En el original iban seguidas (s(…)m(…)).
+   El orden, de abajo arriba, es el mismo.
+
+9. Ancho de los módulos. La app escribe el ancho útil repartido, sin el cruce: 52.5. El
+   original escribía 52.9, que es el ancho ya con el cruce. En la mocheta pasa lo mismo:
+   f(105) y f(157.5), donde el original tenía f<105.7> y f<158.5>.
+
+10. Altura de las mochetas. Coincide con el original. Normal e invertida descuentan 2.5 del
+    puente también en inaparente (140 − 100 − 2.5 = 37.5). Bandera reparte sin descontar
+    (20 + 100 + 20 = 140).
+
+11. Salida con edición. En el original la cadena conservaba lo editado: corrediza en la
+    mocheta, bandera en un solo tramo, full corredizas en un tramo. Hoy lo editado no llega a
+    la cadena archivada: se vuelve a generar la automática.
+
+12. Esquinas. En L, C y serie cada lado va en su bloque, con A<90> entre lados. Si un lado
+    tiene varios tramos, sus módulos se agrupan por franja
+    (s(tramo1;P;tramo2);m(tramo1;P;tramo2)) y no por tramo como en la ventana plana. El
+    original no tenía ejemplo de esquina.
+
+13. Curva y circular. Llevan una marca dentro del diseño: U<flecha> para la curva y O<1> para
+    la circular. No estaban en el original.
+
+14. Materiales y accesorios. MAT<alu:color;vid:vidrio> lleva un solo dato por material (el
+    original preveía color, espesor y descripción). ACC<> lleva acabado superficial y
+    observaciones, o null.
+
+15. Nulos. El cliente nulo sigue saliendo "sin cliente" y los materiales nulos como null. La
+    altura de puente vacía sale 0 en M<> (el original también ponía 0).

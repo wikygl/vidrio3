@@ -74,8 +74,13 @@ object NovaInaCalculos {
     fun uParante(alto: Float, us: Float): Float {
         return alto - (2 * us)
     }
-    fun uParante2(alto: Float, altoHoja: Float, us: Float): Float {
-        return ((alto - altoHoja) - us) + 1.5f
+    /**
+     * U parante de mocheta (N-44): `(alto − altoHoja) − u + 1.5` con la mocheta arriba; en
+     * invertido (mocheta abajo) es `(alto − altoHoja) − u`, sin el +1.5.
+     */
+    fun uParante2(alto: Float, altoHoja: Float, us: Float, invertido: Boolean = false): Float {
+        val mas = if (invertido) 0f else 1.5f
+        return ((alto - altoHoja) - us) + mas
     }
     fun uSuperior(ancho: Float): Float {
         return ancho
@@ -199,7 +204,7 @@ object NovaInaCalculos {
         val holgura = if (us == 0f) 1f else 0.2f
         val uFijosVal = uFijos(ancho, divisiones, cruce)
         val altDes = df1(alto - (us + holgura)).toFloat()
-        // ncfc: ancho de vidrio de fijos por COLINDANCIA (pared/parante 0.4, fijo 0.2, corrediza 0).
+        // ncfc: ancho de vidrio de fijos por COLINDANCIA (pared/parante 0.5, fijo 0.2, corrediza 0).
         if (esCfc) {
             val tramos = NovaCalculos.patronModulosNcfc(ancho, divisiones)
             return NovaCalculos.descuentosVidrioFijos(tramos).entries.joinToString("\n") { (desc, cant) ->
@@ -212,27 +217,30 @@ object NovaInaCalculos {
             .map { tramo -> tramo.filter { it == 'f' || it == 'c' } }
             .filter { it.isNotEmpty() }
 
-        if (tramos.isEmpty()) {
+        // Un solo fijo (1 división) es full fijos de uno: descuenta una gruña (N-87, N-91).
+        if (tramos.isEmpty() || divisiones == 1) {
             val nFijosVal = nFijos(divisiones)
-            return "${df1(uFijosVal - 0.4f)} x ${df1(altDes)} = $nFijosVal"
+            return "${df1(uFijosVal - NovaCalculos.GRUNA)} x ${df1(altDes)} = $nFijosVal"
         }
 
         data class FijoTramo(val tramo: Int, val pos: Int, var descuento: Float)
         val fijos = mutableListOf<FijoTramo>()
+        // N-61: el fijo que colinda con pared o parante descuenta 0.5 (fue 0.4 hasta 2026-09-25).
+        val pared = NovaCalculos.COLINDANCIA_PARED
 
         tramos.forEachIndexed { idxTramo, sec ->
             val posFijos = sec.mapIndexedNotNull { idx, ch -> if (ch == 'f') idx else null }
             if (posFijos.isEmpty()) return@forEachIndexed
 
-            // Regla franja/tramo 5: uno queda en uFijo y los otros descuentan 0.4.
+            // Regla franja/tramo 5: uno queda en uFijo y los otros descuentan la pared.
             if (sec.length == 5) {
                 val fijoCentral = posFijos[posFijos.size / 2]
                 posFijos.forEach { pos ->
-                    val descuento = if (pos == fijoCentral) 0f else 0.4f
+                    val descuento = if (pos == fijoCentral) 0f else pared
                     fijos.add(FijoTramo(idxTramo, pos, descuento))
                 }
             } else {
-                posFijos.forEach { pos -> fijos.add(FijoTramo(idxTramo, pos, 0.4f)) }
+                posFijos.forEach { pos -> fijos.add(FijoTramo(idxTramo, pos, pared)) }
             }
         }
 
@@ -300,7 +308,8 @@ object NovaInaCalculos {
                 val altoV = altoVidrioMochetaIna(alto, altoHoja, alturaMocheta.valor, alturaMocheta.inferior, mochetaInvertidaIna)
                 for (run in runs) {
                     val w = df1((run * anchoPorCorr - 0.6f).coerceAtLeast(0f))
-                    val key = "${df1(altoV)} x $w"
+                    // N-14: siempre ancho x alto.
+                    val key = "$w x ${df1(altoV)}"
                     lineas[key] = (lineas[key] ?: 0) + 1
                 }
             }
@@ -341,7 +350,7 @@ object NovaInaCalculos {
                         mochetaInferior = alturaMocheta.inferior,
                         mochetaInvertidaIna = mochetaInvertidaIna
                     )
-                    val key = "${df1(altoVidrioMocheta)} x ${df1(medidaAncho)}"
+                    val key = "${df1(medidaAncho)} x ${df1(altoVidrioMocheta)}"
                     lineas[key] = (lineas[key] ?: 0) + cantidadBase
                 }
             }
@@ -368,7 +377,7 @@ object NovaInaCalculos {
                 mochetaInvertidaIna = mochetaInvertidaIna
             )
             for ((anchoMocheta, cantidadBase) in cantidadesPorAncho) {
-                val key = "${df1(altoVidrioMocheta)} x ${df1(anchoMocheta)}"
+                val key = "${df1(anchoMocheta)} x ${df1(altoVidrioMocheta)}"
                 lineas[key] = (lineas[key] ?: 0) + cantidadBase
             }
         }
@@ -401,18 +410,24 @@ object NovaInaCalculos {
         cruceExacto: Float,
         incluirUFijos: Boolean = true,
         esFullFijos: Boolean = false,
-        esCfc: Boolean = false
+        esCfc: Boolean = false,
+        invertido: Boolean = false
     ): String {
         val cruce = cruce(cruceExacto, divisiones)
         val altoHojaVal = altoHoja(alto, hoja)
 
         val uFijosVal = df1(uFijos(ancho, divisiones, cruce)).toFloat()
         val uParanteVal = df1(uParante(alto, us)).toFloat()
-        val uParante2Val = df1(uParante2(alto, altoHojaVal, us)).toFloat()
+        val uParante2Val = df1(uParante2(alto, altoHojaVal, us, invertido)).toFloat()
         val uSuperiorVal = df1(uSuperior(ancho)).toFloat()
         val nFijosVal = nFijos(divisiones)
-        // ncfc: U parante solo en fijos al borde del tramo (pared/parante); 0 = no se muestra.
-        val fijoUParanteVal = if (esCfc) NovaCalculos.uParanteFijosNcfc(ancho, divisiones) else NovaCalculos.fijoUParante(divisiones, ancho)
+        // N-43: en INA la U parante va 1 por cada fijo que colinda con muro, acople o lado libre,
+        // es decir, en los bordes de la ventana; el fijo junto a un parante NO cuenta (en APA sí).
+        // Antes contaba por tramo, con los parantes:
+        //     if (esCfc) NovaCalculos.uParanteFijosNcfc(ancho, divisiones) else NovaCalculos.fijoUParante(divisiones, ancho)
+        val tramosU = if (esCfc) NovaCalculos.patronModulosNcfc(ancho, divisiones)
+                      else NovaCalculos.patronModulosClasico(ancho, divisiones)
+        val fijoUParanteVal = NovaCalculos.fijosEnMuros(tramosU)
         val textoUFijos = if (!incluirUFijos) {
             ""
         } else if (esFullFijos) {
@@ -506,10 +521,8 @@ object NovaInaCalculos {
                 else -> textoUFijos
             }
         }
-        // ncfc: la U parante puede dar 0 (fijo que no colinda con pared/parante); no mostrarla.
-        return if (esCfc) {
-            resultadoU.lines().filterNot { it.substringAfter("=", "").trim() == "0" }.joinToString("\n")
-        } else resultadoU
+        // La U parante puede dar 0 (ningún fijo en los bordes de la ventana); no mostrarla.
+        return resultadoU.lines().filterNot { it.substringAfter("=", "").trim() == "0" }.joinToString("\n")
     }
 
     // ==================== FUNCIÓN COMPLETA DE OTROS ALUMINIOS ====================
@@ -532,7 +545,10 @@ object NovaInaCalculos {
         val textoRieles = if (divisiones == 1) "" else rieles(alto, hoja, ancho, divisiones)
         val textoUFelpero = if (divisiones == 1) "" else rieles(alto, hoja, ancho, divisiones)
         val textoHache = "${df1(hacheVal)} = $nCorredizasVal"
-        val textoAngTope = if (divisiones == 2) "${df1(altoHojaVal - 0.9f)} = 1" else ""
+        // N-56: 1 tope por cada corrediza que colinda con pared o parante (antes, solo con 2
+        // divisiones). Orden clásico; las otras modulaciones las resuelve NovaCorrediza.
+        val nTope = if (nCorredizasVal > 0) NovaCalculos.anguloTopeCantidad(ancho, divisiones, "nn") else 0
+        val textoAngTope = if (nTope > 0) "${df1(altoHojaVal - 0.9f)} = $nTope" else ""
         val textoPortafelpa = "${df1(portafelpaVal)} = $divDePortasVal"
 
         return OtrosAluminiosResult(
@@ -542,7 +558,7 @@ object NovaInaCalculos {
             hache = textoHache,
             angTope = textoAngTope,
             portafelpa = textoPortafelpa,
-            mostrarAngTope = divisiones == 2,
+            mostrarAngTope = textoAngTope.isNotBlank(),
             mostrarHache = divisiones != 1,
             mostrarUFelpero = divisiones != 1 && alto > hoja
         )

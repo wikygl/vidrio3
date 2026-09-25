@@ -59,8 +59,8 @@ class NovaCorrediza : AppCompatActivity() {
     private var cliente: String = ""
     private var tubo: Float = 1.5f
     private var puente: String = "M\u00FAltiple"
-    private val puenteInaDefault = "tubo 2\u215C x 1"
-    private val puenteNpDefault = "tubo 2 x 1"
+    /** Puente predeterminado cuando el elegido no se admite (N-03). */
+    private val puentePorDefecto = "tubo 2\u215C x 1"
     private var diseno: String = ""
     private var texto: String = ""
     private var otros: Boolean = false
@@ -596,6 +596,7 @@ class NovaCorrediza : AppCompatActivity() {
 
                 if (modulosDesiguales.isNotEmpty()) {
                     calcularDesigual()
+                    aplicarMotor()
                 } else {
                     actualizarTxPrConDisenoV2()
                     if (texto == "nl") {
@@ -610,6 +611,7 @@ class NovaCorrediza : AppCompatActivity() {
                         referencias()
                     }
                     aplicarVistaReferencias()
+                    aplicarMotor()
                     // En serie, habilitar la navegación/edición de los lados ya ingresados.
                     if (texto == "ns") activarNavegacionNs()
 
@@ -637,6 +639,102 @@ class NovaCorrediza : AppCompatActivity() {
                 Toast.makeText(this, "Ingrese dato válido", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    // ==================== MOTOR ÚNICO (fase 3) ====================
+    /**
+     * Fase 3 del motor único (docs/AUDITORIA_NOVA.md): con `true` los materiales salen de
+     * [crystal.crystal.taller.nova.motor.MotorNova] y reemplazan a los de las rutas viejas. Las
+     * referencias y el diseño siguen saliendo de la pantalla. Se encendió tras aprobar el usuario
+     * la comparación (docs/COMPARACION_MOTOR_NOVA.md); encendido el 2026-09-25 en el moto g04.
+     */
+    private var usarMotor = true
+
+    /** G-02: el ancho de la U según su alto (U-3/8 1 × 1, U-13 1 × 1.5, U-1/2 1.2 × 1.2, U-3/4 1.2 × 1.9). */
+    private fun perfilUMotor(): crystal.crystal.taller.nova.motor.PerfilU {
+        val alto = binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f
+        val ancho = when {
+            kotlin.math.abs(alto - 1.2f) < 0.01f || kotlin.math.abs(alto - 1.9f) < 0.01f -> 1.2f
+            else -> 1f
+        }
+        return crystal.crystal.taller.nova.motor.PerfilU(ancho, alto)
+    }
+
+    private fun puenteMotor(): crystal.crystal.taller.nova.motor.Puente {
+        val op = NovaSpinnerData.obtenerOpcionesTubo().firstOrNull { it.text == puente }
+        return crystal.crystal.taller.nova.motor.Puente(puente, tubo, op?.valorEsquina ?: tubo)
+    }
+
+    private fun bordeMotor(vacio: Boolean) =
+        if (vacio) crystal.crystal.taller.nova.motor.Borde.LIBRE else crystal.crystal.taller.nova.motor.Borde.MURO
+
+    private fun ventanaMotorAutomatica(): crystal.crystal.taller.nova.motor.VentanaNova {
+        val actual = MedidaNl(
+            ancho = arcoCurvo(binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f),
+            alto = binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f,
+            hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f,
+            divisManual = binding.etPartes.text?.toString()?.toIntOrNull() ?: 0
+        )
+        val lados = medidasDeLaGeometria().ifEmpty { listOf(actual) }
+        // El encuentro (N-78) solo se marca en la ventana plana: ARBL, 0 = al vacío.
+        val e = if (esGeometriaPlana()) metaEncuentro.padEnd(4, '1') else "1111"
+        val esquinero = opcionEsquinero()?.let { crystal.crystal.taller.nova.motor.Puente(it.text, it.valor, it.valorEsquina) }
+        return crystal.crystal.taller.nova.motor.VentanaAutomatica.ventana(crystal.crystal.taller.nova.motor.VentanaAutomatica.Entrada(
+            acabado = if (tipoNova == TipoNova.APA) crystal.crystal.taller.nova.motor.Acabado.APA else crystal.crystal.taller.nova.motor.Acabado.INA,
+            modelo = modeloMotor(),
+            modulacion = if (textoModelo == "nci" || textoModelo.isBlank()) "nn" else textoModelo,
+            lados = lados.map { crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(it.ancho, it.alto, it.hoja, it.divisManual) },
+            u = perfilUMotor(), puente = puenteMotor(), cruce = cruce(),
+            mochetaInferior = mochetaInferiorDoblePuente(),
+            izquierda = bordeMotor(e[3] == '0'), derecha = bordeMotor(e[1] == '0'),
+            libresVerticales = ladosVaciosVerticales(), perfilLibre = valorParanteVacio(),
+            esquinero = esquinero,
+            repartoManual = NovaCalculos.repartoManual, corredizasPorTramoNfc = corredizasPorTramo
+        ))
+    }
+
+    private fun modeloMotor() = when (modeloRemate) {
+        "nr" -> crystal.crystal.taller.nova.motor.ModeloMocheta.INVERTIDO
+        "np" -> crystal.crystal.taller.nova.motor.ModeloMocheta.BANDERA
+        else -> crystal.crystal.taller.nova.motor.ModeloMocheta.NORMAL
+    }
+
+    /** Nova desigual por el mismo motor: el diseño lo lee el lector único (N-81). */
+    private fun ventanaMotorDesigual(): crystal.crystal.taller.nova.motor.VentanaNova? {
+        if (ultimoPaquete.isBlank()) return null
+        val esquinero = opcionEsquinero()?.let { crystal.crystal.taller.nova.motor.Puente(it.text, it.valor, it.valorEsquina) }
+        return crystal.crystal.taller.nova.motor.DesdeDiseno.ventana(
+            ultimoPaquete, perfilUMotor(), puenteMotor(), cruce(), esquinero = esquinero,
+            modulacion = textoModelo.takeIf { it.isNotBlank() && it != "nci" }
+        )
+    }
+
+    /** Reemplaza los materiales de la pantalla por los del motor, si está encendido. */
+    private fun aplicarMotor() {
+        if (!usarMotor) return
+        // Si el motor no puede con algún caso, se queda lo que calculó la pantalla.
+        val m = runCatching {
+            val v = (if (modulosDesiguales.isNotEmpty()) ventanaMotorDesigual() else ventanaMotorAutomatica())
+            v?.let { crystal.crystal.taller.nova.motor.MotorNova.calcular(it) }
+        }.getOrNull() ?: return
+        val t = crystal.crystal.taller.nova.motor.MaterialesNova
+        val estado = EstadoMateriales(
+            u = t.texto(m.u), p = t.texto(m.puente), r = t.texto(m.riel), fc = t.texto(m.rielSuperior),
+            pf = t.texto(m.portafelpa), te = t.texto(m.tee), tope = t.texto(m.tope), hache = t.texto(m.hache),
+            tubo = t.texto(m.parante), vidrio = t.textoVidrios(m.vidrios),
+            referencias = binding.txReferencias.text?.toString().orEmpty()
+        )
+        aplicarMateriales(estado)
+        // En L y C lo que se archiva sale de esta copia: tiene que ser lo del motor.
+        if (materialesNlArchivables != null) materialesNlArchivables = estado
+        when (m.nombreRielSuperior) {
+            crystal.crystal.taller.nova.motor.RielSuperior.U_FELPERO -> binding.tvFc.setText(R.string.u_felpero)
+            crystal.crystal.taller.nova.motor.RielSuperior.FIJO_CORREDIZO -> binding.tvFc.setText(R.string.fijo_corre)
+            crystal.crystal.taller.nova.motor.RielSuperior.DOBLE_CORREDIZA -> binding.tvFc.text = m.nombreRielSuperior.etiqueta
+        }
+        val falso = t.texto(m.falsoPuente)
+        binding.txFalsoPuente.text = falso
+        binding.lyFalsoPuente.visibility = if (falso.isNotBlank()) View.VISIBLE else View.GONE
     }
 
     // ==================== CÁLCULO DESIGUAL ====================
@@ -2182,6 +2280,9 @@ class NovaCorrediza : AppCompatActivity() {
         return tipoNova == TipoNova.APA && modeloRemate == "nr"
     }
 
+    /** Modulaciones cuyo ángulo tope no sale del orden clásico (ver NovaCalculos.anguloTopeCantidad). */
+    private val modulacionesConTopePropio = setOf("ncfc", "nfc", "ncc", "n3c")
+
     private fun esModeloInvertidoIna(): Boolean {
         return tipoNova == TipoNova.INA && modeloRemate == "nr"
     }
@@ -2258,11 +2359,11 @@ class NovaCorrediza : AppCompatActivity() {
         if (textoModelo == "nfc") {
             val maxCorr = maxCorredizasPorTramoNfc()
             if (maxCorr > 4) return "paflon 1"
-            if (maxCorr > 2) return puenteInaDefault   // tubo 2⅜ x 1
-            return puenteNpDefault                     // tubo 2 x 1 (no múltiple/gorrito)
         }
-        // Invertido: preestablecido tubo 2⅜ x 1. INA: igual. Resto (doble puente): tubo 2 x 1.
-        return if (modeloRemate == "nr" || tipoNova == TipoNova.INA) puenteInaDefault else puenteNpDefault
+        // N-03: el predeterminado es tubo 2⅜ x 1 en todos los casos. Hasta el 2026-09-25 el doble
+        // puente y las full corredizas de hasta 2 por tramo usaban tubo 2 x 1:
+        //     return if (modeloRemate == "nr" || tipoNova == TipoNova.INA) puenteInaDefault else "tubo 2 x 1"
+        return puentePorDefecto
     }
 
     private fun aplicarPuentePredeterminadoSinMultiple() {
@@ -2537,7 +2638,7 @@ class NovaCorrediza : AppCompatActivity() {
                 // costados son uParante2 = 2. Sin mocheta (altoHoja>=alto) no va.
                 binding.txU.text = if (alto > altoHoja && us != 0f) {
                     val superior = NovaInaCalculos.uSuperior(ancho)
-                    val vertical = NovaInaCalculos.uParante2(alto, altoHoja, us)
+                    val vertical = NovaInaCalculos.uParante2(alto, altoHoja, us, esModeloInvertidoIna())
                     "${NovaCalculos.df1(superior)} = 1\n${NovaCalculos.df1(vertical)} = 2"
                 } else ""
             } else {
@@ -2550,7 +2651,8 @@ class NovaCorrediza : AppCompatActivity() {
                     cruceExacto = binding.etCruce.text?.toString()?.toFloatOrNull() ?: 0f,
                     incluirUFijos = !esModeloInvertidoIna(),
                     esFullFijos = textoModelo == "nff",
-                    esCfc = textoModelo == "ncfc"
+                    esCfc = textoModelo == "ncfc",
+                    invertido = esModeloInvertidoIna()
                 )
             }
         }
@@ -2722,15 +2824,10 @@ class NovaCorrediza : AppCompatActivity() {
             }
             binding.txTe.text = resultado.teeTxt
             binding.tLayout.visibility = if (resultado.mostrarTee) View.VISIBLE else View.GONE
-            if (textoModelo == "ncfc") {
-                // ncfc: ángulo tope = 1 por cada corrediza que toca el inicio o el final del tramo.
-                val nTope = NovaCalculos.anguloTopeCorredizasNcfc(ancho, divisiones)
-                binding.txTo.text = if (nTope > 0) "${NovaCalculos.df1(altoHoja - 0.9f)} = $nTope" else ""
-                binding.lyTo.visibility = if (nTope > 0) View.VISIBLE else View.GONE
-            } else if (textoModelo == "nfc") {
-                // Full corredizas: ángulo tope a cada lado de cada tramo (todos los bordes son
-                // corredizas) → 2 por tramo.
-                val nTope = 2 * NovaCalculos.gruposDivisionesMochetaPorModelo(ancho, divisiones, "nfc").size
+            if (textoModelo in modulacionesConTopePropio) {
+                // N-56: 1 por cada corrediza que toca el inicio o el final del tramo (pared o
+                // parante). ncfc según su patrón; full, doble y triple corrediza: 2 por tramo.
+                val nTope = NovaCalculos.anguloTopeCantidad(ancho, divisiones, textoModelo)
                 binding.txTo.text = if (nTope > 0) "${NovaCalculos.df1(altoHoja - 0.9f)} = $nTope" else ""
                 binding.lyTo.visibility = if (nTope > 0) View.VISIBLE else View.GONE
             } else {
@@ -2864,11 +2961,11 @@ class NovaCorrediza : AppCompatActivity() {
                 binding.txH.text = resultado.hache
             }
 
-            // ÁNGULO TOPE
-            if (textoModelo == "nfc") {
-                // Full corredizas: ángulo tope a cada costado (un tramo) → 2.
-                binding.txTo.text = "${NovaCalculos.df1(altoHoja - 0.9f)} = 2"
-                binding.lyTo.visibility = View.VISIBLE
+            // ÁNGULO TOPE (N-56): 1 por cada corrediza que colinda con pared o parante.
+            if (textoModelo in modulacionesConTopePropio) {
+                val nTope = NovaCalculos.anguloTopeCantidad(ancho, divisiones, textoModelo)
+                binding.txTo.text = if (nTope > 0) "${NovaCalculos.df1(altoHoja - 0.9f)} = $nTope" else ""
+                binding.lyTo.visibility = if (nTope > 0) View.VISIBLE else View.GONE
             } else {
                 binding.txTo.text = resultado.angTope
                 binding.lyTo.visibility = if (resultado.mostrarAngTope) View.VISIBLE else View.GONE
@@ -3465,6 +3562,21 @@ class NovaCorrediza : AppCompatActivity() {
     @androidx.annotation.VisibleForTesting
     fun disenoSimbolicoParaPruebas(): String = disenoSimbolico()
 
+    /**
+     * El diseño que se archiva: el editado a mano si lo hay (N-72, N-89), y si no el automático.
+     * Antes siempre se regeneraba el automático desde los campos, y lo editado —anchos desiguales,
+     * una bandera en un solo tramo, un tramo sin puente— se perdía al archivar.
+     */
+    private fun disenoParaArchivar(): String =
+        if (modulosDesiguales.isNotEmpty() && ultimoPaquete.isNotBlank()) ultimoPaquete else disenoSimbolico()
+
+    /** ¿Los tramos del diseño editado tienen franjas distintas? Entonces es compuesto (N-89). */
+    private fun esDisenoCompuesto(): Boolean {
+        if (modulosDesiguales.isEmpty() || ultimoPaquete.isBlank()) return false
+        val d = crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(ultimoPaquete) ?: return false
+        return d.tramos.map { t -> t.franjas.map { it.esSistema } }.distinct().size > 1
+    }
+
     private fun disenoSimbolico(): String {
         val ancho = binding.etAncho.text.toString().toFloat()
         val alto = binding.etAlto.text.toString().toFloat()
@@ -3629,14 +3741,15 @@ class NovaCorrediza : AppCompatActivity() {
             texto == "nv" -> "a"
             else -> "m"
         }
-        // El "modelo" del paquete refleja el REMATE (eje independiente de la modulación).
-        val modelo = when (modeloRemate) {
+        // El "modelo" del paquete refleja el REMATE (eje independiente de la modulación). Un diseño
+        // con tramos de modelos distintos es compuesto (N-89).
+        val modelo = if (esDisenoCompuesto()) "x" else when (modeloRemate) {
             "nn" -> "n"
             "nr" -> "i"
             "np" -> "b"
             else -> "x"
         }
-        val disenoTecnico = try { disenoSimbolico() } catch (_: Exception) { "" }
+        val disenoTecnico = try { disenoParaArchivar() } catch (_: Exception) { "" }
         val tramo = escaparCampoV2(tramosDelPaquete(disenoTecnico).ifBlank { "null" })
         val aluminio = escaparCampoV2(metaColorAluminio.ifBlank { "null" })
         val vidrios = escaparCampoV2(metaTipoVidrio.ifBlank { "null" })
@@ -4713,7 +4826,7 @@ class NovaCorrediza : AppCompatActivity() {
             ModoMasivoHelper.texto(binding.tvT) to ModoMasivoHelper.texto(binding.txT),
             ModoMasivoHelper.texto(binding.tvH) to ModoMasivoHelper.texto(binding.txH)
         ).filter { it.value.isNotBlank() }
-        val paqueteDiseno = try { disenoSimbolico() } catch (_: Exception) { "" }
+        val paqueteDiseno = try { disenoParaArchivar() } catch (_: Exception) { "" }
         val paqueteDisenoV2 = try { disenoSimbolicoV2() } catch (_: Exception) { "" }
         ModoMasivoHelper.devolverResultado(
             activity = this,
@@ -4815,7 +4928,7 @@ class NovaCorrediza : AppCompatActivity() {
                 ListaCasilla.procesarArchivarConPrefijo(this, binding.tvDiseno, binding.txDiseno, mapListas, identificadorPaquete)
             }
             try {
-                val paquete = disenoSimbolico()
+                val paquete = disenoParaArchivar()
                 if (paquete.isNotBlank()) {
                     val entrada = mutableListOf(paquete, "", identificadorPaquete)
                     mapListas.getOrPut("DisenoPaquete") { mutableListOf() }.add(entrada)
