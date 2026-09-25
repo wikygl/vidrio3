@@ -25,6 +25,12 @@ data class MaterialesNova(
     val riel: List<Pieza> = emptyList(),
     val rielSuperior: List<Pieza> = emptyList(),
     val nombreRielSuperior: RielSuperior = RielSuperior.FIJO_CORREDIZO,
+    /**
+     * Perfil doble corrediza de los tramos de solo corredizas, cuando conviven con tramos clásicos
+     * en la misma ventana (un diseño editado: `fccf` y `ccc`). Si todos los tramos son de solo
+     * corredizas, la doble corrediza va en [rielSuperior] con su nombre y esta lista queda vacía.
+     */
+    val dobleCorrediza: List<Pieza> = emptyList(),
     val portafelpa: List<Pieza> = emptyList(),
     val tee: List<Pieza> = emptyList(),
     val tope: List<Pieza> = emptyList(),
@@ -40,6 +46,7 @@ data class MaterialesNova(
         u = u + o.u, puente = puente + o.puente, riel = riel + o.riel,
         rielSuperior = rielSuperior + o.rielSuperior,
         nombreRielSuperior = if (rielSuperior.isEmpty()) o.nombreRielSuperior else nombreRielSuperior,
+        dobleCorrediza = dobleCorrediza + o.dobleCorrediza,
         portafelpa = portafelpa + o.portafelpa, tee = tee + o.tee, tope = tope + o.tope,
         hache = hache + o.hache, parante = parante + o.parante,
         falsoPuente = falsoPuente + o.falsoPuente, vidrios = vidrios + o.vidrios

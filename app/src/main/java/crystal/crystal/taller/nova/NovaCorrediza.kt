@@ -732,6 +732,13 @@ class NovaCorrediza : AppCompatActivity() {
             crystal.crystal.taller.nova.motor.RielSuperior.FIJO_CORREDIZO -> binding.tvFc.setText(R.string.fijo_corre)
             crystal.crystal.taller.nova.motor.RielSuperior.DOBLE_CORREDIZA -> binding.tvFc.text = m.nombreRielSuperior.etiqueta
         }
+        // Diseño con tramos clásicos y tramos de solo corredizas: la doble corrediza de estos va en
+        // su propia fila (lyUf, que ya no se usaba), porque la fila del riel superior la ocupa el
+        // fijo corredizo o la U felpero de los otros. Se archiva igual que las demás filas.
+        val doble = t.texto(m.dobleCorrediza)
+        binding.tvUf.text = crystal.crystal.taller.nova.motor.RielSuperior.DOBLE_CORREDIZA.etiqueta
+        binding.txUf.text = doble
+        binding.lyUf.visibility = if (doble.isNotBlank()) View.VISIBLE else View.GONE
         val falso = t.texto(m.falsoPuente)
         binding.txFalsoPuente.text = falso
         binding.lyFalsoPuente.visibility = if (falso.isNotBlank()) View.VISIBLE else View.GONE
@@ -2347,9 +2354,20 @@ class NovaCorrediza : AppCompatActivity() {
             // Hasta 2 corredizas por tramo: solo se bloquea Múltiple y gorrito.
             return esPuenteMultiple(textoPuente) || textoPuente.lowercase().contains("gorrito")
         }
-        // Invertido (nr) nunca admite Múltiple, en cualquier geometría/forma/acabado.
+        // Invertido (nr) nunca admite Múltiple, en cualquier geometría/forma/acabado. Tampoco un
+        // diseño editado con algún tramo invertido o en bandera (N-03): el modelo de la ventana es el
+        // del primer tramo y no lo delataba.
         return esPuenteMultiple(textoPuente) &&
-                (tipoNova == TipoNova.INA || esModeloDoblePuente() || modeloRemate == "nr")
+                (tipoNova == TipoNova.INA || esModeloDoblePuente() || modeloRemate == "nr" ||
+                    disenoConMochetaAbajo())
+    }
+
+    /** ¿El diseño editado tiene algún tramo con mocheta debajo del sistema (invertido o bandera)? */
+    private fun disenoConMochetaAbajo(): Boolean {
+        if (modulosDesiguales.isEmpty() || ultimoPaquete.isBlank()) return false
+        val d = runCatching { crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(ultimoPaquete) }.getOrNull()
+            ?: return false
+        return d.tramos.any { t -> t.franjas.indexOfFirst { it.esSistema } > 0 }
     }
 
     private fun puentePredeterminadoSinMultiple(): String {
@@ -3454,6 +3472,9 @@ class NovaCorrediza : AppCompatActivity() {
 
             // Guardar paquete y actualizar diseño
             ultimoPaquete = paqueteSeguro
+            // Un tramo invertido o en bandera no admite Múltiple (N-03): se pasa al preestablecido,
+            // como cuando se elige el modelo con su botón.
+            if (puenteMultipleNoPermitido(puente)) aplicarPuentePredeterminadoSinMultiple()
             binding.textView28.setText(R.string.referencias_y_c_lculos)
             val tipoMsg = if (modulosDesiguales.isNotEmpty()) " (desigual)" else ""
             Toast.makeText(this, "Diseño cargado: ${df1(ancho)} x ${df1(alto)}$tipoMsg", Toast.LENGTH_SHORT).show()
@@ -4875,6 +4896,10 @@ class NovaCorrediza : AppCompatActivity() {
             }
             if (esValido(binding.fcLayout)) {
                 ListaCasilla.procesarArchivarConPrefijo(this, binding.tvFc, txArchivableNl(binding.txFc, matNl?.fc), mapListas, identificadorPaquete)
+            }
+            // Doble corrediza aparte (diseño con tramos clásicos y de solo corredizas; ver aplicarMotor).
+            if (esValido(binding.lyUf) && binding.txUf.text.isNotBlank()) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.tvUf, binding.txUf, mapListas, identificadorPaquete)
             }
             if (esValido(binding.lyRiel)) {
                 ListaCasilla.procesarArchivarConPrefijo(this, binding.tvR, txArchivableNl(binding.txR, matNl?.r), mapListas, identificadorPaquete)

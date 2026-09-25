@@ -154,6 +154,7 @@ object MotorNova {
         val puente = mutableListOf<Pieza>()
         val riel = mutableListOf<Pieza>()
         val rielSup = mutableListOf<Pieza>()
+        val dobleCorrediza = mutableListOf<Pieza>()
         val parante = mutableListOf<Pieza>()
         val vidrios = mutableListOf<Vidrio>()
 
@@ -241,21 +242,40 @@ object MotorNova {
         if (nParantes > 0) parante.add(Pieza(l.altoMedido, nParantes, Orientacion.VERTICAL))
 
         // ---------- Riel (N-51) y riel superior (N-52, N-52b) ----------
-        val primeroConCorredizas = l.tramos.indexOfFirst { it.corredizas > 0 }.coerceAtLeast(0)
-        val vRef = vert[primeroConCorredizas]
+        // Full corredizas (N-51, N-52b): 1 riel por corrediza, y el perfil doble corrediza, 1 por cada
+        // 2 corredizas, en lugar de U felpero o fijo corredizo. Se decide por TRAMO, como el cruce: un
+        // tramo `ccc` dentro de un diseño editado es full corredizas aunque la ventana sea "nn".
+        // Antes solo miraba la modulación de la ventana (`todoCorredizas`) y ese tramo salía con 1
+        // riel y fijo corredizo.
+        fun esFull(t: Tramo) = todoCorredizas || soloCorredizas(t)
+        val tramosClasicos = l.tramos.withIndex().filter { it.value.corredizas > 0 && !esFull(it.value) }
+        val vRef = tramosClasicos.firstOrNull()?.let { vert[it.index] } ?: vert[0]
+        // Si todos los tramos con corredizas son full, la doble corrediza ocupa el lugar del riel
+        // superior de la ventana; si conviven con tramos clásicos, va aparte ([MaterialesNova.dobleCorrediza]).
         val nombreRielSup = when {
-            todoCorredizas -> RielSuperior.DOBLE_CORREDIZA
+            tramosClasicos.isEmpty() -> RielSuperior.DOBLE_CORREDIZA
             !apa && vRef.hayMocheta && !vRef.soloAbajo -> RielSuperior.U_FELPERO
             else -> RielSuperior.FIJO_CORREDIZO
         }
+        val dobleAparte = tramosClasicos.isNotEmpty()
         l.tramos.forEachIndexed { i, t ->
             if (t.corredizas == 0) return@forEachIndexed
             val medida = t.ancho - 0.06f
-            riel.add(Pieza(medida, if (todoCorredizas) t.corredizas else 1))
+            if (esFull(t)) {
+                riel.add(Pieza(medida, t.corredizas))
+                val doble = Pieza(medida, ceil(t.corredizas / 2.0).toInt())
+                if (dobleAparte) dobleCorrediza.add(doble) else rielSup.add(doble)
+                return@forEachIndexed
+            }
+            riel.add(Pieza(medida, 1))
             // Como la pantalla: no va cuando hay mocheta arriba con puente Múltiple, que ya lo trae.
-            val lleva = todoCorredizas || !vert[i].hayMocheta || vert[i].soloAbajo || !v.puente.esMultiple
-            if (lleva) rielSup.add(Pieza(medida, if (todoCorredizas) ceil(t.corredizas / 2.0).toInt() else 1))
+            val lleva = !vert[i].hayMocheta || vert[i].soloAbajo || !v.puente.esMultiple
+            if (lleva) rielSup.add(Pieza(medida, 1))
         }
+        // Antes:
+        //     riel.add(Pieza(medida, if (todoCorredizas) t.corredizas else 1))
+        //     val lleva = todoCorredizas || !vert[i].hayMocheta || vert[i].soloAbajo || !v.puente.esMultiple
+        //     if (lleva) rielSup.add(Pieza(medida, if (todoCorredizas) ceil(t.corredizas / 2.0).toInt() else 1))
 
         // ---------- Hache, portafelpa, tope (N-54, N-55, N-56) ----------
         val hache = ms.filter { it.corrediza }.map { Pieza(it.u, 1) }
@@ -298,8 +318,13 @@ object MotorNova {
         }
 
         // ---------- Vidrios corredizos (N-58, N-59) ----------
+        // Full corredizas va sin el −1.4 (N-59). Se mira el tramo, como el cruce: un tramo de solo
+        // corredizas dentro de un diseño editado es full corredizas aunque la ventana sea "nn".
+        // Doble y triple corrediza siguen con el −1.4. Antes: `if (l.modulacion == "nfc") c.u else c.u − 1.4f`.
+        val fullPorTramo = l.modulacion !in setOf("ncc", "n3c")
         ms.filter { it.corrediza }.forEach { c ->
-            val ancho = if (l.modulacion == "nfc") c.u else c.u - 1.4f
+            val full = l.modulacion == "nfc" || (fullPorTramo && soloCorredizas(l.tramos[c.tramo]))
+            val ancho = if (full) c.u else c.u - 1.4f
             vidrios.add(Vidrio(ancho, vDe(c).altoHoja - 3.5f))
         }
 
@@ -331,7 +356,7 @@ object MotorNova {
 
         var total = MaterialesNova(
             u = u, puente = puente, riel = riel, rielSuperior = rielSup, nombreRielSuperior = nombreRielSup,
-            portafelpa = portafelpa, tee = tee, tope = tope, hache = hache, parante = parante,
+            dobleCorrediza = dobleCorrediza, portafelpa = portafelpa, tee = tee, tope = tope, hache = hache, parante = parante,
             falsoPuente = falsoPuente, vidrios = vidrios
         )
         // Franjas de sistema de más (N-88: la mocheta con corrediza pasa a ser sistema): cada una se
@@ -362,7 +387,7 @@ object MotorNova {
         val apa = v.acabado == Acabado.APA
         val sumaW = l.tramos.sumOf { it.ancho.toDouble() }.toFloat()
         val escala = if (!apa && sumaW > 0f) l.anchoCalculo / sumaW else 1f
-        val transicionesTramo = l.tramos.map { t -> transiciones(t, l.modulacion) }
+        val transicionesTramo = l.tramos.map { t -> transiciones(t) }
         val ajusteLado = if (l.divisiones > 0) transicionesTramo.sum() * v.cruce / l.divisiones else 0f
         val out = mutableListOf<M>()
         var g = 0
@@ -377,14 +402,26 @@ object MotorNova {
     }
 
     /**
-     * Cruces de un tramo: cada paso fijo↔corrediza. En las modulaciones de solo corredizas (full,
-     * doble, triple) se cuentan como en el orden clásico del mismo número de hojas, como la pantalla.
+     * Cruces de un tramo: cada paso fijo↔corrediza. Un tramo de solo corredizas (full, doble,
+     * triple) se cuenta como el orden clásico del mismo número de hojas, como la pantalla.
+     *
+     * Se mira el TRAMO, no la modulación de la ventana: en un diseño editado, un tramo `ccc` junto
+     * a uno `fccf` es una ventana "nn", y contado por la modulación se quedaba sin cruces (la U de
+     * fijos de la Dora editada daba 52.7 con `ccc` y 52.9 con `fcf`). El mismo tramo tiene que dar
+     * lo mismo venga de donde venga.
+     *
+     * Antes:
+     *     val p = if (modulacion in setOf("nfc", "ncc", "n3c")) DisenoAutomatico.patron(t.modulos.size, "nn")
+     *             else t.modulos.map { it.corrediza }
      */
-    private fun transiciones(t: Tramo, modulacion: String): Int {
-        val p = if (modulacion in setOf("nfc", "ncc", "n3c")) DisenoAutomatico.patron(t.modulos.size, "nn")
+    private fun transiciones(t: Tramo): Int {
+        val p = if (soloCorredizas(t)) DisenoAutomatico.patron(t.modulos.size, "nn")
                 else t.modulos.map { it.corrediza }
         return (0 until p.size - 1).count { p[it] != p[it + 1] }
     }
+
+    /** Un tramo de dos o más hojas, todas corredizas. */
+    private fun soloCorredizas(t: Tramo): Boolean = t.modulos.size > 1 && t.modulos.all { it.corrediza }
 
     /** Rachas de fijos seguidos. En INA atraviesan los parantes (N-42); en APA no. */
     private fun rachasDeFijos(ms: List<M>, cruzaParantes: Boolean): List<List<M>> {

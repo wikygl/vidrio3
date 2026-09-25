@@ -18,7 +18,8 @@ número. Lo que cambia en el código sale de aquí, con su prueba.
 **Fuentes:** el documento del usuario *Revisión de reglas* (Google Docs, 2026-09-25), las respuestas
 en conversación, `diseño simbólico nova.txt` y la revisión del código del 2026-09-23.
 
-Última revisión: 2026-09-25 (se incorporaron las respuestas de *Revisión de reglas*).
+Última revisión: 2026-09-25 (se incorporaron las respuestas de *Revisión de reglas*; después, el
+puente preestablecido por modelo y por lado, N-03, y la modulación por tramo, N-92).
 
 **Vocabulario.** *Modelo* = dónde van las mochetas (normal, invertido, bandera, compuesto); en el
 código se llama `modeloRemate`. *Modulación* = el patrón de hojas (clásico, full corredizas…); en el
@@ -106,10 +107,16 @@ vidrios, U y tees son otra cosa (G-05).
 - N-02 ✅ **Pivotante es una tipología**, no un acabado. Pivotante, Nova mampara y Nova puerta
   **quedan sin desarrollar** por ahora (mampara y puerta, versión 2). 🐞 El código que trata
   pivotante como acabado (`PIV`) se elimina (C-01).
-- N-03 ✅ **Puente por defecto: tubo 2⅜ x 1, en todos los casos** (hecho, C-02; antes bandera y
-  full corredizas usaban tubo 2 x 1). Invertido y bandera siguen sin admitir Múltiple ⚙️.
-  Excepciones por resistencia que siguen: INA ncfc → paflón 1; full corredizas con más de 4 por
-  tramo → paflón 1.
+- N-03 ✅ **Puente preestablecido** (dictado el 2026-09-25):
+  - **Aparente normal: Múltiple.**
+  - **Todo lo demás: tubo 2⅜ x 1** (hecho, C-02; antes bandera y full corredizas usaban tubo 2 x 1).
+  - **En L, C, serie y demás volúmenes se decide por lado.** Cada lado normal en aparente, o cada
+    tramo normal de ese lado, lleva Múltiple como preestablecido, aunque los otros lados o tramos
+    lleven tubo. 🐞 Hoy el puente es uno para toda la ventana (C-24).
+  - Invertido y bandera **no admiten Múltiple**. Vale también para un tramo invertido o en bandera
+    de un diseño editado: al volver de novaDiseño el puente pasa al tubo (hecho el 2026-09-25).
+  - Excepciones por resistencia que siguen: INA ncfc → paflón 1; full corredizas con más de 4 por
+    tramo → paflón 1.
 - N-04 ✅ Mampara y puerta Nova: versión 2.
 
 ---
@@ -171,6 +178,18 @@ vidrios, U y tees son otra cosa (G-05).
 - N-23 ✅ Por modulación (fijos / corredizas): clásico según el orden · full fijos todas/0 · full
   corredizas 0/todas · doble corrediza 0/2 · triple 0/3 · ncfc el inverso del clásico. Las
   combinaciones de nfc, n3c, etc. están en el diálogo.
+- N-92 ✅ **La modulación se lee por tramo** (dictado el 2026-09-25). Un tramo de dos o más hojas,
+  todas corredizas, es **full corredizas** aunque el resto de la ventana sea clásica (un diseño
+  editado con un tramo `fccf` y otro `ccc`). El mismo tramo calcula igual venga de donde venga: el
+  motor es uno. Ese tramo lleva:
+  - el cruce del clásico con el mismo número de hojas (N-42): `ccc` cruza como `fcf`;
+  - su vidrio de corrediza sin el −1.4 (N-59);
+  - 1 riel por corrediza y el perfil doble corrediza, 1 por cada 2 corredizas, en lugar de U
+    felpero o fijo corredizo (N-51, N-52b).
+
+  Si la ventana lleva a la vez tramos clásicos y de solo corredizas, la doble corrediza sale en su
+  propia fila, aparte del fijo corredizo o la U felpero, y se archiva con las demás. Hecho el
+  2026-09-25 (`CompuestoTest`).
 - N-24 ✅ **Máximo 5 módulos por tramo**, en automático. Un módulo grande no parte la ventana, y dos
   tramos de 10 cm siguen siendo dos tramos (G-03).
 - N-25 ✅ Repartos iniciales: 6 → [3,3] · 8 → [4,4] · 10 → [5,5] · 12 → [4,4,4] · 14 → [5,4,5].
@@ -293,7 +312,9 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   reparte entre las hojas como el cruce (`(120 + 0.7 + 1) / 2 = 60.8`). Los fijos seguidos van en
   una sola U. ✅ (2026-09-25) **Con tramos automáticos y ninguno bloqueado, todos los módulos son
   iguales**: el cruce se reparte en toda la ventana, aunque los tramos tengan distinto número de hojas
-  (420 en 4 + 3 hojas: hache `60 = 3`).
+  (420 en 4 + 3 hojas: hache `60 = 3`). ✅ (2026-09-25) **Los cruces se cuentan por tramo**: un tramo
+  de solo corredizas cruza como el clásico con el mismo número de hojas (N-92). Dora editada, 370,
+  tramos `fccf` y `ccc`: 4 cruces → `(370 − 2.5 + 4 × 0.7) / 7 = 52.9`, igual que con `fcf`.
 - N-43 ✅ **U parante**: APA `altoHoja − (u + 0.2)`; INA `alto − 2u`. **Cantidad**:
   - APA: una por cada colindancia de fijo con pared o parante.
   - INA: una por cada fijo que colinda con **pared o con otro material de acople**; **no** con
@@ -322,11 +343,14 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   solo llegaba a 15 divisiones.)
 - N-51 ✅ **Riel** = puente − 0.06; sin mocheta, `ancho − 0.06`. Solo si hay corredizas. En APA e
   INA, **doble corrediza (ncc) lleva 2 rieles, triple corrediza (n3c) 3**, y así sucesivamente.
+  **Full corredizas: 1 riel por corrediza**, también en el tramo de solo corredizas de un diseño
+  editado (N-92).
 - N-52 ✅ **U felpero** (INA) y **fijo corredizo** (APA) = la medida del riel. U felpero en INA con
   mocheta; fijo corredizo en APA cuando el puente superior no es Múltiple o no hay puente superior.
   (Revisar en código, C-19.)
-- N-52b ✅ **Perfil doble corrediza**: en las modulaciones doble y triple corrediza **reemplaza** a
-  la U felpero (INA) y al fijo corredizo (APA). Cantidad: **1 por cada 2 corredizas** (3 corredizas
+- N-52b ✅ **Perfil doble corrediza**: en **full corredizas**, doble y triple corrediza **reemplaza**
+  a la U felpero (INA) y al fijo corredizo (APA); en un diseño editado, en cada tramo de solo
+  corredizas (N-92). Cantidad: **1 por cada 2 corredizas** (3 corredizas
   → 2). Doble corrediza, fijo corredizo y U felpero son **rieles superiores**: miden **igual que
   el riel** (puente − 0.06; confirmado el 2026-09-25). Ejemplo dictado, solo para entender: en la L, el lado de 120 (el mayor) resta el ancho
   del parante de esquina (2.5 por defecto), en APA y en INA → `117.5 = 2`. 🐞 C-22.
@@ -348,7 +372,8 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 
 - N-58 ✅ `hache − 1.4` x `altoHoja − 3.5`.
 - N-59 ✅ **Full corredizas**: `U de fijos` x `altoHoja − 3.5`, sin el −1.4, porque se coloca en otro
-  sentido (contra el polvo y la lluvia).
+  sentido (contra el polvo y la lluvia). También el tramo de solo corredizas de un diseño editado
+  (N-92). Doble y triple corrediza siguen con el −1.4.
 
 ### 9.2 Fijo
 
@@ -453,10 +478,13 @@ Lo que ya hace el motor, sacado de las reglas N-31, N-33, N-35, N-49, N-72, N-88
 
 - **Cada tramo se calcula con sus propias franjas.** La franja de sistema da la altura de hoja de
   ese tramo: un tramo con el puente a 130 junto a otro con el puente a 100, o sin puente.
-- **Las alturas dibujadas de las mochetas valen como proporción.** El editor las guarda con el
-  puente incluido y el diseño automático sin él. El espacio de cada tramo es su alto menos la hoja,
-  repartido entre sus mochetas como en el dibujo. Cada mocheta pierde el puente que la separa del
-  sistema (N-31); en inaparente, el vidrio usa el atajo sin descontar (N-86).
+- 🐞 **El diseño escribe mal la mocheta** (hallado el 2026-09-25). Debe escribirla como espacio,
+  sin el puente (N-31, N-34), y cada módulo con su ancho (N-70). La Dora editada debe quedar
+  `m<37.5>` en el tramo normal y `m<17.5>`, `s<100>`, `m<17.5>` en la bandera. Hoy el editor guarda
+  `m<40>` (con el puente dentro), el diseño automático de bandera `m<20>` y a veces los módulos
+  salen sin ancho (`fccf`). El motor lo tapaba leyendo las alturas "como proporción" (alto − hoja
+  repartido como en el dibujo, menos el puente de cada mocheta): los materiales salían bien, pero
+  el diseño simbólico no. Se corrige en C-25.
 - **Puente: una corrida por cada mocheta del tramo.** Normal o invertido 1, bandera 2, sin mocheta
   ninguno. Ejemplo, la Dora editada (tramo de 210 normal y tramo de 157.5 en bandera): `210 = 1`,
   `157.5 = 2`.
@@ -572,6 +600,8 @@ novaDiseño; después formas.
 | C-21 | U parante de mocheta INA. ✔ Invertido sin el +1.5 (hecho 2026-09-25). Falta bandera: hoy la U de INA en bandera se calcula como si fuera de 1 división (viene del código original, `932353b`) y no lleva U parante de mocheta | N-44 |
 | C-22 | Perfil doble corrediza en ncc/n3c (1 por cada 2 corredizas) en lugar de U felpero / fijo corredizo; rieles 2 en ncc, 3 en n3c | N-51, N-52b |
 | C-23 | Módulo curvo `f<desarrollo,flecha>` en el diseño simbólico; en resultados solo el desarrollo | N-84 |
+| C-24 | Puente por lado y por tramo: en L, C y serie, el lado o tramo normal en aparente con Múltiple y el resto con tubo. Hoy el motor usa un solo puente para toda la ventana | N-03 |
+| C-25 | Un solo escritor del diseño, desde el motor: mocheta como espacio sin el puente, cada módulo con su ancho; el editor mantiene la regla al agregar o quitar franjas y al cambiar alturas; el motor deja de leer "como proporción"; Referencias con la misma mocheta en APA e INA (hoy `mocheta sup: 40` en normal y 20 en bandera INA) | N-31, N-34, N-70, N-81 |
 
 ---
 
@@ -607,6 +637,7 @@ Mandan las reglas de este documento.
 ## Pruebas que fijan reglas
 
 - `ReglasDictadasVidriosYPerfilesTest` (N-14, N-44, N-56, N-61, N-63, N-87).
+- `CompuestoTest` (N-35, N-46, N-88, N-89 y N-92: la Dora editada con un tramo `ccc`).
 - `PuenteDobleEscaladoTest` (N-35) · `DivisionesAnchoUtilTest` (N-15, N-17) ·
   `RepartosPosiblesTest`, `RepartoSegunLosArcosTest` (N-25) · `TramosYUMochetaTest` (N-45) ·
   `ContornoEnTramosTest`, `PiezasDelEscalonTest` (sección 12).

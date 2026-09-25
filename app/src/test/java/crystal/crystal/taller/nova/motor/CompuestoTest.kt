@@ -46,6 +46,35 @@ class CompuestoTest {
     }
 
     @Test
+    fun el_tramo_de_solo_corredizas_cruza_igual_que_el_clasico() {
+        // Hallado por el usuario el 2026-09-25: con el tramo 2 en `ccc` la U de fijos salía 52.7 y
+        // en `fcf` 52.9. El cruce es del tramo: `ccc` cruza como `fcf` (2 cruces), en toda la
+        // ventana 4 → (370 − 2.5 + 4 × 0.7) / 7 = 52.9.
+        fun ventana(tramo2: String) = MotorNova.calcular(DesdeDiseno.ventana(
+            "{nova,apa,[370,140:Tl<210>(s<100>(f<52.5>c<52.5>c<52.5>f<52.5>);m<37.5>(f<105>f<105>)) P<2.5> " +
+                "Tl<157.5>(m<17.5>(f<157.5>);s<100>($tramo2);m<17.5>(f<157.5>))]}", u13, tubo)!!)
+        val ccc = ventana("c<52.5>c<52.5>c<52.5>")
+        val fcf = ventana("f<52.5>c<52.5>f<52.5>")
+        assertEquals("52.9 = 5", t(ccc.hache))
+        // La misma medida de U de fijos (la cantidad cambia: `fcf` tiene dos fijos más).
+        assertEquals("52.9 = 2", t(ccc.u).lines().first())
+        assertEquals("52.9 = 4", t(fcf.u).lines().first())
+        // Es full corredizas (N-51, N-52b): 1 riel por corrediza y doble corrediza, 1 por cada 2,
+        // aparte del fijo corredizo del tramo clásico.
+        assertEquals("209.9 = 1\n157.4 = 3", t(ccc.riel))
+        assertEquals("209.9 = 1", t(ccc.rielSuperior))
+        assertEquals(RielSuperior.FIJO_CORREDIZO, ccc.nombreRielSuperior)
+        assertEquals("157.4 = 2", t(ccc.dobleCorrediza))
+        // Con el tramo clásico no cambia nada: 1 riel y fijo corredizo por tramo.
+        assertEquals("209.9 = 1\n157.4 = 1", t(fcf.riel))
+        assertEquals("209.9 = 1\n157.4 = 1", t(fcf.rielSuperior))
+        assertEquals("", t(fcf.dobleCorrediza))
+        // Y su vidrio es de full corredizas (N-59, sin el −1.4); los del tramo clásico lo llevan.
+        assertEquals("52.4 x 98.3 = 2\n51.5 x 96.5 = 2\n52.9 x 96.5 = 3\n104.5 x 36.3 = 2\n157 x 16.3 = 2",
+            MaterialesNova.textoVidrios(ccc.vidrios))
+    }
+
+    @Test
     fun dos_mochetas_seguidas_llevan_un_tubo_que_pierde_la_de_arriba() {
         // Sistema de 100 y dos mochetas de 30 encima, en 160: cada división es un tubo (2 corridas);
         // la de abajo pierde el puente que la separa del sistema y la de arriba el tubo: 27.5 cada una.
