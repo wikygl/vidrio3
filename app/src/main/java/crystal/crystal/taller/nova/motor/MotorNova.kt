@@ -332,7 +332,9 @@ object MotorNova {
         if (apa) {
             l.tramos.forEachIndexed { i, t ->
                 vert[i].mochetas.forEach { m ->
-                    val alto = if (v.puente.esMultipleOGorrito) m.espacio - 0.5f else m.espacio - us + 0.3f
+                    // N-63 (dictado 2026-09-25): con los demás puentes, mocheta − (u + 0.3); también
+                    // en bandera. Antes: `m.espacio - us + 0.3f`.
+                    val alto = if (v.puente.esMultipleOGorrito) m.espacio - 0.5f else m.espacio - (us + 0.3f)
                     panos(t).forEach { w -> vidrios.add(Vidrio(w - 0.5f, alto)) }
                 }
             }

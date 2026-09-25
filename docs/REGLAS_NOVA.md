@@ -223,7 +223,8 @@ vidrios, U y tees son otra cosa (G-05).
 - N-34 ✅ **Bandera (doble puente)**: la mocheta inferior más la altura de hoja definen la
   superior; si la inferior es 0, se reparte en dos mitades. Igual en APA e INA.
   - Alto 160, puente 2.5, hoja 110, inferior 0 → cada mocheta `(160 − 110 − 2 × 2.5) / 2 = 22.5`.
-  - Vidrio APA: 22.5 − alto de la U.
+  - Vidrio APA: con tubo, `22.5 − (u + 0.3)` (N-63; el dictado original decía "22.5 − alto de la
+    U", corregido el 2026-09-25).
   - Vidrio INA: `(160 − 110) / 2 + 1` arriba, `− 0.5` abajo.
 - N-35 ✅ Bandera lleva dos corridas de puente (solo la horizontal se duplica); el parante vertical
   entre tramos no se duplica; riel y U felpero siguen en 1 por tramo.
@@ -387,8 +388,10 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 ### 9.3 Mocheta
 
 - N-62 ✅ **Paños por tramo**: `ceil(ancho del tramo / 180)`; el ancho del tramo se reparte.
-- N-63 ✅ **APA**: ancho del paño − 0.5; alto = mocheta − 0.5 (Múltiple o gorrito) o **mocheta − u
-  + 0.3** (los demás). Hecho (C-07), también en Nova desigual; antes restaba 0.3.
+- N-63 ✅ **APA**: ancho del paño − 0.5; alto = mocheta − 0.5 (Múltiple o gorrito) o **mocheta −
+  (u + 0.3)** con los demás puentes, en todos los modelos, bandera incluida (dictado el 2026-09-25).
+  Dora editada con U-13: mocheta 37.5 → **35.7**; mochetas de bandera 17.5 → **15.7**. Hecho en el
+  motor, en Nova con ceil y en Nova desigual. (Ese mismo día se aplicó por error `mocheta − u + 0.3`.)
 - N-64 ✅ **INA**: alto = `alto − altoHoja + 1` la de arriba, `− 0.5` la de abajo en bandera (N-34);
   invertido `alto − altoHoja − 0.5`. **Los vidrios de mocheta superior e inferior deben tener el
   mismo ancho** (C-08). ✅ (2026-09-25) **Ancho**: lo que dejan las U de fijos ya cortadas (con su
@@ -583,7 +586,7 @@ novaDiseño; después formas.
 | C-04 | Full corredizas INA: máximo automático 5 por tramo (hoy 6). No es solo un número: hoy full corredizas INA solo sabe hacer **un** tramo (puente, riel y felpero al ancho total); hay que enseñarle a partir en tramos | N-19 |
 | C-05 | ✔ Hecho 2026-09-25. Tope: 1 por corrediza que colinda con pared o parante (clásico, ncfc, full, doble y triple corrediza) | N-56 |
 | C-06 | ✔ Hecho 2026-09-25. Vidrio fijo: colindancia con pared o parante 0.5, en APA, INA y desigual | N-61 |
-| C-07 | ✔ Hecho 2026-09-25. Vidrio de mocheta APA (puentes que no son Múltiple ni gorrito): mocheta − u + 0.3, también en desigual | N-63 |
+| C-07 | ✔ Hecho 2026-09-25. Vidrio de mocheta APA (puentes que no son Múltiple ni gorrito): mocheta − (u + 0.3), también en desigual y en el motor | N-63 |
 | C-08 | Vidrios de mocheta superior e inferior del mismo ancho | N-64 |
 | C-09 | INA: sumar el ancho de U en cada esquina en ángulo (U de fijos, U superior, full fijos) | G-09, N-39, N-42, N-46, N-47 |
 | C-10 | Lista de U editable (ancho, alto, espesor máximo) | G-02, N-40 |

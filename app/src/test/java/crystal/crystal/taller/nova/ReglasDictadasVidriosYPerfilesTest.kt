@@ -62,10 +62,11 @@ class ReglasDictadasVidriosYPerfilesTest {
     // ---------- N-63: vidrio de mocheta de APA ----------
 
     @Test
-    fun n63_mocheta_aparente_con_tubo_es_mocheta_menos_u_mas_03() {
-        // Mocheta 140 − (100 + 2.5) = 37.5 → 37.5 − 1.5 + 0.3 = 36.3. Ancho 145 − 0.5.
+    fun n63_mocheta_aparente_con_tubo_es_mocheta_menos_u_mas_03_entre_parentesis() {
+        // Dictado el 2026-09-25: mocheta − (u + 0.3). Mocheta 140 − (100 + 2.5) = 37.5 →
+        // 37.5 − 1.8 = 35.7. Ancho 145 − 0.5.
         val v = NovaVidriosHelper.calcularVidrioMochetaAparente(145f, 140f, 100f, 3, 2.5f, "tubo 2⅜ x 1", 1.5f)
-        assertEquals("144.5 x 36.3 = 1", v)
+        assertEquals("144.5 x 35.7 = 1", v)
     }
 
     @Test

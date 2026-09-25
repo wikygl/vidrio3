@@ -70,7 +70,8 @@ class CompuestoTest {
         assertEquals("209.9 = 1\n157.4 = 1", t(fcf.rielSuperior))
         assertEquals("", t(fcf.dobleCorrediza))
         // Y su vidrio es de full corredizas (N-59, sin el −1.4); los del tramo clásico lo llevan.
-        assertEquals("52.4 x 98.3 = 2\n51.5 x 96.5 = 2\n52.9 x 96.5 = 3\n104.5 x 36.3 = 2\n157 x 16.3 = 2",
+        // Mocheta con tubo: mocheta − (u + 0.3) (N-63): 37.5 − 1.8 = 35.7 y 17.5 − 1.8 = 15.7.
+        assertEquals("52.4 x 98.3 = 2\n51.5 x 96.5 = 2\n52.9 x 96.5 = 3\n104.5 x 35.7 = 2\n157 x 15.7 = 2",
             MaterialesNova.textoVidrios(ccc.vidrios))
     }
 

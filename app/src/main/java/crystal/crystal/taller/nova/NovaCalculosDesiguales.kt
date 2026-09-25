@@ -388,12 +388,13 @@ object NovaCalculosDesiguales {
                     } else {
                         alturaMocheta.valor + 1f
                     }
-                    // APA: mismo alto que el motor igual → altoMocheta − us + 0.3 (N-63)
-                    // o altoMocheta − 0.5 con puente múltiple/gorrito.
+                    // APA: mismo alto que el motor igual → altoMocheta − (us + 0.3) (N-63, dictado
+                    // el 2026-09-25) o altoMocheta − 0.5 con puente múltiple/gorrito.
+                    // Antes: `alturaMocheta.valor - us + 0.3f`.
                     else -> if (esPuenteMultipleOGorrito(puente)) {
                         (alturaMocheta.valor - 0.5f).coerceAtLeast(0f)
                     } else {
-                        (alturaMocheta.valor - us + 0.3f).coerceAtLeast(0f)
+                        (alturaMocheta.valor - (us + 0.3f)).coerceAtLeast(0f)
                     }
                 }
                 if (tipo != "apa") {

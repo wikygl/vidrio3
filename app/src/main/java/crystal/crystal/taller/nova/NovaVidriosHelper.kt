@@ -158,12 +158,12 @@ object NovaVidriosHelper {
             val anchMotaTramo = NovaCalculos.anchMota(anchoSeccion)
             val anchoVidrio = (anchoSeccion / anchMotaTramo) - holguraAncho
             for (altoMocheta in alturasMochetas) {
-                // N-63: con Múltiple o gorrito, mocheta − 0.5; con los demás puentes, mocheta − u
-                // + 0.3 ("es más, no menos"; hasta el 2026-09-25 restaba 0.3).
+                // N-63: con Múltiple o gorrito, mocheta − 0.5; con los demás puentes, mocheta −
+                // (u + 0.3) (dictado el 2026-09-25). Hubo un día con `altoMocheta - us + holguraAlto`.
                 val vAltoMocheta = if (puente == "Múltiple" || puente == "gorrito") {
                     altoMocheta - (holguraAlto+0.2f)
                 } else {
-                    altoMocheta - us + holguraAlto
+                    altoMocheta - (us + holguraAlto)
                 }
                 val key = "${NovaCalculos.df1(anchoVidrio)} x ${NovaCalculos.df1(vAltoMocheta)}"
                 lineas[key] = (lineas[key] ?: 0) + anchMotaTramo
