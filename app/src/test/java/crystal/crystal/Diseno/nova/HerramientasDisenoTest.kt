@@ -80,6 +80,28 @@ class HerramientasDisenoTest {
     }
 
     @Test
+    fun cada_franja_es_un_rectangulo_dentro_del_vano() {
+        // El diseño del usuario (2026-09-26), parante dentro: tramo 2 con la mocheta abajo (35.1) y
+        // el sistema arriba (109.4). La mocheta solo llega hasta el recorte: 151.7, no 233.7.
+        val base = dosTramosEnElEscalon()
+        val dentro = HerramientasDiseno.opcionesDelParante(base, 0).first { it.lado == HerramientasDiseno.LadoParante.DENTRO }
+        val d0 = HerramientasDiseno.conParanteEnEscalon(base, 0, dentro)
+        val t2 = d0.tramos[1]
+        val d = d0.copy(tramos = listOf(d0.tramos[0], t2.copy(franjas = listOf(
+            NovaFranja(false, 35.1f, listOf(NovaModulo('f', t2.ancho))),
+            NovaFranja(true, 109.4f, List(4) { NovaModulo(if (it == 0 || it == 3) 'f' else 'c', t2.ancho / 4) })
+        ))))
+        val mocheta = HerramientasDiseno.rectanguloDeFranja(d, 1, 0)!!
+        assertEquals(151.7f, r1(mocheta.first), 0.01f)
+        assertEquals(35.1f, r1(mocheta.second), 0.01f)
+        val sistema = HerramientasDiseno.rectanguloDeFranja(d, 1, 1)!!
+        assertEquals(233.7f, r1(sistema.first), 0.01f)
+        assertEquals(109.4f, r1(sistema.second), 0.01f)
+        // El tramo 1 es un rectángulo solo: 102.1 × 77.2.
+        assertEquals(77.2f, r1(HerramientasDiseno.altoDelSistema(d, 0)!!), 0.01f)
+    }
+
+    @Test
     fun el_descuadre_del_vano_se_detecta() {
         // Formas: el alféizar del recorte va de 109.4 a 108.5 (0.9). El dintel baja 0.1 en 233.7:
         // eso es el trazo del apunte, no un descuadre. Los escalones de verdad (35.1, 67.3) tampoco.

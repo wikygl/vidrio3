@@ -1170,12 +1170,22 @@ class DisenoNovaActivity : AppCompatActivity() {
         // tramoSel: índice del tramo seleccionado (no depende de indiceFranjaActiva)
         val tramoSel = if (indiceTramoActivo in tramoInfo.indices) indiceTramoActivo else -1
 
+        // Las medidas salen del modelo, y se rehacen con cada cambio (pedido del usuario el
+        // 2026-09-26: "todos los datos mostrados deben actualizar automáticamente"). En un vano con
+        // forma cada tramo muestra su rectángulo (N-66): en Formas, tramo 1 102.1 × 77.2 y tramo 2
+        // 233.7 × 109.4. Antes todos los tramos mostraban el alto de la ventana.
+        val modelo = modeloEnPantalla()
+        fun anchoTramo(i: Int) = modelo?.tramos?.getOrNull(i)?.ancho ?: tramoInfo[i].ancho
+        fun altoTramo(i: Int) = modelo?.let {
+            HerramientasDiseno.altoDelSistema(it, i, anchoParanteCm) ?: it.altoDeTramo(i)
+        } ?: altoCm
+
         if (tramoInfo.isNotEmpty()) {
             // Líneas de tramos — negrita el seleccionado
             for (i in tramoInfo.indices) {
                 ssb.append("\n")
                 val start = ssb.length
-                ssb.append("tramo${i + 1} = ${df1(tramoInfo[i].ancho)} × ${df1(altoCm)}")
+                ssb.append("tramo${i + 1} = ${df1(anchoTramo(i))} × ${df1(altoTramo(i))}")
                 if (i == tramoSel) {
                     ssb.setSpan(StyleSpan(Typeface.BOLD), start, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
@@ -1183,15 +1193,18 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
 
         // Línea de franja — siempre que haya una franja seleccionada, sin importar si hay tramo
-        if (indiceFranjaActiva in franjas.indices) {
-            val fr = franjas[indiceFranjaActiva]
-            val esSis = fr.esSistema
+        // La franja elegida, del tramo elegido: su tipo y su rectángulo dentro del vano (en Formas la
+        // mocheta de abajo del tramo 2 mide 151.7 × 35, no el ancho del tramo).
+        val franjaModelo = modelo?.tramos?.getOrNull(tramoSel)?.franjas?.getOrNull(indiceFranjaActiva)
+        if (franjaModelo != null || indiceFranjaActiva in franjas.indices) {
+            val esSis = franjaModelo?.esSistema ?: franjas[indiceFranjaActiva].esSistema
             val franjaLabel = if (esSis) "sistema" else "mocheta"
-            val franjaAncho = if (tramoSel >= 0) tramoInfo[tramoSel].ancho else anchoCm
-            val franjaAltura = when {
+            val rect = if (modelo != null && tramoSel >= 0)
+                HerramientasDiseno.rectanguloDeFranja(modelo, tramoSel, indiceFranjaActiva, anchoParanteCm) else null
+            val franjaAncho = rect?.first ?: if (tramoSel >= 0) anchoTramo(tramoSel) else anchoCm
+            val franjaAltura = rect?.second ?: when {
                 tramoSel >= 0 && esSis  -> tramoInfo[tramoSel].sistemaAltura
                 tramoSel >= 0 && !esSis -> tramoInfo[tramoSel].mochetaAltura
-                fr.alturaCm > 0f        -> fr.alturaCm
                 else                    -> altoCm
             }
             ssb.append("\n")

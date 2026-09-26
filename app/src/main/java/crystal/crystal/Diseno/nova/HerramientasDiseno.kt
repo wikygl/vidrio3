@@ -246,6 +246,42 @@ object HerramientasDiseno {
         return piso - techo
     }
 
+    /**
+     * El rectángulo de una franja dentro del vano (ancho × alto): la estrategia de las formas es
+     * partir en rectángulos y calcular cada uno (dictado el 2026-09-26). El alto es el de la franja;
+     * el ancho, lo que el vano le deja a su altura dentro del tramo. En Formas, la mocheta de abajo
+     * del tramo 2 mide 151.7 y no 233.7: el recorte de la derecha le quita 82. Sin vano, el tramo.
+     */
+    fun rectanguloDeFranja(d: DisenoNova, indiceTramo: Int, indiceFranja: Int, anchoParante: Float = 2.5f): Pair<Float, Float>? {
+        val t = d.tramos.getOrNull(indiceTramo) ?: return null
+        val alturas = alturasDeFranjas(d, indiceTramo)
+        val alto = alturas.getOrNull(indiceFranja) ?: return null
+        val puntos = puntosDelVano(d)
+        if (puntos.size < 3) return t.ancho to alto
+        val piso = d.caidaDeTramo(indiceTramo) + d.altoDeTramo(indiceTramo)
+        val abajo = piso - alturas.take(indiceFranja).sum()
+        val y = abajo - alto / 2f
+        val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        val ancho = anchoDelVanoEn(puntos, y, inicio, inicio + t.ancho) ?: t.ancho
+        return ancho to alto
+    }
+
+    /** El trozo más largo del vano sobre la horizontal [y], dentro de [xIni]..[xFin]. */
+    private fun anchoDelVanoEn(puntos: List<Pair<Float, Float>>, y: Float, xIni: Float, xFin: Float): Float? {
+        val cruces = mutableListOf<Float>()
+        for (i in puntos.indices) {
+            val (ax, ay) = puntos[i]
+            val (bx, by) = puntos[(i + 1) % puntos.size]
+            if (abs(by - ay) <= 0.01f) continue
+            if (y < minOf(ay, by) || y >= maxOf(ay, by)) continue
+            cruces.add(ax + (y - ay) / (by - ay) * (bx - ax))
+        }
+        cruces.sort()
+        return cruces.chunked(2).filter { it.size == 2 }
+            .map { (a, b) -> (minOf(b, xFin) - maxOf(a, xIni)) }
+            .filter { it > 0f }.maxOrNull()
+    }
+
     // ==================== DESCUADRES DEL VANO ====================
     // Pedido del usuario (2026-09-26): muchas veces quien mide no es quien diseña, y un descuadre
     // que no salta a la vista (en Formas, 9 mm) se pasa por alto. Se marca en rojo en el dibujo.
