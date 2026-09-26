@@ -613,6 +613,8 @@ class NovaCorrediza : AppCompatActivity() {
                 // El vano con forma se rehace si cambió el alto de hoja: es el dato que decide dónde
                 // cabe la corrediza.
                 rehacerDisenoSiCambioLaHoja()
+                // Con un diseño cargado, medidas cambiadas no lo sueltan en silencio: se pregunta.
+                if (!confirmarMedidasDelDiseno()) return@setOnClickListener
 
                 if (modulosDesiguales.isNotEmpty()) {
                     calcularDesigual()
@@ -3496,6 +3498,8 @@ class NovaCorrediza : AppCompatActivity() {
 
             // Guardar paquete y actualizar diseño
             ultimoPaquete = paqueteSeguro
+            // Las medidas con que queda el diseño: si luego se cambian, Calcular pregunta.
+            medidasDelDiseno = medidasEnPantalla()
             // Un tramo invertido o en bandera no admite Múltiple (N-03): se pasa al preestablecido,
             // como cuando se elige el modelo con su botón.
             if (puenteMultipleNoPermitido(puente)) aplicarPuentePredeterminadoSinMultiple()
@@ -3549,23 +3553,78 @@ class NovaCorrediza : AppCompatActivity() {
         altoHojaDesigual = 0f
     }
 
-    /** Al editar manualmente cualquier campo base se suelta el estado desigual. */
+    /**
+     * El diseño ya no se suelta al escribir (pedido del usuario el 2026-09-26): cambiar la U de una
+     * ventana con forma soltaba el diseño y el siguiente Calcular la volvía rectangular.
+     *
+     * - U y cruce son datos de material, no de forma: el diseño se conserva y el motor calcula con
+     *   los nuevos.
+     * - Ancho, alto, hoja y divisiones sí cambian la forma, pero no se suelta en silencio: al
+     *   calcular, si ya no son los del diseño, se pregunta ([confirmarMedidasDelDiseno]).
+     *
+     * Antes el mismo watcher, en los seis campos, llamaba a [limpiarEstadoDesigual].
+     */
     private fun configurarLimpiezaDesigual() {
         val watcher = object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
-                limpiarEstadoDesigual()
                 // El reparto elegido a mano era para esa medida: con otra vuelve el automático.
-                NovaCalculos.repartoManual = null
+                if (!cargandoDiseno) NovaCalculos.repartoManual = null
             }
         }
         binding.etPartes.addTextChangedListener(watcher)
         binding.etHoja.addTextChangedListener(watcher)
         binding.etAncho.addTextChangedListener(watcher)
         binding.etAlto.addTextChangedListener(watcher)
-        binding.etCruce.addTextChangedListener(watcher)
-        binding.etU.addTextChangedListener(watcher)
+    }
+
+    /** Las medidas con que llegó el diseño (ancho, alto, hoja, divisiones), para saber si se tocaron. */
+    private var medidasDelDiseno: List<String>? = null
+
+    private fun medidasEnPantalla(): List<String> =
+        listOf(binding.etAncho, binding.etAlto, binding.etHoja, binding.etPartes).map { it.text?.toString()?.trim().orEmpty() }
+
+    /**
+     * Antes de calcular con un diseño cargado: si el ancho, el alto, la hoja o las divisiones ya no
+     * son los del diseño, pregunta si se conserva el diseño (vuelven sus medidas) o se descarta y se
+     * calcula el automático. Devuelve true si se puede seguir calculando ya.
+     */
+    private fun confirmarMedidasDelDiseno(): Boolean {
+        val delDiseno = medidasDelDiseno ?: return true
+        if (modulosDesiguales.isEmpty()) return true
+        val ahora = medidasEnPantalla()
+        val nombres = listOf("ancho", "alto", "hoja", "divisiones")
+        fun igual(a: String, b: String): Boolean {
+            val x = a.replace(",", ".").toFloatOrNull()
+            val y = b.replace(",", ".").toFloatOrNull()
+            return if (x != null && y != null) kotlin.math.abs(x - y) <= 0.05f else a == b
+        }
+        val cambios = nombres.indices.filter { !igual(delDiseno[it], ahora[it]) }
+            .map { "${nombres[it]}: ${delDiseno[it].ifBlank { "vacío" }} → ${ahora[it].ifBlank { "vacío" }}" }
+        if (cambios.isEmpty()) return true
+        AlertDialog.Builder(this)
+            .setTitle("Las medidas ya no son las del diseño")
+            .setMessage(cambios.joinToString("\n") +
+                "\n\nSi descarta el diseño, se calcula la ventana automática (rectangular).")
+            .setPositiveButton("Conservar el diseño") { _, _ ->
+                cargandoDiseno = true
+                try {
+                    listOf(binding.etAncho, binding.etAlto, binding.etHoja, binding.etPartes)
+                        .forEachIndexed { i, et -> et.setText(delDiseno[i]) }
+                } finally {
+                    cargandoDiseno = false
+                }
+                binding.btCalcular.performClick()
+            }
+            .setNegativeButton("Descartar y calcular automático") { _, _ ->
+                limpiarEstadoDesigual()
+                medidasDelDiseno = null
+                binding.btCalcular.performClick()
+            }
+            .setNeutralButton("Cancelar", null)
+            .show()
+        return false
     }
 
     /**

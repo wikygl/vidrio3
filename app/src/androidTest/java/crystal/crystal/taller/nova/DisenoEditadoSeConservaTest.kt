@@ -47,6 +47,20 @@ class DisenoEditadoSeConservaTest {
                 llamar(a, "rehacerDisenoSiCambioLaHoja")   // lo primero que hace Calcular
                 assertEquals(editado, campo(a, "ultimoPaquete").get(a))
 
+                // Pedido del usuario (2026-09-26): cambiar la U o el cruce no suelta el diseño (antes la
+                // forma se volvía rectangular al calcular).
+                b.etU.setText("1")
+                b.etCruce.setText("0.5")
+                assertEquals(editado, campo(a, "ultimoPaquete").get(a))
+                assertNotEquals(0, (campo(a, "modulosDesiguales").get(a) as List<*>).size)
+                assertEquals(true, llamar(a, "confirmarMedidasDelDiseno"))
+                // Cambiar el ancho tampoco lo suelta en silencio: Calcular pregunta (no sigue).
+                val anchoAntes = b.etAncho.text.toString()
+                b.etAncho.setText("300")
+                assertEquals(false, llamar(a, "confirmarMedidasDelDiseno"))
+                assertNotEquals(0, (campo(a, "modulosDesiguales").get(a) as List<*>).size)
+                b.etAncho.setText(anchoAntes)
+
                 // Si después el vidriero escribe otra hoja, el vano sí se rehace desde el contorno.
                 b.etHoja.setText("80")
                 llamar(a, "rehacerDisenoSiCambioLaHoja")
