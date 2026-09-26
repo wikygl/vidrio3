@@ -53,6 +53,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         const val EXTRA_BOCETO_ORIGINAL = "extra_boceto_original"
         /** Alto del puente elegido en Nova (tubo 2.5, Múltiple 1.5, paflón 3.8…). */
         const val EXTRA_PUENTE_CM = "extra_puente_cm"
+        /** Nombre del puente elegido en Nova: un tramo invertido no admite Múltiple (N-03). */
+        const val EXTRA_PUENTE_NOMBRE = "extra_puente_nombre"
         /** Pasos que se guardan para deshacer; los más viejos se van soltando. */
         private const val MAX_PASOS = 100
         const val RESULT_URI = "resultado_uri_imagen"
@@ -1187,7 +1189,13 @@ class DisenoNovaActivity : AppCompatActivity() {
             for (i in tramoInfo.indices) {
                 ssb.append("\n")
                 val start = ssb.length
-                ssb.append("tramo${i + 1} = ${df1(anchoTramo(i))} × ${df1(altoTramo(i))}")
+                // Y qué es el tramo entero: su modelo y el puente que admite (N-03).
+                val que = modelo?.let { m ->
+                    val nombre = HerramientasDiseno.modeloDeTramo(m, i)?.nombre ?: return@let ""
+                    val p = HerramientasDiseno.puenteDeTramo(m, i, puenteElegido)?.nombre
+                    if (p != null) " · $nombre, $p" else " · $nombre"
+                }.orEmpty()
+                ssb.append("tramo${i + 1} = ${df1(anchoTramo(i))} × ${df1(altoTramo(i))}$que")
                 if (i == tramoSel) {
                     ssb.setSpan(StyleSpan(Typeface.BOLD), start, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
@@ -1560,6 +1568,11 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     private val altoPuenteCm: Float by lazy { intent.getFloatExtra(EXTRA_PUENTE_CM, 2.5f) }
 
+    /** El puente elegido en Nova. Cada tramo lo toma solo si lo admite (HerramientasDiseno.puenteDeTramo). */
+    private val puenteElegido: HerramientasDiseno.PuenteTramo by lazy {
+        HerramientasDiseno.PuenteTramo(intent.getStringExtra(EXTRA_PUENTE_NOMBRE) ?: "tubo 2⅜ x 1", altoPuenteCm)
+    }
+
     /**
      * Puentes ya decididos (tramo:y×10). "Dentro" en un invertido deja el límite en el escalón mismo
      * (el puente entero en la mocheta), así que sin esto se volvería a preguntar.
@@ -1584,9 +1597,13 @@ class DisenoNovaActivity : AppCompatActivity() {
     }
 
     private fun preguntarLadoDelPuente(d: DisenoNova, tramo: Int, limite: Int) {
-        val opciones = HerramientasDiseno.opcionesDelPuente(d, tramo, limite, altoPuenteCm, anchoParanteCm)
+        // Primero qué es el tramo entero y qué puente admite (dictado el 2026-09-26): el tramo 2 de
+        // Formas es invertido y lleva tubo aunque en Nova esté elegido Múltiple (N-03).
+        val puente = HerramientasDiseno.puenteDeTramo(d, tramo, puenteElegido) ?: puenteElegido
+        val opciones = HerramientasDiseno.opcionesDelPuente(d, tramo, limite, puente.alto, anchoParanteCm)
         if (opciones.isEmpty()) return
         val escalon = HerramientasDiseno.escalonDelPuente(d, tramo, limite, anchoParanteCm) ?: return
+        val modelo = HerramientasDiseno.modeloDeTramo(d, tramo)?.nombre.orEmpty()
         fun medida(r: Pair<Float, Float>?) = r?.let { "${df1(it.first)} × ${df1(it.second)}" } ?: "—"
         val textos = opciones.map { o ->
             "${o.lado.nombre}: puente ${df1(o.largoPuente)}\n" +
@@ -1594,7 +1611,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         }.toTypedArray()
         preguntandoParante = true
         AlertDialog.Builder(this)
-            .setTitle("El puente del tramo ${tramo + 1} cae en el escalón (a ${df1(escalon.y)} del dintel)")
+            .setTitle("El puente del tramo ${tramo + 1} ($modelo, ${puente.nombre}) cae en el escalón (a ${df1(escalon.y)} del dintel)")
             .setItems(textos) { _, cual ->
                 preguntandoParante = false
                 val o = opciones[cual]

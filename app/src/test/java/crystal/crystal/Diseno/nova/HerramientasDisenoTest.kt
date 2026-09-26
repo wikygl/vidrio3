@@ -95,6 +95,21 @@ class HerramientasDisenoTest {
     }
 
     @Test
+    fun primero_se_identifica_el_tramo_entero() {
+        // Dictado el 2026-09-26: el tramo 2 de Formas es un invertido con la mocheta recortada. Por
+        // ser invertido no admite Múltiple (N-03): aunque en Nova esté elegido, su puente es el tubo.
+        val d = formasConElParanteDentro()
+        assertEquals(HerramientasDiseno.ModeloTramo.SIN_PUENTE, HerramientasDiseno.modeloDeTramo(d, 0))
+        assertEquals(HerramientasDiseno.ModeloTramo.INVERTIDO, HerramientasDiseno.modeloDeTramo(d, 1))
+        val multiple = HerramientasDiseno.PuenteTramo("Múltiple", 1.5f)
+        assertNull(HerramientasDiseno.puenteDeTramo(d, 0, multiple))
+        assertEquals(HerramientasDiseno.TUBO_POR_DEFECTO, HerramientasDiseno.puenteDeTramo(d, 1, multiple))
+        // Un puente que el invertido sí admite se respeta (G-03).
+        val paflon = HerramientasDiseno.PuenteTramo("paflon 1½", 3.8f)
+        assertEquals(paflon, HerramientasDiseno.puenteDeTramo(d, 1, paflon))
+    }
+
+    @Test
     fun el_puente_en_un_escalon_se_deja_dentro_o_fuera() {
         // Dictado el 2026-09-26: dentro, el puente entero entra en la mocheta; el sistema queda un
         // rectángulo limpio de 233.7 × 109.4 y el puente mide lo que la mocheta, 151.7.

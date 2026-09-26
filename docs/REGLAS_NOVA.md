@@ -522,6 +522,17 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   coinciden se suman y los que no, se agrupan, y eso es lo que se muestra. Por ahora solo aparente.
   En Formas: tramo 1 (102.1 × 77.2), el sistema del tramo 2 (233.7 × 109.4) y su mocheta de abajo
   (151.7 × 35.1). Todos los datos mostrados se actualizan solos con cada cambio.
+
+  **El orden** (dictado el 2026-09-26):
+  1. **Identificar cada tramo entero**: su modelo por el orden de sus franjas (sin puente, normal,
+     invertido, bandera, compuesto) y el puente que admite por N-03. El tramo 2 de Formas es un
+     **invertido con la mocheta recortada**: no admite Múltiple, lleva tubo 2⅜ x 1 aunque en Nova esté
+     elegido Múltiple. El tramo 1 no tiene mocheta: sin puente.
+  2. Partirlo en rectángulos (por franjas) y calcular cada uno con las reglas que ya existen.
+  3. Sumar lo que coincide y agrupar lo demás.
+
+  El editor muestra la identificación en su panel (`tramo2 = 233.7 × 109.4 · invertido, tubo 2⅜ x 1`)
+  y la usa en el diálogo del puente en un escalón (N-97).
 - N-95 ✅ **El descuadre se marca en rojo** (pedido el 2026-09-26): quien mide no siempre es quien
   diseña, y 9 mm no se ven en el dibujo. Todo lado del vano casi horizontal o casi vertical cuyas
   puntas se desvían entre 0.3 y 2.5 cm se resalta en rojo con "descuadre N" (menos de 0.3 es el

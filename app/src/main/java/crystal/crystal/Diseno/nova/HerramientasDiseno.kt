@@ -282,6 +282,47 @@ object HerramientasDiseno {
             .filter { it > 0f }.maxOrNull()
     }
 
+    // ==================== QUÉ ES CADA TRAMO ====================
+    // Dictado por el usuario (2026-09-26): antes de partir un tramo en rectángulos hay que saber qué
+    // es el tramo entero. El tramo 2 de Formas es un invertido (ni) con la mocheta recortada: por ser
+    // invertido no admite Múltiple (N-03), y eso decide su puente antes de cualquier cuenta.
+
+    /** El modelo de un tramo, por el orden de sus franjas de abajo arriba (N-33). */
+    enum class ModeloTramo(val nombre: String) {
+        SIN_PUENTE("sin puente"), NORMAL("normal"), INVERTIDO("invertido"), BANDERA("bandera"), COMPUESTO("compuesto")
+    }
+
+    /** Un puente: su nombre y su alto. */
+    data class PuenteTramo(val nombre: String, val alto: Float) {
+        val esMultiple: Boolean get() = nombre.lowercase().let { it.contains("múlt") || it.contains("multi") }
+    }
+
+    /** El preestablecido de todo lo que no es aparente normal (N-03). */
+    val TUBO_POR_DEFECTO = PuenteTramo("tubo 2⅜ x 1", 2.5f)
+
+    fun modeloDeTramo(d: DisenoNova, indiceTramo: Int): ModeloTramo? {
+        val t = d.tramos.getOrNull(indiceTramo) ?: return null
+        return when (t.franjas.joinToString("") { if (it.esSistema) "s" else "m" }) {
+            "s" -> ModeloTramo.SIN_PUENTE
+            "sm" -> ModeloTramo.NORMAL
+            "ms" -> ModeloTramo.INVERTIDO
+            "msm" -> ModeloTramo.BANDERA
+            else -> ModeloTramo.COMPUESTO
+        }
+    }
+
+    /**
+     * El puente de un tramo (N-03): el que se eligió en Nova, salvo que el tramo no lo admita. Solo
+     * el aparente normal admite Múltiple; un invertido, una bandera o un compuesto llevan el tubo
+     * aunque la ventana tenga Múltiple. Un tramo sin mocheta no lleva puente: null.
+     */
+    fun puenteDeTramo(d: DisenoNova, indiceTramo: Int, elegido: PuenteTramo): PuenteTramo? {
+        val modelo = modeloDeTramo(d, indiceTramo) ?: return null
+        if (modelo == ModeloTramo.SIN_PUENTE) return null
+        val admiteMultiple = d.acabado == "apa" && modelo == ModeloTramo.NORMAL
+        return if (elegido.esMultiple && !admiteMultiple) TUBO_POR_DEFECTO else elegido
+    }
+
     // ==================== EL PUENTE EN UN ESCALÓN ====================
     // Dictado por el usuario (2026-09-26): con el puente pasa lo mismo que con el parante. Si cae en
     // un escalón (en Formas, el alféizar del recorte de la derecha, a 109.4 del dintel), se pregunta

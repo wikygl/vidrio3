@@ -4352,6 +4352,7 @@ class NovaCorrediza : AppCompatActivity() {
         intent.putExtra(DisenoNovaActivity.EXTRA_US_CM, binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f)
         // El alto del puente elegido: el diálogo del puente en un escalón lo usa (dentro / fuera).
         intent.putExtra(DisenoNovaActivity.EXTRA_PUENTE_CM, tubo)
+        intent.putExtra(DisenoNovaActivity.EXTRA_PUENTE_NOMBRE, puente)
         // La medida original, para verla desde el editor con todas sus cotas.
         if (bocetoOriginalRuta.isNotBlank()) intent.putExtra(DisenoNovaActivity.EXTRA_BOCETO_ORIGINAL, bocetoOriginalRuta)
         lanzarDisenoInteractivo.launch(intent)
