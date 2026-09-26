@@ -51,6 +51,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         const val EXTRA_DIRECCION = "extra_direccion"
         /** Archivo del boceto de MedidaActivity: la medida original, con todas sus cotas. */
         const val EXTRA_BOCETO_ORIGINAL = "extra_boceto_original"
+        /** Alto del puente elegido en Nova (tubo 2.5, Múltiple 1.5, paflón 3.8…). */
+        const val EXTRA_PUENTE_CM = "extra_puente_cm"
         /** Pasos que se guardan para deshacer; los más viejos se van soltando. */
         private const val MAX_PASOS = 100
         const val RESULT_URI = "resultado_uri_imagen"
@@ -251,7 +253,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         instalarChipsHistorial()
         // Un diseño que llega con un parante centrado en un escalón (el automático del contorno
         // los deja así) pide la decisión al abrir.
-        binding.root.post { revisarParantesEnEscalon() }
+        binding.root.post { revisarEscalones() }
     }
 
     // ===================================== MENÚ EDITAR =====================================
@@ -1545,11 +1547,71 @@ class DisenoNovaActivity : AppCompatActivity() {
                     bloquearTramos(indice, indice + 1)
                     actualizarPanelCotas()
                 }
-                revisarParantesEnEscalon()   // el siguiente escalón, si hay
+                revisarEscalones()   // el siguiente escalón, si hay
             }
             // Hay que elegir: centrado tiene que ser una decisión, no lo que queda al cerrar.
             .setCancelable(false)
             .show()
+    }
+
+    // ==================== EL PUENTE EN UN ESCALÓN ====================
+    // Lo mismo que el parante (dictado el 2026-09-26): si un puente cae en un escalón, dentro, fuera
+    // o centrado, con las medidas de cada opción. Las cuentas están en HerramientasDiseno.
+
+    private val altoPuenteCm: Float by lazy { intent.getFloatExtra(EXTRA_PUENTE_CM, 2.5f) }
+
+    /**
+     * Puentes ya decididos (tramo:y×10). "Dentro" en un invertido deja el límite en el escalón mismo
+     * (el puente entero en la mocheta), así que sin esto se volvería a preguntar.
+     */
+    private val puentesDecididos = mutableSetOf<String>()
+
+    private fun clavePuente(tramo: Int, y: Float) = "$tramo:${Math.round(y * 10)}"
+
+    /** Si algún puente quedó en un escalón sin decisión, pregunta (el primero que encuentre). */
+    private fun revisarPuentesEnEscalon() {
+        if (preguntandoParante) return
+        val d = modeloEnPantalla() ?: return
+        for (t in d.tramos.indices) {
+            val limites = HerramientasDiseno.limitesDePuente(d, t)
+            for (k in limites.indices) {
+                if (clavePuente(t, limites[k]) in puentesDecididos) continue
+                if (HerramientasDiseno.escalonDelPuente(d, t, k, anchoParanteCm) == null) continue
+                preguntarLadoDelPuente(d, t, k)
+                return
+            }
+        }
+    }
+
+    private fun preguntarLadoDelPuente(d: DisenoNova, tramo: Int, limite: Int) {
+        val opciones = HerramientasDiseno.opcionesDelPuente(d, tramo, limite, altoPuenteCm, anchoParanteCm)
+        if (opciones.isEmpty()) return
+        val escalon = HerramientasDiseno.escalonDelPuente(d, tramo, limite, anchoParanteCm) ?: return
+        fun medida(r: Pair<Float, Float>?) = r?.let { "${df1(it.first)} × ${df1(it.second)}" } ?: "—"
+        val textos = opciones.map { o ->
+            "${o.lado.nombre}: puente ${df1(o.largoPuente)}\n" +
+                "sistema ${medida(o.sistema)}   ·   mocheta ${medida(o.mocheta)}"
+        }.toTypedArray()
+        preguntandoParante = true
+        AlertDialog.Builder(this)
+            .setTitle("El puente del tramo ${tramo + 1} cae en el escalón (a ${df1(escalon.y)} del dintel)")
+            .setItems(textos) { _, cual ->
+                preguntandoParante = false
+                val o = opciones[cual]
+                puentesDecididos.add(clavePuente(tramo, o.y))
+                aplicarAlModelo { HerramientasDiseno.conPuenteEnEscalon(it, tramo, limite, o) }
+                actualizarPanelCotas()
+                revisarEscalones()   // el siguiente, si hay
+            }
+            // Hay que elegir, como con el parante.
+            .setCancelable(false)
+            .show()
+    }
+
+    /** Parantes y puentes que cayeron en un escalón: primero los parantes, después los puentes. */
+    private fun revisarEscalones() {
+        revisarParantesEnEscalon()
+        if (!preguntandoParante) revisarPuentesEnEscalon()
     }
 
     // ==================== DESHACER / REHACER ====================
@@ -2716,11 +2778,11 @@ class DisenoNovaActivity : AppCompatActivity() {
                     a is Arrastre.DeParante && valor != null -> {
                         if (aplicarAlModelo { HerramientasDiseno.conParanteMovido(it, a.indice, valor, anchoParanteCm) }) {
                             bloquearTramos(a.indice, a.indice + 1)
-                            revisarParantesEnEscalon()   // si quedó en un escalón: dentro, fuera o centrado
+                            revisarEscalones()   // si quedó en un escalón: dentro, fuera o centrado
                         }
                     }
                     a is Arrastre.DePuente && valor != null ->
-                        aplicarAlModelo { HerramientasDiseno.conPuenteMovido(it, a.tramo, a.limite, valor) }
+                        { if (aplicarAlModelo { HerramientasDiseno.conPuenteMovido(it, a.tramo, a.limite, valor) }) revisarEscalones() }
                     a == null && kotlin.math.hypot(event.x - toqueX, event.y - toqueY) < 12 * dp ->
                         dialogoPonerAqui(d, event.x, event.y)
                 }
@@ -2781,10 +2843,10 @@ class DisenoNovaActivity : AppCompatActivity() {
                             while (tramosBlockeados.size < antes) tramosBlockeados.add(false)
                             tramosBlockeados.add((tramo + 1).coerceAtMost(tramosBlockeados.size), false)
                             bloquearTramos(tramo, tramo + 1)
-                            revisarParantesEnEscalon()   // si quedó en un escalón: dentro, fuera o centrado
+                            revisarEscalones()   // si quedó en un escalón: dentro, fuera o centrado
                         }
                     }
-                    1 -> aplicarAlModelo { HerramientasDiseno.conPuenteEn(it, tramo, y) }
+                    1 -> if (aplicarAlModelo { HerramientasDiseno.conPuenteEn(it, tramo, y) }) revisarEscalones()
                     // Mocheta abajo y sistema arriba, o al revés: cada franja del tramo cambia de tipo.
                     2 -> aplicarAlModelo { m ->
                         m.tramos[tramo].franjas.indices.fold(m) { acc, k -> acc.conTipoDeFranjaCambiado(tramo, k) }

@@ -504,6 +504,18 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 
   El alto de cada tramo es el rectángulo donde entra el sistema (N-66); con un descuadre de hasta
   2.5 manda la medida mayor (N-06): el alféizar del recorte mide 109.4 y 108.5 → 109.4.
+- N-97 ✅ **El puente en un escalón** (dictado el 2026-09-26): lo mismo que el parante (N-94). Si un
+  puente cae en un escalón, novaDiseño pregunta dentro, fuera o centrado con las medidas. Dentro deja
+  el puente entero del lado angosto: en el tramo invertido de Formas, en la mocheta, y así el
+  sistema queda un rectángulo limpio y el puente mide lo que la mocheta.
+
+  | Opción (Formas, tramo 2) | Puente | Sistema | Mocheta (espacio) |
+  |---|---|---|---|
+  | Dentro (elegida por el usuario) | 151.7 | 233.7 × 109.4 | 151.7 × 32.6 |
+  | Fuera | 233.7 | 233.7 × 106.9 | 151.7 × 35.1 |
+
+  El alto del puente es el del puente elegido en Nova. Con esto, el puente del tramo 2 de Formas
+  mide **151.7** (respuesta a la duda de N-49 en formas).
 - N-96 ✅ **Estrategia de cálculo de las formas: partir en rectángulos** (dictado el 2026-09-26). Un
   tramo que no es rectángulo se parte por sus franjas hasta que cada trozo lo sea; cada rectángulo
   se calcula con las reglas que ya existen, identificando sus módulos; al final los materiales que

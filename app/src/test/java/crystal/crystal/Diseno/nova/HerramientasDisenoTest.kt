@@ -79,18 +79,49 @@ class HerramientasDisenoTest {
         assertNull(HerramientasDiseno.escalonDelParante(hecho, 0))
     }
 
-    @Test
-    fun cada_franja_es_un_rectangulo_dentro_del_vano() {
-        // El diseño del usuario (2026-09-26), parante dentro: tramo 2 con la mocheta abajo (35.1) y
-        // el sistema arriba (109.4). La mocheta solo llega hasta el recorte: 151.7, no 233.7.
+    /**
+     * El diseño del usuario (2026-09-26), parante dentro: tramo 2 invertido, con la mocheta abajo
+     * (35.1, con el puente dentro) y el sistema arriba (109.4), f c c f.
+     */
+    private fun formasConElParanteDentro(): DisenoNova {
         val base = dosTramosEnElEscalon()
         val dentro = HerramientasDiseno.opcionesDelParante(base, 0).first { it.lado == HerramientasDiseno.LadoParante.DENTRO }
         val d0 = HerramientasDiseno.conParanteEnEscalon(base, 0, dentro)
         val t2 = d0.tramos[1]
-        val d = d0.copy(tramos = listOf(d0.tramos[0], t2.copy(franjas = listOf(
+        return d0.copy(tramos = listOf(d0.tramos[0], t2.copy(franjas = listOf(
             NovaFranja(false, 35.1f, listOf(NovaModulo('f', t2.ancho))),
             NovaFranja(true, 109.4f, List(4) { NovaModulo(if (it == 0 || it == 3) 'f' else 'c', t2.ancho / 4) })
         ))))
+    }
+
+    @Test
+    fun el_puente_en_un_escalon_se_deja_dentro_o_fuera() {
+        // Dictado el 2026-09-26: dentro, el puente entero entra en la mocheta; el sistema queda un
+        // rectángulo limpio de 233.7 × 109.4 y el puente mide lo que la mocheta, 151.7.
+        val d = formasConElParanteDentro()
+        val e = HerramientasDiseno.escalonDelPuente(d, 1, 0)!!
+        assertEquals(109.4f, r1(e.y), 0.01f)
+        assertTrue(e.angostoAbajo)
+        val op = HerramientasDiseno.opcionesDelPuente(d, 1, 0).associateBy { it.lado }
+        val dentro = op.getValue(HerramientasDiseno.LadoParante.DENTRO)
+        assertEquals(151.7f, r1(dentro.largoPuente), 0.01f)
+        assertEquals(233.7f, r1(dentro.sistema!!.first), 0.01f)
+        assertEquals(109.4f, r1(dentro.sistema!!.second), 0.01f)
+        assertEquals(151.7f, r1(dentro.mocheta!!.first), 0.01f)
+        assertEquals(32.6f, r1(dentro.mocheta!!.second), 0.01f)   // 35.1 − 2.5 (N-31)
+        // Fuera, el puente queda sobre el escalón: el sistema baja a 106.9 y el puente mide 233.7.
+        val fuera = op.getValue(HerramientasDiseno.LadoParante.FUERA)
+        assertEquals(233.7f, r1(fuera.largoPuente), 0.01f)
+        assertEquals(106.9f, r1(fuera.sistema!!.second), 0.01f)
+        assertEquals(35.1f, r1(fuera.mocheta!!.second), 0.01f)
+        val aplicado = HerramientasDiseno.conPuenteEnEscalon(d, 1, 0, fuera)
+        assertNull(HerramientasDiseno.escalonDelPuente(aplicado, 1, 0))
+    }
+
+    @Test
+    fun cada_franja_es_un_rectangulo_dentro_del_vano() {
+        // La mocheta del tramo 2 solo llega hasta el recorte: 151.7, no 233.7.
+        val d = formasConElParanteDentro()
         val mocheta = HerramientasDiseno.rectanguloDeFranja(d, 1, 0)!!
         assertEquals(151.7f, r1(mocheta.first), 0.01f)
         assertEquals(35.1f, r1(mocheta.second), 0.01f)

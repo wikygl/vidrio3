@@ -282,6 +282,108 @@ object HerramientasDiseno {
             .filter { it > 0f }.maxOrNull()
     }
 
+    // ==================== EL PUENTE EN UN ESCALÓN ====================
+    // Dictado por el usuario (2026-09-26): con el puente pasa lo mismo que con el parante. Si cae en
+    // un escalón (en Formas, el alféizar del recorte de la derecha, a 109.4 del dintel), se pregunta
+    // dentro, fuera o centrado. DENTRO deja el puente entero del lado angosto (en el tramo invertido
+    // de Formas, en la mocheta): el sistema queda un rectángulo limpio de 233.7 × 109.4 y el puente
+    // mide lo que la mocheta, 151.7. FUERA lo deja del lado ancho: el sistema baja a 106.9 y el
+    // puente mide 233.7.
+    //
+    // En el modelo el puente va dentro de la mocheta que separa (N-31: la mocheta lo pierde): la
+    // franja de la mocheta incluye su alto. Por eso cada opción es una altura del límite.
+
+    /** Un escalón horizontal del vano: a qué [y] (del dintel) está, y si el vano se angosta abajo. */
+    data class EscalonHorizontal(val y: Float, val angostoAbajo: Boolean)
+
+    /** Una manera de dejar el puente en su escalón: dónde queda el límite y cómo quedan las piezas. */
+    data class OpcionPuente(
+        val lado: LadoParante, val y: Float, val largoPuente: Float,
+        val sistema: Pair<Float, Float>?, val mocheta: Pair<Float, Float>?
+    )
+
+    /**
+     * El escalón donde está el puente [indiceLimite] del tramo, o null. Es un lado casi horizontal del
+     * vano (con descuadre de hasta 2.5, N-06) a la altura del puente, con el vano más angosto de un
+     * lado que del otro. Con descuadre manda la medida mayor: el escalón de Formas va de 108.5 a
+     * 109.4, y del lado angosto (abajo) se toma 109.4.
+     */
+    fun escalonDelPuente(d: DisenoNova, indiceTramo: Int, indiceLimite: Int, anchoParante: Float = 2.5f): EscalonHorizontal? {
+        val puntos = puntosDelVano(d)
+        if (puntos.size < 3) return null
+        val t = d.tramos.getOrNull(indiceTramo) ?: return null
+        val y = limitesDePuente(d, indiceTramo).getOrNull(indiceLimite) ?: return null
+        val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        val fin = inicio + t.ancho
+        for (i in puntos.indices) {
+            val (ax, ay) = puntos[i]
+            val (bx, by) = puntos[(i + 1) % puntos.size]
+            if (abs(bx - ax) <= abs(by - ay) || abs(by - ay) > DESCUADRE_CM) continue
+            if (maxOf(ax, bx) <= inicio || minOf(ax, bx) >= fin) continue
+            val yMin = minOf(ay, by)
+            val yMax = maxOf(ay, by)
+            if (y < yMin - 0.15f || y > yMax + 0.15f) continue
+            val arriba = anchoDelVanoEn(puntos, yMin - 0.5f, inicio, fin) ?: continue
+            val abajo = anchoDelVanoEn(puntos, yMax + 0.5f, inicio, fin) ?: continue
+            if (abs(arriba - abajo) <= DESCUADRE_CM) continue
+            val angostoAbajo = abajo < arriba
+            return EscalonHorizontal(if (angostoAbajo) yMax else yMin, angostoAbajo)
+        }
+        return null
+    }
+
+    /** Las tres maneras de dejar el puente [indiceLimite] en su escalón; vacía si no está en uno. */
+    fun opcionesDelPuente(
+        d: DisenoNova, indiceTramo: Int, indiceLimite: Int, altoPuente: Float = 2.5f, anchoParante: Float = 2.5f
+    ): List<OpcionPuente> {
+        val e = escalonDelPuente(d, indiceTramo, indiceLimite, anchoParante) ?: return emptyList()
+        val franjas = d.tramos[indiceTramo].franjas
+        val deAbajo = franjas.getOrNull(indiceLimite) ?: return emptyList()
+        val deArriba = franjas.getOrNull(indiceLimite + 1) ?: return emptyList()
+        // El puente va en la mocheta que separa: la de abajo en un invertido, si no la de arriba.
+        val mochetaAbajo = !deAbajo.esSistema && deArriba.esSistema
+        val h = altoPuente
+        val s = e.y
+        // La y del límite que deja el puente entero en el lado angosto, en el ancho, o partido.
+        val dentro = when {
+            e.angostoAbajo && mochetaAbajo -> s
+            e.angostoAbajo -> s + h
+            mochetaAbajo -> s - h
+            else -> s
+        }
+        val fuera = when {
+            e.angostoAbajo && mochetaAbajo -> s - h
+            e.angostoAbajo -> s
+            mochetaAbajo -> s
+            else -> s + h
+        }
+        val centrado = if (mochetaAbajo) s - h / 2f else s + h / 2f
+        val puntos = puntosDelVano(d)
+        val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        val fin = inicio + d.tramos[indiceTramo].ancho
+        val actual = limitesDePuente(d, indiceTramo)[indiceLimite]
+        return listOf(LadoParante.DENTRO to dentro, LadoParante.FUERA to fuera, LadoParante.CENTRADO to centrado)
+            .mapNotNull { (lado, y) ->
+                val m = if (abs(y - actual) <= 0.01f) d
+                        else conPuenteMovido(d, indiceTramo, indiceLimite, y).takeIf { it !== d } ?: return@mapNotNull null
+                // El puente mide lo que el vano le deja donde queda; si pisa los dos lados, el mayor.
+                val arriba = if (mochetaAbajo) y else y - h
+                val largo = listOf(arriba + 0.05f, arriba + h / 2f, arriba + h - 0.05f)
+                    .mapNotNull { anchoDelVanoEn(puntos, it, inicio, fin) }.maxOrNull() ?: return@mapNotNull null
+                val iSistema = if (deArriba.esSistema) indiceLimite + 1 else indiceLimite
+                val iMocheta = if (mochetaAbajo) indiceLimite else indiceLimite + 1
+                // La mocheta como espacio, sin el puente (N-31).
+                val moch = rectanguloDeFranja(m, indiceTramo, iMocheta, anchoParante)?.let { it.first to (it.second - h) }
+                OpcionPuente(lado, y, largo, rectanguloDeFranja(m, indiceTramo, iSistema, anchoParante), moch)
+            }
+    }
+
+    /** El diseño con el puente dejado como dice [opcion]. */
+    fun conPuenteEnEscalon(d: DisenoNova, indiceTramo: Int, indiceLimite: Int, opcion: OpcionPuente): DisenoNova {
+        val actual = limitesDePuente(d, indiceTramo).getOrNull(indiceLimite) ?: return d
+        return if (abs(opcion.y - actual) <= 0.01f) d else conPuenteMovido(d, indiceTramo, indiceLimite, opcion.y)
+    }
+
     // ==================== DESCUADRES DEL VANO ====================
     // Pedido del usuario (2026-09-26): muchas veces quien mide no es quien diseña, y un descuadre
     // que no salta a la vista (en Formas, 9 mm) se pasa por alto. Se marca en rojo en el dibujo.
