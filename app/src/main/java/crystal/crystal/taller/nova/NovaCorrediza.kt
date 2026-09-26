@@ -239,6 +239,10 @@ class NovaCorrediza : AppCompatActivity() {
                 TipoNova.INA -> TipoNova.APA
                 TipoNova.PIV -> TipoNova.APA
             }
+            // El diseño editado lleva el acabado en su cabecera ({nova,apa,…}) y de ahí lo leen el
+            // motor y el dibujo: sin cambiarlo ahí, el título cambiaba de color y la ventana seguía
+            // calculándose en el acabado anterior.
+            if (ultimoPaquete.isNotBlank()) ultimoPaquete = conAcabado(ultimoPaquete, tipoPaquete())
             actualizarModo()
         }
 
@@ -2245,6 +2249,10 @@ class NovaCorrediza : AppCompatActivity() {
         return p.contains("multi") || p.contains("múlt") || p.contains("múlt") || p.contains("gorrito") || p.contains("ltiple")
     }
 
+
+    /** El mismo paquete de diseño con otro acabado en la cabecera: `{nova,apa,[…` → `{nova,ina,[…`. */
+    private fun conAcabado(paquete: String, acabado: String): String =
+        Regex("""^(\s*\{\s*nova\s*,\s*)[a-zA-Z]+(\s*,)""").replace(paquete) { "${it.groupValues[1]}$acabado${it.groupValues[2]}" }
 
     private fun tipoPaquete(): String = when (tipoNova) {
         TipoNova.APA -> "apa"
