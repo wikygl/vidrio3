@@ -39,7 +39,17 @@ data class Puente(val nombre: String, val altura: Float, val esquinero: Float) {
 }
 
 /** Un módulo del sistema. [ancho] es el ancho del diseño, ya neto de parantes. */
-data class Modulo(val corrediza: Boolean, val ancho: Float)
+data class Modulo(
+    val corrediza: Boolean,
+    val ancho: Float,
+    /**
+     * Cuánto le quita el vano a este módulo por arriba o por abajo, en un vano con forma (N-96,
+     * dictado el 2026-09-26): en "polis" el techo baja 39.2 sobre el fijo de la izquierda, que
+     * mide 94.4 y no 133.6. Menos de un descuadre (2.5) no cuenta.
+     */
+    val recorteArriba: Float = 0f,
+    val recorteAbajo: Float = 0f
+)
 
 /**
  * Una franja de un tramo dibujado a mano, de abajo arriba (N-33). [alto] es el del dibujo: para las
@@ -76,7 +86,13 @@ data class Tramo(
      * Lo que mide cada corrida de puente del tramo en un vano con forma, de abajo arriba (N-97): en
      * Formas el puente del tramo 2 entra en la mocheta y mide 151.7, no 233.7. Null = el ancho del tramo.
      */
-    val largosPuente: List<Float>? = null
+    val largosPuente: List<Float>? = null,
+    /**
+     * Lo que mide el borde de arriba del sistema cuando el vano lo corta (dictado el 2026-09-26): el
+     * fijo corredizo solo llega hasta donde empieza el corte. En "polis", 190.2 en un tramo de 252.
+     * Null = el ancho del tramo.
+     */
+    val anchoRielSuperior: Float? = null
 ) {
     val ancho: Float get() = modulos.sumOf { it.ancho.toDouble() }.toFloat()
     val corredizas: Int get() = modulos.count { it.corrediza }

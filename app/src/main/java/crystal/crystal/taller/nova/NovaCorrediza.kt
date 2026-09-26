@@ -1280,8 +1280,10 @@ class NovaCorrediza : AppCompatActivity() {
             modelo = texto,
             alturaPuente = tubo,
             mochetaInferior = mochetaInferiorDoblePuente(),
-            remate = modeloRemate,
-            descontarPuentes = tipoNova == TipoNova.APA
+            // El remate sale del diseño: "polis" es invertido aunque la pantalla diga normal.
+            remate = remateDelDiseno() ?: modeloRemate,
+            // N-31: la mocheta es la misma en aparente e inaparente (antes solo aparente descontaba).
+            descontarPuentes = true
         )
 
         // Diseño visual: usar ultimoPaquete (no regenerar)
@@ -3225,7 +3227,8 @@ class NovaCorrediza : AppCompatActivity() {
             alturaPuente = tubo,
             mochetaInferior = mochetaInferiorDoblePuente(),
             remate = modeloRemate,
-            descontarPuentes = tipoNova == TipoNova.APA,
+            // N-31: la mocheta es la misma en aparente e inaparente (antes solo aparente descontaba).
+            descontarPuentes = true,
             anchoReal = anchoReal,
             altoReal = altoReal
         )
@@ -3674,6 +3677,28 @@ class NovaCorrediza : AppCompatActivity() {
     private fun disenoParaArchivar(): String =
         if (modulosDesiguales.isNotEmpty() && ultimoPaquete.isNotBlank()) ultimoPaquete else disenoSimbolico()
 
+    /** El diseño editado que manda (desigual, compuesto, formas), o null si la ventana es automática. */
+    private fun disenoCargado(): crystal.crystal.Diseno.nova.DisenoNova? {
+        if (modulosDesiguales.isEmpty() || ultimoPaquete.isBlank()) return null
+        return runCatching { crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(ultimoPaquete) }.getOrNull()
+    }
+
+    /**
+     * El remate de la ventana según su diseño (primero se identifica la ventana entera, dictado el
+     * 2026-09-26): "polis" tiene sus dos tramos invertidos y es "nr" aunque la pantalla diga normal.
+     * Null si no hay diseño, o si sus tramos no son todos iguales (compuesto).
+     */
+    private fun remateDelDiseno(): String? {
+        val d = disenoCargado() ?: return null
+        return when (crystal.crystal.Diseno.nova.HerramientasDiseno.modeloDeLaVentana(d)) {
+            crystal.crystal.Diseno.nova.HerramientasDiseno.ModeloTramo.NORMAL,
+            crystal.crystal.Diseno.nova.HerramientasDiseno.ModeloTramo.SIN_PUENTE -> "nn"
+            crystal.crystal.Diseno.nova.HerramientasDiseno.ModeloTramo.INVERTIDO -> "nr"
+            crystal.crystal.Diseno.nova.HerramientasDiseno.ModeloTramo.BANDERA -> "np"
+            else -> null
+        }
+    }
+
     /** ¿Los tramos del diseño editado tienen franjas distintas? Entonces es compuesto (N-89). */
     private fun esDisenoCompuesto(): Boolean {
         if (modulosDesiguales.isEmpty() || ultimoPaquete.isBlank()) return false
@@ -3833,7 +3858,10 @@ class NovaCorrediza : AppCompatActivity() {
             "ncu" -> "c"
             else -> "p"
         }
-        val forma = when (metaForma) {
+        // Con un diseño cargado, la forma sale de él: un vano con silueta, escalón o inclinado es
+        // poligonal (N-01b). "polis" salía `r` (rectangular) con su viga y su recorte.
+        val formaDelDiseno = disenoCargado()?.takeIf { it.esIrregular }?.let { "p" }
+        val forma = formaDelDiseno ?: when (metaForma) {
             "circular"  -> "c"
             "poligonal" -> "p"
             else        -> if (texto == "nci") "c" else "r"
@@ -3847,7 +3875,8 @@ class NovaCorrediza : AppCompatActivity() {
         }
         // El "modelo" del paquete refleja el REMATE (eje independiente de la modulación). Un diseño
         // con tramos de modelos distintos es compuesto (N-89).
-        val modelo = if (esDisenoCompuesto()) "x" else when (modeloRemate) {
+        // Con un diseño cargado, el modelo sale de sus tramos ("polis": invertido, `i`; salía `n`).
+        val modelo = if (esDisenoCompuesto()) "x" else when (remateDelDiseno() ?: modeloRemate) {
             "nn" -> "n"
             "nr" -> "i"
             "np" -> "b"

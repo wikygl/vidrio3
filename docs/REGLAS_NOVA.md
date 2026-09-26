@@ -548,6 +548,25 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   | Parante | `77.2 = 1` |
   | Vidrios | `50.9 x 75.5 = 1`, `50 x 73.7 = 1`, `58.2 x 107.7 = 2`, `57.3 x 105.9 = 2`, `151.2 x 30.8 = 1` |
 
+  **El sistema también se parte por módulos cuando el vano lo corta** (dictado el 2026-09-26,
+  medida "polis": una viga de 61.8 × 39.2 sobre el fijo de la izquierda de un tramo de 252 × 133.6):
+  - el fijo bajo la viga es un rectángulo propio (94.4 de hoja): su vidrio (`61.8 x 93.2`), su U
+    parante (`93.2`) y la portafelpa de su lado (`92.8`) salen de ese alto;
+  - en la cara horizontal del corte, sobre el fijo, va una **U** del largo de su U de fijo (`62.3`);
+  - el **fijo corredizo solo llega hasta donde empieza el corte**: 252 − 61.8 = 190.2 − 0.06 = `190.1`;
+  - la corrediza de al lado colinda con la cara vertical del corte (la viga) como con una **pared**:
+    lleva **tope completo** (`133.6 − 0.9 = 132.7`, N-56). El usuario hizo corrediza ese módulo a
+    propósito, para equilibrar con el otro tramo; se desliza hacia el otro lado.
+
+  Un corte de hasta 2.5 no cuenta (es descuadre, N-06). Hecho en el motor (`FormasTest`, y
+  `PolisEnNovaTest` en el celular).
+
+  **Las Referencias y la cadena G<> se identifican desde el diseño** (2026-09-26): "polis" salía
+  `mocheta sup: 56.1` y `G<p,r,m,n>`. Con un diseño cargado, el remate de la ventana sale de sus
+  tramos (los dos invertidos → `nr`, modelo `i`; tramos distintos → `x`) y la forma es poligonal
+  si el vano tiene silueta o escalón (`p`). La mocheta de las Referencias es el espacio, en
+  aparente y en inaparente (N-31): `mocheta inf: 53.6`.
+
   **El riel y el fijo corredizo salen del ancho del sistema** (dictado el 2026-09-26): 233.7 −
   0.06 = 233.6, aunque el puente mida 151.7. En automático, compuesto y desigual coincide con
   puente − 0.06 (N-51), porque ahí el puente mide lo que el tramo.

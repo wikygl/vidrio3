@@ -44,6 +44,39 @@ class FormasTest {
 
     private fun t(p: List<Pieza>) = MaterialesNova.texto(p).lines().sorted()
 
+    /**
+     * "polis" (archivado por el usuario el 2026-09-26 en el moto g04, tal cual): 506.5 × 189.7, dos
+     * tramos invertidos de 252. El techo baja 39.2 sobre los primeros 61.8 (una viga) y el alféizar
+     * sube a 133.6 desde 302.9. El fijo de la izquierda queda bajo la viga: 94.4 de hoja y no 133.6.
+     * Dictado: el fijo corredizo solo llega hasta donde empieza el corte (190.2 − 0.06); en la cara
+     * horizontal del corte, sobre el fijo, va una U; la corrediza de al lado colinda con la viga como
+     * con una pared y lleva tope completo (133.6 − 0.9).
+     */
+    @Test
+    fun polis_la_viga_sobre_el_fijo_parte_el_sistema_por_modulos() {
+        val paquete = "{nova,apa,[506.5,189.7:Tl<252>(m<56.1>(f<126>f<126>);s<133.6>(f<62>c<63.3>c<63.3>f<63.3>))" +
+            "P<2.5>Tl<252>(m<56.1>(f<252>);s<133.6>(f<63>c<63>c<63>f<63>))" +
+            "V<0/39.2|0/189.7|302.9/189.7|302.9/133.6|506.5/133.2|506.5/0|61.8/0|61.8/39.2>]}"
+        val v = DesdeDiseno.ventana(paquete, PerfilU(1f, 1f), Puente("tubo 2⅜ x 1", 2.5f, 6f))!!
+        val m = MotorNova.calcular(v)
+
+        // U: la del corte (62.3, igual que su U de fijo) y la U parante del fijo bajo la viga (93.2).
+        assertEquals(listOf("132.4 = 3", "252 = 2", "48.4 = 2", "51.6 = 4", "62.3 = 2", "63.3 = 2", "63.6 = 1", "93.2 = 1"), t(m.u))
+        assertEquals(listOf("252 = 1", "48.4 = 1"), t(m.puente))
+        assertEquals(listOf("251.9 = 2"), t(m.riel))
+        assertEquals(listOf("190.1 = 1", "251.9 = 1"), t(m.rielSuperior))
+        assertEquals(listOf("132 = 11", "92.8 = 1"), t(m.portafelpa))
+        assertEquals(listOf("132.7 = 1"), t(m.tope))
+        assertEquals(listOf("63.3 = 2", "63.6 = 2"), t(m.hache))
+        assertEquals(listOf("189.7 = 1"), t(m.parante))
+        assertEquals(listOf("51.6 = 1"), t(m.tee))
+        assertEquals(
+            listOf("125.5 x 52.3 = 2", "47.9 x 52.3 = 1", "61.8 x 93.2 = 1", "61.9 x 130.1 = 2",
+                "62.2 x 130.1 = 2", "62.8 x 132.4 = 2", "63.1 x 132.4 = 1"),
+            MaterialesNova.textoVidrios(m.vidrios).lines().sorted()
+        )
+    }
+
     @Test
     fun el_escalonado_de_formas_en_aparente() {
         val multiple = Puente("Múltiple", 1.5f, 5f)

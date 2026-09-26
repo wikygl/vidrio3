@@ -144,8 +144,12 @@ object NovaUIHelper {
         val (mochetaInf, mochetaSup) = if (siNoMoch == 0) {
             0f to 0f
         } else {
+            // La mocheta es el espacio: alto − (hoja + puente), igual en aparente e inaparente (N-31,
+            // G-05). Antes, en normal e invertido, `alto − altoHoja` sin el puente: "polis" mostraba
+            // "mocheta sup: 56.1" en un invertido cuya mocheta (inferior) mide 53.6.
+            val puenteDescontado = if (descontarPuentes) alturaPuente else 0f
             when (remate) {
-                "nr" -> (alto - altoHoja).coerceAtLeast(0f) to 0f
+                "nr" -> (alto - altoHoja - puenteDescontado).coerceAtLeast(0f) to 0f
                 "np" -> {
                     val alturas = NovaInaCalculos.alturasMochetasPorModelo(
                         modelo = remate,
@@ -158,7 +162,7 @@ object NovaUIHelper {
                     val inf = alturas.inferior ?: alturas.superior
                     inf.coerceAtLeast(0f) to alturas.superior.coerceAtLeast(0f)
                 }
-                else -> 0f to (alto - altoHoja).coerceAtLeast(0f)
+                else -> 0f to (alto - altoHoja - puenteDescontado).coerceAtLeast(0f)
             }
         }
 

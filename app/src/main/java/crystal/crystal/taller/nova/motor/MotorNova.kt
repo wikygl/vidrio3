@@ -53,8 +53,12 @@ object MotorNova {
     /** Un módulo con todo lo que hace falta para colindancias y medidas. */
     private data class M(
         val tramo: Int, val pos: Int, val global: Int, val corrediza: Boolean,
-        val ancho: Float, val anchoVidrio: Float, val u: Float
-    )
+        val ancho: Float, val anchoVidrio: Float, val u: Float,
+        /** Lo que el vano le quita al módulo, arriba y abajo (ver [Modulo.recorteArriba]). */
+        val recorteArriba: Float = 0f, val recorteAbajo: Float = 0f
+    ) {
+        val recorte: Float get() = recorteArriba + recorteAbajo
+    }
 
     fun calcular(v: VentanaNova): MaterialesNova {
         var total = MaterialesNova()
@@ -210,10 +214,15 @@ object MotorNova {
         if (us != 0f) {
             if (apa) {
                 // APA: cada fijo contra pared o parante (el borde de cada tramo, esquina incluida).
+                // Cada fijo con su alto: el que tiene recorte (una viga, un escalón) es más bajo.
+                // Antes: n piezas de `altoHoja − (u + 0.2)` por tramo.
                 porTramo.forEach { (i, t) ->
-                    val n = (if (!t.first().corrediza) 1 else 0) + (if (!t.last().corrediza) 1 else 0)
-                    if (n > 0) u.add(Pieza(vert[i].altoHoja - (us + 0.2f), n, Orientacion.VERTICAL))
+                    listOfNotNull(t.first().takeIf { !it.corrediza }, t.last().takeIf { !it.corrediza })
+                        .forEach { f -> u.add(Pieza(vert[i].altoHoja - f.recorte - (us + 0.2f), 1, Orientacion.VERTICAL)) }
                 }
+                // La U en la cara horizontal del corte, sobre el fijo (dictado el 2026-09-26): del
+                // largo de su U de fijo. El fijo corredizo solo llega hasta donde empieza el corte.
+                ms.filter { !it.corrediza && it.recorteArriba > 0f }.forEach { f -> u.add(Pieza(f.u, 1)) }
             } else {
                 // INA: solo los fijos de los bordes de la ventana contra muro, acople o libre.
                 val n = (if (!ms.first().corrediza && esMuro(l.izquierda)) 1 else 0) +
@@ -298,7 +307,9 @@ object MotorNova {
             riel.add(Pieza(medida, 1))
             // Como la pantalla: no va cuando hay mocheta arriba con puente Múltiple, que ya lo trae.
             val lleva = !vert[i].hayMocheta || vert[i].soloAbajo || !(t.puente ?: v.puente).esMultiple
-            if (lleva) rielSup.add(Pieza(medida, 1))
+            // Si el vano corta el borde de arriba del sistema (una viga), el fijo corredizo solo llega
+            // hasta donde empieza el corte (dictado el 2026-09-26): en "polis", 190.2 − 0.06.
+            if (lleva) rielSup.add(Pieza(t.anchoRielSuperior?.let { it - 0.06f } ?: medida, 1))
         }
         // Antes:
         //     riel.add(Pieza(medida, if (todoCorredizas) t.corredizas else 1))
@@ -311,15 +322,24 @@ object MotorNova {
         val tope = mutableListOf<Pieza>()
         porTramo.forEach { (i, t) ->
             if (t.none { it.corrediza }) return@forEach
-            val n = t.count { it.corrediza } * 2 + t.indices.sumOf { k ->
-                if (t[k].corrediza) 0
-                else (if (k > 0 && t[k - 1].corrediza) 1 else 0) + (if (k < t.lastIndex && t[k + 1].corrediza) 1 else 0)
+            val hoja = vert[i].altoHoja
+            portafelpa.add(Pieza(NovaCalculos.portafelpa(hoja), t.count { it.corrediza } * 2, Orientacion.VERTICAL))
+            // Cada lado de fijo que toca una corrediza, con el alto de ESE fijo (un fijo con recorte
+            // es más bajo). Antes todos con el alto de la hoja.
+            t.indices.filter { !t[it].corrediza }.forEach { k ->
+                val lados = (if (k > 0 && t[k - 1].corrediza) 1 else 0) + (if (k < t.lastIndex && t[k + 1].corrediza) 1 else 0)
+                if (lados > 0) portafelpa.add(Pieza(NovaCalculos.portafelpa(hoja - t[k].recorte), lados, Orientacion.VERTICAL))
             }
-            portafelpa.add(Pieza(NovaCalculos.portafelpa(vert[i].altoHoja), n, Orientacion.VERTICAL))
             // Todo borde de tramo es pared o parante: también la esquina, que lleva su parante de
             // esquina P<90> (N-84), y el lado libre, que lleva el suyo (N-78).
-            val nt = (if (t.first().corrediza) 1 else 0) + (if (t.last().corrediza) 1 else 0)
-            if (nt > 0) tope.add(Pieza(vert[i].altoHoja - 0.9f, nt, Orientacion.VERTICAL))
+            var nt = (if (t.first().corrediza) 1 else 0) + (if (t.last().corrediza) 1 else 0)
+            // Una corrediza junto a un fijo con recorte colinda con la cara del corte (una viga, un
+            // escalón): es pared, y lleva tope completo (dictado el 2026-09-26, N-56).
+            nt += t.indices.count { k ->
+                t[k].corrediza && ((k > 0 && !t[k - 1].corrediza && t[k - 1].recorte > 0f) ||
+                    (k < t.lastIndex && !t[k + 1].corrediza && t[k + 1].recorte > 0f))
+            }
+            if (nt > 0) tope.add(Pieza(hoja - 0.9f, nt, Orientacion.VERTICAL))
         }
 
         // ---------- Tee de aparente (N-57) ----------
@@ -341,7 +361,9 @@ object MotorNova {
             val descuento = if (fullFijos) NovaCalculos.GRUNA
             else if (apa) NovaCalculos.descuentoColindanciaFijo(porTramo.getValue(f.tramo).map { if (it.corrediza) 'c' else 'f' }, f.pos)
             else NovaCalculos.descuentoColindanciaFijo(patronLado, f.global)
-            val alto = (if (apa) vDe(f).altoHoja else l.alto) - (us + holgura)
+            // Un fijo con recorte (una viga encima, un escalón debajo) es más bajo: en "polis",
+            // 133.6 − 39.2 = 94.4 de hoja.
+            val alto = (if (apa) vDe(f).altoHoja - f.recorte else l.alto) - (us + holgura)
             vidrios.add(Vidrio(f.u - descuento, alto))
         }
 
@@ -426,7 +448,7 @@ object MotorNova {
             t.modulos.forEachIndexed { pi, m ->
                 val anchoVidrio = m.ancho * escala
                 val uMod = if (apa) m.ancho + ajusteLado else anchoVidrio + ajusteLado
-                out.add(M(ti, pi, g++, m.corrediza, m.ancho, anchoVidrio, uMod))
+                out.add(M(ti, pi, g++, m.corrediza, m.ancho, anchoVidrio, uMod, m.recorteArriba, m.recorteAbajo))
             }
         }
         return out

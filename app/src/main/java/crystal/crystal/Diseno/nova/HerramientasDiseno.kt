@@ -296,6 +296,57 @@ object HerramientasDiseno {
         return ancho to alto
     }
 
+    /**
+     * Cuánto le quita el vano a cada módulo del sistema del tramo, por arriba y por abajo (dictado el
+     * 2026-09-26: el sistema también se parte en rectángulos por módulo cuando el vano lo corta). En
+     * "polis" el techo baja 39.2 sobre el fijo de la izquierda: (39.2, 0). Se mide en el centro del
+     * módulo; menos de un descuadre (2.5) no cuenta. Vacía sin vano.
+     */
+    fun recortesDelSistema(d: DisenoNova, indiceTramo: Int, anchoParante: Float = 2.5f): List<Pair<Float, Float>> {
+        val puntos = puntosDelVano(d)
+        val t = d.tramos.getOrNull(indiceTramo) ?: return emptyList()
+        val iS = t.franjas.indexOfFirst { it.esSistema }
+        if (puntos.size < 3 || iS < 0) return emptyList()
+        val (techo, piso) = bandaDeFranja(d, indiceTramo, iS) ?: return emptyList()
+        var x = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        val mods = t.franjas[iS].modulos
+        val sinAncho = mods.count { it.ancho == null }
+        val resto = if (sinAncho > 0) ((t.ancho - mods.sumOf { (it.ancho ?: 0f).toDouble() }.toFloat()) / sinAncho) else 0f
+        return mods.map { m ->
+            val w = m.ancho ?: resto
+            val centro = x + w / 2f
+            x += w
+            val (arriba, abajo) = bordesEn(puntos, centro) ?: return@map 0f to 0f
+            val cortaArriba = (arriba - techo).takeIf { it > DESCUADRE_CM } ?: 0f
+            val cortaAbajo = (piso - abajo).takeIf { it > DESCUADRE_CM } ?: 0f
+            cortaArriba to cortaAbajo
+        }
+    }
+
+    /**
+     * Lo que mide el borde de arriba del sistema del tramo si el vano lo corta (una viga), o null si
+     * llega de lado a lado. El fijo corredizo solo llega hasta donde empieza el corte (dictado el
+     * 2026-09-26): en "polis", 190.2 de un tramo de 252. Se mide un descuadre por debajo del techo.
+     */
+    fun anchoArribaDelSistema(d: DisenoNova, indiceTramo: Int, anchoParante: Float = 2.5f): Float? {
+        val puntos = puntosDelVano(d)
+        val t = d.tramos.getOrNull(indiceTramo) ?: return null
+        val iS = t.franjas.indexOfFirst { it.esSistema }
+        if (puntos.size < 3 || iS < 0) return null
+        val (techo, _) = bandaDeFranja(d, indiceTramo, iS) ?: return null
+        val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        val ancho = anchoDelVanoEn(puntos, techo + DESCUADRE_CM + 0.1f, inicio, inicio + t.ancho) ?: return null
+        return ancho.takeIf { abs(it - t.ancho) > 0.15f }
+    }
+
+    /** La franja [indiceFranja] del tramo en y: (techo, piso), desde el dintel. */
+    private fun bandaDeFranja(d: DisenoNova, indiceTramo: Int, indiceFranja: Int): Pair<Float, Float>? {
+        val alturas = alturasDeFranjas(d, indiceTramo)
+        val alto = alturas.getOrNull(indiceFranja) ?: return null
+        val piso = d.caidaDeTramo(indiceTramo) + d.altoDeTramo(indiceTramo) - alturas.take(indiceFranja).sum()
+        return (piso - alto) to piso
+    }
+
     /** El trozo más largo del vano sobre la horizontal [y], dentro de [xIni]..[xFin]. */
     private fun anchoDelVanoEn(puntos: List<Pair<Float, Float>>, y: Float, xIni: Float, xFin: Float): Float? {
         val cruces = mutableListOf<Float>()
@@ -337,6 +388,20 @@ object HerramientasDiseno {
             "sm" -> ModeloTramo.NORMAL
             "ms" -> ModeloTramo.INVERTIDO
             "msm" -> ModeloTramo.BANDERA
+            else -> ModeloTramo.COMPUESTO
+        }
+    }
+
+    /**
+     * El modelo de la ventana entera, desde su diseño: el de sus tramos si todos son iguales, y si no
+     * compuesto (N-89). En "polis" los dos tramos son invertidos: invertido. En Formas uno no tiene
+     * mocheta y el otro es invertido: compuesto.
+     */
+    fun modeloDeLaVentana(d: DisenoNova): ModeloTramo? {
+        val modelos = d.tramos.indices.mapNotNull { modeloDeTramo(d, it) }.distinct()
+        return when {
+            modelos.isEmpty() -> null
+            modelos.size == 1 -> modelos.first()
             else -> ModeloTramo.COMPUESTO
         }
     }

@@ -139,8 +139,16 @@ object DesdeDiseno {
         // automático) lo exacto es repartir la décima entre todos ellos, que es lo que hace después
         // el reescalado del lado; ajustarlos antes a su tramo, también truncado, lo estropeaba (420
         // en 4 + 3: el riel daba 238.4 en vez de 238.5).
-        val modulos = if (!modulosIguales && s.parantes.isEmpty() && sumaLeida > 0f && abs(sumaLeida - t.ancho) in 0.001f..0.5f)
+        val ajustados = if (!modulosIguales && s.parantes.isEmpty() && sumaLeida > 0f && abs(sumaLeida - t.ancho) in 0.001f..0.5f)
             leidos.map { it.copy(ancho = it.ancho * t.ancho / sumaLeida) } else leidos
+        // En un vano con forma, lo que el vano le quita a cada módulo (una viga encima, un escalón
+        // debajo): el sistema se parte también por módulos (dictado el 2026-09-26, "polis").
+        val recortes = if (conForma) HerramientasDiseno.recortesDelSistema(d, indice, puente.anchoParante) else emptyList()
+        val modulos = ajustados.mapIndexed { k, m ->
+            val r = recortes.getOrNull(k) ?: return@mapIndexed m
+            m.copy(recorteArriba = r.first, recorteAbajo = r.second)
+        }
+        val anchoArriba = if (conForma) HerramientasDiseno.anchoArribaDelSistema(d, indice, puente.anchoParante) else null
         // Paños de mocheta dibujados: los de la primera mocheta del tramo.
         val panos = t.mochetas.firstOrNull()?.modulos?.map { it.ancho ?: 0f }?.takeIf { p -> p.all { it > 0f } }
         // Las franjas del tramo, de abajo arriba, con su alto dibujado (N-33, N-89). Una mocheta con
@@ -149,7 +157,7 @@ object DesdeDiseno {
             val mods = f.modulos.map { Modulo(!it.esFijo, it.ancho ?: (t.ancho / f.modulos.size)) }
             FranjaTramo(f.esSistema || mods.any { it.corrediza }, alturas?.getOrNull(k) ?: f.alto, mods, anchosRect?.getOrNull(k))
         }
-        if (s.parantes.isEmpty()) return listOf(Tramo(modulos, panos, franjas, puenteTramo, largosPuente))
+        if (s.parantes.isEmpty()) return listOf(Tramo(modulos, panos, franjas, puenteTramo, largosPuente, anchoArriba))
         val cortes = s.parantes.map { it + 1 }.filter { it in 1 until modulos.size }.distinct().sorted()
         val out = mutableListOf<Tramo>()
         var desde = 0
