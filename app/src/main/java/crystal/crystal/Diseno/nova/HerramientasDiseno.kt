@@ -210,15 +210,45 @@ object HerramientasDiseno {
         return ejes.mapNotNull { (lado, eje) ->
             val m = if (abs(eje - ejesDeParantes(d, anchoParante)[indice]) <= 0.01f) d
                     else conParanteMovido(d, indice, eje, anchoParante).takeIf { it !== d } ?: return@mapNotNull null
-            // El parante mide el alto del vano donde está; si pisa los dos lados, el mayor.
-            val largo = listOf(eje - medio + 0.05f, eje, eje + medio - 0.05f)
-                .mapNotNull { altoDelVanoEn(puntos, it) }.maxOrNull() ?: return@mapNotNull null
+            val largo = largoDelParante(m, indice, anchoParante) ?: return@mapNotNull null
             OpcionParante(
                 lado, eje, largo,
                 m.tramos[indice].ancho, altoDelSistema(m, indice, anchoParante) ?: m.altoDeTramo(indice),
                 m.tramos[indice + 1].ancho, altoDelSistema(m, indice + 1, anchoParante) ?: m.altoDeTramo(indice + 1)
             )
         }
+    }
+
+    /**
+     * Lo que mide el parante [indice] en un vano con forma: el alto del vano donde queda; si pisa
+     * los dos lados de un escalón, el mayor (N-94). Null sin vano.
+     */
+    fun largoDelParante(d: DisenoNova, indice: Int, anchoParante: Float = 2.5f): Float? {
+        val puntos = puntosDelVano(d)
+        if (puntos.size < 3) return null
+        val eje = ejesDeParantes(d, anchoParante).getOrNull(indice) ?: return null
+        val medio = anchoParante / 2f
+        return listOf(eje - medio + 0.05f, eje, eje + medio - 0.05f)
+            .mapNotNull { altoDelVanoEn(puntos, it) }.maxOrNull()
+    }
+
+    /**
+     * Lo que mide la corrida de puente [indiceLimite] del tramo en un vano con forma: lo que el vano
+     * le deja a su altura; si pisa los dos lados de un escalón, el mayor (N-97). El puente va dentro
+     * de la mocheta que separa (la de abajo en un invertido). Null sin vano.
+     */
+    fun largoDelPuente(d: DisenoNova, indiceTramo: Int, indiceLimite: Int, altoPuente: Float = 2.5f, anchoParante: Float = 2.5f): Float? {
+        val puntos = puntosDelVano(d)
+        if (puntos.size < 3) return null
+        val t = d.tramos.getOrNull(indiceTramo) ?: return null
+        val deAbajo = t.franjas.getOrNull(indiceLimite) ?: return null
+        val deArriba = t.franjas.getOrNull(indiceLimite + 1) ?: return null
+        val y = limitesDePuente(d, indiceTramo).getOrNull(indiceLimite) ?: return null
+        val mochetaAbajo = !deAbajo.esSistema && deArriba.esSistema
+        val arriba = if (mochetaAbajo) y else y - altoPuente
+        val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        return listOf(arriba + 0.05f, arriba + altoPuente / 2f, arriba + altoPuente - 0.05f)
+            .mapNotNull { anchoDelVanoEn(puntos, it, inicio, inicio + t.ancho) }.maxOrNull()
     }
 
     /** El diseño con el parante [indice] dejado como dice [opcion]. */
@@ -399,18 +429,12 @@ object HerramientasDiseno {
             else -> s + h
         }
         val centrado = if (mochetaAbajo) s - h / 2f else s + h / 2f
-        val puntos = puntosDelVano(d)
-        val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
-        val fin = inicio + d.tramos[indiceTramo].ancho
         val actual = limitesDePuente(d, indiceTramo)[indiceLimite]
         return listOf(LadoParante.DENTRO to dentro, LadoParante.FUERA to fuera, LadoParante.CENTRADO to centrado)
             .mapNotNull { (lado, y) ->
                 val m = if (abs(y - actual) <= 0.01f) d
                         else conPuenteMovido(d, indiceTramo, indiceLimite, y).takeIf { it !== d } ?: return@mapNotNull null
-                // El puente mide lo que el vano le deja donde queda; si pisa los dos lados, el mayor.
-                val arriba = if (mochetaAbajo) y else y - h
-                val largo = listOf(arriba + 0.05f, arriba + h / 2f, arriba + h - 0.05f)
-                    .mapNotNull { anchoDelVanoEn(puntos, it, inicio, fin) }.maxOrNull() ?: return@mapNotNull null
+                val largo = largoDelPuente(m, indiceTramo, indiceLimite, h, anchoParante) ?: return@mapNotNull null
                 val iSistema = if (deArriba.esSistema) indiceLimite + 1 else indiceLimite
                 val iMocheta = if (mochetaAbajo) indiceLimite else indiceLimite + 1
                 // La mocheta como espacio, sin el puente (N-31).

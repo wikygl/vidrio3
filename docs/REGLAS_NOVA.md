@@ -533,6 +533,24 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 
   El editor muestra la identificación en su panel (`tramo2 = 233.7 × 109.4 · invertido, tubo 2⅜ x 1`)
   y la usa en el diálogo del puente en un escalón (N-97).
+
+  **Hecho en el motor (2026-09-26, `FormasTest`).** El lector del diseño identifica cada tramo
+  (su puente por N-03) y, en un vano con forma, le pasa al motor el alto real de cada franja, el
+  rectángulo de cada una, lo que mide cada corrida de puente y cada parante. Formas en aparente,
+  con Múltiple elegido en Nova:
+
+  | Pieza | Resultado |
+  |---|---|
+  | U | `51.4 = 1`, `58.7 = 2`, `151.7 = 2`, `75.5 = 1`, `107.7 = 2`, `29.6 = 2` |
+  | Puente (tubo 2⅜, por ser invertido) | `151.7 = 1` |
+  | Riel y fijo corredizo | `102 = 1`, `233.6 = 1` |
+  | Portafelpa / tope / hache | `75.6 = 3`, `107.8 = 6` / `76.3 = 1` / `51.4 = 1`, `58.7 = 2` |
+  | Parante | `77.2 = 1` |
+  | Vidrios | `50.9 x 75.5 = 1`, `50 x 73.7 = 1`, `58.2 x 107.7 = 2`, `57.3 x 105.9 = 2`, `151.2 x 30.8 = 1` |
+
+  **El riel y el fijo corredizo salen del ancho del sistema** (dictado el 2026-09-26): 233.7 −
+  0.06 = 233.6, aunque el puente mida 151.7. En automático, compuesto y desigual coincide con
+  puente − 0.06 (N-51), porque ahí el puente mide lo que el tramo.
 - N-95 ✅ **El descuadre se marca en rojo** (pedido el 2026-09-26): quien mide no siempre es quien
   diseña, y 9 mm no se ven en el dibujo. Todo lado del vano casi horizontal o casi vertical cuyas
   puntas se desvían entre 0.3 y 2.5 cm se resalta en rojo con "descuadre N" (menos de 0.3 es el
@@ -686,7 +704,7 @@ novaDiseño; después formas.
 | C-21 | U parante de mocheta INA. ✔ Invertido sin el +1.5 (hecho 2026-09-25). Falta bandera: hoy la U de INA en bandera se calcula como si fuera de 1 división (viene del código original, `932353b`) y no lleva U parante de mocheta | N-44 |
 | C-22 | Perfil doble corrediza en ncc/n3c (1 por cada 2 corredizas) en lugar de U felpero / fijo corredizo; rieles 2 en ncc, 3 en n3c | N-51, N-52b |
 | C-23 | Módulo curvo `f<desarrollo,flecha>` en el diseño simbólico; en resultados solo el desarrollo | N-84 |
-| C-24 | Puente por lado y por tramo: en L, C y serie, el lado o tramo normal en aparente con Múltiple y el resto con tubo. Hoy el motor usa un solo puente para toda la ventana | N-03 |
+| C-24 | Puente por lado y por tramo: en L, C y serie, el lado o tramo normal en aparente con Múltiple y el resto con tubo. ✔ En parte (2026-09-26): en el diseño leído (desigual, compuesto, formas) cada tramo toma el puente que admite (un invertido o bandera no lleva Múltiple). Falta el automático en L, C y serie | N-03 |
 | C-25 | Un solo escritor del diseño, desde el motor: mocheta como espacio sin el puente, cada módulo con su ancho; el editor mantiene la regla al agregar o quitar franjas y al cambiar alturas; el motor deja de leer "como proporción"; Referencias con la misma mocheta en APA e INA (hoy `mocheta sup: 40` en normal y 20 en bandera INA) | N-31, N-34, N-70, N-81 |
 
 ---

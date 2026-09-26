@@ -26,7 +26,11 @@ object MotorNova {
      * que usan las U, el tee y el vidrio de APA); [directo] es el atajo de INA (alto − hoja, sin
      * descontar el puente, N-32/N-86).
      */
-    private data class Mocheta(val ubicacion: Ubicacion, val espacio: Float, val directo: Float)
+    private data class Mocheta(
+        val ubicacion: Ubicacion, val espacio: Float, val directo: Float,
+        /** El ancho de su rectángulo en un vano con forma (N-96); null = el del tramo. */
+        val ancho: Float? = null
+    )
 
     /** Una franja de sistema que no es la principal (N-88): se calcula como un sistema propio. */
     private data class SistemaExtra(val alto: Float, val modulos: List<Modulo>)
@@ -73,7 +77,8 @@ object MotorNova {
      * sistema; un tramo sin mocheta no lleva puente.
      */
     private fun vertical(v: VentanaNova, l: LadoNova, t: Tramo): Vertical {
-        val h = v.puente.altura
+        // El puente de ESTE tramo (N-03 por tramo): un invertido lleva tubo aunque la ventana tenga Múltiple.
+        val h = (t.puente ?: v.puente).altura
         val franjas = t.franjas
         if (franjas == null) {
             if (!l.hayMocheta) return Vertical(l.altoHoja, emptyList())
@@ -115,7 +120,7 @@ object MotorNova {
         val suma = mochetas.sumOf { it.value.alto.toDouble() }.toFloat()
         val lista = mochetas.map { (i, f) ->
             val parte = if (suma > 0f) disponible * f.alto / suma else disponible / mochetas.size
-            Mocheta(if (i < iSistema) Ubicacion.ABAJO else Ubicacion.ARRIBA, parte - h * cargas[i], parte)
+            Mocheta(if (i < iSistema) Ubicacion.ABAJO else Ubicacion.ARRIBA, parte - h * cargas[i], parte, f.ancho)
         }
         // Mismo orden que las del modelo (la de arriba primero), para que las listas salgan iguales.
         val ordenadas = lista.sortedBy { it.ubicacion.ordinal }
@@ -163,7 +168,7 @@ object MotorNova {
             l.modulacion == "nff" -> {
                 if (apa) l.tramos.forEachIndexed { i, t ->
                     // La franja lleva U abajo y arriba; con Múltiple (o gorrito) la de arriba la trae el puente.
-                    val n = if (vert[i].hayMocheta && v.puente.esMultipleOGorrito) 1 else 2
+                    val n = if (vert[i].hayMocheta && (t.puente ?: v.puente).esMultipleOGorrito) 1 else 2
                     u.add(Pieza(t.ancho, n))
                 } else if (!vert.all { it.soloAbajo }) u.add(Pieza(l.anchoCalculo + aumentoLado, 2))
             }
@@ -193,8 +198,12 @@ object MotorNova {
 
         // ---------- U de mocheta horizontal APA (N-45) ----------
         if (apa && us != 0f) {
-            val porTramoN = if (v.puente.esMultipleOGorrito) 1 else 2
-            l.tramos.forEachIndexed { i, t -> vert[i].mochetas.forEach { u.add(Pieza(t.ancho, porTramoN)) } }
+            // Con el puente de cada tramo (N-03) y el ancho del rectángulo de cada mocheta (N-96): en
+            // Formas la mocheta del tramo 2 mide 151.7, no el ancho del tramo.
+            l.tramos.forEachIndexed { i, t ->
+                val porTramoN = if ((t.puente ?: v.puente).esMultipleOGorrito) 1 else 2
+                vert[i].mochetas.forEach { m -> u.add(Pieza(m.ancho ?: t.ancho, porTramoN)) }
+            }
         }
 
         // ---------- U parante (N-43) ----------
@@ -235,7 +244,14 @@ object MotorNova {
         // ---------- Puente (N-49, N-35) y falso puente (N-78) ----------
         // Una corrida por cada división entre franjas del tramo: normal e invertido 1, bandera 2,
         // sin mocheta 0; en un diseño compuesto, las que tenga.
-        l.tramos.forEachIndexed { i, t -> if (vert[i].corridas > 0) puente.add(Pieza(t.ancho, vert[i].corridas)) }
+        // En un vano con forma cada corrida mide lo que el vano le deja donde queda (N-97): en Formas
+        // el puente del tramo 2 entra en la mocheta y mide 151.7.
+        l.tramos.forEachIndexed { i, t ->
+            if (vert[i].corridas <= 0) return@forEachIndexed
+            val largos = t.largosPuente
+            if (largos != null && largos.size == vert[i].corridas) largos.forEach { puente.add(Pieza(it, 1)) }
+            else puente.add(Pieza(t.ancho, vert[i].corridas))
+        }
         val falsoPuente = mutableListOf<Pieza>()
         if (v.libresVerticales > 0) {
             if (apa && v.puente.esMultiple) falsoPuente.add(Pieza(l.anchoCalculo, v.libresVerticales))
@@ -244,7 +260,14 @@ object MotorNova {
 
         // ---------- Parantes verticales (N-27, N-78) ----------
         val nParantes = (l.tramos.size - 1) + listOf(l.izquierda, l.derecha).count { it == Borde.LIBRE }
-        if (nParantes > 0) parante.add(Pieza(l.altoMedido, nParantes, Orientacion.VERTICAL))
+        // En un vano con forma cada parante entre tramos mide el alto del vano donde queda (N-94): en
+        // Formas, con el parante dentro, 77.2. Los de los lados libres, el alto medido.
+        val largosParante = l.largosParante?.takeIf { it.size == l.tramos.size - 1 }
+        if (largosParante != null) {
+            largosParante.forEach { parante.add(Pieza(it, 1, Orientacion.VERTICAL)) }
+            val libres = nParantes - largosParante.size
+            if (libres > 0) parante.add(Pieza(l.altoMedido, libres, Orientacion.VERTICAL))
+        } else if (nParantes > 0) parante.add(Pieza(l.altoMedido, nParantes, Orientacion.VERTICAL))
 
         // ---------- Riel (N-51) y riel superior (N-52, N-52b) ----------
         // Full corredizas (N-51, N-52b): 1 riel por corrediza, y el perfil doble corrediza, 1 por cada
@@ -274,7 +297,7 @@ object MotorNova {
             }
             riel.add(Pieza(medida, 1))
             // Como la pantalla: no va cuando hay mocheta arriba con puente Múltiple, que ya lo trae.
-            val lleva = !vert[i].hayMocheta || vert[i].soloAbajo || !v.puente.esMultiple
+            val lleva = !vert[i].hayMocheta || vert[i].soloAbajo || !(t.puente ?: v.puente).esMultiple
             if (lleva) rielSup.add(Pieza(medida, 1))
         }
         // Antes:
@@ -304,10 +327,10 @@ object MotorNova {
         // sus dos corridas en bandera. La pantalla vieja lo calculaba aparte y no lo mostraba.
         val tee = mutableListOf<Pieza>()
         if (apa) l.tramos.forEachIndexed { i, t ->
-            val nTees = (panos(t).size - 1).coerceAtLeast(0)
-            if (nTees == 0) return@forEachIndexed
             vert[i].mochetas.forEach { m ->
-                val valor = NovaPerfilesHelper.calcularTe(m.espacio, us, v.puente.nombre)
+                val nTees = (panosDe(t, m).size - 1).coerceAtLeast(0)
+                if (nTees == 0) return@forEach
+                val valor = NovaPerfilesHelper.calcularTe(m.espacio, us, (t.puente ?: v.puente).nombre)
                 if (valor > 0f) tee.add(Pieza(valor, nTees, Orientacion.VERTICAL))
             }
         }
@@ -339,8 +362,8 @@ object MotorNova {
                 vert[i].mochetas.forEach { m ->
                     // N-63 (dictado 2026-09-25): con los demás puentes, mocheta − (u + 0.3); también
                     // en bandera. Antes: `m.espacio - us + 0.3f`.
-                    val alto = if (v.puente.esMultipleOGorrito) m.espacio - 0.5f else m.espacio - (us + 0.3f)
-                    panos(t).forEach { w -> vidrios.add(Vidrio(w - 0.5f, alto)) }
+                    val alto = if ((t.puente ?: v.puente).esMultipleOGorrito) m.espacio - 0.5f else m.espacio - (us + 0.3f)
+                    panosDe(t, m).forEach { w -> vidrios.add(Vidrio(w - 0.5f, alto)) }
                 }
             }
         } else {
@@ -532,4 +555,15 @@ object MotorNova {
     /** Paños de mocheta del tramo (N-62): los del diseño, o ceil(ancho / 180) iguales. */
     private fun panos(t: Tramo): List<Float> =
         t.panosMocheta ?: NovaCalculos.anchMota(t.ancho).let { n -> List(n) { t.ancho / n } }
+
+    /**
+     * Paños de una mocheta. Si su rectángulo es más angosto que el tramo (un vano con forma, N-96),
+     * los paños del dibujo se ajustan a su ancho, o se reparten con N-62 si el dibujo no los trae.
+     */
+    private fun panosDe(t: Tramo, m: Mocheta): List<Float> {
+        val w = m.ancho ?: return panos(t)
+        val dibujados = t.panosMocheta?.takeIf { p -> p.sum() > 0f }
+        return dibujados?.let { p -> val s = p.sum(); p.map { it * w / s } }
+            ?: NovaCalculos.anchMota(w).let { n -> List(n) { w / n } }
+    }
 }

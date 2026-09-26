@@ -50,7 +50,12 @@ data class FranjaTramo(
     val sistema: Boolean,
     val alto: Float,
     /** Sus módulos. Hacen falta en una franja de sistema que no es la principal (N-88). */
-    val modulos: List<Modulo> = emptyList()
+    val modulos: List<Modulo> = emptyList(),
+    /**
+     * El ancho de su rectángulo en un vano con forma (N-96), si no es el del tramo. En Formas la
+     * mocheta de abajo del tramo 2 mide 151.7 y el tramo 233.7. Null = el ancho del tramo.
+     */
+    val ancho: Float? = null
 )
 
 /**
@@ -61,7 +66,17 @@ data class FranjaTramo(
 data class Tramo(
     val modulos: List<Modulo>,
     val panosMocheta: List<Float>? = null,
-    val franjas: List<FranjaTramo>? = null
+    val franjas: List<FranjaTramo>? = null,
+    /**
+     * El puente de este tramo, si no es el de la ventana (N-03 por tramo, C-24): un tramo invertido
+     * o en bandera no admite Múltiple y lleva tubo. Null = el de la ventana.
+     */
+    val puente: Puente? = null,
+    /**
+     * Lo que mide cada corrida de puente del tramo en un vano con forma, de abajo arriba (N-97): en
+     * Formas el puente del tramo 2 entra en la mocheta y mide 151.7, no 233.7. Null = el ancho del tramo.
+     */
+    val largosPuente: List<Float>? = null
 ) {
     val ancho: Float get() = modulos.sumOf { it.ancho.toDouble() }.toFloat()
     val corredizas: Int get() = modulos.count { it.corrediza }
@@ -86,7 +101,12 @@ data class LadoNova(
     val izquierda: Borde,
     val derecha: Borde,
     /** Modulación del lado (nn, nfc, nff, ncfc, ncc, n3c): decide perfiles propios como la doble corrediza. */
-    val modulacion: String = "nn"
+    val modulacion: String = "nn",
+    /**
+     * Lo que mide cada parante entre tramos en un vano con forma (N-94): el alto del vano donde
+     * queda. En Formas, con el parante dentro, 77.2. Null = el alto medido del lado.
+     */
+    val largosParante: List<Float>? = null
 ) {
     val hayMocheta: Boolean get() = altoHoja < alto
     val modulos: List<Modulo> get() = tramos.flatMap { it.modulos }
