@@ -51,6 +51,23 @@ class PolisEnNovaTest {
     }
 
     @Test
+    fun la_ficha_del_proyecto_dibuja_la_forma() {
+        // Pedido del usuario (2026-09-26): la ficha del proyecto mostraba "polis" ventana 2 como un
+        // rectángulo, porque el SVG manual no recorta la silueta. Con forma sale como imagen.
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        fun svg(p: String): String {
+            val vista = crystal.crystal.Diseno.nova.VistaDiseno(ctx).apply { actualizarDesdePaquete(p, 0f, 0f, 0f) }
+            vista.layout(0, 0, 1080, 1920)
+            return vista.exportarSoloDisenoSVG(paddingPx = 4)
+        }
+        val polis2 = "{nova,apa,[229.5,223.4:Tl<229.5>(m<43.7>(f<114.7>f<114.7>);s<136>(f<76.5>c<76.5>f<76.5>);" +
+            "m<43.7>(f<114.7>f<114.7>))V<0/0|229.5/0.6|229.5/223.4|0.3/223.4|0.3/158.3|36.4/158.3|36.4/61.1|0/61.1>]}"
+        assertTrue(svg(polis2).contains("data:image/png"))
+        val rectangulo = "{nova,apa,[150,120:Tl<150>(s<85.7>(f<75>c<75>);m<34.3>(f<150>))]}"
+        assertTrue(!svg(rectangulo).contains("data:image/png"))
+    }
+
+    @Test
     fun polis_en_la_pantalla_de_nova() {
         ActivityScenario.launch(NovaCorrediza::class.java).use { sc ->
             sc.onActivity { a ->

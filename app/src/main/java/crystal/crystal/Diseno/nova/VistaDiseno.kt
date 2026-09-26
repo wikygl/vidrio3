@@ -158,6 +158,8 @@ class VistaDiseno @JvmOverloads constructor(
     }
     /** La silueta del vano en cm, desde el tag `V<…>`. Vacía = el vano es el rectángulo de siempre. */
     private var contornoVanoCm: List<Pair<Float, Float>> = emptyList()
+    /** ¿El vano tiene forma (silueta, escalón, inclinado)? Decide que el SVG salga como imagen. */
+    private var vanoConForma = false
     private val pVacioRelleno = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#33000000"); style = Paint.Style.FILL
     }
@@ -349,6 +351,9 @@ class VistaDiseno @JvmOverloads constructor(
         contornoVanoCm = RE_VANO_PAQUETE.find(modeloCrudo)
             ?.let { ContornoEnTramos.desdeEtiqueta(it.value) }
             .orEmpty()
+        // Un vano con forma (silueta, escalón, inclinado): el SVG manual no la recorta.
+        vanoConForma = contornoVanoCm.size >= 3 ||
+            runCatching { DisenoNova.desdePaquete(paqueteSeguro)?.esIrregular == true }.getOrDefault(false)
         val franjas = parsearModeloConAlturas(RE_VANO_PAQUETE.replace(modeloCrudo, ""))
         if (this.mochetaLateralCm <= 0f && mochetaLDesdeModeloCm > 0f) {
             this.mochetaLateralCm = mochetaLDesdeModeloCm
@@ -3691,7 +3696,9 @@ class VistaDiseno @JvmOverloads constructor(
     fun exportarSoloDisenoSVG(paddingPx: Int = 0): String {
         // Multi-tramo o multi-cara: el SVG manual no cubre segmentosNs → usar bitmap embebido.
         // También cuando hay lados al vacío (encuentro): el SVG vectorial no los dibuja.
-        if (segmentosNs.isNotEmpty() || encuentroVacio.padEnd(4, '1').contains('0')) {
+        // Y con un vano con forma: el SVG manual no recorta la silueta, y la ficha del proyecto
+        // mostraba el diseño archivado como un rectángulo (pedido del usuario el 2026-09-26).
+        if (segmentosNs.isNotEmpty() || encuentroVacio.padEnd(4, '1').contains('0') || vanoConForma) {
             val bmp = exportarSoloDisenoBitmap(paddingPx)
             val stream = java.io.ByteArrayOutputStream()
             bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
