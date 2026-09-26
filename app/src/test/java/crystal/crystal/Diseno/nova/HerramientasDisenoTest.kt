@@ -25,6 +25,70 @@ class HerramientasDisenoTest {
 
     private fun r1(x: Float) = Math.round(x * 10) / 10f
 
+    /** El diseño del usuario (2026-09-26): dos tramos con el parante centrado en el escalón (104.6). */
+    private fun dosTramosEnElEscalon(): DisenoNova {
+        val a = 104.6f - 1.25f
+        val b = 338.3f - 2.5f - a
+        return HerramientasDiseno.conFormaDelVano(DisenoNova(
+            "apa", 338.3f, 144.5f,
+            listOf(
+                NovaTramo(a, listOf(NovaFranja(true, 0f, listOf(NovaModulo('f', a / 2), NovaModulo('c', a / 2))))),
+                NovaTramo(b, listOf(NovaFranja(true, 0f, List(4) { NovaModulo('c', b / 4) })))
+            )
+        ).conContornoVano(vano))
+    }
+
+    @Test
+    fun el_parante_en_un_escalon_se_deja_dentro_o_fuera() {
+        // Dictado el 2026-09-26: centrado en la esquina del escalón solo si el usuario lo decide.
+        val d = dosTramosEnElEscalon()
+        assertEquals(104.6f, HerramientasDiseno.escalonDelParante(d, 0)!!, 0.01f)
+        val op = HerramientasDiseno.opcionesDelParante(d, 0).associateBy { it.lado }
+
+        // Dentro (del lado del tramo bajo): parante 77.2, tramo 1 102.1 × 77.2, tramo 2 233.7 × 109.4
+        // (el alféizar del recorte mide 109.4 y 108.5: descuadre, manda la mayor, N-06).
+        val dentro = op.getValue(HerramientasDiseno.LadoParante.DENTRO)
+        assertEquals(77.2f, r1(dentro.largoParante), 0.01f)
+        assertEquals(102.1f, r1(dentro.anchoIzq), 0.01f)
+        assertEquals(77.2f, r1(dentro.altoIzq), 0.01f)
+        assertEquals(233.7f, r1(dentro.anchoDer), 0.01f)
+        assertEquals(109.4f, r1(dentro.altoDer), 0.01f)
+
+        // Fuera (del lado del tramo alto): el parante va del dintel al piso, 144.4.
+        val fuera = op.getValue(HerramientasDiseno.LadoParante.FUERA)
+        assertEquals(144.4f, r1(fuera.largoParante), 0.11f)
+        assertEquals(104.6f, r1(fuera.anchoIzq), 0.01f)
+        assertEquals(231.2f, r1(fuera.anchoDer), 0.01f)
+
+        // Centrado pisa los dos lados: mide lo del lado alto.
+        val centrado = op.getValue(HerramientasDiseno.LadoParante.CENTRADO)
+        assertEquals(fuera.largoParante, centrado.largoParante, 0.01f)
+
+        // Lo mismo después de pasar por el paquete, que guarda los anchos truncados (103.35 → 103.3):
+        // en el celular el tramo 2 salía 233.6.
+        val leido = DisenoNova.desdePaquete(d.aPaquete())!!
+        val dentroLeido = HerramientasDiseno.opcionesDelParante(leido, 0)
+            .first { it.lado == HerramientasDiseno.LadoParante.DENTRO }
+        assertEquals("233.7", crystal.crystal.taller.nova.NovaCalculos.df1(dentroLeido.anchoDer))
+        assertEquals("102.1", crystal.crystal.taller.nova.NovaCalculos.df1(dentroLeido.anchoIzq))
+
+        // Aplicado dentro, el parante ya no está en el escalón y no se vuelve a preguntar.
+        val hecho = HerramientasDiseno.conParanteEnEscalon(d, 0, dentro)
+        assertEquals(102.1f, r1(hecho.tramos[0].ancho), 0.01f)
+        assertEquals(233.7f, r1(hecho.tramos[1].ancho), 0.01f)
+        assertNull(HerramientasDiseno.escalonDelParante(hecho, 0))
+    }
+
+    @Test
+    fun el_descuadre_del_vano_se_detecta() {
+        // Formas: el alféizar del recorte va de 109.4 a 108.5 (0.9). El dintel baja 0.1 en 233.7:
+        // eso es el trazo del apunte, no un descuadre. Los escalones de verdad (35.1, 67.3) tampoco.
+        val d = HerramientasDiseno.descuadres(vano)
+        assertEquals(1, d.size)
+        assertEquals(0.9f, r1(d[0].diferencia), 0.01f)
+        assertEquals(256.3f to 109.4f, d[0].desde)
+    }
+
     @Test
     fun el_iman_pega_a_menos_de_3_cm_y_suelta_lo_demas() {
         val guias = HerramientasDiseno.guiasVerticales(rectangular())

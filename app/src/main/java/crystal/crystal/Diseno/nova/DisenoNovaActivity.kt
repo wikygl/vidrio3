@@ -249,6 +249,9 @@ class DisenoNovaActivity : AppCompatActivity() {
         instalarChip3D()
         instalarChipsHerramientas()
         instalarChipsHistorial()
+        // Un diseño que llega con un parante centrado en un escalón (el automático del contorno
+        // los deja así) pide la decisión al abrir.
+        binding.root.post { revisarParantesEnEscalon() }
     }
 
     // ===================================== MENÚ EDITAR =====================================
@@ -1487,6 +1490,55 @@ class DisenoNovaActivity : AppCompatActivity() {
         registrarPaso()
     }
 
+    // ==================== EL PARANTE EN UN ESCALÓN ====================
+    // Dictado por el usuario (2026-09-26): un parante no queda centrado en la esquina de un
+    // escalón salvo que el usuario lo decida. Cuando cae ahí —puesto o movido con el imán, o porque
+    // el diseño llegó así— se pregunta dentro, fuera o centrado, con las medidas de cada opción. Las
+    // cuentas están en HerramientasDiseno.opcionesDelParante.
+
+    /** Escalones (x × 10) donde el usuario eligió dejar el parante centrado: no se vuelve a preguntar. */
+    private val centradosDecididos = mutableSetOf<Int>()
+    private var preguntandoParante = false
+
+    /** Si algún parante quedó centrado en un escalón sin que el usuario lo decidiera, pregunta. */
+    private fun revisarParantesEnEscalon() {
+        if (preguntandoParante) return
+        val d = modeloEnPantalla() ?: return
+        val indice = (0 until d.tramos.size - 1).firstOrNull { i ->
+            HerramientasDiseno.escalonDelParante(d, i, anchoParanteCm)
+                ?.let { Math.round(it * 10) !in centradosDecididos } == true
+        } ?: return
+        preguntarLadoDelParante(d, indice)
+    }
+
+    private fun preguntarLadoDelParante(d: DisenoNova, indice: Int) {
+        val opciones = HerramientasDiseno.opcionesDelParante(d, indice, anchoParanteCm)
+        if (opciones.isEmpty()) return
+        val escalon = HerramientasDiseno.escalonDelParante(d, indice, anchoParanteCm) ?: return
+        val textos = opciones.map { o ->
+            "${o.lado.nombre}: parante ${df1(o.largoParante)}\n" +
+                "tramo ${indice + 1}: ${df1(o.anchoIzq)} × ${df1(o.altoIzq)}   ·   " +
+                "tramo ${indice + 2}: ${df1(o.anchoDer)} × ${df1(o.altoDer)}"
+        }.toTypedArray()
+        preguntandoParante = true
+        AlertDialog.Builder(this)
+            .setTitle("El parante cae en el escalón (a ${df1(escalon)} cm)")
+            .setItems(textos) { _, cual ->
+                preguntandoParante = false
+                val o = opciones[cual]
+                if (o.lado == HerramientasDiseno.LadoParante.CENTRADO) {
+                    centradosDecididos.add(Math.round(escalon * 10))
+                } else if (aplicarAlModelo { HerramientasDiseno.conParanteEnEscalon(it, indice, o, anchoParanteCm) }) {
+                    bloquearTramos(indice, indice + 1)
+                    actualizarPanelCotas()
+                }
+                revisarParantesEnEscalon()   // el siguiente escalón, si hay
+            }
+            // Hay que elegir: centrado tiene que ser una decisión, no lo que queda al cerrar.
+            .setCancelable(false)
+            .show()
+    }
+
     // ==================== DESHACER / REHACER ====================
     // Pedido del usuario (2026-09-26): volver atrás y adelante, como Ctrl+Z / Ctrl+Y. Se guarda el
     // diseño entero en cada paso (el paquete, que ya lleva medidas y acabado); una selección no
@@ -2651,6 +2703,7 @@ class DisenoNovaActivity : AppCompatActivity() {
                     a is Arrastre.DeParante && valor != null -> {
                         if (aplicarAlModelo { HerramientasDiseno.conParanteMovido(it, a.indice, valor, anchoParanteCm) }) {
                             bloquearTramos(a.indice, a.indice + 1)
+                            revisarParantesEnEscalon()   // si quedó en un escalón: dentro, fuera o centrado
                         }
                     }
                     a is Arrastre.DePuente && valor != null ->
@@ -2715,6 +2768,7 @@ class DisenoNovaActivity : AppCompatActivity() {
                             while (tramosBlockeados.size < antes) tramosBlockeados.add(false)
                             tramosBlockeados.add((tramo + 1).coerceAtMost(tramosBlockeados.size), false)
                             bloquearTramos(tramo, tramo + 1)
+                            revisarParantesEnEscalon()   // si quedó en un escalón: dentro, fuera o centrado
                         }
                     }
                     1 -> aplicarAlModelo { HerramientasDiseno.conPuenteEn(it, tramo, y) }

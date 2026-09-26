@@ -146,8 +146,14 @@ object HerramientasDiseno {
     fun conParanteMovido(d: DisenoNova, indice: Int, x: Float, anchoParante: Float = 2.5f): DisenoNova {
         val a = d.tramos.getOrNull(indice) ?: return d
         val b = d.tramos.getOrNull(indice + 1) ?: return d
-        val inicio = iniciosDeTramos(d, anchoParante)[indice]
-        val total = a.ancho + b.ancho
+        val inicios = iniciosDeTramos(d, anchoParante)
+        val inicio = inicios[indice]
+        // El paquete guarda los anchos truncados a un decimal (103.35 → 103.3, 232.45 → 232.4) y su
+        // suma pierde una décima: en Formas el tramo 2 quedaba en 233.6 y no en 233.7. Si el tramo de
+        // la derecha es el último, su borde es el canto de la ventana: manda el ancho de la ventana.
+        // Antes: `val total = a.ancho + b.ancho`.
+        val total = if (indice + 1 == d.tramos.lastIndex) d.ancho - inicio - anchoParante
+                    else inicios[indice + 1] + b.ancho - inicio - anchoParante
         val anchoA = x - inicio - anchoParante / 2f
         val anchoB = total - anchoA
         if (anchoA < MINIMO_CM || anchoB < MINIMO_CM) return d
@@ -155,6 +161,116 @@ object HerramientasDiseno {
         nuevos[indice] = a.copy(ancho = anchoA, franjas = a.franjas.map { it.copy(modulos = ajustar(it.modulos, anchoA)) })
         nuevos[indice + 1] = b.copy(ancho = anchoB, franjas = b.franjas.map { it.copy(modulos = ajustar(it.modulos, anchoB)) })
         return conFormaDelVano(d.copy(tramos = nuevos), anchoParante)
+    }
+
+    // ==================== EL PARANTE EN UN ESCALÓN ====================
+    // Dictado por el usuario (2026-09-26): un parante nunca queda centrado en la esquina de un
+    // escalón salvo que el usuario lo decida. Va DENTRO (del lado del tramo bajo, el que tiene el
+    // escalón encima o debajo) o FUERA (del lado del tramo alto). En el vano de Formas, dentro: parante
+    // 77.2, tramo 1 102.1 × 77.2 y tramo 2 233.7 × 109.4; fuera: parante 144.4.
+
+    enum class LadoParante(val nombre: String) { DENTRO("Dentro"), FUERA("Fuera"), CENTRADO("Centrado") }
+
+    /**
+     * Una manera de dejar el parante [indice] en su escalón: dónde queda su eje, cuánto mide (el
+     * alto del vano donde está, el mayor si pisa los dos lados) y cómo quedan los dos tramos (ancho y
+     * alto del rectángulo del sistema, [altoDelSistema]).
+     */
+    data class OpcionParante(
+        val lado: LadoParante, val eje: Float, val largoParante: Float,
+        val anchoIzq: Float, val altoIzq: Float, val anchoDer: Float, val altoDer: Float
+    )
+
+    /**
+     * La x del escalón donde está centrado el parante [indice], o null si no está en uno. Es un
+     * escalón si el eje cae en un vértice del vano y el alto del vano cambia de un lado a otro más
+     * que un descuadre (N-06).
+     */
+    fun escalonDelParante(d: DisenoNova, indice: Int, anchoParante: Float = 2.5f): Float? {
+        val puntos = puntosDelVano(d)
+        if (puntos.size < 3) return null
+        val eje = ejesDeParantes(d, anchoParante).getOrNull(indice) ?: return null
+        val x = puntos.map { it.first }.filter { abs(it - eje) <= 0.15f }.minByOrNull { abs(it - eje) } ?: return null
+        val izq = altoDelVanoEn(puntos, x - 0.5f) ?: return null
+        val der = altoDelVanoEn(puntos, x + 0.5f) ?: return null
+        return if (abs(izq - der) > DESCUADRE_CM) x else null
+    }
+
+    /** Las tres maneras de dejar el parante [indice] en su escalón; vacía si no está en uno. */
+    fun opcionesDelParante(d: DisenoNova, indice: Int, anchoParante: Float = 2.5f): List<OpcionParante> {
+        val x = escalonDelParante(d, indice, anchoParante) ?: return emptyList()
+        val puntos = puntosDelVano(d)
+        val bajoALaIzquierda = (altoDelVanoEn(puntos, x - 0.5f) ?: 0f) < (altoDelVanoEn(puntos, x + 0.5f) ?: 0f)
+        val medio = anchoParante / 2f
+        val ejes = listOf(
+            LadoParante.DENTRO to if (bajoALaIzquierda) x - medio else x + medio,
+            LadoParante.FUERA to if (bajoALaIzquierda) x + medio else x - medio,
+            LadoParante.CENTRADO to x
+        )
+        return ejes.mapNotNull { (lado, eje) ->
+            val m = if (abs(eje - ejesDeParantes(d, anchoParante)[indice]) <= 0.01f) d
+                    else conParanteMovido(d, indice, eje, anchoParante).takeIf { it !== d } ?: return@mapNotNull null
+            // El parante mide el alto del vano donde está; si pisa los dos lados, el mayor.
+            val largo = listOf(eje - medio + 0.05f, eje, eje + medio - 0.05f)
+                .mapNotNull { altoDelVanoEn(puntos, it) }.maxOrNull() ?: return@mapNotNull null
+            OpcionParante(
+                lado, eje, largo,
+                m.tramos[indice].ancho, altoDelSistema(m, indice, anchoParante) ?: m.altoDeTramo(indice),
+                m.tramos[indice + 1].ancho, altoDelSistema(m, indice + 1, anchoParante) ?: m.altoDeTramo(indice + 1)
+            )
+        }
+    }
+
+    /** El diseño con el parante [indice] dejado como dice [opcion]. */
+    fun conParanteEnEscalon(d: DisenoNova, indice: Int, opcion: OpcionParante, anchoParante: Float = 2.5f): DisenoNova {
+        val eje = ejesDeParantes(d, anchoParante).getOrNull(indice) ?: return d
+        return if (abs(opcion.eje - eje) <= 0.01f) d else conParanteMovido(d, indice, opcion.eje, anchoParante)
+    }
+
+    /**
+     * El alto del rectángulo donde entra el sistema del tramo (N-66): del dintel más bajo al alféizar
+     * más alto sobre su ancho. Con un descuadre de hasta 2.5 manda la medida mayor (N-06): en Formas
+     * el alféizar del recorte está a 109.4 en un canto y a 108.5 en el otro, y el tramo mide 109.4.
+     */
+    fun altoDelSistema(d: DisenoNova, indiceTramo: Int, anchoParante: Float = 2.5f): Float? {
+        val puntos = puntosDelVano(d)
+        val t = d.tramos.getOrNull(indiceTramo) ?: return null
+        if (puntos.size < 3) return null
+        val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        val cortes = muestrasEnTramo(puntos, inicio, inicio + t.ancho).mapNotNull { bordesEn(puntos, it) }
+        if (cortes.isEmpty()) return null
+        val techoMasBajo = cortes.maxOf { it.first }
+        val techo = cortes.map { it.first }.filter { it >= techoMasBajo - DESCUADRE_CM }.minOrNull() ?: techoMasBajo
+        val pisoMasAlto = cortes.minOf { it.second }
+        val piso = cortes.map { it.second }.filter { it <= pisoMasAlto + DESCUADRE_CM }.maxOrNull() ?: pisoMasAlto
+        return piso - techo
+    }
+
+    // ==================== DESCUADRES DEL VANO ====================
+    // Pedido del usuario (2026-09-26): muchas veces quien mide no es quien diseña, y un descuadre
+    // que no salta a la vista (en Formas, 9 mm) se pasa por alto. Se marca en rojo en el dibujo.
+
+    /** Lo que se nota por debajo de esto es el trazo del apunte, no un descuadre. */
+    const val DESCUADRE_MINIMO_CM = 0.3f
+
+    /** Un lado del vano que debería ser recto y no lo es: de [desde] a [hasta], y cuánto se desvía. */
+    data class Descuadre(val desde: Pair<Float, Float>, val hasta: Pair<Float, Float>, val diferencia: Float)
+
+    /**
+     * Los lados casi horizontales o casi verticales del vano cuyas puntas no están a la misma altura
+     * (o a la misma x): entre 0.3 y 2.5 cm (N-06). Más que eso ya no es descuadre, es una pendiente.
+     * En Formas: el alféizar del recorte, a 109.4 en un canto y a 108.5 en el otro (0.9).
+     */
+    fun descuadres(vano: List<Pair<Float, Float>>): List<Descuadre> {
+        if (vano.size < 3) return emptyList()
+        return vano.indices.mapNotNull { i ->
+            val a = vano[i]
+            val b = vano[(i + 1) % vano.size]
+            val dx = abs(b.first - a.first)
+            val dy = abs(b.second - a.second)
+            val desvio = if (dx >= dy) dy else dx
+            if (desvio >= DESCUADRE_MINIMO_CM && desvio <= DESCUADRE_CM) Descuadre(a, b, desvio) else null
+        }
     }
 
     // ==================== PUENTES ====================
@@ -311,17 +427,33 @@ object HerramientasDiseno {
         puntos: List<Pair<Float, Float>>, xIni: Float, xFin: Float
     ): Pair<Pair<Float, Float>, Pair<Float, Float>>? {
         if (xFin <= xIni) return null
-        val margen = ((xFin - xIni) * 0.02f).coerceAtMost(0.5f)
-        // Se mide en los bordes (un pelo hacia dentro) y en cada vértice que cae dentro del trozo.
-        val xs = (listOf(xIni + margen, xFin - margen) +
-            puntos.map { it.first }.filter { it > xIni + margen && it < xFin - margen }
-                .flatMap { listOf(it - 0.05f, it + 0.05f) }).sorted()
-        val cortes = xs.mapNotNull { bordesEn(puntos, it) }
+        val cortes = muestrasEnTramo(puntos, xIni, xFin).mapNotNull { bordesEn(puntos, it) }
         if (cortes.isEmpty()) return null
         val entero = cortes.minOf { it.first } to cortes.maxOf { it.second }
         val interior = cortes.maxOf { it.first } to cortes.minOf { it.second }
         return entero to interior
     }
+
+    /** Las x donde se mide el vano sobre un trozo: sus bordes (un pelo hacia dentro) y cada vértice. */
+    private fun muestrasEnTramo(puntos: List<Pair<Float, Float>>, xIni: Float, xFin: Float): List<Float> {
+        if (xFin <= xIni) return emptyList()
+        val margen = ((xFin - xIni) * 0.02f).coerceAtMost(0.5f)
+        return (listOf(xIni + margen, xFin - margen) +
+            puntos.map { it.first }.filter { it > xIni + margen && it < xFin - margen }
+                .flatMap { listOf(it - 0.05f, it + 0.05f) }).sorted()
+    }
+
+    /** El vano en coordenadas de la ventana (x desde el canto izquierdo, y desde el dintel). */
+    private fun puntosDelVano(d: DisenoNova): List<Pair<Float, Float>> {
+        val vano = d.contornoVano
+        if (vano.size < 3) return emptyList()
+        val (x0, y0) = origenDelVano(d)
+        return vano.map { (x, y) -> (x - x0) to (y - y0) }
+    }
+
+    /** Cuánto mide el vano de alto en esa vertical, o null si ahí no hay vano. */
+    private fun altoDelVanoEn(puntos: List<Pair<Float, Float>>, x: Float): Float? =
+        bordesEn(puntos, x)?.let { (arriba, abajo) -> abajo - arriba }
 
     /** Dónde empieza y acaba el vano en esa vertical (como ContornoEnTramos.bordesEn). */
     private fun bordesEn(puntos: List<Pair<Float, Float>>, x: Float): Pair<Float, Float>? {

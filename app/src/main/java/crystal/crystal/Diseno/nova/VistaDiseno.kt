@@ -1218,6 +1218,47 @@ class VistaDiseno @JvmOverloads constructor(
         // recorte saldría como un bloque opaco sobre el papel.
         canvas.drawPath(fuera, if (omitirFondoAlExportar) pBorrarVano else pFondo)
         canvas.drawPath(silueta, pMarco)
+        dibujarDescuadres(canvas, x0, y0, escala)
+    }
+
+    private val pDescuadre = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(110, 229, 57, 53)
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val pTextoDescuadre = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(198, 40, 40)
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+    }
+
+    /**
+     * Cada lado del vano con descuadre, resaltado en rojo con cuánto se desvía (pedido del usuario el
+     * 2026-09-26): quien diseña muchas veces no es quien midió, y 9 mm no se ven en el dibujo. La
+     * detección está en HerramientasDiseno.descuadres.
+     */
+    private fun dibujarDescuadres(canvas: Canvas, x0: Float, y0: Float, escala: Float) {
+        val lista = HerramientasDiseno.descuadres(contornoVanoCm)
+        if (lista.isEmpty()) return
+        val dp = resources.displayMetrics.density
+        pDescuadre.strokeWidth = 10f * dp
+        pTextoDescuadre.textSize = 11f * dp
+        // El texto va por dentro del vano, hacia su centro: por fuera están las cotas y se montaban.
+        val cx = x0 + contornoVanoCm.map { it.first }.average().toFloat() * escala
+        val cy = y0 + contornoVanoCm.map { it.second }.average().toFloat() * escala
+        lista.forEach { d ->
+            val ax = x0 + d.desde.first * escala; val ay = y0 + d.desde.second * escala
+            val bx = x0 + d.hasta.first * escala; val by = y0 + d.hasta.second * escala
+            canvas.drawLine(ax, ay, bx, by, pDescuadre)
+            val mx = (ax + bx) / 2f; val my = (ay + by) / 2f
+            var nx = -(by - ay); var ny = bx - ax
+            val largo = kotlin.math.hypot(nx, ny).takeIf { it > 0f } ?: return@forEach
+            nx /= largo; ny /= largo
+            if (nx * (cx - mx) + ny * (cy - my) < 0f) { nx = -nx; ny = -ny }
+            val sep = 16f * dp
+            val texto = "descuadre ${crystal.crystal.taller.nova.NovaCalculos.df1(d.diferencia)}"
+            canvas.drawText(texto, mx + nx * sep, my + ny * sep + pTextoDescuadre.textSize / 3f, pTextoDescuadre)
+        }
     }
 
     private fun dibujarContenido(canvas: Canvas) {

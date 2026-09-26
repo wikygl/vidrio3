@@ -489,6 +489,26 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   no era la con que se armó. Ahora lo que vuelve del editor pasa a ser la referencia; el vano solo
   se rehace si el vidriero escribe otra hoja. Prueba en el celular: `DisenoEditadoSeConservaTest`
   (el escalonado de 446.3 × 160).
+- N-94 ✅ **El parante en un escalón** (dictado el 2026-09-26). Un parante **nunca queda centrado en
+  la esquina de un escalón**, salvo que el usuario lo decida. Va **dentro** (del lado del tramo bajo)
+  o **fuera** (del lado del tramo alto). Cuando cae en un escalón (puesto o movido con el imán, o
+  porque el diseño llegó así), novaDiseño pregunta dentro, fuera o centrado, con las medidas de cada
+  opción, y no se cierra sin elegir. El parante mide el alto del vano donde queda; si pisa los dos
+  lados (centrado), el mayor. Vano de Formas (338.3 × 144.5, escalón a 104.6):
+
+  | Opción | Parante | Tramo 1 | Tramo 2 |
+  |---|---|---|---|
+  | Dentro (elegida por el usuario) | 77.2 | 102.1 × 77.2 | 233.7 × 109.4 |
+  | Fuera | 144.4 | 104.6 × 77.2 | 231.2 × 109.4 |
+  | Centrado | 144.4 | 103.3 × 77.2 | 232.4 × 109.4 |
+
+  El alto de cada tramo es el rectángulo donde entra el sistema (N-66); con un descuadre de hasta
+  2.5 manda la medida mayor (N-06): el alféizar del recorte mide 109.4 y 108.5 → 109.4.
+- N-95 ✅ **El descuadre se marca en rojo** (pedido el 2026-09-26): quien mide no siempre es quien
+  diseña, y 9 mm no se ven en el dibujo. Todo lado del vano casi horizontal o casi vertical cuyas
+  puntas se desvían entre 0.3 y 2.5 cm se resalta en rojo con "descuadre N" (menos de 0.3 es el
+  trazo del apunte; más de 2.5 ya es pendiente, forma poligonal). En Formas sale en el alféizar del
+  recorte de 82: 0.9. La medida completa se ve con el chip "medida original".
 
 ---
 
