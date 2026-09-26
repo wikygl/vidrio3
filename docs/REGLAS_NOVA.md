@@ -739,7 +739,7 @@ novaDiseño; después formas.
 | C-22 | Perfil doble corrediza en ncc/n3c (1 por cada 2 corredizas) en lugar de U felpero / fijo corredizo; rieles 2 en ncc, 3 en n3c | N-51, N-52b |
 | C-23 | Módulo curvo `f<desarrollo,flecha>` en el diseño simbólico; en resultados solo el desarrollo | N-84 |
 | C-24 | Puente por lado y por tramo: en L, C y serie, el lado o tramo normal en aparente con Múltiple y el resto con tubo. ✔ En parte (2026-09-26): en el diseño leído (desigual, compuesto, formas) cada tramo toma el puente que admite (un invertido o bandera no lleva Múltiple). Falta el automático en L, C y serie | N-03 |
-| C-25 | Un solo escritor del diseño, desde el motor: mocheta como espacio sin el puente, cada módulo con su ancho; el editor mantiene la regla al agregar o quitar franjas y al cambiar alturas; el motor deja de leer "como proporción"; Referencias con la misma mocheta en APA e INA (hoy `mocheta sup: 40` en normal y 20 en bandera INA) | N-31, N-34, N-70, N-81 |
+| C-25 | Un solo escritor del diseño, desde el motor: mocheta como espacio sin el puente, cada módulo con su ancho; el editor mantiene la regla al agregar o quitar franjas y al cambiar alturas; el motor deja de leer "como proporción"; Referencias con la misma mocheta en APA e INA (hoy `mocheta sup: 40` en normal y 20 en bandera INA) . ✔ En parte (2026-09-26): Referencias con la mocheta como espacio en APA e INA; alturas sin escribir resueltas con N-29 (sistema 5/7, mochetas el resto) en el dibujo, el panel y el paquete que va a Nova; agregar o quitar un módulo solo reparte su franja, las demás conservan sus anchos. Falta: mocheta sin puente en el paquete, módulos sin ancho escritos | N-31, N-34, N-70, N-81 |
 
 ---
 

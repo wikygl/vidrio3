@@ -51,6 +51,32 @@ class PolisEnNovaTest {
     }
 
     @Test
+    fun el_trapecio_sin_alturas_llega_a_nova_con_su_hoja() {
+        // Pedido del usuario (2026-09-26): el trapecio de 208.6 × 156.8 con sistema y mocheta sin
+        // alturas escritas llegaba a Nova sin puente (hoja = alto). Tiene que llegar con 5/7 = 112.
+        val d = crystal.crystal.Diseno.nova.DisenoNova(
+            "apa", 208.6f, 156.8f,
+            listOf(crystal.crystal.Diseno.nova.NovaTramo(208.6f, listOf(
+                crystal.crystal.Diseno.nova.NovaFranja(true, 0f, listOf(
+                    crystal.crystal.Diseno.nova.NovaModulo('f', 69.5f), crystal.crystal.Diseno.nova.NovaModulo('c', 69.5f),
+                    crystal.crystal.Diseno.nova.NovaModulo('f', 69.6f))),
+                crystal.crystal.Diseno.nova.NovaFranja(false, 0f, listOf(
+                    crystal.crystal.Diseno.nova.NovaModulo('f', 104.3f), crystal.crystal.Diseno.nova.NovaModulo('f', 104.3f)))
+            )))
+        ).conContornoVano(listOf(0f to 0f, 208.6f to 0f, 208.6f to 156.8f, 75.4f to 156.8f))
+        ActivityScenario.launch(NovaCorrediza::class.java).use { sc ->
+            sc.onActivity { a ->
+                val b = campo(a, "binding").get(a) as ActivityNovaCorredizaBinding
+                campo(a, "texto").set(a, "nn")
+                campo(a, "textoModelo").set(a, "nn")
+                campo(a, "tipoNova").set(a, NovaCorrediza.TipoNova.APA)
+                llamar(a, "recibirDisenoEditado", d.aPaquete())
+                assertTrue(b.etHoja.text.toString(), b.etHoja.text.toString() == "112")
+            }
+        }
+    }
+
+    @Test
     fun la_ficha_del_proyecto_dibuja_la_forma() {
         // Pedido del usuario (2026-09-26): la ficha del proyecto mostraba "polis" ventana 2 como un
         // rectángulo, porque el SVG manual no recorta la silueta. Con forma sale como imagen.

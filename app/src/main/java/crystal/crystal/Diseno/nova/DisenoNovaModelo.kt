@@ -421,7 +421,12 @@ data class DisenoNova(
      */
     fun conAnchosRepartidos(
         anchoParante: Float = 2.5f,
-        bloqueados: Set<Int> = emptySet()
+        bloqueados: Set<Int> = emptySet(),
+        /**
+         * Qué franjas (tramo, franja) se reparten por igual. Las demás conservan la proporción de
+         * sus módulos y solo se ajustan al ancho nuevo de su tramo. Por defecto, todas por igual.
+         */
+        repartirIgual: (Int, Int) -> Boolean = { _, _ -> true }
     ): DisenoNova {
         val totalModulos = nModulos
         if (totalModulos <= 0) return this
@@ -439,9 +444,12 @@ data class DisenoNova(
             // escalón, y al perderlo la ventana volvía a salir rectangular en cuanto se editaba.
             NovaTramo(
                 ancho = anchoTramo,
-                franjas = tramo.franjas.map { fr ->
+                franjas = tramo.franjas.mapIndexed { k, fr ->
                     val w = if (fr.modulos.isEmpty()) anchoTramo else anchoTramo / fr.modulos.size
-                    fr.copy(modulos = fr.modulos.map { it.copy(ancho = w) })
+                    val suma = fr.modulos.sumOf { (it.ancho ?: 0f).toDouble() }.toFloat()
+                    val conservar = !repartirIgual(i, k) && fr.modulos.all { it.ancho != null } && suma > 0f
+                    if (conservar) fr.copy(modulos = fr.modulos.map { it.copy(ancho = it.ancho!! * anchoTramo / suma) })
+                    else fr.copy(modulos = fr.modulos.map { it.copy(ancho = w) })
                 },
                 alto = tramo.alto,
                 caida = tramo.caida,
@@ -780,7 +788,14 @@ data class DisenoNova(
         franjas[indiceFranja] = franja.copy(modulos = nuevos)
         val ts = tramos.toMutableList()
         ts[indiceTramo] = tramo.copy(franjas = franjas)
-        return copy(tramos = ts).conAnchosRepartidos(bloqueados = bloqueados)
+        // Solo se reparte por igual la franja que se tocó; las demás conservan los anchos que el
+        // vidriero les dio (pedido del usuario, 2026-09-26: al agregar un módulo en la mocheta, el
+        // ancho escrito en el sistema volvía a su medida anterior). Cambiar f ↔ c tampoco reparte.
+        val repartir = nuevos.size != franja.modulos.size
+        return copy(tramos = ts).conAnchosRepartidos(
+            bloqueados = bloqueados,
+            repartirIgual = { t, k -> repartir && t == indiceTramo && k == indiceFranja }
+        )
     }
 
     fun aPaquete(): String {
@@ -792,15 +807,20 @@ data class DisenoNova(
                 indice == 0 -> ""
                 else -> "$SEPARADOR_TRAMO "
             }
-            delante + unTramo(tramo)
+            delante + unTramo(tramo, indice)
         }.joinToString(" ")
         val tags = if (etiquetas.isEmpty()) "" else " " + etiquetas.joinToString(" ")
         return "{nova,$acabado,[${df(ancho)},${df(alto)}:$cuerpo$tags]}"
     }
 
     /** Un tramo escrito: su ancho y, dentro, sus tags y sus franjas. */
-    private fun unTramo(tramo: NovaTramo): String {
-        val franjas = tramo.franjas.joinToString(";") { fr ->
+    private fun unTramo(tramo: NovaTramo, indice: Int): String {
+        // Con varias franjas, las que no tienen alto escrito salen con el que de verdad tienen (N-29:
+        // el sistema 5/7 del alto y las mochetas el resto). Si no, Nova no encontraba la hoja y la
+        // ventana le llegaba sin puente (pedido del usuario, 2026-09-26).
+        val resueltas = if (tramo.franjas.size >= 2 && tramo.franjas.any { it.alto <= 0f })
+            HerramientasDiseno.alturasDeFranjas(this, indice) else null
+        val franjas = tramo.franjas.withIndex().joinToString(";") { (k, fr) ->
             val cabeza = if (fr.esSistema) "s" else "m"
             // Los módulos, y detrás del que toque el `;P;` del parante que va dentro de la franja.
             val mods = fr.modulos.mapIndexed { i, m ->
@@ -808,7 +828,8 @@ data class DisenoNova(
                 if (i in fr.parantes) "$escrito;P;" else escrito
             }.joinToString("")
             // Una franja sin altura se escribe sin `<alto>`, como venía.
-            if (fr.alto > 0f) "$cabeza<${df(fr.alto)}>($mods)" else "$cabeza($mods)"
+            val alto = resueltas?.getOrNull(k) ?: fr.alto
+            if (alto > 0f) "$cabeza<${df(alto)}>($mods)" else "$cabeza($mods)"
         }
         // El alto propio del tramo va como tag `H<…>` dentro, delante de las franjas: los
         // parsers viejos parten por `;` y solo miran los tokens que empiezan por s o m, así

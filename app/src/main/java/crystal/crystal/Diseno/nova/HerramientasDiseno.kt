@@ -94,10 +94,17 @@ object HerramientasDiseno {
     fun alturasDeFranjas(d: DisenoNova, indiceTramo: Int): List<Float> {
         val t = d.tramos.getOrNull(indiceTramo) ?: return emptyList()
         val altoT = d.altoDeTramo(indiceTramo)
-        val fijas = t.franjas.filter { it.alto > 0f }.sumOf { it.alto.toDouble() }.toFloat()
-        val libres = t.franjas.count { it.alto <= 0f }
+        // Un sistema sin alto escrito, con mochetas, es la hoja de la casa: 5/7 del alto (N-29), como
+        // lo dibuja la vista. Antes se repartía por igual con las mochetas, el dibujo mostraba 5/7 y
+        // Nova no encontraba hoja (el trapecio del usuario llegaba sin puente, 2026-09-26).
+        val conMocheta = t.franjas.any { !it.esSistema }
+        // Solo si NINGUNA franja tiene alto escrito: con la mocheta escrita, el sistema es lo que queda.
+        val sistemaAuto = conMocheta && t.franjas.count { it.esSistema } == 1 && t.franjas.all { it.alto <= 0f }
+        val franjas = if (sistemaAuto) t.franjas.map { if (it.esSistema) it.copy(alto = altoT * 5f / 7f) else it } else t.franjas
+        val fijas = franjas.filter { it.alto > 0f }.sumOf { it.alto.toDouble() }.toFloat()
+        val libres = franjas.count { it.alto <= 0f }
         val porLibre = if (libres > 0) ((altoT - fijas) / libres).coerceAtLeast(0f) else 0f
-        val alturas = t.franjas.map { if (it.alto > 0f) it.alto else porLibre }
+        val alturas = franjas.map { if (it.alto > 0f) it.alto else porLibre }
         // Si no suman el alto del tramo, se estiran en proporción: así los puentes caen donde se ven.
         val suma = alturas.sum()
         return if (suma > 0f && abs(suma - altoT) > 0.05f) alturas.map { it * altoT / suma } else alturas

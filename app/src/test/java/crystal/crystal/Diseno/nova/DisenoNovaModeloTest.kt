@@ -185,4 +185,49 @@ class DisenoNovaModeloTest {
         // Iguales: no se toca nada.
         assertEquals(d, d.conAltosDeLado(listOf(221.9f, 221.9f)))
     }
+
+    // ---------- Pedido del usuario (2026-09-26): el trapecio de 208.6 × 156.8 ----------
+
+    /** Un tramo con el sistema abajo y la mocheta arriba, sin alturas escritas (tras Limpiar y +). */
+    private fun trapecioSinAlturas() = DisenoNova(
+        "apa", 208.6f, 156.8f,
+        listOf(NovaTramo(208.6f, listOf(
+            NovaFranja(true, 0f, listOf(NovaModulo('f', 69.5f), NovaModulo('c', 69.5f), NovaModulo('f', 69.6f))),
+            NovaFranja(false, 0f, listOf(NovaModulo('f', 104.3f), NovaModulo('f', 104.3f)))
+        )))
+    ).conContornoVano(listOf(0f to 0f, 208.6f to 0f, 208.6f to 156.8f, 75.4f to 156.8f))
+
+    @Test
+    fun sin_alturas_escritas_el_sistema_es_la_hoja_de_la_casa() {
+        // N-29: 5/7 del alto (112) y la mocheta el resto (44.8), como lo dibuja la vista. Antes se
+        // repartía por igual y Nova no encontraba la hoja: la ventana le llegaba sin puente.
+        val d = trapecioSinAlturas()
+        val a = HerramientasDiseno.alturasDeFranjas(d, 0)
+        assertEquals(112f, a[0], 0.05f)
+        assertEquals(44.8f, a[1], 0.05f)
+        // Y se escriben en el paquete, que es lo que lee Nova.
+        val p = d.aPaquete()
+        assertTrue(p, p.contains("s<112>") && p.contains("m<44.8>"))
+        // Con la mocheta escrita, el sistema es lo que queda (no 5/7).
+        val conMocheta = d.copy(tramos = listOf(d.tramos[0].copy(franjas = listOf(
+            d.tramos[0].franjas[0], d.tramos[0].franjas[1].copy(alto = 40f)))))
+        assertEquals(116.8f, HerramientasDiseno.alturasDeFranjas(conMocheta, 0)[0], 0.05f)
+    }
+
+    @Test
+    fun agregar_un_modulo_en_una_franja_no_mueve_los_anchos_de_la_otra() {
+        // El vidriero escribió 50 en el primer módulo del sistema; agrega un paño en la mocheta: el
+        // sistema conserva sus anchos. Antes volvían a repartirse por igual.
+        val base = trapecioSinAlturas()
+        val t = base.tramos[0]
+        val editado = base.copy(tramos = listOf(t.copy(franjas = listOf(
+            t.franjas[0].copy(modulos = listOf(NovaModulo('f', 50f), NovaModulo('c', 79.3f), NovaModulo('f', 79.3f))),
+            t.franjas[1]
+        ))))
+        val d = editado.conModuloAgregado(0, 1, 1, 'f')
+        assertEquals(3, d.tramos[0].franjas[1].modulos.size)
+        assertEquals(listOf(50f, 79.3f, 79.3f), d.tramos[0].franjas[0].modulos.map { Math.round(it.ancho!! * 10) / 10f })
+        // La mocheta sí se reparte: tres paños iguales.
+        d.tramos[0].franjas[1].modulos.forEach { assertEquals(208.6f / 3f, it.ancho!!, 0.05f) }
+    }
 }

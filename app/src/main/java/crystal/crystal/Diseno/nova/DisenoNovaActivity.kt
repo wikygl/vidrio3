@@ -1180,8 +1180,11 @@ class DisenoNovaActivity : AppCompatActivity() {
         // 233.7 × 109.4. Antes todos los tramos mostraban el alto de la ventana.
         val modelo = modeloEnPantalla()
         fun anchoTramo(i: Int) = modelo?.tramos?.getOrNull(i)?.ancho ?: tramoInfo[i].ancho
-        fun altoTramo(i: Int) = modelo?.let {
-            HerramientasDiseno.altoDelSistema(it, i, anchoParanteCm) ?: it.altoDeTramo(i)
+        // El alto de su franja de sistema (la hoja): en un tramo inclinado, el rectángulo medido de
+        // borde a borde daba 1.0 (el trapecio del usuario, 2026-09-26). Antes: altoDelSistema.
+        fun altoTramo(i: Int) = modelo?.let { m ->
+            val iS = m.tramos.getOrNull(i)?.franjas?.indexOfFirst { it.esSistema } ?: -1
+            (if (iS >= 0) HerramientasDiseno.alturasDeFranjas(m, i).getOrNull(iS) else null) ?: m.altoDeTramo(i)
         } ?: altoCm
 
         if (tramoInfo.isNotEmpty()) {
