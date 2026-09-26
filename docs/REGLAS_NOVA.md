@@ -331,7 +331,26 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 - N-45 ✅ **U de mocheta** (APA): `altoMocheta − 2u` por tramos; con Múltiple o gorrito 1 por
   tramo, con los demás 2. (La mocheta es una superficie: ancho de mocheta × alto de mocheta.)
 - N-46 ✅ **U superior** (INA): el ancho, 1 pieza; **en bandera, 2**. Con esquina: ancho del lado +
-  ancho de la U.
+  ancho de la U. Es un caso de N-93.
+- N-93 ✅ **La U de cada borde en inaparente** (dictado el 2026-09-25). La U horizontal sigue al vidrio
+  a lo largo del borde de arriba y del de abajo; **todo lo que apoya seguido en ese borde va en una
+  sola U**. U de fijos, U superior y U inferior son esa misma pieza:
+  - Un tramo **con mocheta en ese borde** lleva U de punta a punta: su mocheta, sus fijos y el paso
+    de sus corredizas.
+  - **Arriba**, un tramo sin mocheta arriba (invertido, o normal sin puente) lleva **fijo
+    corredizo, que ya incluye su U**: ahí no hay U y se corta.
+  - **Abajo**, un tramo sin mocheta abajo: cada racha de fijos apoya en su U; las corredizas la
+    cortan, porque van sobre el riel.
+  - **El parante no la corta**: el vidrio pasa por delante (N-75). Suma su ancho junto a un tramo
+    cubierto de punta a punta (que se mide con su ancho de tramo); entre dos fijos no, porque su U
+    ya lo lleva (420 en `fccf P fcf`: 60.4 + 60.4 = 120.8).
+
+  Dora editada en inaparente (370: `fccf` normal, P 2.5, `ccc` en bandera): arriba `370 = 1`; abajo
+  `53.2 = 1` (fijo izquierdo) y `213.2 = 1` (fijo derecho 53.2 + parante 2.5 + tramo 157.5). Normal:
+  abajo una U por racha de fijos, arriba de lado a lado. Invertido: abajo de lado a lado, arriba
+  nada. **Bandera: una U de lado a lado en cada borde (`2`), sin U de fijos aparte**; hasta el
+  2026-09-25 el motor sacaba además la U de fijos (bandera de 180 en `fcf`: `60.4 = 2`, que ya no
+  va). Hecho en el motor (`CompuestoTest`).
 - N-47 ✅ **Full fijos**: U horizontal = ancho del tramo, 2 piezas; con esquina en INA, más el ancho
   de la U.
 - N-48 ✅ Con 1 división: U de fijos × 2 y U parante × 2.
@@ -505,8 +524,9 @@ Dictado por el usuario el 2026-09-25:
   portafelpa, tope, U y vidrios con su altura. Ejemplo: mocheta de 60 con corrediza sobre un
   sistema de 100 → hoja de 57.5, riel `199.9 = 2`, portafelpas `98.4 = 3` y `55.9 = 3`.
 - ✅ **U superior e inferior de inaparente:** albergan el vidrio que va delante de la estructura, así
-  que no las afectan los tramos: siempre el ancho entero (420 en dos tramos de 4 y 3 sigue siendo
-  420). Va la superior si algún tramo tiene mocheta arriba y la inferior si alguno la tiene abajo.
+  que no las parten los parantes (420 en dos tramos de 4 y 3 sigue siendo 420). Precisado el mismo
+  día en N-93: la U sigue al vidrio de cada borde, y se corta donde no hay vidrio que apoyar (fijo
+  corredizo arriba, corredizas sobre el riel abajo). Antes se aplicaba siempre de lado a lado.
 
 ---
 

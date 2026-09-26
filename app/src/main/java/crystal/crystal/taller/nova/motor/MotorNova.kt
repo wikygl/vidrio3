@@ -168,28 +168,33 @@ object MotorNova {
                 } else if (!vert.all { it.soloAbajo }) u.add(Pieza(l.anchoCalculo + aumentoLado, 2))
             }
             fullFijos -> if (apa || !vert[0].soloAbajo) u.add(Pieza(ms.first().u + aumentoLado, 2))
-            // Como la pantalla: en INA invertido los fijos no llevan U de fijos.
-            else -> rachasDeFijos(ms.filter { apa || !vDe(it).soloAbajo }, cruzaParantes = !apa).forEach { racha ->
+            apa -> rachasDeFijos(ms, cruzaParantes = false).forEach { racha ->
+                u.add(Pieza(racha.sumOf { (it.u + aumentoPorHoja).toDouble() }.toFloat(), 1))
+            }
+            // INA con corredizas: la U de cada borde (ver uDelBorde), que reemplaza a la U de fijos
+            // y a la U superior e inferior de lado a lado.
+            ms.any { it.corrediza } -> {
+                // Primero el borde de abajo (lo que antes era la U de fijos) y después el de arriba.
+                uDelBorde(v, l, ms, vert, arriba = false, aumentoPorHoja).forEach { u.add(Pieza(it, 1)) }
+                uDelBorde(v, l, ms, vert, arriba = true, aumentoPorHoja).forEach { u.add(Pieza(it, 1)) }
+            }
+            else -> rachasDeFijos(ms, cruzaParantes = true).forEach { racha ->
                 u.add(Pieza(racha.sumOf { (it.u + aumentoPorHoja).toDouble() }.toFloat(), 1))
             }
         }
+        // Antes, en INA: U de fijos por racha (sin ellas en invertido) y además
+        //     if (!apa && ms.any { it.corrediza }) {
+        //         val arriba = vert.any { vt -> vt.mochetas.any { it.ubicacion == Ubicacion.ARRIBA } }
+        //         val abajo = vert.any { vt -> vt.mochetas.any { it.ubicacion == Ubicacion.ABAJO } }
+        //         val n = (if (arriba) 1 else 0) + (if (abajo) 1 else 0)
+        //         if (n > 0) u.add(Pieza(l.anchoCalculo + aumentoLado, n))
+        //     }
+        // La Dora editada daba 53.2 = 2 y 370 = 2; lo dictado es 53.2 = 1, 370 = 1 y 213.2 = 1.
 
         // ---------- U de mocheta horizontal APA (N-45) ----------
         if (apa && us != 0f) {
             val porTramoN = if (v.puente.esMultipleOGorrito) 1 else 2
             l.tramos.forEachIndexed { i, t -> vert[i].mochetas.forEach { u.add(Pieza(t.ancho, porTramoN)) } }
-        }
-        // ---------- U superior e inferior INA (N-46) ----------
-        // Albergan el vidrio que va delante de la estructura (parantes y puentes), así que no las
-        // afectan los tramos: siempre el ancho entero del lado (dictado 2026-09-25: 420 en dos
-        // tramos de 4 y 3 sigue siendo 420). Superior si algún tramo tiene mocheta arriba; inferior
-        // si alguno la tiene abajo. Un lado de solo fijos no la lleva (en la L dictada, el lado de 40
-        // con un fijo lleva solo su U de fijo, 41 = 2).
-        if (!apa && ms.any { it.corrediza }) {
-            val arriba = vert.any { vt -> vt.mochetas.any { it.ubicacion == Ubicacion.ARRIBA } }
-            val abajo = vert.any { vt -> vt.mochetas.any { it.ubicacion == Ubicacion.ABAJO } }
-            val n = (if (arriba) 1 else 0) + (if (abajo) 1 else 0)
-            if (n > 0) u.add(Pieza(l.anchoCalculo + aumentoLado, n))
         }
 
         // ---------- U parante (N-43) ----------
@@ -424,6 +429,67 @@ object MotorNova {
 
     /** Un tramo de dos o más hojas, todas corredizas. */
     private fun soloCorredizas(t: Tramo): Boolean = t.modulos.size > 1 && t.modulos.all { it.corrediza }
+
+    /**
+     * La U horizontal de un borde en inaparente (dictado el 2026-09-25). La U sigue al vidrio a lo
+     * largo del borde, y todo lo que apoya seguido en él va en una sola pieza:
+     *
+     * - Un tramo con mocheta en ese borde lleva U de punta a punta: su vidrio de mocheta, sus fijos
+     *   y el paso de sus corredizas.
+     * - Arriba, un tramo sin mocheta arriba (invertido, o normal sin puente) lleva fijo corredizo,
+     *   que ya incluye su U: ahí la U se corta.
+     * - Abajo, un tramo sin mocheta abajo: cada fijo apoya en su U y las corredizas la cortan (van
+     *   sobre el riel).
+     * - El parante no la corta: en inaparente el vidrio pasa por delante (N-75). Suma su ancho
+     *   cuando la U sigue a los dos lados.
+     *
+     * Dora editada (370: `fccf` normal, P 2.5, `ccc` en bandera): arriba `370`; abajo `53.2` (el
+     * fijo izquierdo) y `213.2` (el fijo derecho 53.2 + parante 2.5 + tramo 157.5). Normal: abajo
+     * una por racha de fijos, arriba de lado a lado; invertido: abajo de lado a lado, arriba nada.
+     */
+    private fun uDelBorde(
+        v: VentanaNova, l: LadoNova, ms: List<M>, vert: List<Vertical>,
+        arriba: Boolean, aumentoPorHoja: Float
+    ): List<Float> {
+        val borde = if (arriba) Ubicacion.ARRIBA else Ubicacion.ABAJO
+        // De izquierda a derecha: el largo de U de cada elemento, o null donde se corta.
+        // El parante suma su ancho solo junto a un tramo cubierto, que se mide con su ancho de tramo
+        // (ya sin el parante). Entre dos fijos no: su U de inaparente ya lo lleva dentro, porque el
+        // vidrio no descuenta el parante (N-75); dos fijos seguidos a través de un parante siguen
+        // siendo la suma de sus U (420 en fccf P fcf: 60.4 + 60.4 = 120.8).
+        val elementos = mutableListOf<Float?>()
+        val tipo = mutableListOf<Char>()   // 'f' fijo, 't' tramo cubierto, 'p' parante, '-' corte
+        fun poner(e: Float?, t: Char) { elementos.add(e); tipo.add(if (e == null) '-' else t) }
+        l.tramos.forEachIndexed { i, t ->
+            if (i > 0) poner(v.puente.anchoParante, 'p')
+            when {
+                vert[i].mochetas.any { it.ubicacion == borde } -> {
+                    // Esquina en ángulo (G-09): el tramo del borde suma el ancho de la U.
+                    val esquina = (if (i == 0 && l.izquierda == Borde.ESQUINA_ANGULO) v.u.ancho else 0f) +
+                        (if (i == l.tramos.lastIndex && l.derecha == Borde.ESQUINA_ANGULO) v.u.ancho else 0f)
+                    poner(t.ancho + esquina, 't')
+                }
+                arriba && t.corredizas > 0 -> poner(null, '-')   // fijo corredizo
+                else -> ms.filter { it.tramo == i }.forEach { m -> poner(if (m.corrediza) null else m.u + aumentoPorHoja, 'f') }
+            }
+        }
+        val out = mutableListOf<Float>()
+        var actual = 0f
+        var abierta = false
+        elementos.forEachIndexed { k, e ->
+            val siguiente = tipo.getOrNull(k + 1) ?: '-'
+            when {
+                tipo[k] == '-' || (tipo[k] == 'p' && siguiente == '-') -> {
+                    if (abierta) out.add(actual)
+                    actual = 0f; abierta = false
+                }
+                tipo[k] == 'p' -> if (abierta && (tipo[k - 1] == 't' || siguiente == 't')) actual += e!!
+                else -> { actual += e!!; abierta = true }
+            }
+        }
+        if (abierta) out.add(actual)
+        return out
+    }
 
     /** Rachas de fijos seguidos. En INA atraviesan los parantes (N-42); en APA no. */
     private fun rachasDeFijos(ms: List<M>, cruzaParantes: Boolean): List<List<M>> {
