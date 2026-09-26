@@ -80,6 +80,11 @@ vidrios, U y tees son otra cosa (G-05).
 - **G-09 Esquinas.** APA descuenta y INA **aumenta** (el ancho de la U) en cada esquina en ángulo;
   en una esquina **curva** no se aumenta ni se descuenta. Aparte de eso, APA e INA calculan igual
   (N-83).
+- **G-11 Todo el cálculo en float; `df1` solo al presentar** (dictado el 2026-09-25). Ninguna medida
+  se trunca a mitad de camino: se suma, se resta y se reparte con la medida exacta, y solo la línea
+  que se muestra o se archiva pasa por `df1` (N-10). "Que salga lo que salga." Ejemplo: la U de
+  la Dora en inaparente, 53.257 + 1.25 + 157.5 = 212.007 → `212`, no 211.9. Aplicado en el motor
+  (2026-09-25); las rutas viejas de respaldo se retiran en la fase 4 y no se tocaron.
 - **G-10 Configuración guardada.** El usuario podrá guardar alturas, cruces, materiales, etc. y
   usarlos en los cálculos siguientes. Existe en otra calculadora; en Nova falta.
 
@@ -341,12 +346,15 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
     corredizo, que ya incluye su U**: ahí no hay U y se corta.
   - **Abajo**, un tramo sin mocheta abajo: cada racha de fijos apoya en su U; las corredizas la
     cortan, porque van sobre el riel.
-  - **El parante no la corta**: el vidrio pasa por delante (N-75). Suma su ancho junto a un tramo
-    cubierto de punta a punta (que se mide con su ancho de tramo); entre dos fijos no, porque su U
-    ya lo lleva (420 en `fccf P fcf`: 60.4 + 60.4 = 120.8).
+  - **El parante no la corta**: el vidrio pasa por delante (N-75). La U de un fijo llega hasta el
+    **centro del parante**, y un tramo cubierto se mide con su ancho de tramo, que empieza al otro
+    lado del parante. Por eso el parante suma entero entre dos tramos cubiertos (210 + 2.5 + 157.5 =
+    370), **la mitad** entre un fijo y un tramo cubierto, y nada entre dos fijos, porque cada U ya
+    lleva su mitad (420 en `fccf P fcf`: 60.4 + 60.4 = 120.8).
 
   Dora editada en inaparente (370: `fccf` normal, P 2.5, `ccc` en bandera): arriba `370 = 1`; abajo
-  `53.2 = 1` (fijo izquierdo) y `213.2 = 1` (fijo derecho 53.2 + parante 2.5 + tramo 157.5). Normal:
+  `53.2 = 1` (fijo izquierdo) y `212 = 1` (fijo derecho 53.257 + medio parante 1.25 + tramo 157.5 =
+  212.007; con el 53.2 ya truncado daría 211.9, ver G-11). Normal:
   abajo una U por racha de fijos, arriba de lado a lado. Invertido: abajo de lado a lado, arriba
   nada. **Bandera: una U de lado a lado en cada borde (`2`), sin U de fijos aparte**; hasta el
   2026-09-25 el motor sacaba además la U de fijos (bandera de 180 en `fcf`: `60.4 = 2`, que ya no
@@ -413,9 +421,10 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   motor, en Nova con ceil y en Nova desigual. (Ese mismo día se aplicó por error `mocheta − u + 0.3`.)
 - N-64 ✅ **INA**: alto = `alto − altoHoja + 1` la de arriba, `− 0.5` la de abajo en bandera (N-34);
   invertido `alto − altoHoja − 0.5`. **Los vidrios de mocheta superior e inferior deben tener el
-  mismo ancho** (C-08). ✅ (2026-09-25) **Ancho**: lo que dejan las U de fijos ya cortadas (con su
-  medida de la lista, truncada) menos una gruña de **0.3 a cada lado**. Ejemplo dictado: 140 en fcf,
-  U de fijo 47.1 → `140 − 2 × 47.1 − 0.6 = 45.2`. Sobre dos o más corredizas juntas, lo mismo: un solo
+  mismo ancho** (C-08). ✅ (2026-09-25) **Ancho**: lo que dejan las U de fijos menos una gruña de
+  **0.3 a cada lado**, con las U en float (G-11): 140 en fcf, U de fijo 47.133 → `140 − 2 × 47.133 −
+  0.6 = 45.13` → **45.1**. (El ejemplo dictado restaba la U ya truncada, 47.1, y daba 45.2; quedó
+  superado por G-11 el mismo día.) Sobre dos o más corredizas juntas, lo mismo: un solo
   vidrio con 0.3 a cada lado.
 - N-86 ✅ En INA la mocheta sigue siendo un espacio; el cálculo directo desde `alto − altoHoja` es un
   atajo. En INA el **vidrio** de mocheta superior es **+ 1** y la **U parante de mocheta + 1.5**

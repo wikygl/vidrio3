@@ -39,12 +39,13 @@ class CompuestoTest {
         // Dictado el 2026-09-25, con el tramo 2 en `ccc`: arriba todo es vidrio seguido (los dos
         // tramos con mocheta arriba) → 370 = 1. Abajo, el fijo izquierdo solo (las corredizas lo
         // cortan, van sobre el riel) → 53.2; el fijo derecho, el parante y la mocheta inferior de la
-        // bandera van seguidos → 53.2 + 2.5 + 157.5 = 213.2.
+        // bandera van seguidos. La U del fijo llega al centro del parante y el tramo empieza al otro
+        // lado: 53.257 + 1.25 + 157.5 = 212.007 → 212 (todo en float, df1 al presentar).
         val p = "{nova,ina,[370,140:Tl<210>(s<100>(f<52.5>c<52.5>c<52.5>f<52.5>);m<37.5>(f<105>f<105>)) P<2.5> " +
             "Tl<157.5>(m<17.5>(f<157.5>);s<100>(c<52.5>c<52.5>c<52.5>);m<17.5>(f<157.5>))]}"
         val m = MotorNova.calcular(DesdeDiseno.ventana(p, u13, tubo)!!)
-        assertEquals(listOf("53.2 = 1", "213.2 = 1", "370 = 1"),
-            t(m.u).lines().filter { it.startsWith("53.2") || it.startsWith("213.2") || it.startsWith("370") })
+        assertEquals(listOf("53.2 = 1", "212 = 1", "370 = 1"),
+            t(m.u).lines().filter { it.startsWith("53.2") || it.startsWith("212") || it.startsWith("370") })
     }
 
     @Test

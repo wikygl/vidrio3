@@ -345,14 +345,15 @@ object MotorNova {
             }
         } else {
             // INA: la mocheta va sobre las corredizas (los fijos van de piso a techo). El ancho es
-            // lo que dejan las U de fijos ya cortadas (con su medida truncada, como salen de la
-            // lista), menos una gruña de 0.3 a cada lado. Ejemplo dictado el 2026-09-25: 140 en
-            // fcf, U de fijo 47.1 → 140 − 2 × 47.1 − 0.6 = 45.2. Alto: arriba +1, abajo −0.5 (N-64).
+            // lo que dejan las U de fijos, menos una gruña de 0.3 a cada lado. Alto: arriba +1,
+            // abajo −0.5 (N-64). Todo en float; df1 solo al presentar (dictado el 2026-09-25):
+            // 140 en fcf, U de fijo 47.133 → 140 − 2 × 47.133 − 0.6 = 45.13 → 45.1. Antes se
+            // restaban las U ya truncadas (`NovaCalculos.df1(it.u)`: 47.1 → 45.2).
             porTramo.forEach { (i, t) ->
                 val nc = t.count { it.corrediza }
                 if (nc == 0 || !vert[i].hayMocheta) return@forEach
                 val espacio = t.sumOf { it.anchoVidrio.toDouble() }.toFloat() -
-                    t.filter { !it.corrediza }.sumOf { NovaCalculos.df1(it.u).toDouble() }.toFloat()
+                    t.filter { !it.corrediza }.sumOf { it.u.toDouble() }.toFloat()
                 val anchos = rachas(t.map { it.corrediza }, true).map { n -> espacio * n / nc - 2 * GRUNA_MOCHETA_INA }
                 vert[i].mochetas.forEach { m ->
                     val alto = if (m.ubicacion == Ubicacion.ARRIBA) m.directo + 1f else m.directo - 0.5f
@@ -453,10 +454,13 @@ object MotorNova {
     ): List<Float> {
         val borde = if (arriba) Ubicacion.ARRIBA else Ubicacion.ABAJO
         // De izquierda a derecha: el largo de U de cada elemento, o null donde se corta.
-        // El parante suma su ancho solo junto a un tramo cubierto, que se mide con su ancho de tramo
-        // (ya sin el parante). Entre dos fijos no: su U de inaparente ya lo lleva dentro, porque el
-        // vidrio no descuenta el parante (N-75); dos fijos seguidos a través de un parante siguen
-        // siendo la suma de sus U (420 en fccf P fcf: 60.4 + 60.4 = 120.8).
+        // La U de un fijo de inaparente llega hasta el centro del parante (el vidrio no descuenta
+        // el parante, N-75), y un tramo cubierto se mide con su ancho de tramo, que empieza al otro
+        // lado del parante (dictado el 2026-09-25). Así el parante suma:
+        //  - entre dos tramos cubiertos, entero (210 + 2.5 + 157.5 = 370);
+        //  - entre un fijo y un tramo cubierto, la mitad (Dora: 53.257 + 1.25 + 157.5 = 212.0);
+        //  - entre dos fijos, nada: cada U ya lleva su mitad (420 en fccf P fcf: 60.4 + 60.4 = 120.8).
+        // Todo en float; df1 solo al presentar.
         val elementos = mutableListOf<Float?>()
         val tipo = mutableListOf<Char>()   // 'f' fijo, 't' tramo cubierto, 'p' parante, '-' corte
         fun poner(e: Float?, t: Char) { elementos.add(e); tipo.add(if (e == null) '-' else t) }
@@ -483,7 +487,10 @@ object MotorNova {
                     if (abierta) out.add(actual)
                     actual = 0f; abierta = false
                 }
-                tipo[k] == 'p' -> if (abierta && (tipo[k - 1] == 't' || siguiente == 't')) actual += e!!
+                tipo[k] == 'p' -> if (abierta) {
+                    val tramos = (if (tipo[k - 1] == 't') 1 else 0) + (if (siguiente == 't') 1 else 0)
+                    actual += e!! * tramos / 2f
+                }
                 else -> { actual += e!!; abierta = true }
             }
         }

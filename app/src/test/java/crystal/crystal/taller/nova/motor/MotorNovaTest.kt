@@ -49,7 +49,8 @@ class MotorNovaTest {
         assertEquals("142.9 = 1", t(m.riel))
         assertEquals("142.9 = 1", t(m.rielSuperior))
         assertEquals(RielSuperior.U_FELPERO, m.nombreRielSuperior)
-        assertEquals("47.6 x 143.3 = 2\n46.7 x 96.5 = 1\n46.2 x 46 = 1", tv(m.vidrios))
+        // Mocheta: 143 − 2 × 48.133 − 0.6 = 46.13 → 46.1, todo en float (con las U truncadas daba 46.2).
+        assertEquals("47.6 x 143.3 = 2\n46.7 x 96.5 = 1\n46.1 x 46 = 1", tv(m.vidrios))
     }
 
     @Test
@@ -62,11 +63,12 @@ class MotorNovaTest {
 
     @Test
     fun vidrio_de_mocheta_inaparente_dictado() {
-        // Dictado 2026-09-25: 140 en fcf, U de fijo 47.1; el vidrio de mocheta es lo que dejan las
-        // U cortadas menos 0.3 a cada lado: 140 − 2 × 47.1 − 0.6 = 45.2.
+        // Dictado 2026-09-25: 140 en fcf; el vidrio de mocheta es lo que dejan las U de fijos menos
+        // 0.3 a cada lado. Todo en float y df1 solo al presentar (dictado el mismo día): U 47.133 →
+        // 140 − 2 × 47.133 − 0.6 = 45.13 → 45.1. Con las U ya truncadas (47.1) daba 45.2.
         val m = plana(Acabado.INA, 140f, 145f, 100f, tubo238)
         assertEquals("47.1 = 2\n140 = 1\n142 = 2", t(m.u))
-        assertEquals(true, tv(m.vidrios).lines().any { it.startsWith("45.2 x ") })
+        assertEquals(true, tv(m.vidrios).lines().any { it.startsWith("45.1 x ") })
     }
 
     @Test
