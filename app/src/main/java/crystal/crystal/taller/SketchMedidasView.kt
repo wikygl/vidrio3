@@ -829,10 +829,14 @@ class SketchMedidasView @JvmOverloads constructor(
                         val imantado = crearTrazoImantado()
                         if (imantado.isNotEmpty()) {
                             elementos.addAll(imantado)
+                            // Una cadena abierta que cierra con las líneas que ya había: forma.
+                            cerrarFormasTrasEditar()
                             registrarAccion()
                         }
                     } else crearElemento(p.x, p.y)?.let {
                         elementos.add(it)
+                        val tool = (it as? Element.Shape)?.tool
+                        if (tool == Tool.LINE || tool == Tool.ORTHO_LINE) cerrarFormasTrasEditar()
                         registrarAccion()
                         // El arco se termina con sus medidas: la cuerda dibujada es a ojo.
                         if ((it as? Element.Shape)?.tool == Tool.ARCO) pedirDatosDeArco(elementos.lastIndex)
@@ -3763,6 +3767,19 @@ class SketchMedidasView @JvmOverloads constructor(
         return false
     }
 
+    /**
+     * Después de cualquier edición de líneas (extender, recortar, mover con imán, una línea nueva):
+     * si alguna cadena da la vuelta completa, pasa a ser una forma. Pedido del usuario (2026-09-26):
+     * cerraba un contorno con extender y recortar, y seguían siendo líneas sueltas, porque solo se
+     * miraba al soltar un nodo.
+     */
+    private fun cerrarFormasTrasEditar(): Boolean {
+        var cerro = false
+        while (cerrarFormaSiDaLaVuelta()) cerro = true
+        if (cerro) Toast.makeText(context, "Contorno cerrado: ahora es una forma", Toast.LENGTH_SHORT).show()
+        return cerro
+    }
+
     private fun reemplazarPorContorno(lineas: List<Int>, vertices: List<PointF>): Boolean {
         if (vertices.size < 3) return false
         val contours = mutableListOf(vertices.map { PointF(it.x, it.y) }.toMutableList())
@@ -5934,6 +5951,10 @@ class SketchMedidasView @JvmOverloads constructor(
                         vertical = maxOf(vertical, element.heightCm)
                     }
                     Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO -> {
+                        // Una cota a escuadra es una medida de apoyo dentro de una forma, no la pieza:
+                        // no cuenta. Contándola, el boceto de Formas (338.3 × 144.5) se archivaba
+                        // como "256.4 x 109.4", y una forma escalada seguía con el tamaño de antes.
+                        if (esCotaAEscuadra(element.cotaHint)) return
                         // Una línea suma a lo ancho o a lo alto según hacia dónde corre.
                         if (abs(element.end.x - element.start.x) >= abs(element.end.y - element.start.y)) {
                             horizontal = maxOf(horizontal, element.lengthCm)
@@ -5942,6 +5963,12 @@ class SketchMedidasView @JvmOverloads constructor(
                         }
                     }
                     Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> Unit
+                }
+                // Una forma cerrada (lápiz imán, líneas que se cerraron, plantillas) mide su caja.
+                // Antes no contaba y la medida salía de otras piezas o de las cotas de apoyo.
+                is Element.Composite -> {
+                    horizontal = maxOf(horizontal, element.widthCm)
+                    vertical = maxOf(vertical, element.heightCm)
                 }
                 else -> Unit
             }
@@ -9301,6 +9328,7 @@ class SketchMedidasView @JvmOverloads constructor(
             if (porElFin) punta else linea.end,
             linea.cotaHint
         ).conEstiloDe(linea)
+        cerrarFormasTrasEditar()
         registrarAccion()
         invalidate()
     }
@@ -9327,6 +9355,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.removeAt(i)
         elementos.addAll(i, nuevas)
         selectedIndices.clear()
+        cerrarFormasTrasEditar()
         registrarAccion()
         invalidate()
     }
@@ -9377,6 +9406,7 @@ class SketchMedidasView @JvmOverloads constructor(
         indicesAgarre.forEach { translateElement(it, dx, dy) }
         agarreIman = null
         indicesAgarre = emptyList()
+        cerrarFormasTrasEditar()
         registrarAccion()
         invalidate()
     }
@@ -9489,6 +9519,13 @@ class SketchMedidasView @JvmOverloads constructor(
             else if (abs(dx) <= abs(dy) * 0.12f) { punto = PointF(anterior.x, punto.y); ortogonal = true }
             if (distancia(punto, anterior) < 1f) return
             elementos.add(crearShape(if (ortogonal) Tool.ORTHO_LINE else Tool.LINE, anterior, punto))
+            // Si el último tramo vuelve al primero, la polilínea es ya una forma cerrada.
+            if (cerrarFormasTrasEditar()) {
+                registrarAccion()
+                polilineaUltimo = null
+                invalidate()
+                return
+            }
             registrarAccion()
         }
         polilineaUltimo = punto
