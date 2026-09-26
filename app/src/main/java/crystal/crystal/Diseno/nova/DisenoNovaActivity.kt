@@ -49,6 +49,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         const val EXTRA_US_CM = "extra_us_cm"
         const val EXTRA_ENCUENTRO_VACIO = "extra_encuentro_vacio"
         const val EXTRA_DIRECCION = "extra_direccion"
+        /** Archivo del boceto de MedidaActivity: la medida original, con todas sus cotas. */
+        const val EXTRA_BOCETO_ORIGINAL = "extra_boceto_original"
         const val RESULT_URI = "resultado_uri_imagen"
         const val RESULT_PAQUETE = "resultado_paquete"
     }
@@ -2486,6 +2488,12 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
         }
         chipIman = chip(textoIman(), 112) { imanActivo = !imanActivo; refrescarChipsHerramientas() }
+        // La medida tal como se tomó en MedidaActivity. El diseño redondea y oculta cotas para no
+        // ensuciarse (el escalón de 109.4 llegaba como 108.5); aquí se ve completa para diseñar.
+        val boceto = crystal.crystal.taller.DialogoMedidaOriginal.cargar(this, intent.getStringExtra(EXTRA_BOCETO_ORIGINAL))
+        if (boceto != null) {
+            chip("📐 medida original", 162) { crystal.crystal.taller.DialogoMedidaOriginal.mostrar(this, boceto) }
+        }
     }
 
     private fun refrescarChipsHerramientas() {

@@ -12,7 +12,6 @@ import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
-import android.view.ScaleGestureDetector
 import android.text.Editable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -153,6 +152,7 @@ class NovaCorrediza : AppCompatActivity() {
 
     // Medidas que vienen de MedidaActivity (cola de calculadoras).
     private var bocetoOriginalDrawable: Drawable? = null   // gráfico de la medida original
+    private var bocetoOriginalRuta: String = ""            // su archivo, para pasarlo a novaDiseño
     private var disenoCalculadoGuardado: Drawable? = null   // diseño mostrado antes de ver el original
     private var mostrandoBocetoOriginal = false
     private var arrastreDownX = 0f
@@ -4350,64 +4350,19 @@ class NovaCorrediza : AppCompatActivity() {
         intent.putExtra(DisenoNovaActivity.EXTRA_ENCUENTRO_VACIO, metaEncuentro)
         intent.putExtra(DisenoNovaActivity.EXTRA_DIRECCION, metaDireccion)
         intent.putExtra(DisenoNovaActivity.EXTRA_US_CM, binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f)
+        // La medida original, para verla desde el editor con todas sus cotas.
+        if (bocetoOriginalRuta.isNotBlank()) intent.putExtra(DisenoNovaActivity.EXTRA_BOCETO_ORIGINAL, bocetoOriginalRuta)
         lanzarDisenoInteractivo.launch(intent)
     }
 
-    /** Muestra la medida original en grande, con pellizco para zoom y arrastre para desplazar. */
-    @SuppressLint("ClickableViewAccessibility")
+    /** Muestra la medida original en grande, con zoom (la misma ventana que usa novaDiseño). */
     private fun mostrarDialogoBocetoOriginal() {
-        val original = bocetoOriginalDrawable ?: run {
-            Toast.makeText(this, "No hay medida original para mostrar", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val imagen = ImageView(this).apply {
-            setImageDrawable(original)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            adjustViewBounds = true
-            setBackgroundColor(Color.WHITE)
-            minimumHeight = (resources.displayMetrics.heightPixels * 0.6f).toInt()
-        }
-
-        var escala = 1f
-        val zoom = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            override fun onScale(d: ScaleGestureDetector): Boolean {
-                escala = (escala * d.scaleFactor).coerceIn(1f, 6f)
-                imagen.scaleX = escala
-                imagen.scaleY = escala
-                if (escala == 1f) {
-                    imagen.translationX = 0f
-                    imagen.translationY = 0f
-                }
-                return true
-            }
-        })
-        var ultimoX = 0f
-        var ultimoY = 0f
-        imagen.setOnTouchListener { _, e ->
-            zoom.onTouchEvent(e)
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    ultimoX = e.rawX
-                    ultimoY = e.rawY
-                }
-                MotionEvent.ACTION_MOVE -> if (escala > 1f && e.pointerCount == 1) {
-                    imagen.translationX += e.rawX - ultimoX
-                    imagen.translationY += e.rawY - ultimoY
-                    ultimoX = e.rawX
-                    ultimoY = e.rawY
-                }
-            }
-            true
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Medida original")
-            .setView(imagen)
-            .setPositiveButton("Cerrar", null)
-            .show()
+        crystal.crystal.taller.DialogoMedidaOriginal.mostrar(this, bocetoOriginalDrawable)
     }
 
     private fun cargarYMostrarBocetoOriginal(path: String) {
+        // La ruta viaja a novaDiseño, que también la muestra (su chip "medida original").
+        bocetoOriginalRuta = path
         val bmp = if (path.isNotBlank()) BitmapFactory.decodeFile(path) else null
         bocetoOriginalDrawable = bmp?.let { BitmapDrawable(resources, it) }
         if (bocetoOriginalDrawable == null) {
