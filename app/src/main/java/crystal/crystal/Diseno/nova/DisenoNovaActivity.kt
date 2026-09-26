@@ -51,6 +51,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         const val EXTRA_DIRECCION = "extra_direccion"
         /** Archivo del boceto de MedidaActivity: la medida original, con todas sus cotas. */
         const val EXTRA_BOCETO_ORIGINAL = "extra_boceto_original"
+        /** Pasos que se guardan para deshacer; los más viejos se van soltando. */
+        private const val MAX_PASOS = 100
         const val RESULT_URI = "resultado_uri_imagen"
         const val RESULT_PAQUETE = "resultado_paquete"
     }
@@ -246,6 +248,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarVista()
         instalarChip3D()
         instalarChipsHerramientas()
+        instalarChipsHistorial()
     }
 
     // ===================================== MENÚ EDITAR =====================================
@@ -1480,6 +1483,109 @@ class DisenoNovaActivity : AppCompatActivity() {
         binding.vistaDiseno.resaltarFranja(indiceFranjaActiva, indiceTramoActivo)
         actualizarInfoSeleccion()
         binding.vistaDiseno.invalidate()
+        // Todo cambio del diseño termina aquí: es el sitio donde se anota el paso para deshacer.
+        registrarPaso()
+    }
+
+    // ==================== DESHACER / REHACER ====================
+    // Pedido del usuario (2026-09-26): volver atrás y adelante, como Ctrl+Z / Ctrl+Y. Se guarda el
+    // diseño entero en cada paso (el paquete, que ya lleva medidas y acabado); una selección no
+    // cambia el diseño y no cuenta como paso. Editando una esquina por lados, cada lado empieza su
+    // propio historial: deshacer nunca trae el diseño de otro lado.
+
+    private val historial = mutableListOf<String>()
+    private var posHistorial = -1
+    private var restaurandoHistorial = false
+    private var chipDeshacer: TextView? = null
+    private var chipRehacer: TextView? = null
+
+    private fun registrarPaso() {
+        if (restaurandoHistorial) return
+        val actual = runCatching { paqueteActualLectura() }.getOrNull() ?: return
+        if (posHistorial in historial.indices && historial[posHistorial] == actual) return
+        while (historial.size > posHistorial + 1) historial.removeAt(historial.lastIndex)
+        historial.add(actual)
+        if (historial.size > MAX_PASOS) historial.removeAt(0)
+        posHistorial = historial.lastIndex
+        refrescarChipsHistorial()
+    }
+
+    private fun reiniciarHistorial() {
+        historial.clear()
+        posHistorial = -1
+        registrarPaso()
+    }
+
+    private fun irAlPaso(indice: Int) {
+        if (indice !in historial.indices || indice == posHistorial) return
+        posHistorial = indice
+        restaurandoHistorial = true
+        try {
+            indiceModuloActivo = -1
+            cargarDesdePaquete(historial[indice])
+            actualizarVista()
+            refrescarPanelCotasSiEstaAbierto()
+        } finally {
+            restaurandoHistorial = false
+        }
+        refrescarChipsHistorial()
+    }
+
+    private fun deshacer() = irAlPaso(posHistorial - 1)
+    private fun rehacer() = irAlPaso(posHistorial + 1)
+
+    private fun refrescarChipsHistorial() {
+        chipDeshacer?.alpha = if (posHistorial > 0) 1f else 0.35f
+        chipRehacer?.alpha = if (posHistorial < historial.lastIndex) 1f else 0.35f
+    }
+
+    /** Los dos chips, en una fila a la derecha, debajo de los de herramientas. */
+    private fun instalarChipsHistorial() {
+        if (chipRehacer != null) return
+        val dp = resources.displayMetrics.density
+        fun chip(texto: String, alTocar: () -> Unit) = TextView(this).apply {
+            setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+            setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+            textSize = 14f
+            text = texto
+            id = View.generateViewId()
+            setOnClickListener { alTocar() }
+            elevation = 8 * dp
+        }
+        val rehacer = chip("↷ rehacer") { rehacer() }
+        binding.root.addView(rehacer, androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            topMargin = (212 * dp).toInt()
+            marginEnd = (12 * dp).toInt()
+        })
+        val deshacer = chip("↶ deshacer") { deshacer() }
+        binding.root.addView(deshacer, androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topToTop = rehacer.id
+            endToStart = rehacer.id
+            marginEnd = (6 * dp).toInt()
+        })
+        chipRehacer = rehacer
+        chipDeshacer = deshacer
+        refrescarChipsHistorial()
+    }
+
+    /** Con teclado físico, Ctrl+Z deshace y Ctrl+Y (o Ctrl+Mayús+Z) rehace. */
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        if (event.isCtrlPressed) {
+            when {
+                keyCode == android.view.KeyEvent.KEYCODE_Z && event.isShiftPressed -> { rehacer(); return true }
+                keyCode == android.view.KeyEvent.KEYCODE_Z -> { deshacer(); return true }
+                keyCode == android.view.KeyEvent.KEYCODE_Y -> { rehacer(); return true }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     // ==================== PANEL COTAS / TRAMOS ====================
@@ -2784,6 +2890,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarVista()
         actualizarChipLado()
         refrescarPanelCotasSiEstaAbierto()
+        // Cada lado con su propio historial: deshacer no puede traer el diseño de otro lado.
+        reiniciarHistorial()
     }
 
     /**
@@ -2834,6 +2942,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarVista()
         actualizarChipLado()
         refrescarPanelCotasSiEstaAbierto()
+        // Mirar la ventana entera o volver a un lado no es una edición: historial nuevo.
+        reiniciarHistorial()
     }
 
     private fun instalarChipLado() {
@@ -2949,6 +3059,10 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     @androidx.annotation.VisibleForTesting
     fun paqueteParaPruebas(): String = paqueteActualLectura()
+
+    fun editarParaPruebas(operacion: (DisenoNova) -> DisenoNova): Boolean = aplicarAlModelo(operacion)
+    fun deshacerParaPruebas() = deshacer()
+    fun rehacerParaPruebas() = rehacer()
 
     /** Pulsa Limpiar, el botón con el que se empieza un diseño a mano. */
     @androidx.annotation.VisibleForTesting

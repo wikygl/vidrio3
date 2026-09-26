@@ -125,8 +125,12 @@
             android:exported="false" />
         <activity
             android:name=".Diseno.nova.DisenoNovaActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard"
             android:exported="false"
             android:label="Diseño Nova" />
+        <!-- novaDiseño: girar la pantalla sin querer rehacía la pantalla y se perdía lo diseñado.
+             Con configChanges la pantalla solo se reacomoda y conserva todo (diseño, lado,
+             herramientas, historial de deshacer). No tiene diseño propio en horizontal. -->
         <activity
             android:name=".Diseno.vitroven.VitroActivity"
             android:exported="false"
