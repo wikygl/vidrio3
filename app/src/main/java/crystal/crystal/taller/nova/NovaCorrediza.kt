@@ -189,7 +189,23 @@ class NovaCorrediza : AppCompatActivity() {
     ) { res ->
         if (res.resultCode == RESULT_OK) {
             val paquete = res.data?.getStringExtra(DisenoNovaActivity.RESULT_PAQUETE) ?: return@registerForActivityResult
-            cargarDesdePaqueteDiseno(paquete)
+            recibirDisenoEditado(paquete)
+        }
+    }
+
+    /**
+     * El diseño que vuelve de novaDiseño. Es ahora EL diseño: su hoja y su medida pasan a ser la
+     * referencia del vano con forma. Sin esto, si la hoja del diseño editado no era la con que se
+     * armó desde el contorno, el siguiente Calcular rehacía el vano desde el contorno
+     * ([rehacerDisenoSiCambioLaHoja]) y lo editado se perdía. Si después el vidriero escribe otra
+     * hoja, sí se rehace, como siempre.
+     */
+    private fun recibirDisenoEditado(paquete: String) {
+        cargarDesdePaqueteDiseno(paquete)
+        if (contornoMedida.isNotBlank()) {
+            hojaDelDiseno = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
+            medidaDelDiseno = (binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f) to
+                (binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f)
         }
     }
 

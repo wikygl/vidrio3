@@ -484,6 +484,11 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 - N-69 ✅ Lo que no se sabe calcular se resuelve con pruebas, caso por caso.
 - **Orden de trabajo dictado**: primero dejar bien Nova con ceil y Nova desigual; después las
   formas, con pruebas.
+- **Paso 1 (2026-09-25): lo diseñado en novaDiseño se conserva al volver a Nova.** Con un vano de
+  contorno, el siguiente Calcular rehacía el diseño desde el contorno si la hoja del diseño editado
+  no era la con que se armó. Ahora lo que vuelve del editor pasa a ser la referencia; el vano solo
+  se rehace si el vidriero escribe otra hoja. Prueba en el celular: `DisenoEditadoSeConservaTest`
+  (el escalonado de 446.3 × 160).
 
 ---
 
