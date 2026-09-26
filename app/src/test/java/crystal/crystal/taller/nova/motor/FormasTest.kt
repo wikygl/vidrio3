@@ -77,6 +77,38 @@ class FormasTest {
         )
     }
 
+    /**
+     * "polis" ventana 2 (archivada por el usuario el 2026-09-26, tal cual): 229.5 × 223.4, bandera,
+     * `f c f`, U-13. Una columna entra desde la pared izquierda (36.4 × 97.2) a media altura del fijo
+     * de la izquierda. Dictado: la U sigue la pared; las horizontales tienen preferencia (G-01) y en la
+     * esquina saliente suman el alto de la U (36.4 + 1.5 = 37.9; 36.1 + 1.5 = 37.6); la cara de la
+     * columna, 97.2; la pared de arriba 17.4 − 1.7 = 15.7 y la de abajo 21.4 − 3 = 18.4.
+     */
+    @Test
+    fun polis_2_la_columna_en_el_costado_del_fijo() {
+        val paquete = "{nova,apa,[229.5,223.4:Tl<229.5>(m<43.7>(f<114.7>f<114.7>);s<136>(f<76.5>c<76.5>f<76.5>);" +
+            "m<43.7>(f<114.7>f<114.7>))V<0/0|229.5/0.6|229.5/223.4|0.3/223.4|0.3/158.3|36.4/158.3|36.4/61.1|0/61.1>]}"
+        val v = DesdeDiseno.ventana(paquete, PerfilU(1f, 1.5f), Puente("tubo 2⅜ x 1", 2.5f, 6f))!!
+        val m = MotorNova.calcular(v)
+
+        assertEquals(
+            listOf("134.3 = 1", "15.7 = 1", "18.4 = 1", "229.2 = 2", "229.5 = 2", "37.6 = 1", "37.9 = 1",
+                "38.2 = 4", "76.9 = 2", "97.2 = 1"),
+            t(m.u)
+        )
+        // Lo demás, como estaba archivado.
+        assertEquals(listOf("229.2 = 1", "229.5 = 1"), t(m.puente))
+        assertEquals(listOf("229.4 = 1"), t(m.riel))
+        assertEquals(listOf("229.4 = 1"), t(m.rielSuperior))
+        assertEquals(listOf("134.4 = 4"), t(m.portafelpa))
+        assertEquals(listOf("38.2 = 2"), t(m.tee))
+        assertEquals(listOf("76.9 = 1"), t(m.hache))
+        assertEquals(
+            listOf("114.1 x 39.4 = 2", "114.2 x 39.4 = 2", "75.5 x 132.5 = 1", "76.4 x 134.3 = 2"),
+            MaterialesNova.textoVidrios(m.vidrios).lines().sorted()
+        )
+    }
+
     @Test
     fun el_escalonado_de_formas_en_aparente() {
         val multiple = Puente("Múltiple", 1.5f, 5f)

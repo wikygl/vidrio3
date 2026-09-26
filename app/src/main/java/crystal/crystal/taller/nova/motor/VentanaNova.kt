@@ -48,7 +48,22 @@ data class Modulo(
      * mide 94.4 y no 133.6. Menos de un descuadre (2.5) no cuenta.
      */
     val recorteArriba: Float = 0f,
-    val recorteAbajo: Float = 0f
+    val recorteAbajo: Float = 0f,
+    /**
+     * Una columna que entra por el costado del módulo, del lado de la pared (dictado el 2026-09-26,
+     * "polis" ventana 2): su U parante sigue la pared alrededor de ella. Null = pared recta.
+     */
+    val columna: Columna? = null
+)
+
+/**
+ * Una columna que entra en un fijo por su costado. [caraArriba] y [caraAbajo] son sus caras
+ * horizontales (desde la pared), [alto] su cara vertical, [paredArriba] y [paredAbajo] la pared que
+ * queda encima y debajo dentro del sistema. En "polis" ventana 2: 36.4, 36.1, 97.2, 17.4 y 21.4.
+ */
+data class Columna(
+    val caraArriba: Float, val caraAbajo: Float, val alto: Float,
+    val paredArriba: Float, val paredAbajo: Float
 )
 
 /**

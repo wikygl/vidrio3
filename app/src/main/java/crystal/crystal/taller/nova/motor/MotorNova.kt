@@ -55,7 +55,9 @@ object MotorNova {
         val tramo: Int, val pos: Int, val global: Int, val corrediza: Boolean,
         val ancho: Float, val anchoVidrio: Float, val u: Float,
         /** Lo que el vano le quita al módulo, arriba y abajo (ver [Modulo.recorteArriba]). */
-        val recorteArriba: Float = 0f, val recorteAbajo: Float = 0f
+        val recorteArriba: Float = 0f, val recorteAbajo: Float = 0f,
+        /** La columna que entra por su costado de la pared (ver [Columna]). */
+        val columna: Columna? = null
     ) {
         val recorte: Float get() = recorteArriba + recorteAbajo
     }
@@ -217,8 +219,29 @@ object MotorNova {
                 // Cada fijo con su alto: el que tiene recorte (una viga, un escalón) es más bajo.
                 // Antes: n piezas de `altoHoja − (u + 0.2)` por tramo.
                 porTramo.forEach { (i, t) ->
-                    listOfNotNull(t.first().takeIf { !it.corrediza }, t.last().takeIf { !it.corrediza })
-                        .forEach { f -> u.add(Pieza(vert[i].altoHoja - f.recorte - (us + 0.2f), 1, Orientacion.VERTICAL)) }
+                    // El primero y el último, cada uno con su lado de pared (un tramo de un solo fijo:
+                    // los dos lados, y la columna solo en el primero).
+                    listOfNotNull(
+                        t.first().takeIf { !it.corrediza }?.let { it to it.columna },
+                        t.last().takeIf { !it.corrediza }?.let { it to (if (t.size > 1) it.columna else null) }
+                    ).forEach { (f, col) ->
+                        val hoja = vert[i].altoHoja - f.recorte
+                        if (col == null) {
+                            u.add(Pieza(hoja - (us + 0.2f), 1, Orientacion.VERTICAL))
+                            return@forEach
+                        }
+                        // Una columna en el costado (dictado el 2026-09-26, "polis" ventana 2): la U
+                        // sigue la pared. Las horizontales tienen preferencia (G-01) y en la esquina
+                        // saliente suman el alto de la U, que si no quedaría vacía (36.4 + 1.5 = 37.9).
+                        // La cara de la columna, su largo (97.2). La pared de arriba va entre el fijo
+                        // corredizo y la horizontal (− u − 0.2, como N-43); la de abajo entre la
+                        // horizontal y la U de fijos (− 2u).
+                        u.add(Pieza(col.caraArriba + us, 1))
+                        u.add(Pieza(col.caraAbajo + us, 1))
+                        u.add(Pieza(col.alto, 1, Orientacion.VERTICAL))
+                        (col.paredArriba - (us + 0.2f)).takeIf { it > 0f }?.let { u.add(Pieza(it, 1, Orientacion.VERTICAL)) }
+                        (col.paredAbajo - 2 * us).takeIf { it > 0f }?.let { u.add(Pieza(it, 1, Orientacion.VERTICAL)) }
+                    }
                 }
                 // La U en la cara horizontal del corte, sobre el fijo (dictado el 2026-09-26): del
                 // largo de su U de fijo. El fijo corredizo solo llega hasta donde empieza el corte.
@@ -448,7 +471,7 @@ object MotorNova {
             t.modulos.forEachIndexed { pi, m ->
                 val anchoVidrio = m.ancho * escala
                 val uMod = if (apa) m.ancho + ajusteLado else anchoVidrio + ajusteLado
-                out.add(M(ti, pi, g++, m.corrediza, m.ancho, anchoVidrio, uMod, m.recorteArriba, m.recorteAbajo))
+                out.add(M(ti, pi, g++, m.corrediza, m.ancho, anchoVidrio, uMod, m.recorteArriba, m.recorteAbajo, m.columna))
             }
         }
         return out

@@ -28,6 +28,29 @@ class PolisEnNovaTest {
             .apply { isAccessible = true }.invoke(o, *args)
 
     @Test
+    fun polis_2_la_columna_en_la_pantalla_de_nova() {
+        // La columna en el costado del fijo: la U sigue la pared (37.9, 37.6, 97.2, 15.7, 18.4).
+        val polis2 = "{nova,apa,[229.5,223.4:Tl<229.5>(m<43.7>(f<114.7>f<114.7>);s<136>(f<76.5>c<76.5>f<76.5>);" +
+            "m<43.7>(f<114.7>f<114.7>))V<0/0|229.5/0.6|229.5/223.4|0.3/223.4|0.3/158.3|36.4/158.3|36.4/61.1|0/61.1>]}"
+        ActivityScenario.launch(NovaCorrediza::class.java).use { sc ->
+            sc.onActivity { a ->
+                val b = campo(a, "binding").get(a) as ActivityNovaCorredizaBinding
+                campo(a, "texto").set(a, "nn")
+                campo(a, "textoModelo").set(a, "nn")
+                campo(a, "tipoNova").set(a, NovaCorrediza.TipoNova.APA)
+                campo(a, "puente").set(a, "tubo 2⅜ x 1"); campo(a, "tubo").set(a, 2.5f)
+                b.etU.setText("1.5"); b.etCruce.setText("0.7")
+                llamar(a, "recibirDisenoEditado", polis2)
+                llamar(a, "calcularDesigual")
+                llamar(a, "aplicarMotor")
+                val u = b.txU.text.toString()
+                listOf("37.9 = 1", "37.6 = 1", "97.2 = 1", "15.7 = 1", "18.4 = 1", "134.3 = 1")
+                    .forEach { assertTrue("$it\n$u", u.lines().any { l -> l.trim() == it }) }
+            }
+        }
+    }
+
+    @Test
     fun polis_en_la_pantalla_de_nova() {
         ActivityScenario.launch(NovaCorrediza::class.java).use { sc ->
             sc.onActivity { a ->

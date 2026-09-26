@@ -144,9 +144,20 @@ object DesdeDiseno {
         // En un vano con forma, lo que el vano le quita a cada módulo (una viga encima, un escalón
         // debajo): el sistema se parte también por módulos (dictado el 2026-09-26, "polis").
         val recortes = if (conForma) HerramientasDiseno.recortesDelSistema(d, indice, puente.anchoParante) else emptyList()
+        // Y una columna que entra por un costado (dictado el 2026-09-26): va en el fijo de ese lado.
+        val (colIzq, colDer) = if (conForma) HerramientasDiseno.cortesLateralesDelSistema(d, indice, puente.anchoParante) else null to null
+        fun columna(c: HerramientasDiseno.CorteLateral?) = c?.let { Columna(it.caraArriba, it.caraAbajo, it.alto, it.paredArriba, it.paredAbajo) }
         val modulos = ajustados.mapIndexed { k, m ->
-            val r = recortes.getOrNull(k) ?: return@mapIndexed m
-            m.copy(recorteArriba = r.first, recorteAbajo = r.second)
+            val r = recortes.getOrNull(k)
+            val col = when (k) {
+                0 -> columna(colIzq)
+                ajustados.lastIndex -> columna(colDer)
+                else -> null
+            }
+            m.copy(
+                recorteArriba = r?.first ?: m.recorteArriba, recorteAbajo = r?.second ?: m.recorteAbajo,
+                columna = col
+            )
         }
         val anchoArriba = if (conForma) HerramientasDiseno.anchoArribaDelSistema(d, indice, puente.anchoParante) else null
         // Paños de mocheta dibujados: los de la primera mocheta del tramo.

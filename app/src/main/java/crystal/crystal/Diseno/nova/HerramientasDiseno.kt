@@ -339,6 +339,50 @@ object HerramientasDiseno {
         return ancho.takeIf { abs(it - t.ancho) > 0.15f }
     }
 
+    /**
+     * Una columna que entra en el sistema por un costado (dictado el 2026-09-26, "polis" ventana 2:
+     * 36.4 × 97.2 desde la pared izquierda, a media altura del fijo). [caraArriba] y [caraAbajo]
+     * son sus caras horizontales, medidas desde la pared; [alto] su cara vertical; [paredArriba] y
+     * [paredAbajo] lo que queda de pared encima y debajo de ella, dentro del sistema.
+     */
+    data class CorteLateral(
+        val caraArriba: Float, val caraAbajo: Float, val alto: Float,
+        val paredArriba: Float, val paredAbajo: Float
+    )
+
+    /**
+     * Las columnas que entran en el sistema del tramo por la izquierda y por la derecha, o null. Una
+     * columna son dos lados casi horizontales del vano dentro de la franja del sistema que salen del
+     * costado del tramo y entran más que un descuadre (2.5).
+     */
+    fun cortesLateralesDelSistema(d: DisenoNova, indiceTramo: Int, anchoParante: Float = 2.5f): Pair<CorteLateral?, CorteLateral?> {
+        val puntos = puntosDelVano(d)
+        val t = d.tramos.getOrNull(indiceTramo) ?: return null to null
+        val iS = t.franjas.indexOfFirst { it.esSistema }
+        if (puntos.size < 3 || iS < 0) return null to null
+        val (techo, piso) = bandaDeFranja(d, indiceTramo, iS) ?: return null to null
+        val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        val fin = inicio + t.ancho
+        fun lado(izquierdo: Boolean): CorteLateral? {
+            val caras = puntos.indices.mapNotNull { i ->
+                val (ax, ay) = puntos[i]
+                val (bx, by) = puntos[(i + 1) % puntos.size]
+                if (abs(by - ay) > 0.5f) return@mapNotNull null
+                val y = (ay + by) / 2f
+                if (y <= techo + 0.5f || y >= piso - 0.5f) return@mapNotNull null
+                val x0 = minOf(ax, bx)
+                val x1 = maxOf(ax, bx)
+                val sale = if (izquierdo) x0 <= inicio + 0.5f && x1 > inicio + DESCUADRE_CM && x1 < fin
+                           else x1 >= fin - 0.5f && x0 < fin - DESCUADRE_CM && x0 > inicio
+                if (sale) y to (x1 - x0) else null
+            }.sortedBy { it.first }
+            if (caras.size != 2) return null
+            val (arriba, abajo) = caras
+            return CorteLateral(arriba.second, abajo.second, abajo.first - arriba.first, arriba.first - techo, piso - abajo.first)
+        }
+        return lado(true) to lado(false)
+    }
+
     /** La franja [indiceFranja] del tramo en y: (techo, piso), desde el dintel. */
     private fun bandaDeFranja(d: DisenoNova, indiceTramo: Int, indiceFranja: Int): Pair<Float, Float>? {
         val alturas = alturasDeFranjas(d, indiceTramo)

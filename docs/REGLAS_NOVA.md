@@ -561,6 +561,21 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   Un corte de hasta 2.5 no cuenta (es descuadre, N-06). Hecho en el motor (`FormasTest`, y
   `PolisEnNovaTest` en el celular).
 
+- N-98 ✅ **Una columna en el costado de un fijo: la U sigue la pared** (dictado el 2026-09-26,
+  "polis" ventana 2: 229.5 × 223.4 en bandera, U-13; una columna de 36.4 × 97.2 entra desde la pared
+  izquierda a media altura del fijo). El fijo sigue siendo uno (su vidrio, el rectángulo, se corta en
+  obra) y su U parante rodea la columna:
+  - **Primero las horizontales** (G-01): las caras de arriba y de abajo de la columna llevan U; en la
+    esquina saliente, donde se encuentran con la vertical de la columna, el espesor de la U quedaría
+    vacío, así que **suman el alto de la U**: 36.4 + 1.5 = `37.9`, 36.1 + 1.5 = `37.6`. Lo mismo en
+    toda esquina saliente.
+  - La cara vertical de la columna, su largo: `97.2`.
+  - La pared que queda encima y debajo de la columna, dentro del sistema: la de arriba va entre el
+    fijo corredizo y la horizontal, `17.4 − (1.5 + 0.2) = 15.7` (como N-43); la de abajo entre la
+    horizontal y la U de fijos, `21.4 − 2 × 1.5 = 18.4`. *(Deducido de N-43 y G-01; confirmar.)*
+
+  Hecho en el motor (`FormasTest`, `PolisEnNovaTest` en el celular).
+
   **Las Referencias y la cadena G<> se identifican desde el diseño** (2026-09-26): "polis" salía
   `mocheta sup: 56.1` y `G<p,r,m,n>`. Con un diseño cargado, el remate de la ventana sale de sus
   tramos (los dos invertidos → `nr`, modelo `i`; tramos distintos → `x`) y la forma es poligonal
