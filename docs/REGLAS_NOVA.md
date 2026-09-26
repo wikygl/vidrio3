@@ -504,6 +504,12 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 
   El alto de cada tramo es el rectángulo donde entra el sistema (N-66); con un descuadre de hasta
   2.5 manda la medida mayor (N-06): el alféizar del recorte mide 109.4 y 108.5 → 109.4.
+- N-96 ✅ **Estrategia de cálculo de las formas: partir en rectángulos** (dictado el 2026-09-26). Un
+  tramo que no es rectángulo se parte por sus franjas hasta que cada trozo lo sea; cada rectángulo
+  se calcula con las reglas que ya existen, identificando sus módulos; al final los materiales que
+  coinciden se suman y los que no, se agrupan, y eso es lo que se muestra. Por ahora solo aparente.
+  En Formas: tramo 1 (102.1 × 77.2), el sistema del tramo 2 (233.7 × 109.4) y su mocheta de abajo
+  (151.7 × 35.1). Todos los datos mostrados se actualizan solos con cada cambio.
 - N-95 ✅ **El descuadre se marca en rojo** (pedido el 2026-09-26): quien mide no siempre es quien
   diseña, y 9 mm no se ven en el dibujo. Todo lado del vano casi horizontal o casi vertical cuyas
   puntas se desvían entre 0.3 y 2.5 cm se resalta en rojo con "descuadre N" (menos de 0.3 es el
