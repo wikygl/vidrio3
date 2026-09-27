@@ -178,5 +178,10 @@ data class VentanaNova(
     /** Perfil que cierra los lados libres (parante o falso puente). */
     val perfilLibre: Float = 2.5f,
     /** Esquinero de las L y C: su parante vertical; null = "ninguno". */
-    val esquinero: Puente? = null
+    val esquinero: Puente? = null,
+    /**
+     * Forma circular (N-01, sección 11 de las reglas): el vano es el círculo (o la elipse) inscrito
+     * en ancho × alto. Los puentes son cuerdas y las U de los bordes, arcos. Ver [Circulo].
+     */
+    val circular: Boolean = false
 )

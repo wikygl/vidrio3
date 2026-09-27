@@ -77,7 +77,8 @@ object DesdeDiseno {
                 else null
             )
         }
-        return VentanaNova(acabado, modelo, lados, u, puente, cruce, esquinero = esquinero)
+        // Circular (N-01): el paquete lleva la marca O<1>.
+        return VentanaNova(acabado, modelo, lados, u, puente, cruce, esquinero = esquinero, circular = paquete.contains("O<1>"))
     }
 
     /** El preestablecido de todo lo que no es aparente normal (N-03), como lo entiende el motor. */

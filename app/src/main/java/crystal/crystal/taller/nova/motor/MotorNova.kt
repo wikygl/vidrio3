@@ -154,7 +154,14 @@ object MotorNova {
         val ms = modulos(v, l)
         val porTramo = ms.groupBy { it.tramo }
         val patronLado = ms.map { if (it.corrediza) 'c' else 'f' }
-        val vert = l.tramos.map { vertical(v, l, it) }
+        val circulo = if (v.circular && l.tramos.size == 1) Circulo(l.anchoCalculo, l.alto) else null
+        // Circular (sección 11): cada mocheta es un segmento; su rectángulo, el que lo contiene, va
+        // de la cuerda del borde de afuera de su puente (el vidrio entero, se corta en obra, N-99).
+        val vert = l.tramos.map { vertical(v, l, it) }.map { vt ->
+            if (circulo == null) vt else vt.copy(mochetas = vt.mochetas.map { m ->
+                m.copy(ancho = circulo.cuerda(if (m.ubicacion == Ubicacion.ARRIBA) m.espacio else l.alto - m.espacio))
+            })
+        }
         fun vDe(m: M) = vert[m.tramo]
 
         // Esquina en ángulo de INA (G-09, N-42): se suma el ancho de la U al ancho del lado y se
@@ -415,8 +422,14 @@ object MotorNova {
             val alto = (if (apa) vDe(f).altoHoja - f.recorte else l.alto) - (us + holgura)
             // Un fijo contra un lado inclinado lleva el vidrio entero, el rectángulo que lo contiene, y
             // se corta en obra (dictado el 2026-09-26, Vna4: 56.5 de ancho, no los 78 del módulo).
+            // En un círculo, el fijo junto a la pared no llega de arriba abajo: su rectángulo es lo más
+            // alto que llega el círculo sobre él (INA 180 × 180: 169.7, no 180).
+            val altoCirculo = circulo?.let { c ->
+                val x0 = ms.takeWhile { it !== f }.sumOf { it.ancho.toDouble() }.toFloat()
+                minOf(alto, c.altoEntre(x0, x0 + f.ancho) - (us + holgura))
+            } ?: alto
             val u = f.inclinado?.let { f.u - it.faltaContenido } ?: f.u
-            vidrios.add(Vidrio(u - descuento, alto))
+            vidrios.add(Vidrio(u - descuento, altoCirculo))
         }
 
         // ---------- Vidrios corredizos (N-58, N-59) ----------
@@ -458,6 +471,9 @@ object MotorNova {
                 }
             }
         }
+
+        // ---------- Forma circular (N-01, sección 11) ----------
+        if (circulo != null) circular(v, l, circulo, ms, vert[0], u, puente, riel, rielSup)
 
         var total = MaterialesNova(
             u = u, puente = puente, riel = riel, rielSuperior = rielSup, nombreRielSuperior = nombreRielSup,
@@ -593,6 +609,69 @@ object MotorNova {
         }
         if (abierta) out.add(actual)
         return out
+    }
+
+    /**
+     * Forma circular (N-01; sección 11 de las reglas, primer dictado N-65). Hache, portafelpa, tope y
+     * los vidrios de fijos y corredizas siguen la lógica rectangular: el ancho por ceil vale para el
+     * vidrio, que va entero y se corta en obra. Lo que cambia (180 × 180, hoja 128.6, tubo):
+     *
+     * - Puente: mocheta + puente es una flecha y la cuerda en esa flecha es el puente (126).
+     * - Riel y fijo corredizo: dependen del puente, su misma medida − 0.06 (N-51).
+     * - INA: la U es el perímetro, = 1 (565.5).
+     * - APA, U de mocheta: el arco entre donde empiezan y terminan los puentes, por el borde de afuera
+     *   del puente (132.2); con tubo, además la U recta sobre el puente, como en la rectangular.
+     * - APA, U parante: el arco entre el puente inferior y el superior (143.2), − (u + 0.2) como N-43.
+     * - APA, U de fijo: desde donde el fijo empieza contra la pared, sobre el puente de abajo
+     *   (60.5 − 27 = 33.4).
+     */
+    private fun circular(
+        v: VentanaNova, l: LadoNova, c: Circulo, ms: List<M>, vt: Vertical,
+        u: MutableList<Pieza>, puente: MutableList<Pieza>, riel: MutableList<Pieza>, rielSup: MutableList<Pieza>
+    ) {
+        val pte = l.tramos[0].puente ?: v.puente
+        val h = pte.altura
+        val us = v.u.alto
+        val sup = vt.mochetas.firstOrNull { it.ubicacion == Ubicacion.ARRIBA }
+        val inf = vt.mochetas.firstOrNull { it.ubicacion == Ubicacion.ABAJO }
+        // Los bordes del sistema, desde arriba: donde terminan las flechas.
+        val yArriba = sup?.let { it.espacio + h } ?: 0f
+        val yAbajo = inf?.let { l.alto - (it.espacio + h) } ?: l.alto
+
+        puente.clear()
+        sup?.let { puente.add(Pieza(c.cuerda(yArriba), 1)) }
+        inf?.let { puente.add(Pieza(c.cuerda(yAbajo), 1)) }
+        riel.replaceAll { it.copy(medida = c.cuerda(yAbajo) - 0.06f) }
+        rielSup.replaceAll { it.copy(medida = c.cuerda(yArriba) - 0.06f) }
+
+        u.clear()
+        if (v.acabado != Acabado.APA) {
+            u.add(Pieza(c.perimetro(), 1))
+            return
+        }
+        // U de fijo: lo que queda del fijo dentro del círculo sobre el puente de abajo.
+        val fuera = c.fueraEn(yAbajo)
+        val inicios = ms.runningFold(0f) { x, m -> x + m.ancho }
+        rachasDeFijos(ms, cruzaParantes = false).forEach { racha ->
+            val x0 = inicios[racha.first().global]
+            val x1 = inicios[racha.last().global + 1]
+            val corte = (fuera - x0).coerceAtLeast(0f) + (x1 - (l.anchoCalculo - fuera)).coerceAtLeast(0f)
+            u.add(Pieza(racha.sumOf { it.u.toDouble() }.toFloat() - corte, 1))
+        }
+        // U de mocheta: el arco por el borde de afuera del puente; con tubo, la recta sobre él.
+        val recta = !pte.esMultipleOGorrito
+        sup?.let {
+            u.add(Pieza(c.arcoArriba(it.espacio), 1))
+            if (recta) u.add(Pieza(c.cuerda(it.espacio), 1))
+        }
+        inf?.let {
+            u.add(Pieza(c.arcoAbajo(l.alto - it.espacio), 1))
+            if (recta) u.add(Pieza(c.cuerda(l.alto - it.espacio), 1))
+        }
+        // U parante: el arco de cada costado con fijo, entre los dos puentes.
+        val lado = c.arcoLado(yArriba, yAbajo) - (us + 0.2f)
+        val n = (if (!ms.first().corrediza) 1 else 0) + (if (!ms.last().corrediza) 1 else 0)
+        if (n > 0) u.add(Pieza(lado, n, Orientacion.VERTICAL))
     }
 
     /** Rachas de fijos seguidos. En INA atraviesan los parantes (N-42); en APA no. */

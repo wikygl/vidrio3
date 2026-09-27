@@ -472,6 +472,28 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   (sale algo más larga y se recorta en obra), o mejor calcularla geométricamente, lo que servirá
   también para circular y compuesto.
 
+**En el motor (2026-09-26, `Circulo.kt`, `CircularTest`)**, con el ejemplo de 180 × 180 APA en
+bandera con tubo (hoja 5/7 = 128.6, mochetas 23.2, flecha 25.7):
+
+| Pieza | Cálculo | 180 × 180 |
+|---|---|---|
+| Puente | cuerda en la flecha (mocheta + puente) | 125.9 = 2 |
+| Riel y fijo corredizo | puente − 0.06 (N-51) | 125.9 |
+| U de fijo | el fijo desde donde empieza contra la pared, sobre el puente de abajo | 60.5 − 27 = 33.4 = 2 |
+| U de mocheta | el arco entre los extremos del puente, por su borde de afuera | 132.2 = 2 |
+| U recta de mocheta (solo con tubo) | la cuerda sobre el puente, como la rectangular | 120.6 = 2 |
+| U parante | el arco entre los dos puentes − (u + 0.2) como N-43 | 143.2 − 1.2 = 142 = 2 |
+| Hache, portafelpa, tope, vidrios corredizos | sin cambio | 60.4 · 126.9 = 4 |
+| Vidrio de fijo | ancho por ceil; alto, lo que el círculo le deja (entero, se corta en obra) | 59.9 x 127.3 |
+| Vidrio de mocheta | el rectángulo que contiene el segmento (N-99) | 120.1 x 21.9 = 2 |
+| INA | la U es el perímetro | 565.4 = 1 |
+
+Sin confirmar (tomado por analogía): el arco de mocheta por el borde de afuera del puente (por el
+de adentro sería 139.5), la U recta con tubo, el − (u + 0.2) de la U parante, el vidrio de mocheta
+por su rectángulo, y ancho ≠ alto como elipse (el dibujo usa un círculo del lado menor). Solo un
+tramo; con varios tramos sigue la lógica rectangular. Pendientes: tee geométrica y "con 5
+divisiones, la U del vidrio del centro va con ceil".
+
 ## 12. Forma poligonal (se desarrolla con pruebas)
 
 - N-66 ✅ En Nova **no existe jamba** (es de ventanas estructuradas). Primero se evalúa la forma:

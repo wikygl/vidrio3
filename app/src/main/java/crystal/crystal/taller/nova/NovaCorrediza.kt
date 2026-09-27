@@ -703,7 +703,8 @@ class NovaCorrediza : AppCompatActivity() {
         val esquinero = opcionEsquinero()?.let { crystal.crystal.taller.nova.motor.Puente(it.text, it.valor, it.valorEsquina) }
         return crystal.crystal.taller.nova.motor.VentanaAutomatica.ventana(crystal.crystal.taller.nova.motor.VentanaAutomatica.Entrada(
             acabado = if (tipoNova == TipoNova.APA) crystal.crystal.taller.nova.motor.Acabado.APA else crystal.crystal.taller.nova.motor.Acabado.INA,
-            modelo = modeloMotor(),
+            // Circular (sección 11): en automático el modelo pasa a bandera.
+            modelo = if (textoModelo == "nci") crystal.crystal.taller.nova.motor.ModeloMocheta.BANDERA else modeloMotor(),
             modulacion = if (textoModelo == "nci" || textoModelo.isBlank()) "nn" else textoModelo,
             lados = lados.map { crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(it.ancho, it.alto, it.hoja, it.divisManual) },
             u = perfilUMotor(), puente = puenteMotor(), cruce = cruce(),
@@ -712,7 +713,7 @@ class NovaCorrediza : AppCompatActivity() {
             libresVerticales = ladosVaciosVerticales(), perfilLibre = valorParanteVacio(),
             esquinero = esquinero,
             repartoManual = NovaCalculos.repartoManual, corredizasPorTramoNfc = corredizasPorTramo
-        ))
+        )).copy(circular = textoModelo == "nci")
     }
 
     private fun modeloMotor() = when (modeloRemate) {
