@@ -263,4 +263,19 @@ class DisenoNovaModeloTest {
         assertEquals(68.53f, geo[0].contenido, 0.05f)
         assertEquals(208.6f, e.tramos[0].franjas[0].modulos.sumOf { it.ancho!!.toDouble() }.toFloat(), 0.05f)
     }
+
+    @Test
+    fun al_editar_otro_modulo_el_ya_escrito_conserva_su_ancho() {
+        // Pedido del usuario (2026-09-26): primero el fijo de la derecha a 50, después el del medio
+        // a 60. El de la derecha sigue en 50; solo el no editado (el fijo inclinado) absorbe.
+        val d = trapecioSinAlturas().conAnchosRepartidos()
+        val e = HerramientasDiseno.conAnchoDeModuloEnElVano(d, 0, 0, 2, 50f)!!
+        val f = HerramientasDiseno.conAnchoDeModuloEnElVano(e, 0, 0, 1, 60f, editados = setOf(2))!!
+        val geo = HerramientasDiseno.geometriaDeModulos(f, 0, 0)
+        assertEquals(50f, geo[2].contenido, 0.05f)
+        assertEquals(60f, geo[1].contenido, 0.05f)
+        assertEquals(187.06f - 110f, geo[0].contenido, 0.05f)
+        // Si ya no queda sitio para el que falta, no se aplica.
+        assertEquals(null, HerramientasDiseno.conAnchoDeModuloEnElVano(e, 0, 0, 1, 140f, editados = setOf(2)))
+    }
 }

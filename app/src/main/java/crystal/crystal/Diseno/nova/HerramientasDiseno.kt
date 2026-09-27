@@ -414,16 +414,28 @@ object HerramientasDiseno {
      * Null si el ancho no entra en el hueco.
      */
     fun conAnchoDeModuloEnElVano(
-        d: DisenoNova, indiceTramo: Int, indiceFranja: Int, indiceModulo: Int, dentro: Float, anchoParante: Float = 2.5f
+        d: DisenoNova, indiceTramo: Int, indiceFranja: Int, indiceModulo: Int, dentro: Float, anchoParante: Float = 2.5f,
+        /**
+         * Los módulos que el vidriero ya escribió (dictado el 2026-09-26): conservan su ancho y solo
+         * los que aún no se editaron absorben el cambio. Si no queda ninguno libre, se reparten todos.
+         */
+        editados: Set<Int> = emptySet()
     ): DisenoNova? {
         val (hueco, fuera) = huecoDeFranja(d, indiceTramo, indiceFranja, anchoParante) ?: return null
         val n = fuera.size
         if (indiceModulo !in 0 until n || dentro <= 0f || dentro >= hueco && n > 1) return null
-        val otros = if (n > 1) (hueco - dentro) / (n - 1) else 0f
+        val actuales = geometriaDeModulos(d, indiceTramo, indiceFranja, anchoParante).map { it.contenido }
+        val otros = (0 until n).filter { it != indiceModulo }
+        val libres = otros.filter { it !in editados }.ifEmpty { otros }
+        val quietos = otros.filter { it !in libres }
+        val resto = hueco - dentro - quietos.sumOf { actuales[it].toDouble() }.toFloat()
+        if (libres.isNotEmpty() && resto <= 0f) return null
+        val cadaLibre = if (libres.isNotEmpty()) resto / libres.size else 0f
         val t = d.tramos[indiceTramo]
         val fr = t.franjas[indiceFranja]
         val nuevaFranja = fr.copy(modulos = fr.modulos.mapIndexed { j, m ->
-            m.copy(ancho = (if (j == indiceModulo) dentro else otros) + fuera[j])
+            val adentro = when (j) { indiceModulo -> dentro; in libres -> cadaLibre; else -> actuales[j] }
+            m.copy(ancho = adentro + fuera[j])
         })
         return d.copy(tramos = d.tramos.mapIndexed { i, tr ->
             if (i != indiceTramo) tr else tr.copy(franjas = tr.franjas.mapIndexed { k, f -> if (k == indiceFranja) nuevaFranja else f })

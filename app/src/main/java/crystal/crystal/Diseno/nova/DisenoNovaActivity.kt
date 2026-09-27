@@ -83,6 +83,19 @@ class DisenoNovaActivity : AppCompatActivity() {
     private var indiceModuloActivo: Int = -1
     private val anchoParanteCm = 2.5f
     private val tramosBlockeados = mutableListOf<Boolean>()
+    /**
+     * Los módulos cuyo ancho escribió el vidriero, por (tramo, franja), con cuántos tramos y módulos
+     * había al escribirlos: si la franja cambia de módulos, lo anotado ya no vale. Al editar otro
+     * módulo, estos conservan su medida y solo los no editados absorben el cambio.
+     */
+    private val modulosEditados = mutableMapOf<Pair<Int, Int>, Triple<Int, Int, Set<Int>>>()
+
+    private fun editadosDe(tramo: Int, franja: Int, nModulos: Int, nTramos: Int): Set<Int> =
+        modulosEditados[tramo to franja]?.takeIf { it.first == nTramos && it.second == nModulos }?.third ?: emptySet()
+
+    private fun marcarEditado(tramo: Int, franja: Int, modulo: Int, nModulos: Int, nTramos: Int) {
+        modulosEditados[tramo to franja] = Triple(nTramos, nModulos, editadosDe(tramo, franja, nModulos, nTramos) + modulo)
+    }
 
     // ----------------- Binding -----------------
     private lateinit var binding: ActivityDisenoNovaBinding
@@ -891,28 +904,43 @@ class DisenoNovaActivity : AppCompatActivity() {
                     ).show()
                     return@setPositiveButton
                 }
+                // Los ya escritos se quedan; solo los no editados absorben el cambio.
+                val editados = editadosDe(tramoIdx, indiceFranjaActiva, mods.size, bloques.size)
                 if (enVano != null && modelo != null) {
                     val nuevo = HerramientasDiseno.conAnchoDeModuloEnElVano(
-                        modelo, tramoIdx, indiceFranjaActiva, nMod, escrito, anchoParanteCm)
-                    if (nuevo != null) {
-                        indiceModuloActivo = -1
-                        binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
-                        aplicarAlModelo { nuevo }
+                        modelo, tramoIdx, indiceFranjaActiva, nMod, escrito, anchoParanteCm, editados)
+                    if (nuevo == null) {
+                        Toast.makeText(this, "No entra: los módulos ya escritos ocupan el resto de la franja.", Toast.LENGTH_LONG).show()
                         return@setPositiveButton
                     }
+                    marcarEditado(tramoIdx, indiceFranjaActiva, nMod, mods.size, bloques.size)
+                    indiceModuloActivo = -1
+                    binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
+                    aplicarAlModelo { nuevo }
+                    return@setPositiveButton
                 }
                 // Lo escrito es lo que mide el vidrio; en el paquete los módulos se anotan sobre el
                 // ancho del tramo, así que se devuelve a esa escala.
                 val nuevoAncho = escrito / encogido
-                // Módulo editado recibe nuevoAncho; el resto se reparte equitativamente
+                // Módulo editado recibe nuevoAncho; los ya escritos se quedan y el resto se reparte
+                // equitativamente entre los no editados.
                 val nMods = mods.size
-                val anchoRestante = (tramoAncho - nuevoAncho).coerceAtLeast(0f)
-                val anchoOtros = if (nMods > 1) anchoRestante / (nMods - 1) else 0f
+                val anchoDe = { i: Int -> mods[i].medida ?: (tramoAncho / nMods.coerceAtLeast(1)) }
+                val otros = (0 until nMods).filter { it != nMod }
+                val libres = otros.filter { it !in editados }.ifEmpty { otros }
+                val quietos = otros.filter { it !in libres }
+                val anchoRestante = tramoAncho - nuevoAncho - quietos.sumOf { anchoDe(it).toDouble() }.toFloat()
+                if (libres.isNotEmpty() && anchoRestante <= 0f) {
+                    Toast.makeText(this, "No entra: los módulos ya escritos ocupan el resto de la franja.", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                val anchoOtros = if (libres.isNotEmpty()) anchoRestante / libres.size else 0f
+                marcarEditado(tramoIdx, indiceFranjaActiva, nMod, mods.size, bloques.size)
 
                 val newModStr = buildString {
                     mods.forEachIndexed { idx, mod ->
                         append(if (mod.tipo == 'c') "c" else "f")
-                        val w = if (idx == nMod) nuevoAncho else anchoOtros
+                        val w = if (idx == nMod) nuevoAncho else if (idx in libres) anchoOtros else anchoDe(idx)
                         if (w > 0.05f) append("<${df1(w)}>")
                     }
                 }.ifEmpty { "f" }
@@ -2644,6 +2672,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         indiceModuloActivo = -1
         corteVerticalCm = null
         tramosBlockeados.clear()
+        modulosEditados.clear()
         cerrarFlotanteModulos()
         cargarDesdePaquete(paqueteEnBlanco())
         actualizarVista()
