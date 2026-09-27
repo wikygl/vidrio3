@@ -64,6 +64,12 @@ object ColaCalculadoras {
          * calculadora necesita sus cuerpos y lo que lleva cada uno para armarlo igual.
          */
         val disenoRopero: String = "",
+        /**
+         * La forma del vano cuando no la dicen el ancho, el alto ni el contorno: "circular" si la
+         * medida es un círculo o una elipse (el círculo de Medidas, con su diámetro de ancho y de
+         * alto). Vacío en las demás.
+         */
+        val forma: String = "",
         val estado: EstadoCola = EstadoCola.PENDIENTE
 
     ) : java.io.Serializable

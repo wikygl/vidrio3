@@ -3031,6 +3031,14 @@ class SketchMedidasView @JvmOverloads constructor(
         return lados.filter { it.cm >= 0.5f }
     }
 
+    /** El contorno de la elipse de [ancho] × [alto] (Ramanujan); con los dos iguales, π × diámetro. */
+    private fun perimetroElipse(ancho: Float, alto: Float): Float {
+        val a = ancho / 2.0
+        val b = alto / 2.0
+        val h = ((a - b) * (a - b)) / ((a + b) * (a + b))
+        return (Math.PI * (a + b) * (1 + 3 * h / (10 + kotlin.math.sqrt(4 - 3 * h)))).toFloat()
+    }
+
     private fun ladosDeShape(shape: Element.Shape, index: Int, figura: Int): List<LadoMedido> {
         // Las cotas de alto son medidas, no piezas; la cota total de la gradería tampoco se corta.
         if (shape.cotaHint in setOf(VENTANA_ALTO, VENTANA_ALTO_ESQUINA, "GRADA_TOTAL_COTA")) return emptyList()
@@ -3060,7 +3068,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 listOf(lado(izq, der), lado(der, punta), lado(punta, izq))
             }
             // Del círculo se corta su contorno: el desarrollo de la circunferencia.
-            Tool.CIRCLE -> listOf(LadoMedido(shape.diameterCm * Math.PI.toFloat(), nombre))
+            Tool.CIRCLE -> listOf(LadoMedido(perimetroElipse(shape.widthCm, shape.heightCm), nombre))
             Tool.LINE, Tool.ORTHO_LINE -> listOf(LadoMedido(shape.lengthCm, nombre))
             // Del arco se corta su desarrollo.
             Tool.ARCO -> listOf(LadoMedido(medidasDelArco(shape)?.desarrollo ?: shape.lengthCm, nombre))
@@ -5764,6 +5772,16 @@ class SketchMedidasView @JvmOverloads constructor(
         val vale = lados.size >= 2 || (lados.size == 1 && lados[0].esCurva)
         return if (vale) EsquinaMedida(lados, angulos) else null
 
+    }
+
+    /**
+     * ¿La figura principal del boceto es un círculo (o una elipse)? Es la más grande; un círculo no
+     * tiene contorno de puntos, así que sin esto llegaba a la calculadora como un rectángulo.
+     */
+    fun esCircularPrincipal(): Boolean {
+        fun area(e: Element): Float = boundsForElement(e).let { it.width() * it.height() }
+        val mayor = elementos.filter { it is Element.Shape || it is Element.Composite }.maxByOrNull { area(it) }
+        return (mayor as? Element.Shape)?.tool == Tool.CIRCLE
     }
 
     fun contornoPrincipalEnCm(): List<Pair<Float, Float>>? {
@@ -8483,8 +8501,12 @@ class SketchMedidasView @JvmOverloads constructor(
                     pxToCm(alturaTrianguloPx(shape)), collectHits
                 )
             }
+            // Diámetro de ancho y diámetro de alto (pedido del usuario, 2026-09-27): casi nunca es un
+            // círculo perfecto, y con los dos se forma la elipse. El primero que se escribe en un
+            // círculo perfecto lo sigue siendo; el otro lo vuelve elipse.
             Tool.CIRCLE -> {
-                drawHorizontalCota(canvas, index, CotaType.DIAMETER, shape.rect.left, shape.rect.right, shape.rect.centerY(), shape.diameterCm, collectHits)
+                drawHorizontalCota(canvas, index, CotaType.WIDTH, shape.rect.left, shape.rect.right, shape.rect.centerY(), shape.widthCm, collectHits)
+                drawVerticalCota(canvas, index, CotaType.HEIGHT, shape.rect.centerX(), shape.rect.top, shape.rect.bottom, shape.heightCm, collectHits)
             }
             Tool.ARCO -> drawCotasArco(canvas, index, shape, collectHits)
             Tool.LINE, Tool.ORTHO_LINE -> {
@@ -11028,14 +11050,14 @@ class SketchMedidasView @JvmOverloads constructor(
                     return
                 }
                 val factor = factorEstirado(shape.rect.width(), valueCm)
-                val vertical = if (shape.tool == Tool.CIRCLE) factor else 1f
+                // Un círculo perfecto sigue siéndolo; una elipse solo cambia su ancho.
+                val perfecto = shape.tool == Tool.CIRCLE && kotlin.math.abs(shape.widthCm - shape.heightCm) < 0.05f
+                val vertical = if (perfecto) factor else 1f
                 estirarShape(shape, factor, vertical, PointF(shape.rect.left, shape.rect.top))
                 actualizarShapeDesdePuntos(shape)
                 shape.widthCm = valueCm
-                if (shape.tool == Tool.CIRCLE) {
-                    shape.diameterCm = valueCm
-                    shape.heightCm = valueCm
-                }
+                if (perfecto) shape.heightCm = valueCm
+                if (shape.tool == Tool.CIRCLE) shape.diameterCm = maxOf(shape.widthCm, shape.heightCm)
             }
             CotaType.HEIGHT -> {
                 if (shape.tool == Tool.TRIANGLE) {
@@ -11046,6 +11068,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 estirarShape(shape, 1f, factor, PointF(shape.rect.left, shape.rect.top))
                 actualizarShapeDesdePuntos(shape)
                 shape.heightCm = valueCm
+                if (shape.tool == Tool.CIRCLE) shape.diameterCm = maxOf(shape.widthCm, shape.heightCm)
             }
             // Cada lado se estira SOBRE SÍ MISMO: la medida escrita es la del lado, con la
             // inclinación que tenga. Un lado inclinado mide más que la separación entre esquinas, y

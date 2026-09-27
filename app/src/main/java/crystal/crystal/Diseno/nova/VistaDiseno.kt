@@ -354,7 +354,7 @@ class VistaDiseno @JvmOverloads constructor(
         // Un vano con forma (silueta, escalón, inclinado): el SVG manual no la recorta.
         vanoConForma = contornoVanoCm.size >= 3 ||
             runCatching { DisenoNova.desdePaquete(paqueteSeguro)?.esIrregular == true }.getOrDefault(false)
-        val franjas = parsearModeloConAlturas(RE_VANO_PAQUETE.replace(modeloCrudo, ""))
+        val franjas = parsearModeloConAlturas(formaDentroDelSistema(RE_VANO_PAQUETE.replace(modeloCrudo, "")))
         if (this.mochetaLateralCm <= 0f && mochetaLDesdeModeloCm > 0f) {
             this.mochetaLateralCm = mochetaLDesdeModeloCm
         }
@@ -1535,14 +1535,17 @@ class VistaDiseno @JvmOverloads constructor(
     ) {
         val ancho = (x1 - x0).coerceAtLeast(1f)
         val alto = (y1 - y0).coerceAtLeast(1f)
-        val diametro = min(ancho, alto)
+        // Elipse de ancho × alto (pedido del usuario, 2026-09-27): casi nunca es un círculo perfecto,
+        // y el cálculo ya la trata así (motor/Circulo.kt). Antes, un círculo del lado menor.
+        val diametro = ancho
         val cx = (x0 + x1) * 0.5f
         val cy = (y0 + y1) * 0.5f
-        val r = (diametro * 0.5f).coerceAtLeast(1f)
-        val left = cx - r
-        val right = cx + r
-        val top = cy - r
-        val bottom = cy + r
+        val r = (ancho * 0.5f).coerceAtLeast(1f)
+        val ry = (alto * 0.5f).coerceAtLeast(1f)
+        val left = x0
+        val right = x1
+        val top = y0
+        val bottom = y1
 
         val pathCirculo = Path().apply { addOval(RectF(left, top, right, bottom), Path.Direction.CW) }
 
@@ -1593,7 +1596,7 @@ class VistaDiseno @JvmOverloads constructor(
         fun yRadioEnX(x: Float): Float {
             val dx = ((x - cx) / r).coerceIn(-1f, 1f)
             val inside = (1f - (dx * dx)).coerceAtLeast(0f)
-            return r * sqrt(inside)
+            return ry * sqrt(inside)
         }
 
         val yTopBase = top + anchoMarcoPx * 0.5f
@@ -1621,10 +1624,23 @@ class VistaDiseno @JvmOverloads constructor(
         }
 
         rangosFranjaY.clear()
-
         rangosFranjaPorTramo.clear()
         divisionesDeFranja.clear()
-        rangosFranjaY.add(Pair(top, bottom))
+        // Cada franja con su banda y sus módulos, para poder tocarlos y editarlos (pedido del usuario,
+        // 2026-09-27): antes había una sola banda y en novaDiseño no se seleccionaba nada.
+        val idxSis = franjasAbajoArriba.indexOfFirst { it.tipo == TipoFranja.SISTEMA }
+        if (idxSis < 0 || franjasAbajoArriba.size <= 1) rangosFranjaY.add(Pair(top, bottom))
+        else franjasAbajoArriba.forEachIndexed { k, f ->
+            val banda = when {
+                k < idxSis -> yPanelBottom to bottom
+                k > idxSis -> top to yPanelTop
+                else -> yPanelTop to yPanelBottom
+            }
+            rangosFranjaY.add(banda)
+            registrarFranjaDeTramo(0, banda.first, banda.second)
+            val nK = f.modulos.size.coerceAtLeast(1)
+            divisionesDeFranja[0 to k] = FloatArray(nK + 1) { left + it * (right - left) / nK }
+        }
         ultimaVentanaX0 = left
         ultimaVentanaX1 = right
 
@@ -1764,6 +1780,21 @@ class VistaDiseno @JvmOverloads constructor(
                     val dy = yRadioEnX(xPar)
                     canvas.drawLine(xPar, cy - dy, xPar, cy + dy, pLinea)
                 }
+            }
+        }
+        // La franja y el módulo elegidos, recortados a la elipse como en los otros dibujos (pedido
+        // del usuario, 2026-09-27): sin esto, en nci no se veía qué se había seleccionado.
+        rangosFranjaY.getOrNull(indiceFranjaResaltada)?.let { (yTopR, yBottomR) ->
+            canvas.drawRect(RectF(left, yTopR, right, yBottomR), pResaltaRelleno)
+            canvas.drawRect(RectF(left, yTopR, right, yBottomR), pResaltaBorde)
+            val nR = if (modo == ModoEnsamble.APA) franjasAbajoArriba.getOrNull(indiceFranjaResaltada)?.modulos?.size ?: 0
+                     else sistemaModulos.size
+            if (indiceModuloResaltado in 0 until nR) {
+                val xs = divisionesDeFranja[0 to indiceFranjaResaltada]?.takeIf { it.size == nR + 1 }
+                    ?: FloatArray(nR + 1) { left + it * (right - left) / nR }
+                val rM = RectF(xs[indiceModuloResaltado], yTopR, xs[indiceModuloResaltado + 1], yBottomR)
+                canvas.drawRect(rM, pResaltaModuloRelleno)
+                canvas.drawRect(rM, pResaltaModuloBorde)
             }
         }
         canvas.restore()
@@ -4191,6 +4222,9 @@ class VistaDiseno @JvmOverloads constructor(
     /** La silueta del vano que quedó puesta, en cm; vacía si el vano es el rectángulo. */
     fun contornoVanoParaPruebas(): List<Pair<Float, Float>> = contornoVanoCm
 
+    /** ¿El vano se está dibujando circular (o elíptico)? */
+    fun circularParaPruebas(): Boolean = modoCircular
+
     fun diagnosticoParaPruebas(): String
  = "segmentos=${segmentosNs.size} franjas=${franjasAbajoArriba.size} modo=$modo"
 
@@ -4348,6 +4382,42 @@ class VistaDiseno @JvmOverloads constructor(
         private val RE_CONTORNO_TRAMO = Regex("""[lL]\s*<[^>]*>""")
         /** El contorno del vano: `V<x/y|x/y|…>`, en centímetros. */
         private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
+        /** El círculo (`O<1>`) o el arco (`U<…>`), escritos donde sea del cuerpo. */
+        private val RE_FORMA = Regex("""(?<![A-Za-z])[uUoO]<[^>]*>""")
+        /** La cabeza de la franja de sistema: `s(` o `s<alto>(`. */
+        private val RE_CABEZA_SISTEMA = Regex("""(?<![A-Za-z])[sS](?:<[^>]*>)?\(""")
+    }
+
+    /**
+     * Mete en la franja de sistema el círculo o el arco que vengan sueltos, que es donde los busca
+     * el dibujo. La pantalla de diseño los guarda como etiquetas de toda la ventana, al final del
+     * paquete; sin esto, al limpiar o cambiar una medida el vano volvía rectángulo (pedido del
+     * usuario, 2026-09-27).
+     */
+    private fun formaDentroDelSistema(cuerpo: String): String {
+        val sueltas = RE_FORMA.findAll(cuerpo).filter { m ->
+            val antes = cuerpo.substring(0, m.range.first)
+            antes.count { it == '(' } == antes.count { it == ')' }
+        }.toList()
+        if (sueltas.isEmpty()) return cuerpo
+        var resto = cuerpo
+        sueltas.asReversed().forEach { resto = resto.removeRange(it.range) }
+        val cabeza = RE_CABEZA_SISTEMA.find(resto) ?: return cuerpo
+        // El paréntesis que cierra el sistema.
+        var nivel = 0
+        var cierre = -1
+        for (j in cabeza.range.last until resto.length) {
+            when (resto[j]) {
+                '(' -> nivel++
+                ')' -> { nivel--; if (nivel == 0) { cierre = j; break } }
+            }
+        }
+        if (cierre < 0) return cuerpo
+        val dentro = resto.substring(cabeza.range.last + 1, cierre)
+        val nuevas = sueltas.map { it.value }
+            .filter { tag -> RE_FORMA.findAll(dentro).none { it.value.first().equals(tag.first(), ignoreCase = true) } }
+            .joinToString("")
+        return resto.substring(0, cierre) + nuevas + resto.substring(cierre)
     }
 }
 

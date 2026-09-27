@@ -4336,6 +4336,8 @@ class NovaCorrediza : AppCompatActivity() {
         // La PRIMERA medida no pasa por el navegador: sus datos llegan en el intent. El contorno
         // no viaja ahí, así que se aplica aquí o el vano escalonado entraría como un rectángulo.
         val actual = ColaCalculadoras.cola(this).getOrNull(ColaCalculadoras.indice(this))
+        // Un círculo (o una elipse) de Medidas entra como forma circular (sección 11).
+        if (actual != null && aplicarFormaDeMedida(actual.forma)) return
         if (actual != null && cargarEsquinaDeMedida(actual.esquina, actual.contornosLados, actual.parantesLados)) return
         if (actual != null && cargarDisenoDelContorno(actual.contorno)) {
             Toast.makeText(
@@ -4509,6 +4511,7 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etAncho.requestFocus()
         // Una ventana de esquina trae sus lados: se arma su geometría en vez de un vano plano.
         if (cargarEsquinaDeMedida(item.esquina, item.contornosLados, item.parantesLados)) return
+        if (aplicarFormaDeMedida(item.forma)) return
         val escalonada = cargarDisenoDelContorno(item.contorno)
         Toast.makeText(
             this,
@@ -4800,6 +4803,20 @@ class NovaCorrediza : AppCompatActivity() {
             partes.add("hay descuadre: se tomó la medida MAYOR de cada lado, revise el gráfico")
         }
         Toast.makeText(this, "Ventana de esquina ${partes.joinToString(". ")}", Toast.LENGTH_LONG).show()
+    }
+
+    /**
+     * La forma que trae la medida de Medidas: un círculo o una elipse pone la forma circular, como
+     * elegirla en el diálogo; cualquier otra medida la quita. Devuelve true si quedó circular.
+     */
+    private fun aplicarFormaDeMedida(forma: String): Boolean {
+        if (forma == "circular") {
+            seleccionarModelo("circular", R.drawable.novaci, "nci")
+            Toast.makeText(this, "Vano circular: revisa el gráfico y calcula", Toast.LENGTH_SHORT).show()
+            return true
+        }
+        salirDeCircular()
+        return false
     }
 
     private fun cargarDisenoDelContorno(contorno: String): Boolean {

@@ -38,6 +38,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         private const val RESERVA_MANDO_DP = 52f
         /** La silueta del vano dentro del paquete: `V<x/y|x/y|…>`. */
         private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
+        /** El círculo (`O<1>`) o el arco (`U<…>`), dentro del sistema o sueltos. */
+        private val RE_FORMA_PAQUETE = Regex("""(?<![A-Za-z])[uUoO]<[^>]*>""")
         private const val TAG_FLOTANTE = "flotante_modulos"
         private const val FLOTANTE_MODULOS = 1
         private const val FLOTANTE_FRANJAS = 2
@@ -947,7 +949,7 @@ class DisenoNovaActivity : AppCompatActivity() {
 
                 franjaTokens[franjaIdxInBloque] = "${franjaHead}(${newModStr})"
                 val newBloques = bloques.toMutableList()
-                newBloques[tramoIdx] = BloqueTramo(bloque.letra, bloque.ancho, franjaTokens.joinToString(";"))
+                newBloques[tramoIdx] = bloque.copy(contenido = franjaTokens.joinToString(";"))
                 indiceModuloActivo = -1
                 binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
                 cargarDesdePaquete(reconstruirPaqueteConBloques(newBloques))
@@ -1888,9 +1890,24 @@ class DisenoNovaActivity : AppCompatActivity() {
             sb.append("${bloque.letra}<${df1(bloque.ancho)}>(${bloque.contenido})")
         }
         if (vano.isNotBlank()) sb.append(" $vano")
+        // Lo mismo el círculo y el arco: al aplicar las medidas de mochetas o del sistema el vano
+        // circular volvía rectángulo (pedido del usuario, 2026-09-27). Solo los que el tramo
+        // rearmado ya no lleva dentro.
+        val cuerpo = sb.toString()
+        etiquetasFormaActual()
+            .filter { tag -> RE_FORMA_PAQUETE.findAll(cuerpo).none { it.value.first().equals(tag.first(), ignoreCase = true) } }
+            .forEach { sb.append(" $it") }
         sb.append("]}")
         return sb.toString()
     }
+
+    /**
+     * El círculo (`O<1>`) y el arco (`U<…>`) del diseño de ahora mismo, estén dentro del sistema
+     * —como los escribe la calculadora— o sueltos al final —como los escribe esta pantalla—.
+     */
+    private fun etiquetasFormaActual(): List<String> =
+        RE_FORMA_PAQUETE.findAll(paqueteOriginal).map { it.value }
+            .distinctBy { it.first().lowercaseChar() }.toList()
 
     /** La etiqueta `V<…>` del diseño de ahora mismo, o vacío si el vano es un rectángulo. */
     private fun etiquetaVanoActual(): String =
@@ -1980,7 +1997,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
 
         val bloquesFinal = bloques.mapIndexed { i, bloque ->
-            var bt = BloqueTramo(bloque.letra, anchosFinal[i], bloque.contenido)
+            var bt = bloque.copy(ancho = anchosFinal[i])
             // Reescribir los <w> de los módulos para que su suma sea el nuevo ancho del tramo,
             // en TODOS los tramos que cambian (editado y los que absorben). Si no, el motor
             // desigual deriva el puente de una suma de módulos desactualizada.
@@ -2655,7 +2672,10 @@ class DisenoNovaActivity : AppCompatActivity() {
             }
                 .orEmpty()
         }.getOrElse { emptyList() }
-        val enBlanco = "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))]}"
+        // El círculo (`O<1>`) y el arco (`U<…>`) también son la forma del vano: se quedan (pedido del
+        // usuario, 2026-09-27; antes el vano circular volvía rectángulo al limpiar).
+        val forma = etiquetasFormaActual().joinToString("") { " $it" }
+        val enBlanco = "{nova,${tipoTxt},[${df1(anchoCm)},${df1(altoCm)}:Tl<${df1(anchoCm)}>(s(f))$forma]}"
         if (vano.size < 3) return enBlanco
         // Limpiar deja la hoja en blanco de verdad: un tramo, un fijo, y la silueta del vano para
         // dibujar encima (decidido por el usuario el 2026-09-25). Lo demás lo pone el usuario con las
@@ -3370,6 +3390,9 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     @androidx.annotation.VisibleForTesting
     fun contornoVanoParaPruebas(): List<Pair<Float, Float>> = binding.vistaDiseno.contornoVanoParaPruebas()
+
+    @androidx.annotation.VisibleForTesting
+    fun circularParaPruebas(): Boolean = binding.vistaDiseno.circularParaPruebas()
 
     @androidx.annotation.VisibleForTesting
     fun mochetaLateralParaPruebas(): Float = mochetaLateralCm

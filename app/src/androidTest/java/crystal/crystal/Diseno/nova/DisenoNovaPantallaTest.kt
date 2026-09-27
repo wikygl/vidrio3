@@ -1064,4 +1064,41 @@ class DisenoNovaPantallaTest {
             }
         }
     }
+
+    /**
+     * El vano circular sigue circular después de cada edición (pedido del usuario, 2026-09-27).
+     *
+     * La calculadora escribe el círculo (`O<1>`) dentro del sistema; aplicar las medidas del panel,
+     * editar con el modelo o limpiar rearmaban el paquete sin él y el vano volvía rectángulo.
+     */
+    @Test
+    fun el_vano_circular_no_se_pierde_al_editar() {
+        val nci = "{nova,apa,[200,180:Tl<200>(s<128.6>(f<50>c<50>c<50>f<50>O<1>);m<51.4>(f<100>f<100>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(nci) }
+            esperar()
+            fun circular(paso: String) = assertTrue(
+                "$paso: el vano dejó de ser circular: ${enPantalla(esc) { it.paqueteParaPruebas() }}",
+                enPantalla(esc) { it.circularParaPruebas() }
+            )
+            circular("al cargar")
+
+            assertTrue(enPantalla(esc) { it.editarCotaParaPruebas("cotas_franja_0_0", "120") })
+            esperar()
+            circular("al aplicar el alto del sistema")
+
+            assertTrue(enPantalla(esc) { it.editarCotaParaPruebas("cotas_franja_0_1", "60") })
+            esperar()
+            circular("al aplicar el alto de la mocheta")
+
+            enPantalla(esc) { it.editarParaPruebas { d -> d.conModuloAgregado(0, 0, 0, 'f') } }
+            esperar()
+            circular("al agregar un módulo")
+
+            enPantalla(esc) { it.limpiarParaPruebas() }
+            esperar()
+            circular("al limpiar")
+        }
+    }
 }

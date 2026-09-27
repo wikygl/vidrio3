@@ -883,6 +883,8 @@ data class DisenoNova(
             Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>)?|;\s*[pP]\s*;""")
         private val RE_TRAMO = Regex("""^t[a-z]?\s*<\s*([\d.,-]+)\s*>""", RegexOption.IGNORE_CASE)
         private val RE_ETIQUETA = Regex("""^[UO]<[^>]*>$""", RegexOption.IGNORE_CASE)
+        /** El círculo o el arco escritos dentro de una franja: `s(fccfO<1>)`. */
+        private val RE_FORMA_EN_SISTEMA = Regex("""(?<![A-Za-z])[UO]<[^>]*>""", RegexOption.IGNORE_CASE)
         /** El pliegue que va delante de un tramo: `A<90>`. */
         private val RE_PLIEGUE = Regex("""^[aA]<[^>]*>$""")
         /** Lo que arranca un trozo nuevo: la cabeza de un tramo o un tag suelto. */
@@ -1009,6 +1011,12 @@ data class DisenoNova(
                 val cab = RE_TRAMO.find(t)
                 val anchoTramo = cab?.groupValues?.get(1)?.let { num(it) } ?: ancho
                 val interior = interiorDeParentesis(t) ?: continue
+                // La calculadora escribe el círculo (`O<1>`) y el arco (`U<…>`) dentro del sistema, y
+                // ahí los módulos no los leen: se guardan como etiquetas de toda la ventana o, al
+                // limpiar o cambiar una medida, el vano volvía rectángulo (pedido del usuario, 2026-09-27).
+                RE_FORMA_EN_SISTEMA.findAll(interior).forEach { f ->
+                    if (etiquetas.none { it.first().equals(f.value.first(), ignoreCase = true) }) etiquetas.add(f.value)
+                }
                 val tokens = partirNivelSuperior(interior, ';')
                 // `H<160>` vale para los dos lados; `H<160,106.2>` es izquierda y derecha, que es
                 // como se describe un tramo inclinado. Igual con la caída.

@@ -278,4 +278,16 @@ class DisenoNovaModeloTest {
         // Si ya no queda sitio para el que falta, no se aplica.
         assertEquals(null, HerramientasDiseno.conAnchoDeModuloEnElVano(e, 0, 0, 1, 140f, editados = setOf(2)))
     }
+
+    @Test
+    fun el_circulo_sobrevive_al_cambiar_una_medida() {
+        // Pedido del usuario (2026-09-27): al cambiar el alto del sistema el vano circular volvía
+        // rectángulo, porque la marca `O<1>` va dentro del sistema y los módulos no la leían.
+        val nci = "{nova,apa,[200,180:Tl<200>(s<128.6>(f<50>c<50>c<50>f<50>O<1>);m<51.4>(f<100>f<100>))]}"
+        val d = DisenoNova.desdePaquete(nci)!!
+        assertTrue(d.etiquetas.contains("O<1>"))
+        val e = d.conAlturaDeFranja(0, 0, 120f)
+        val otra = DisenoNova.desdePaquete(e.aPaquete())!!
+        assertEquals(1, otra.etiquetas.count { it == "O<1>" })
+    }
 }

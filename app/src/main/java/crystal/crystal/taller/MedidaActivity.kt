@@ -2727,7 +2727,9 @@ class MedidaActivity : AppCompatActivity() {
                         contornosLados = LadosLibres.contornosATexto(binding.sketchMedidas.contornosDeLadosEnCm()),
                         parantesLados = LadosLibres.parantesATexto(binding.sketchMedidas.parantesDeLadosEnCm()),
                         // Y el ropero de melamina entero, si la medida es un ropero.
-                        disenoRopero = binding.sketchMedidas.roperoDelDibujo()?.aJson().orEmpty()
+                        disenoRopero = binding.sketchMedidas.roperoDelDibujo()?.aJson().orEmpty(),
+                        // Y si es un círculo (o una elipse), que la calculadora lo sepa.
+                        forma = if (binding.sketchMedidas.esCircularPrincipal()) "circular" else ""
                     )
                 )
             }
