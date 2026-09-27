@@ -1247,7 +1247,14 @@ class DisenoNovaActivity : AppCompatActivity() {
                             franjaAltura
                         }
                         // El vidrio mide lo que le deja el vano a la altura de su franja.
-                        val anchoVidrio = anchoMod * encogidoDeFranja(tramoIdx, indiceFranjaActiva)
+                        // El rectángulo que contiene al módulo dentro del vano (el vidrio entero, se corta
+                        // en obra). Antes se achicaba en proporción a toda la franja y un fijo recto
+                        // junto a un lado inclinado salía de 58.5 cuando mide 65.2 (Vna4, 2026-09-26).
+                        val geo = modelo?.let {
+                            HerramientasDiseno.geometriaDeModulos(it, tramoIdx, indiceFranjaActiva, anchoParanteCm)
+                                .getOrNull(indiceModuloActivo)
+                        }
+                        val anchoVidrio = geo?.contenido ?: (anchoMod * encogidoDeFranja(tramoIdx, indiceFranjaActiva))
                         ssb.append("\n")
                         val modStart = ssb.length
                         ssb.append("vidrio ${df1(anchoVidrio)} × ${df1(altoVidrio)}")

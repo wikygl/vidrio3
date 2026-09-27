@@ -147,6 +147,8 @@ object DesdeDiseno {
         // Y una columna que entra por un costado (dictado el 2026-09-26): va en el fijo de ese lado.
         val (colIzq, colDer) = if (conForma) HerramientasDiseno.cortesLateralesDelSistema(d, indice, puente.anchoParante) else null to null
         fun columna(c: HerramientasDiseno.CorteLateral?) = c?.let { Columna(it.caraArriba, it.caraAbajo, it.alto, it.paredArriba, it.paredAbajo) }
+        val iSistema = t.franjas.indexOfFirst { it.esSistema }
+        val geometria = if (conForma && iSistema >= 0) HerramientasDiseno.geometriaDeModulos(d, indice, iSistema, puente.anchoParante) else emptyList()
         val modulos = ajustados.mapIndexed { k, m ->
             val r = recortes.getOrNull(k)
             val col = when (k) {
@@ -154,9 +156,17 @@ object DesdeDiseno {
                 ajustados.lastIndex -> columna(colDer)
                 else -> null
             }
+            // Contra un lado inclinado: su rectángulo contenedor, su borde de abajo y el largo del lado
+            // (dictado el 2026-09-26, Vna4). La geometría se mide módulo por módulo.
+            val g = geometria.getOrNull(k)?.takeIf { it.inclinado }
             m.copy(
                 recorteArriba = r?.first ?: m.recorteArriba, recorteAbajo = r?.second ?: m.recorteAbajo,
-                columna = col
+                columna = col,
+                inclinado = g?.let {
+                    // Lo que le falta, medido con el ancho del DISEÑO, que es con el que se midió.
+                    val w = s.modulos.getOrNull(k)?.ancho ?: m.ancho
+                    Inclinado((w - it.contenido).coerceAtLeast(0f), (w - it.abajo).coerceAtLeast(0f), it.diagonalIzq, it.diagonalDer)
+                }
             )
         }
         val anchoArriba = if (conForma) HerramientasDiseno.anchoArribaDelSistema(d, indice, puente.anchoParante) else null
@@ -166,7 +176,12 @@ object DesdeDiseno {
         // una corrediza pasa a ser franja de sistema (N-88), con sus módulos.
         val franjas = t.franjas.mapIndexed { k, f ->
             val mods = f.modulos.map { Modulo(!it.esFijo, it.ancho ?: (t.ancho / f.modulos.size)) }
-            FranjaTramo(f.esSistema || mods.any { it.corrediza }, alturas?.getOrNull(k) ?: f.alto, mods, anchosRect?.getOrNull(k))
+            val alto = alturas?.getOrNull(k) ?: f.alto
+            // Cuánto se alargan sus costados si son inclinados, por cm de alto (su U en diagonal).
+            val geo = if (conForma) HerramientasDiseno.geometriaDeModulos(d, indice, k, puente.anchoParante) else emptyList()
+            val incIzq = geo.firstOrNull()?.diagonalIzq?.takeIf { it > 0f && alto > 0f }?.let { it / alto } ?: 0f
+            val incDer = geo.lastOrNull()?.diagonalDer?.takeIf { it > 0f && alto > 0f }?.let { it / alto } ?: 0f
+            FranjaTramo(f.esSistema || mods.any { it.corrediza }, alto, mods, anchosRect?.getOrNull(k), incIzq, incDer)
         }
         if (s.parantes.isEmpty()) return listOf(Tramo(modulos, panos, franjas, puenteTramo, largosPuente, anchoArriba))
         val cortes = s.parantes.map { it + 1 }.filter { it in 1 until modulos.size }.distinct().sorted()

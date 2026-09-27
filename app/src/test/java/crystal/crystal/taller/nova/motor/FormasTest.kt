@@ -130,4 +130,34 @@ class FormasTest {
             MaterialesNova.textoVidrios(m.vidrios).lines().sorted()
         )
     }
+
+    /**
+     * "polis" Vna4 (archivada por el usuario el 2026-09-26): el trapecio de 208.6 × 156.8, el lado
+     * izquierdo inclinado (de x 0 arriba a x 75.4 abajo), U-3/8, Múltiple, sistema 112 abajo (`f c f`)
+     * y mocheta arriba. La geometría se mide módulo por módulo. Dictado:
+     * - el fijo contra el lado inclinado lleva el vidrio entero (el rectángulo que lo contiene) y se
+     *   corta en obra: 56.4 × 110.8, no 78 × 35.1 ("recortado");
+     * - su U: primero la de abajo (3.1, "como 2 o 3 cm") y sobre ella la diagonal (124.3 − 1 = 123.2);
+     * - la mocheta: U de arriba 208.6 (la de abajo la trae el Múltiple), la de su lado inclinado en
+     *   diagonal (48.1 − 1 = 47) y el vidrio por el rectángulo mayor (208.6 en dos paños);
+     * - el riel: 133.2 + 1.2 × tan (lo que sube el alto del riel por la pendiente) − 0.06 = 133.7;
+     * - sin tope: la corrediza no toca ninguna pared.
+     */
+    @Test
+    fun vna4_el_lado_inclinado_se_mide_modulo_por_modulo() {
+        val p = "{nova,apa,[208.6,156.8:Tl<208.6>(s<112>(f<78>c<65.2>f<65.2>);m<44.8>(f<104.3>f<104.3>))" +
+            "V<0/0|208.6/0|208.6/156.8|75.4/156.8>]}"
+        val m = MotorNova.calcular(DesdeDiseno.ventana(p, PerfilU(1f, 1f), Puente("Múltiple", 1.5f, 5f))!!)
+        assertEquals(listOf("110.8 = 1", "123.2 = 1", "208.6 = 1", "3.1 = 1", "41.3 = 1", "47 = 1", "65.7 = 1"), t(m.u))
+        assertEquals(listOf("187.7 = 1"), t(m.puente))
+        assertEquals(listOf("133.7 = 1"), t(m.riel))
+        assertEquals(listOf("110.4 = 4"), t(m.portafelpa))
+        assertEquals(listOf(""), t(m.tope))
+        assertEquals(listOf("42.3 = 1"), t(m.tee))
+        assertEquals(listOf("65.7 = 1"), t(m.hache))
+        assertEquals(
+            listOf("103.8 x 42.8 = 2", "56.4 x 110.8 = 1", "64.3 x 108.5 = 1", "65.2 x 110.8 = 1"),
+            MaterialesNova.textoVidrios(m.vidrios).lines().sorted()
+        )
+    }
 }

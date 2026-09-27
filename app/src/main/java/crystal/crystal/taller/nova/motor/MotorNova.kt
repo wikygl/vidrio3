@@ -29,7 +29,9 @@ object MotorNova {
     private data class Mocheta(
         val ubicacion: Ubicacion, val espacio: Float, val directo: Float,
         /** El ancho de su rectángulo en un vano con forma (N-96); null = el del tramo. */
-        val ancho: Float? = null
+        val ancho: Float? = null,
+        /** Cuánto se alarga cada costado inclinado por cm de alto (ver [FranjaTramo.inclinacionIzq]). */
+        val inclinacionIzq: Float = 0f, val inclinacionDer: Float = 0f
     )
 
     /** Una franja de sistema que no es la principal (N-88): se calcula como un sistema propio. */
@@ -57,7 +59,9 @@ object MotorNova {
         /** Lo que el vano le quita al módulo, arriba y abajo (ver [Modulo.recorteArriba]). */
         val recorteArriba: Float = 0f, val recorteAbajo: Float = 0f,
         /** La columna que entra por su costado de la pared (ver [Columna]). */
-        val columna: Columna? = null
+        val columna: Columna? = null,
+        /** Si el vano lo corta en diagonal (ver [Modulo.inclinado]). */
+        val inclinado: Inclinado? = null
     ) {
         val recorte: Float get() = recorteArriba + recorteAbajo
     }
@@ -126,7 +130,7 @@ object MotorNova {
         val suma = mochetas.sumOf { it.value.alto.toDouble() }.toFloat()
         val lista = mochetas.map { (i, f) ->
             val parte = if (suma > 0f) disponible * f.alto / suma else disponible / mochetas.size
-            Mocheta(if (i < iSistema) Ubicacion.ABAJO else Ubicacion.ARRIBA, parte - h * cargas[i], parte, f.ancho)
+            Mocheta(if (i < iSistema) Ubicacion.ABAJO else Ubicacion.ARRIBA, parte - h * cargas[i], parte, f.ancho, f.inclinacionIzq, f.inclinacionDer)
         }
         // Mismo orden que las del modelo (la de arriba primero), para que las listas salgan iguales.
         val ordenadas = lista.sortedBy { it.ubicacion.ordinal }
@@ -179,8 +183,12 @@ object MotorNova {
                 } else if (!vert.all { it.soloAbajo }) u.add(Pieza(l.anchoCalculo + aumentoLado, 2))
             }
             fullFijos -> if (apa || !vert[0].soloAbajo) u.add(Pieza(ms.first().u + aumentoLado, 2))
+            // Un fijo contra un lado inclinado: su U de fijo es su borde de abajo, "como 2 o 3 cm"
+            // (dictado el 2026-09-26, Vna4: 2.7 + su parte de cruce), no el ancho del módulo.
             apa -> rachasDeFijos(ms, cruzaParantes = false).forEach { racha ->
-                u.add(Pieza(racha.sumOf { (it.u + aumentoPorHoja).toDouble() }.toFloat(), 1))
+                u.add(Pieza(racha.sumOf { m ->
+                    (m.inclinado?.let { m.u - it.faltaAbajo } ?: (m.u + aumentoPorHoja)).toDouble()
+                }.toFloat(), 1))
             }
             // INA con corredizas: la U de cada borde (ver uDelBorde), que reemplaza a la U de fijos
             // y a la U superior e inferior de lado a lado.
@@ -222,10 +230,17 @@ object MotorNova {
                     // El primero y el último, cada uno con su lado de pared (un tramo de un solo fijo:
                     // los dos lados, y la columna solo en el primero).
                     listOfNotNull(
-                        t.first().takeIf { !it.corrediza }?.let { it to it.columna },
-                        t.last().takeIf { !it.corrediza }?.let { it to (if (t.size > 1) it.columna else null) }
-                    ).forEach { (f, col) ->
+                        t.first().takeIf { !it.corrediza }?.let { Triple(it, it.columna, it.inclinado?.diagonalIzq ?: 0f) },
+                        t.last().takeIf { !it.corrediza }?.let { Triple(it, if (t.size > 1) it.columna else null, it.inclinado?.diagonalDer ?: 0f) }
+                    ).forEach { (f, col, diagonal) ->
                         val hoja = vert[i].altoHoja - f.recorte
+                        // Contra un lado inclinado (dictado el 2026-09-26, Vna4): la U de ese costado es
+                        // una diagonal. Primero va la de abajo (la U de fijo, horizontal, G-01) y sobre
+                        // ella la diagonal: su largo menos el alto de la U, como el 99 → 98 de G-01.
+                        if (diagonal > 0f) {
+                            u.add(Pieza(diagonal - us, 1, Orientacion.DIAGONAL))
+                            return@forEach
+                        }
                         if (col == null) {
                             u.add(Pieza(hoja - (us + 0.2f), 1, Orientacion.VERTICAL))
                             return@forEach
@@ -257,7 +272,14 @@ object MotorNova {
         // ---------- U vertical de mocheta (N-44, N-45) ----------
         if (us != 0f) {
             if (apa) {
-                vert.forEach { vt -> vt.mochetas.forEach { m -> u.add(Pieza(m.espacio - 2 * us, 2, Orientacion.VERTICAL)) } }
+                // Un costado inclinado de la mocheta lleva su U en diagonal: el largo del lado menos el
+                // alto de la U (dictado el 2026-09-26, Vna4: 43.3 de mocheta → 48.1 − 1).
+                vert.forEach { vt -> vt.mochetas.forEach { m ->
+                    listOf(m.inclinacionIzq, m.inclinacionDer).forEach { k ->
+                        if (k > 0f) u.add(Pieza(m.espacio * k - us, 1, Orientacion.DIAGONAL))
+                        else u.add(Pieza(m.espacio - 2 * us, 1, Orientacion.VERTICAL))
+                    }
+                } }
             } else {
                 // INA: 1 por cada corrediza de los bordes de la ventana contra muro o acople. Arriba
                 // +1.5; abajo (invertido y la inferior de bandera) sin él.
@@ -321,13 +343,17 @@ object MotorNova {
         l.tramos.forEachIndexed { i, t ->
             if (t.corredizas == 0) return@forEachIndexed
             val medida = t.ancho - 0.06f
+            // El riel va por el borde de abajo del sistema: si un costado es inclinado, del lado
+            // inclinado al otro, más lo que su propio alto sube por la pendiente (dictado el
+            // 2026-09-26, Vna4: 133.2 + 1.2 × tan = 133.8, − 0.06).
+            val medidaRiel = rielAbajo(t, vert[i].altoHoja) - 0.06f
             if (esFull(t)) {
-                riel.add(Pieza(medida, t.corredizas))
+                riel.add(Pieza(medidaRiel, t.corredizas))
                 val doble = Pieza(medida, ceil(t.corredizas / 2.0).toInt())
                 if (dobleAparte) dobleCorrediza.add(doble) else rielSup.add(doble)
                 return@forEachIndexed
             }
-            riel.add(Pieza(medida, 1))
+            riel.add(Pieza(medidaRiel, 1))
             // Como la pantalla: no va cuando hay mocheta arriba con puente Múltiple, que ya lo trae.
             val lleva = !vert[i].hayMocheta || vert[i].soloAbajo || !(t.puente ?: v.puente).esMultiple
             // Si el vano corta el borde de arriba del sistema (una viga), el fijo corredizo solo llega
@@ -387,7 +413,10 @@ object MotorNova {
             // Un fijo con recorte (una viga encima, un escalón debajo) es más bajo: en "polis",
             // 133.6 − 39.2 = 94.4 de hoja.
             val alto = (if (apa) vDe(f).altoHoja - f.recorte else l.alto) - (us + holgura)
-            vidrios.add(Vidrio(f.u - descuento, alto))
+            // Un fijo contra un lado inclinado lleva el vidrio entero, el rectángulo que lo contiene, y
+            // se corta en obra (dictado el 2026-09-26, Vna4: 56.5 de ancho, no los 78 del módulo).
+            val u = f.inclinado?.let { f.u - it.faltaContenido } ?: f.u
+            vidrios.add(Vidrio(u - descuento, alto))
         }
 
         // ---------- Vidrios corredizos (N-58, N-59) ----------
@@ -471,7 +500,7 @@ object MotorNova {
             t.modulos.forEachIndexed { pi, m ->
                 val anchoVidrio = m.ancho * escala
                 val uMod = if (apa) m.ancho + ajusteLado else anchoVidrio + ajusteLado
-                out.add(M(ti, pi, g++, m.corrediza, m.ancho, anchoVidrio, uMod, m.recorteArriba, m.recorteAbajo, m.columna))
+                out.add(M(ti, pi, g++, m.corrediza, m.ancho, anchoVidrio, uMod, m.recorteArriba, m.recorteAbajo, m.columna, m.inclinado))
             }
         }
         return out
@@ -595,6 +624,29 @@ object MotorNova {
         }
         if (n > 0) out.add(n)
         return out
+    }
+
+    /** El alto del riel, que en un extremo inclinado lo alarga por la pendiente (dictado el 2026-09-26). */
+    private const val ALTO_RIEL = 1.2f
+
+    /**
+     * El largo del borde de abajo del sistema para el riel. Sin costados inclinados, el ancho del
+     * tramo. Con uno, desde el lado inclinado (lo que el vano deja abajo) más lo que el alto del riel
+     * sube por la pendiente: `alto del riel × tangente` de la inclinación respecto de la vertical.
+     */
+    private fun rielAbajo(t: Tramo, hoja: Float): Float {
+        if (hoja <= 0f) return t.ancho
+        var ancho = t.ancho
+        fun extremo(m: Modulo?, diagonal: Float) {
+            val inc = m?.inclinado ?: return
+            if (diagonal <= 0f) return
+            val horizontal = kotlin.math.sqrt((diagonal * diagonal - hoja * hoja).coerceAtLeast(0f))
+            ancho -= inc.faltaAbajo
+            ancho += ALTO_RIEL * horizontal / hoja
+        }
+        extremo(t.modulos.firstOrNull(), t.modulos.firstOrNull()?.inclinado?.diagonalIzq ?: 0f)
+        extremo(t.modulos.lastOrNull(), t.modulos.lastOrNull()?.inclinado?.diagonalDer ?: 0f)
+        return ancho
     }
 
     /** Paños de mocheta del tramo (N-62): los del diseño, o ceil(ancho / 180) iguales. */

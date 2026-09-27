@@ -295,12 +295,96 @@ object HerramientasDiseno {
         val alto = alturas.getOrNull(indiceFranja) ?: return null
         val puntos = puntosDelVano(d)
         if (puntos.size < 3) return t.ancho to alto
-        val piso = d.caidaDeTramo(indiceTramo) + d.altoDeTramo(indiceTramo)
-        val abajo = piso - alturas.take(indiceFranja).sum()
-        val y = abajo - alto / 2f
+        val (techo, piso) = bandaDeFranja(d, indiceTramo, indiceFranja) ?: return null
         val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
-        val ancho = anchoDelVanoEn(puntos, y, inicio, inicio + t.ancho) ?: t.ancho
+        // El rectángulo que la CONTIENE (dictado el 2026-09-26: el vidrio va entero y se corta en
+        // obra): lo más a la izquierda y lo más a la derecha que llega el vano en su franja. Antes se
+        // medía a media altura, y una mocheta bajo un lado inclinado salía con un promedio (197.8 en
+        // vez de 208.6).
+        val ancho = extensionEnBanda(puntos, techo, piso, inicio, inicio + t.ancho)?.let { it.second - it.first } ?: t.ancho
         return ancho to alto
+    }
+
+    /**
+     * Cómo queda cada módulo de una franja dentro del vano (dictado el 2026-09-26: la geometría se
+     * mide módulo por módulo; antes se achicaba la franja entera en proporción y el fijo recto de
+     * la Vna4 salía de 58.5 cuando mide 65.2).
+     *
+     * - [contenido]: el ancho del rectángulo que lo contiene (el vidrio entero, se corta en obra);
+     * - [abajo] y [arriba]: su borde de abajo y de arriba dentro del vano;
+     * - [diagonalIzq] / [diagonalDer]: el largo del lado inclinado, si el vano lo corta en diagonal
+     *   por ese costado (0 si es recto). En la Vna4 el fijo de la izquierda: contenido 56.5, abajo
+     *   2.7 y diagonal 124.3.
+     */
+    data class GeometriaModulo(
+        val contenido: Float, val abajo: Float, val arriba: Float,
+        val diagonalIzq: Float, val diagonalDer: Float
+    ) {
+        val inclinado: Boolean get() = diagonalIzq > 0f || diagonalDer > 0f
+    }
+
+    fun geometriaDeModulos(d: DisenoNova, indiceTramo: Int, indiceFranja: Int, anchoParante: Float = 2.5f): List<GeometriaModulo> {
+        val puntos = puntosDelVano(d)
+        val t = d.tramos.getOrNull(indiceTramo) ?: return emptyList()
+        val fr = t.franjas.getOrNull(indiceFranja) ?: return emptyList()
+        if (puntos.size < 3) return emptyList()
+        val (techo, piso) = bandaDeFranja(d, indiceTramo, indiceFranja) ?: return emptyList()
+        val sinAncho = fr.modulos.count { it.ancho == null }
+        val resto = if (sinAncho > 0) ((t.ancho - fr.modulos.sumOf { (it.ancho ?: 0f).toDouble() }.toFloat()) / sinAncho) else 0f
+        var x = iniciosDeTramos(d, anchoParante)[indiceTramo]
+        val alto = piso - techo
+        return fr.modulos.map { m ->
+            val w = m.ancho ?: resto
+            val x0 = x; val x1 = x + w
+            x += w
+            val arriba = extensionEn(puntos, techo + 0.05f, x0, x1)
+            val medio = extensionEn(puntos, (techo + piso) / 2f, x0, x1)
+            val abajo = extensionEn(puntos, piso - 0.05f, x0, x1)
+            val contenido = extensionEnBanda(puntos, techo, piso, x0, x1)?.let { it.second - it.first } ?: w
+            // Un costado es inclinado si el vano lo corta de arriba a abajo en línea recta (el
+            // punto medio cae a mitad de camino). Un escalón o una viga cambian de golpe: esos son
+            // recortes (N-96 "polis"), no diagonales.
+            fun diagonal(a: Float?, mid: Float?, b: Float?): Float {
+                if (a == null || mid == null || b == null) return 0f
+                val salto = abs(b - a)
+                if (salto <= DESCUADRE_CM) return 0f
+                if (abs(mid - (a + b) / 2f) > salto * 0.15f) return 0f
+                return kotlin.math.sqrt(salto * salto + alto * alto)
+            }
+            GeometriaModulo(
+                contenido = contenido,
+                abajo = abajo?.let { it.second - it.first } ?: 0f,
+                arriba = arriba?.let { it.second - it.first } ?: 0f,
+                diagonalIzq = diagonal(arriba?.first, medio?.first, abajo?.first),
+                diagonalDer = diagonal(arriba?.second, medio?.second, abajo?.second)
+            )
+        }
+    }
+
+    /** Dónde empieza y acaba el vano sobre la horizontal [y], dentro de [xIni]..[xFin] (el trozo más largo). */
+    private fun extensionEn(puntos: List<Pair<Float, Float>>, y: Float, xIni: Float, xFin: Float): Pair<Float, Float>? {
+        val cruces = mutableListOf<Float>()
+        for (i in puntos.indices) {
+            val (ax, ay) = puntos[i]
+            val (bx, by) = puntos[(i + 1) % puntos.size]
+            if (abs(by - ay) <= 0.01f) continue
+            if (y < minOf(ay, by) || y >= maxOf(ay, by)) continue
+            cruces.add(ax + (y - ay) / (by - ay) * (bx - ax))
+        }
+        cruces.sort()
+        return cruces.chunked(2).filter { it.size == 2 }
+            .map { (a, b) -> maxOf(a, xIni) to minOf(b, xFin) }
+            .filter { it.second - it.first > 0f }
+            .maxByOrNull { it.second - it.first }
+    }
+
+    /** Lo más a la izquierda y lo más a la derecha que llega el vano en la banda [techo]..[piso]. */
+    private fun extensionEnBanda(puntos: List<Pair<Float, Float>>, techo: Float, piso: Float, xIni: Float, xFin: Float): Pair<Float, Float>? {
+        val ys = (listOf(techo + 0.05f, (techo + piso) / 2f, piso - 0.05f) +
+            puntos.map { it.second }.filter { it > techo + 0.05f && it < piso - 0.05f }.flatMap { listOf(it - 0.05f, it + 0.05f) })
+        val tramos = ys.mapNotNull { extensionEn(puntos, it, xIni, xFin) }
+        if (tramos.isEmpty()) return null
+        return tramos.minOf { it.first } to tramos.maxOf { it.second }
     }
 
     /**
@@ -315,15 +399,19 @@ object HerramientasDiseno {
         val iS = t.franjas.indexOfFirst { it.esSistema }
         if (puntos.size < 3 || iS < 0) return emptyList()
         val (techo, piso) = bandaDeFranja(d, indiceTramo, iS) ?: return emptyList()
+        // Un módulo contra un lado inclinado no está recortado: es un trapecio (ver
+        // geometriaDeModulos). Antes el fijo de la Vna4 salía "recortado" 75.7 por abajo.
+        val inclinados = geometriaDeModulos(d, indiceTramo, iS, anchoParante).map { it.inclinado }
         var x = iniciosDeTramos(d, anchoParante)[indiceTramo]
         val mods = t.franjas[iS].modulos
         val sinAncho = mods.count { it.ancho == null }
         val resto = if (sinAncho > 0) ((t.ancho - mods.sumOf { (it.ancho ?: 0f).toDouble() }.toFloat()) / sinAncho) else 0f
-        return mods.map { m ->
+        return mods.mapIndexed { k, m ->
             val w = m.ancho ?: resto
             val centro = x + w / 2f
             x += w
-            val (arriba, abajo) = bordesEn(puntos, centro) ?: return@map 0f to 0f
+            if (inclinados.getOrNull(k) == true) return@mapIndexed 0f to 0f
+            val (arriba, abajo) = bordesEn(puntos, centro) ?: return@mapIndexed 0f to 0f
             val cortaArriba = (arriba - techo).takeIf { it > DESCUADRE_CM } ?: 0f
             val cortaAbajo = (piso - abajo).takeIf { it > DESCUADRE_CM } ?: 0f
             cortaArriba to cortaAbajo

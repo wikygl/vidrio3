@@ -516,6 +516,22 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 
   El alto del puente es el del puente elegido en Nova. Con esto, el puente del tramo 2 de Formas
   mide **151.7** (respuesta a la duda de N-49 en formas).
+- N-99 ✅ **Un lado inclinado: la geometría se mide módulo por módulo** (dictado el 2026-09-26,
+  "polis" Vna4: trapecio de 208.6 × 156.8, lado izquierdo inclinado de x 0 arriba a x 75.4 abajo,
+  U-3/8, Múltiple). Antes se achicaba la franja entera en proporción (un fijo recto salía de 58.5
+  cuando mide 65.2) y el fijo inclinado se trataba como "recortado" (78 × 35.1, tope de sobra).
+  - **El fijo contra el lado inclinado lleva el vidrio entero**, el rectángulo que lo contiene, y se
+    corta en obra: `56.4 x 110.8`.
+  - **Su U: primero la de abajo** (su borde de abajo, "como 2 o 3 cm": `3.1`) **y sobre ella la
+    diagonal**: el largo del lado menos el alto de la U (124.3 − 1 = `123.2`, como el 99 → 98 de G-01).
+  - **La mocheta:** su U horizontal de arriba es la del rectángulo mayor (`208.6`; la de abajo la
+    trae el Múltiple); la de su lado inclinado va en diagonal (48.1 − 1 = `47`); su vidrio, por el
+    rectángulo mayor (dos paños de 104.3 → `103.8 x 42.8`).
+  - **El riel:** del lado inclinado al otro, más lo que su propio alto (1.2) sube por la pendiente:
+    133.2 + 1.2 × tan − 0.06 = `133.7`. *(El 1.2 y el − 0.06, a confirmar.)*
+  - Un recorte tipo viga o escalón (N-96) solo si el borde que corta es horizontal.
+
+  Hecho en el motor y en el panel del editor (`FormasTest`).
 - N-96 ✅ **Estrategia de cálculo de las formas: partir en rectángulos** (dictado el 2026-09-26). Un
   tramo que no es rectángulo se parte por sus franjas hasta que cada trozo lo sea; cada rectángulo
   se calcula con las reglas que ya existen, identificando sus módulos; al final los materiales que

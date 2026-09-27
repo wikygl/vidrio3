@@ -53,8 +53,21 @@ data class Modulo(
      * Una columna que entra por el costado del módulo, del lado de la pared (dictado el 2026-09-26,
      * "polis" ventana 2): su U parante sigue la pared alrededor de ella. Null = pared recta.
      */
-    val columna: Columna? = null
+    val columna: Columna? = null,
+    /**
+     * Si el vano lo corta en diagonal (un lado inclinado, dictado el 2026-09-26, Vna4): el ancho del
+     * rectángulo que lo contiene (su vidrio entero, se corta en obra), su borde de abajo (su U de
+     * fijo, "como 2 o 3 cm") y el largo del lado inclinado por cada costado. Null = rectángulo.
+     */
+    val inclinado: Inclinado? = null
 )
+
+/** Un módulo contra un lado inclinado del vano (ver [Modulo.inclinado]). */
+/**
+ * [faltaContenido] y [faltaAbajo] son lo que al módulo le falta respecto de su ancho: se guardan así
+ * para que valgan igual con el módulo ya ajustado al ancho de la ventana.
+ */
+data class Inclinado(val faltaContenido: Float, val faltaAbajo: Float, val diagonalIzq: Float, val diagonalDer: Float)
 
 /**
  * Una columna que entra en un fijo por su costado. [caraArriba] y [caraAbajo] son sus caras
@@ -80,7 +93,14 @@ data class FranjaTramo(
      * El ancho de su rectángulo en un vano con forma (N-96), si no es el del tramo. En Formas la
      * mocheta de abajo del tramo 2 mide 151.7 y el tramo 233.7. Null = el ancho del tramo.
      */
-    val ancho: Float? = null
+    val ancho: Float? = null,
+    /**
+     * Cuánto se alarga un costado inclinado por cada cm de alto (1 / coseno de la inclinación), a
+     * la izquierda y a la derecha; 0 = costado vertical. Con esto la U de ese costado de la mocheta
+     * es una diagonal (Vna4: 43.3 de mocheta → 48.1 de lado).
+     */
+    val inclinacionIzq: Float = 0f,
+    val inclinacionDer: Float = 0f
 )
 
 /**
