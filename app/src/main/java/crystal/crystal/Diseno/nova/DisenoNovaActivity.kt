@@ -838,8 +838,17 @@ class DisenoNovaActivity : AppCompatActivity() {
         // El vidrio mide lo que le deja el vano a la altura de su franja, no lo que mide el tramo:
         // en un triángulo, una franja de abajo tiene mucho menos hueco que la ventana entera.
         val encogido = encogidoDeFranja(tramoIdx, indiceFranjaActiva)
-        val huecoFranja = tramoAncho * encogido
-        val anchoActual = (modActual.medida ?: (tramoAncho / mods.size.coerceAtLeast(1))) * encogido
+        // Con forma, cada módulo se mide por lo suyo dentro del vano (Vna4, 2026-09-26): achicar en
+        // proporción decía 55.9 y 75.2 de módulos que miden 62.4. El modelo manda.
+        val modelo = runCatching { DisenoNova.desdePaquete(paqueteActualLectura()) }.getOrNull()
+        val enVano = modelo?.let { HerramientasDiseno.huecoDeFranja(it, tramoIdx, indiceFranjaActiva, anchoParanteCm) }
+            ?.takeIf { it.second.size == mods.size }
+        val geoModulo = if (enVano != null) modelo?.let {
+            HerramientasDiseno.geometriaDeModulos(it, tramoIdx, indiceFranjaActiva, anchoParanteCm).getOrNull(indiceModuloActivo)
+        } else null
+        val huecoFranja = enVano?.first ?: (tramoAncho * encogido)
+        val anchoActual = geoModulo?.contenido
+            ?: ((modActual.medida ?: (tramoAncho / mods.size.coerceAtLeast(1))) * encogido)
 
         // Altura del vidrio (informativo): la de ESA franja, no la del primer tramo.
         val franjaAltura = franjasDelBloque(bloque).getOrNull(franjaIdxInBloque)?.second
@@ -859,7 +868,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         cont.addView(etAncho)
         cont.addView(TextView(this).apply {
             // Con un vano con forma se dice el hueco de la franja, que es contra lo que se mide.
-            text = if (encogido < 0.999f) {
+            text = if (enVano != null || encogido < 0.999f) {
                 "Alto vidrio: ${df1(altoVidrio)} cm · Franja: ${df1(huecoFranja)} cm de ${df1(tramoAncho)}"
             } else {
                 "Alto vidrio: ${df1(altoVidrio)} cm · Tramo: ${df1(tramoAncho)} cm"
@@ -881,6 +890,16 @@ class DisenoNovaActivity : AppCompatActivity() {
                         Toast.LENGTH_LONG
                     ).show()
                     return@setPositiveButton
+                }
+                if (enVano != null && modelo != null) {
+                    val nuevo = HerramientasDiseno.conAnchoDeModuloEnElVano(
+                        modelo, tramoIdx, indiceFranjaActiva, nMod, escrito, anchoParanteCm)
+                    if (nuevo != null) {
+                        indiceModuloActivo = -1
+                        binding.vistaDiseno.resaltarModulo(indiceFranjaActiva, -1)
+                        aplicarAlModelo { nuevo }
+                        return@setPositiveButton
+                    }
                 }
                 // Lo escrito es lo que mide el vidrio; en el paquete los módulos se anotan sobre el
                 // ancho del tramo, así que se devuelve a esa escala.

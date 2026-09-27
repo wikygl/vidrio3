@@ -391,6 +391,45 @@ object HerramientasDiseno {
         })
     }
 
+    /**
+     * El hueco que el vano deja a los módulos de la franja (lo que se reparten) y lo que cada uno
+     * tiene fuera del vano. En la Vna4 el sistema: hueco 187.1, el fijo inclinado 21.5 fuera. Null
+     * sin forma.
+     */
+    fun huecoDeFranja(d: DisenoNova, indiceTramo: Int, indiceFranja: Int, anchoParante: Float = 2.5f): Pair<Float, List<Float>>? {
+        val t = d.tramos.getOrNull(indiceTramo) ?: return null
+        val fr = t.franjas.getOrNull(indiceFranja) ?: return null
+        val geo = geometriaDeModulos(d, indiceTramo, indiceFranja, anchoParante)
+        if (geo.size != fr.modulos.size || geo.isEmpty()) return null
+        val sinAncho = fr.modulos.count { it.ancho == null }
+        val resto = if (sinAncho > 0) ((t.ancho - fr.modulos.sumOf { (it.ancho ?: 0f).toDouble() }.toFloat()) / sinAncho) else 0f
+        val fuera = fr.modulos.mapIndexed { j, m -> ((m.ancho ?: resto) - geo[j].contenido).coerceAtLeast(0f) }
+        return (t.ancho - fuera.sum()) to fuera
+    }
+
+    /**
+     * El módulo [indiceModulo] pasa a medir [dentro] dentro del vano y los demás se reparten por
+     * igual lo que queda del hueco; cada uno conserva lo que tiene fuera del vano (dictado el
+     * 2026-09-26, Vna4: el diálogo decía 55.9 de un fijo de 62.4 porque achicaba en proporción).
+     * Null si el ancho no entra en el hueco.
+     */
+    fun conAnchoDeModuloEnElVano(
+        d: DisenoNova, indiceTramo: Int, indiceFranja: Int, indiceModulo: Int, dentro: Float, anchoParante: Float = 2.5f
+    ): DisenoNova? {
+        val (hueco, fuera) = huecoDeFranja(d, indiceTramo, indiceFranja, anchoParante) ?: return null
+        val n = fuera.size
+        if (indiceModulo !in 0 until n || dentro <= 0f || dentro >= hueco && n > 1) return null
+        val otros = if (n > 1) (hueco - dentro) / (n - 1) else 0f
+        val t = d.tramos[indiceTramo]
+        val fr = t.franjas[indiceFranja]
+        val nuevaFranja = fr.copy(modulos = fr.modulos.mapIndexed { j, m ->
+            m.copy(ancho = (if (j == indiceModulo) dentro else otros) + fuera[j])
+        })
+        return d.copy(tramos = d.tramos.mapIndexed { i, tr ->
+            if (i != indiceTramo) tr else tr.copy(franjas = tr.franjas.mapIndexed { k, f -> if (k == indiceFranja) nuevaFranja else f })
+        })
+    }
+
     /** Dónde empieza y acaba el vano sobre la horizontal [y], dentro de [xIni]..[xFin] (el trozo más largo). */
     private fun extensionEn(puntos: List<Pair<Float, Float>>, y: Float, xIni: Float, xFin: Float): Pair<Float, Float>? {
         val cruces = mutableListOf<Float>()

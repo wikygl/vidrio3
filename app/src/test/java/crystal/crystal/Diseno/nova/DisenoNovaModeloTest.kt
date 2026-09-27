@@ -246,4 +246,21 @@ class DisenoNovaModeloTest {
         // La mocheta llega de lado a lado: sigue en dos paños iguales.
         d.tramos[0].franjas[1].modulos.forEach { assertEquals(104.3f, it.ancho!!, 0.05f) }
     }
+
+    @Test
+    fun el_ancho_escrito_de_un_modulo_es_lo_que_mide_dentro_del_vano() {
+        // El diálogo decía 55.9 y 75.2 de módulos de 62.4: achicaba en proporción a la franja.
+        val d = trapecioSinAlturas().conAnchosRepartidos()
+        val (hueco, fuera) = HerramientasDiseno.huecoDeFranja(d, 0, 0)!!
+        assertEquals(187.06f, hueco, 0.05f)
+        assertEquals(21.54f, fuera[0], 0.05f)
+        // El fijo de la derecha pasa a 50: los otros dos se reparten 137.1 del hueco y el fijo
+        // inclinado conserva lo que tiene fuera del vano.
+        val e = HerramientasDiseno.conAnchoDeModuloEnElVano(d, 0, 0, 2, 50f)!!
+        val geo = HerramientasDiseno.geometriaDeModulos(e, 0, 0)
+        assertEquals(50f, geo[2].contenido, 0.05f)
+        assertEquals(68.53f, geo[1].contenido, 0.05f)
+        assertEquals(68.53f, geo[0].contenido, 0.05f)
+        assertEquals(208.6f, e.tramos[0].franjas[0].modulos.sumOf { it.ancho!!.toDouble() }.toFloat(), 0.05f)
+    }
 }

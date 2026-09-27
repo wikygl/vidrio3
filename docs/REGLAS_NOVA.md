@@ -535,6 +535,9 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
     lo que queda fuera del vano (21.5) va al módulo de la punta, y el fijo inclinado abajo mide 8.5
     (133.2 − 2 × 62.4). Antes salían 69.5 cada uno y el parante caía fuera del alféizar. Una franja
     que llega de lado a lado (la mocheta: 208.6) no cambia; un borde a menos de 2.5 cuenta como recto.
+  - **El ancho de un módulo (diálogo) es lo que mide dentro del vano**: 62.4, no 55.9 ni 75.2 (antes
+    se achicaba en proporción a la franja). Al escribirlo, los demás se reparten el resto del hueco y
+    el módulo de la punta conserva lo que tiene fuera del vano.
 
   Hecho en el motor y en el panel del editor (`FormasTest`).
 - N-96 ✅ **Estrategia de cálculo de las formas: partir en rectángulos** (dictado el 2026-09-26). Un
