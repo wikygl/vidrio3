@@ -641,7 +641,9 @@ object MotorNova {
         puente.clear()
         sup?.let { puente.add(Pieza(c.cuerda(yArriba), 1)) }
         inf?.let { puente.add(Pieza(c.cuerda(yAbajo), 1)) }
-        riel.replaceAll { it.copy(medida = c.cuerda(yAbajo) - 0.06f) }
+        // El riel sobre el puente de abajo: su alto (1.2) sube hacia el centro, donde el círculo es más
+        // ancho, y ahí todavía toca el muro (dictado el 2026-09-27).
+        riel.replaceAll { it.copy(medida = c.cuerda(yAbajo - ALTO_RIEL) - 0.06f) }
         rielSup.replaceAll { it.copy(medida = c.cuerda(yArriba) - 0.06f) }
 
         u.clear()
@@ -650,7 +652,9 @@ object MotorNova {
             return
         }
         // U de fijo: lo que queda del fijo dentro del círculo sobre el puente de abajo.
-        val fuera = c.fueraEn(yAbajo)
+        // Se mide donde el perfil todavía toca el muro (dictado el 2026-09-27): su base toca en 33.4,
+        // pero su alto sube hacia el centro, donde el círculo es más ancho.
+        val fuera = c.fueraEn(yAbajo - us)
         val inicios = ms.runningFold(0f) { x, m -> x + m.ancho }
         rachasDeFijos(ms, cruzaParantes = false).forEach { racha ->
             val x0 = inicios[racha.first().global]
@@ -661,15 +665,17 @@ object MotorNova {
         // U de mocheta: el arco por el borde de afuera del puente; con tubo, la recta sobre él.
         val recta = !pte.esMultipleOGorrito
         sup?.let {
-            u.add(Pieza(c.arcoArriba(it.espacio), 1))
+            u.add(Pieza(maxOf(c.arcoArriba(it.espacio), c.adentro(us).arcoArriba(it.espacio - us)), 1))
             if (recta) u.add(Pieza(c.cuerda(it.espacio), 1))
         }
         inf?.let {
-            u.add(Pieza(c.arcoAbajo(l.alto - it.espacio), 1))
+            u.add(Pieza(maxOf(c.arcoAbajo(l.alto - it.espacio), c.adentro(us).arcoAbajo(l.alto - it.espacio - us)), 1))
             if (recta) u.add(Pieza(c.cuerda(l.alto - it.espacio), 1))
         }
         // U parante: el arco de cada costado con fijo, entre los dos puentes.
-        val lado = c.arcoLado(yArriba, yAbajo) - (us + 0.2f)
+        // El arco más largo del perfil: el de su borde de adentro (radio − u) llega más lejos entre los
+        // dos puentes que el del muro (143.7 contra 143.2).
+        val lado = maxOf(c.arcoLado(yArriba, yAbajo), c.adentro(us).arcoLado(yArriba - us, yAbajo - us)) - (us + 0.2f)
         val n = (if (!ms.first().corrediza) 1 else 0) + (if (!ms.last().corrediza) 1 else 0)
         if (n > 0) u.add(Pieza(lado, n, Orientacion.VERTICAL))
     }

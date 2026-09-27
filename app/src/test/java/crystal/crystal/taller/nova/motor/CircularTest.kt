@@ -35,12 +35,13 @@ class CircularTest {
     @Test
     fun aparente_180_en_bandera() {
         val m = circulo(Acabado.APA)
-        // U de fijo 60.5 − 27 (lo de fuera del círculo sobre el puente de abajo); U de mocheta, el
-        // arco por el borde de afuera del puente (132.2) y la recta sobre él (tubo); U parante, el
-        // arco entre los puentes 143.2 − 1.2.
-        assertEquals("33.4 = 2\n132.2 = 2\n120.6 = 2\n142 = 2", t(m.u))
+        // Cada perfil se mide donde todavía toca el muro (dictado el 2026-09-27): U de fijo 60.5 − 26
+        // (su base toca en 33.4, su alto de 1 sube hacia el centro); riel con su alto 1.2 (128.3); U
+        // parante, el arco de su borde de adentro (143.6 − 1.2). U de mocheta, el arco por el borde de
+        // afuera del puente (132.2) y la recta sobre él (tubo).
+        assertEquals("34.4 = 2\n132.2 = 2\n120.6 = 2\n142.4 = 2", t(m.u))
         assertEquals("125.9 = 2", t(m.puente))
-        assertEquals("125.9 = 1", t(m.riel))
+        assertEquals("128.3 = 1", t(m.riel))
         assertEquals("125.9 = 1", t(m.rielSuperior))
         assertEquals("60.4 = 1", t(m.hache))
         assertEquals("126.9 = 4", t(m.portafelpa))

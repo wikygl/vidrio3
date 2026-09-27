@@ -48,6 +48,12 @@ class Circulo(val ancho: Float, val alto: Float) {
     /** El arco de un costado entre las alturas [arriba] y [abajo]. */
     fun arcoLado(arriba: Float, abajo: Float): Float = arco(angulo(abajo), angulo(arriba))
 
+    /**
+     * El borde de adentro de un perfil de alto [u] que corre pegado al muro: el mismo círculo con
+     * radio − u. Sus alturas se miden desde su propio borde de arriba, u más abajo que el del vano.
+     */
+    fun adentro(u: Float): Circulo = Circulo(ancho - 2 * u, alto - 2 * u)
+
     /** La circunferencia (INA: la U es el perímetro, = 1). */
     fun perimetro(): Float = arco(0.0, 2 * PI)
 

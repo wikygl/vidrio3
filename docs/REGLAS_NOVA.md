@@ -472,17 +472,23 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   (sale algo más larga y se recorta en obra), o mejor calcularla geométricamente, lo que servirá
   también para circular y compuesto.
 
+**Regla (dictada el 2026-09-27): cada perfil se mide donde todavía toca el muro.** Su base puede
+tocarlo antes; su alto sube hacia el centro, donde el círculo es más ancho, y el perfil se corta a
+esa medida. Ejemplo del usuario: la U de fijo toca con la base en 33.4 y con el alto (U 3/8, alto 1)
+todavía toca más afuera.
+
 **En el motor (2026-09-26, `Circulo.kt`, `CircularTest`)**, con el ejemplo de 180 × 180 APA en
 bandera con tubo (hoja 5/7 = 128.6, mochetas 23.2, flecha 25.7):
 
 | Pieza | Cálculo | 180 × 180 |
 |---|---|---|
 | Puente | cuerda en la flecha (mocheta + puente) | 125.9 = 2 |
-| Riel y fijo corredizo | puente − 0.06 (N-51) | 125.9 |
-| U de fijo | el fijo desde donde empieza contra la pared, sobre el puente de abajo | 60.5 − 27 = 33.4 = 2 |
+| Riel | la cuerda donde su alto (1.2) todavía toca el muro − 0.06 | 128.3 |
+| Fijo corredizo | puente − 0.06 (N-51); falta su alto para medirlo como el riel | 125.9 |
+| U de fijo | el fijo desde donde su perfil todavía toca el muro: la base toca en 33.4, su alto (1) sube hacia el centro | 60.5 − 26 = 34.4 = 2 |
 | U de mocheta | el arco entre los extremos del puente, por su borde de afuera | 132.2 = 2 |
 | U recta de mocheta (solo con tubo) | la cuerda sobre el puente, como la rectangular | 120.6 = 2 |
-| U parante | el arco entre los dos puentes − (u + 0.2) como N-43 | 143.2 − 1.2 = 142 = 2 |
+| U parante | el arco más largo del perfil entre los dos puentes (su borde de adentro, 143.6) − (u + 0.2) como N-43 | 142.4 = 2 |
 | Hache, portafelpa, tope, vidrios corredizos | sin cambio | 60.4 · 126.9 = 4 |
 | Vidrio de fijo | ancho por ceil; alto, lo que el círculo le deja (entero, se corta en obra) | 59.9 x 127.3 |
 | Vidrio de mocheta | el rectángulo que contiene el segmento (N-99) | 120.1 x 21.9 = 2 |
