@@ -438,7 +438,8 @@ data class DisenoNova(
         val modulosLibres = libres.sumOf { tramos[it].nModulosSistema }
         val porModulo = if (modulosLibres > 0) disponible / modulosLibres else 0f
 
-        return copy(tramos = tramos.mapIndexed { i, tramo ->
+        val repartidas = mutableSetOf<Pair<Int, Int>>()
+        val repartido = copy(tramos = tramos.mapIndexed { i, tramo ->
             val anchoTramo = if (i in fijos) tramo.ancho else porModulo * tramo.nModulosSistema
             // Se conserva el alto propio del tramo: repartir anchos no tiene por qué borrar el
             // escalón, y al perderlo la ventana volvía a salir rectangular en cuanto se editaba.
@@ -449,7 +450,7 @@ data class DisenoNova(
                     val suma = fr.modulos.sumOf { (it.ancho ?: 0f).toDouble() }.toFloat()
                     val conservar = !repartirIgual(i, k) && fr.modulos.all { it.ancho != null } && suma > 0f
                     if (conservar) fr.copy(modulos = fr.modulos.map { it.copy(ancho = it.ancho!! * anchoTramo / suma) })
-                    else fr.copy(modulos = fr.modulos.map { it.copy(ancho = w) })
+                    else { repartidas.add(i to k); fr.copy(modulos = fr.modulos.map { it.copy(ancho = w) }) }
                 },
                 alto = tramo.alto,
                 caida = tramo.caida,
@@ -462,6 +463,8 @@ data class DisenoNova(
                 contorno = tramo.contorno
             )
         })
+        // En un vano con forma, lo repartido por igual es lo que el vano deja (Vna4).
+        return HerramientasDiseno.conModulosDentroDelVano(repartido, repartidas, anchoParante)
     }
 
     /**

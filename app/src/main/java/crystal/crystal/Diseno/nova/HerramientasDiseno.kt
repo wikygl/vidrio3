@@ -361,6 +361,36 @@ object HerramientasDiseno {
         }
     }
 
+    /**
+     * Los módulos repartidos por igual se reparten lo que el vano deja de la franja, no el ancho
+     * del tramo (dictado el 2026-09-26, Vna4): con el lado inclinado, el sistema mide 187.1 en su
+     * borde de arriba y cada módulo 62.4, no 208.6 / 3 = 69.5. Lo que queda fuera del vano va al
+     * módulo de la punta (el fijo inclinado: 21.5 + 62.4; abajo le quedan 8.4). Un borde a menos
+     * de un descuadre (2.5) cuenta como recto. [franjas] = (tramo, franja) que se repartieron.
+     */
+    fun conModulosDentroDelVano(d: DisenoNova, franjas: Set<Pair<Int, Int>>, anchoParante: Float = 2.5f): DisenoNova {
+        val puntos = puntosDelVano(d)
+        if (puntos.size < 3 || franjas.isEmpty()) return d
+        val inicios = iniciosDeTramos(d, anchoParante)
+        return d.copy(tramos = d.tramos.mapIndexed { i, t ->
+            t.copy(franjas = t.franjas.mapIndexed { k, fr ->
+                val n = fr.modulos.size
+                if ((i to k) !in franjas || n < 2) return@mapIndexed fr
+                val (techo, piso) = bandaDeFranja(d, i, k) ?: return@mapIndexed fr
+                val ini = inicios[i]
+                val fin = ini + t.ancho
+                val (a, b) = extensionEnBanda(puntos, techo, piso, ini, fin) ?: return@mapIndexed fr
+                val fueraIzq = (a - ini).takeIf { it > DESCUADRE_CM } ?: 0f
+                val fueraDer = (fin - b).takeIf { it > DESCUADRE_CM } ?: 0f
+                if (fueraIzq == 0f && fueraDer == 0f) return@mapIndexed fr
+                val w = (t.ancho - fueraIzq - fueraDer) / n
+                fr.copy(modulos = fr.modulos.mapIndexed { j, m ->
+                    m.copy(ancho = w + (if (j == 0) fueraIzq else 0f) + (if (j == n - 1) fueraDer else 0f))
+                })
+            })
+        })
+    }
+
     /** Dónde empieza y acaba el vano sobre la horizontal [y], dentro de [xIni]..[xFin] (el trozo más largo). */
     private fun extensionEn(puntos: List<Pair<Float, Float>>, y: Float, xIni: Float, xFin: Float): Pair<Float, Float>? {
         val cruces = mutableListOf<Float>()

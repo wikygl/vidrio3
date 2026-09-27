@@ -230,4 +230,20 @@ class DisenoNovaModeloTest {
         // La mocheta sí se reparte: tres paños iguales.
         d.tramos[0].franjas[1].modulos.forEach { assertEquals(208.6f / 3f, it.ancho!!, 0.05f) }
     }
+
+    @Test
+    fun con_lado_inclinado_los_modulos_se_reparten_lo_que_deja_el_vano() {
+        // Vna4 (dibujo del usuario, 2026-09-26): el sistema mide 187.1 en su borde de arriba y cada
+        // módulo 62.4; lo que queda fuera del vano (21.5) va al fijo inclinado, que abajo mide 8.5 (el dibujo, con 62.4 redondeado, dice 8.4).
+        // Antes se repartía el ancho del tramo: 69.5 cada uno, y el parante caía fuera del alféizar.
+        val d = trapecioSinAlturas().conAnchosRepartidos()
+        val sistema = d.tramos[0].franjas[0].modulos.map { it.ancho!! }
+        assertEquals(21.54f + 62.35f, sistema[0], 0.05f)
+        assertEquals(62.35f, sistema[1], 0.05f)
+        assertEquals(62.35f, sistema[2], 0.05f)
+        assertEquals(62.35f, HerramientasDiseno.geometriaDeModulos(d, 0, 0)[0].contenido, 0.05f)
+        assertEquals(133.2f - 2 * 62.35f, HerramientasDiseno.geometriaDeModulos(d, 0, 0)[0].abajo, 0.1f)
+        // La mocheta llega de lado a lado: sigue en dos paños iguales.
+        d.tramos[0].franjas[1].modulos.forEach { assertEquals(104.3f, it.ancho!!, 0.05f) }
+    }
 }

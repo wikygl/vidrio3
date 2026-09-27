@@ -530,6 +530,11 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   - **El riel:** del lado inclinado al otro, más lo que su propio alto (1.2) sube por la pendiente:
     133.2 + 1.2 × tan − 0.06 = `133.7`. *(El 1.2 y el − 0.06, a confirmar.)*
   - Un recorte tipo viga o escalón (N-96) solo si el borde que corta es horizontal.
+  - **Los módulos repartidos por igual se reparten lo que el vano deja de su franja**, no el ancho
+    del tramo (dibujo del usuario): el sistema mide 187.1 en su borde de arriba → 62.4 cada módulo;
+    lo que queda fuera del vano (21.5) va al módulo de la punta, y el fijo inclinado abajo mide 8.5
+    (133.2 − 2 × 62.4). Antes salían 69.5 cada uno y el parante caía fuera del alféizar. Una franja
+    que llega de lado a lado (la mocheta: 208.6) no cambia; un borde a menos de 2.5 cuenta como recto.
 
   Hecho en el motor y en el panel del editor (`FormasTest`).
 - N-96 ✅ **Estrategia de cálculo de las formas: partir en rectángulos** (dictado el 2026-09-26). Un
