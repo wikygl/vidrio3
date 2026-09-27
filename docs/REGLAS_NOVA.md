@@ -538,7 +538,7 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   - **El ancho de un módulo (diálogo) es lo que mide dentro del vano**: 62.4, no 55.9 ni 75.2 (antes
     se achicaba en proporción a la franja). Al escribirlo, los demás se reparten el resto del hueco y
     el módulo de la punta conserva lo que tiene fuera del vano.
-  - **Lo ya escrito se queda** (G-xx de edición, pedido del usuario): al escribir el ancho de otro
+  - **Lo ya escrito se queda** (pedido del usuario, 2026-09-26): al escribir el ancho de otro
     módulo, los editados antes conservan su medida y solo los no editados absorben el cambio. Si no
     queda sitio para ellos, avisa y no se aplica. Vale con forma o sin ella; se olvida si la franja
     cambia de módulos o se limpia el diseño.
