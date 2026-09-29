@@ -463,6 +463,17 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 
 - En esquinero **cada lado es otro tramo**, unido por un parante de esquina `P<90>` (N-84).
 - En una esquina curva, al empezar y al terminar el arco van parantes: el arco es otro tramo (N-84).
+  **En el motor desde el 2026-09-29**: la curva que trae la medida entra como un lado más, con su
+  desarrollo de ancho, sus hojas por la regla de los 60 y un parante en cada punta; ni ella ni las
+  paredes de al lado descuentan nada (G-09). Antes la curva no entraba en el cálculo: en Ele (150 +
+  curva de 90 + 120) faltaban sus dos hojas, su puente de 90 y sus vidrios, y salía un solo parante.
+- **N-75 en L, C y serie inaparente** (aplicado el 2026-09-29): la estructura de cada lado (puente,
+  riel, U felpero) llega hasta el parante de esquina, con el reparto de N-38; el vidrio y sus U no
+  descuentan nada (la U superior sigue siendo el lado + el ancho de la U). En Ele (80 + 210.9) el
+  puente pasó de 80 y 210.9 a 74 y 208.4, lo mismo que en aparente.
+- **La ventana curva dibujada con su figura** (la plantilla de la curva vista de frente) llega a Nova
+  como curva, con su desarrollo de ancho (N-08). Antes llegaba como el rectángulo de su cuerda: en
+  Pipa, 120 de cuerda con flecha 40.2, todo el aluminio horizontal salía de 120 en lugar de 158.9.
 
 ---
 
@@ -597,6 +608,12 @@ divisiones, la U del vidrio del centro va con ceil".
   una mocheta vacía), el 3 `s<103.2>; m<6.1>` (el descuadre de 0.9 se leía como pendiente) y los
   anchos no dejaban sitio a los parantes (343.3 en un vano de 338.3). El diseño sugerido y Limpiar
   sacan los escalones de la misma función (`ContornoEnTramos.escalones`). `ContornoEnTramosTest`.
+  - **Cada escalón calcula su mocheta con SU alto** (corregido el 2026-09-29, `Tramo.alto` en el
+    motor): en Formas el tramo 1 mide 77.2 y su vidrio de mocheta es 102.8 x 20, no 102.8 x 87.3
+    (se tomaba el alto del vano entero). Lo mismo el fijo y la U parante de inaparente.
+  - **Un costado casi vertical que se desvía hasta 2.5 es descuadre** (2026-09-29): no arma un tramo.
+    Formas 11 salía con dos tramos de 1 cm (vidrios de 0.2 x 42.4 en Ele). Y dos trozos seguidos que
+    solo se diferencian en un descuadre son el mismo tramo.
   - ❓ Con la hoja escrita (103.2) el recorte de Formas, que sube 35, queda con una mocheta de 6.1:
     es N-29 al pie de la letra (la hoja es menor que el alto del tramo).
   - 🐞 Los vanos con lados inclinados de verdad (triángulo, trapecio) siguen por el camino viejo:
@@ -668,6 +685,10 @@ divisiones, la U del vidrio del centro va con ceil".
     horizontal y la U de fijos, `21.4 − 2 × 1.5 = 18.4`. *(Deducido de N-43 y G-01; confirmar.)*
 
   Hecho en el motor (`FormasTest`, `PolisEnNovaTest` en el celular).
+  - **La columna que sigue más allá del puente** (2026-09-29, la columna de Ele en el diseño
+    sugerido, sistema 5/7): dentro del sistema queda una sola cara; la otra la cierra el puente. La U
+    sigue la pared igual: cara de abajo `37.1`, cara vertical `94.4`, pared de abajo `63.1`, y el
+    puente llega hasta la columna (`193.1`). Si la columna llega al dintel es una viga (N-96).
 
   **Las Referencias y la cadena G<> se identifican desde el diseño** (2026-09-26): "polis" salía
   `mocheta sup: 56.1` y `G<p,r,m,n>`. Con un diseño cargado, el remate de la ventana sale de sus
@@ -872,6 +893,9 @@ Mandan las reglas de este documento.
 - `PuenteDobleEscaladoTest` (N-35) · `DivisionesAnchoUtilTest` (N-15, N-17) ·
   `RepartosPosiblesTest`, `RepartoSegunLosArcosTest` (N-25) · `TramosYUMochetaTest` (N-45) ·
   `ContornoEnTramosTest`, `PiezasDelEscalonTest` (sección 12).
+- `MedidasDeObraTest` (2026-09-29): medidas reales de Medidas por el camino entero (escalones,
+  columna, esquina curva, L inaparente). `RevisionMedidasNovaTest` en el celular recorre todas las
+  medidas de Nova de `Descargas/Crystal/Medidas` como la cola y deja `revision_medidas_nova.txt`.
 - **Faltan**: listas de materiales completas de ventanas reales (plana APA, plana INA, la L
   dictada en sección 7, una bandera) y pruebas del camino desigual. Cada cambio de sección 16 entra con su
   prueba.

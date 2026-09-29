@@ -739,6 +739,9 @@ class VistaDiseno @JvmOverloads constructor(
     private val matrizZoomInversa = android.graphics.Matrix()
     private var zoom = 1f
     private val ZOOM_MAXIMO = 6f
+    // Alejar también (pedido del usuario, 2026-09-29): achicar el dibujo para verlo entero cuando
+    // los botones lo tapan, y llevarlo con dos dedos a donde no lo tapen.
+    private val ZOOM_MINIMO = 0.35f
     private var pellizcando = false
     private var separacionInicial = 0f
     private var zoomInicial = 1f
@@ -781,7 +784,7 @@ class VistaDiseno @JvmOverloads constructor(
             MotionEvent.ACTION_MOVE -> {
                 if (event.pointerCount < 2 || separacionInicial <= 0f) return
                 val medio = medioDedos(event)
-                val nuevo = (zoomInicial * separacionDedos(event) / separacionInicial).coerceIn(1f, ZOOM_MAXIMO)
+                val nuevo = (zoomInicial * separacionDedos(event) / separacionInicial).coerceIn(ZOOM_MINIMO, ZOOM_MAXIMO)
                 matrizZoom.postScale(nuevo / zoom, nuevo / zoom, medio.x, medio.y)
                 matrizZoom.postTranslate(medio.x - medioAnterior.x, medio.y - medioAnterior.y)
                 zoom = nuevo
@@ -796,9 +799,12 @@ class VistaDiseno @JvmOverloads constructor(
         }
     }
 
-    /** Sin dejar huecos: el dibujo acercado siempre cubre la vista, y en 1 vuelve a su sitio. */
+    /**
+     * Acercado, el dibujo siempre cubre la vista; alejado, se queda entero dentro de ella. Muy cerca
+     * de 1 vuelve a su sitio exacto.
+     */
     private fun encajarZoom() {
-        if (zoom <= 1.01f) {
+        if (kotlin.math.abs(zoom - 1f) <= 0.01f) {
             zoom = 1f
             matrizZoom.reset()
         } else {
@@ -806,8 +812,8 @@ class VistaDiseno @JvmOverloads constructor(
             matrizZoom.getValues(v)
             v[android.graphics.Matrix.MSCALE_X] = zoom
             v[android.graphics.Matrix.MSCALE_Y] = zoom
-            v[android.graphics.Matrix.MTRANS_X] = v[android.graphics.Matrix.MTRANS_X].coerceIn(width * (1f - zoom), 0f)
-            v[android.graphics.Matrix.MTRANS_Y] = v[android.graphics.Matrix.MTRANS_Y].coerceIn(height * (1f - zoom), 0f)
+            v[android.graphics.Matrix.MTRANS_X] = v[android.graphics.Matrix.MTRANS_X].coerceIn(min(0f, width * (1f - zoom)), max(0f, width * (1f - zoom)))
+            v[android.graphics.Matrix.MTRANS_Y] = v[android.graphics.Matrix.MTRANS_Y].coerceIn(min(0f, height * (1f - zoom)), max(0f, height * (1f - zoom)))
             matrizZoom.setValues(v)
         }
         matrizZoom.invert(matrizZoomInversa)

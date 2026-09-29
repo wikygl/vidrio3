@@ -701,6 +701,15 @@ class NovaCorrediza : AppCompatActivity() {
         // El encuentro (N-78) solo se marca en la ventana plana: ARBL, 0 = al vacío.
         val e = if (esGeometriaPlana()) metaEncuentro.padEnd(4, '1') else "1111"
         val esquinero = opcionEsquinero()?.let { crystal.crystal.taller.nova.motor.Puente(it.text, it.valor, it.valorEsquina) }
+        // Las esquinas que la medida resolvió con una curva: la curva es otro trozo de la ventana, con
+        // su desarrollo, entre dos parantes (N-84). Antes no entraba en el cálculo y sus hojas, su
+        // puente y sus vidrios faltaban en la lista (hallado el 2026-09-29, Ele 150 + curva 90 + 120).
+        val medidaEsquina = esquinaDeLaMedida?.takeIf { it.lados.size == lados.size && lados.size > 1 }
+        val curvas = medidaEsquina?.let { m ->
+            (0 until lados.size - 1).map { arista ->
+                m.curvaDe(arista)?.let { c -> crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(c.desarrollo, c.alto, c.puente) }
+            }
+        }.orEmpty()
         return crystal.crystal.taller.nova.motor.VentanaAutomatica.ventana(crystal.crystal.taller.nova.motor.VentanaAutomatica.Entrada(
             acabado = if (tipoNova == TipoNova.APA) crystal.crystal.taller.nova.motor.Acabado.APA else crystal.crystal.taller.nova.motor.Acabado.INA,
             // Circular (sección 11): en automático el modelo pasa a bandera.
@@ -711,7 +720,7 @@ class NovaCorrediza : AppCompatActivity() {
             mochetaInferior = mochetaInferiorDoblePuente(),
             izquierda = bordeMotor(e[3] == '0'), derecha = bordeMotor(e[1] == '0'),
             libresVerticales = ladosVaciosVerticales(), perfilLibre = valorParanteVacio(),
-            esquinero = esquinero,
+            esquinero = esquinero, curvas = curvas,
             repartoManual = NovaCalculos.repartoManual, corredizasPorTramoNfc = corredizasPorTramo
         )).copy(circular = textoModelo == "nci")
     }
@@ -1647,6 +1656,10 @@ class NovaCorrediza : AppCompatActivity() {
                 R.id.dgRbPiv -> TipoNova.PIV
                 else -> TipoNova.APA
             }
+            // Igual que al tocar el título: el diseño cargado lleva el acabado en su cabecera y de ahí
+            // lo lee el motor. Desde aquí no se cambiaba y un vano con forma elegido en inaparente
+            // se seguía calculando en aparente (hallado el 2026-09-29).
+            if (ultimoPaquete.isNotBlank()) ultimoPaquete = conAcabado(ultimoPaquete, tipoPaquete())
             actualizarModo()
         }
 

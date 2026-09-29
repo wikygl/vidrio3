@@ -118,14 +118,16 @@ object MotorNova {
             val abajo = franjas[k]; val arriba = franjas[k + 1]
             cargas[if (abajo.sistema != arriba.sistema && !abajo.sistema) k else k + 1]++
         }
+        // Un escalón más bajo reparte SU alto, no el de la ventana (ver [Tramo.alto]).
+        val altoT = t.alto ?: l.alto
         val iSistema = franjas.indexOfFirst { it.sistema }
-        val altoHoja = franjas.getOrNull(iSistema)?.alto?.takeIf { it > 0f && it < l.alto } ?: l.alto
+        val altoHoja = franjas.getOrNull(iSistema)?.alto?.takeIf { it > 0f && it < altoT } ?: altoT
         // Las franjas de sistema de más (una mocheta con corrediza, N-88) tienen su alto propio.
         val extras = franjas.withIndex().filter { it.value.sistema && it.index != iSistema }
             .map { (k, f) -> SistemaExtra((f.alto - h * cargas[k]).coerceAtLeast(0f), f.modulos) }
         val altoSistemas = altoHoja + franjas.withIndex()
             .filter { it.value.sistema && it.index != iSistema }.sumOf { it.value.alto.toDouble() }.toFloat()
-        val disponible = (l.alto - altoSistemas).coerceAtLeast(0f)
+        val disponible = (altoT - altoSistemas).coerceAtLeast(0f)
         val mochetas = franjas.withIndex().filter { !it.value.sistema }
         val suma = mochetas.sumOf { it.value.alto.toDouble() }.toFloat()
         val lista = mochetas.map { (i, f) ->
@@ -258,8 +260,9 @@ object MotorNova {
                         // La cara de la columna, su largo (97.2). La pared de arriba va entre el fijo
                         // corredizo y la horizontal (− u − 0.2, como N-43); la de abajo entre la
                         // horizontal y la U de fijos (− 2u).
-                        u.add(Pieza(col.caraArriba + us, 1))
-                        u.add(Pieza(col.caraAbajo + us, 1))
+                        // Una cara en 0: la columna sigue más allá del puente o del riel, que la cierra.
+                        if (col.caraArriba > 0f) u.add(Pieza(col.caraArriba + us, 1))
+                        if (col.caraAbajo > 0f) u.add(Pieza(col.caraAbajo + us, 1))
                         u.add(Pieza(col.alto, 1, Orientacion.VERTICAL))
                         (col.paredArriba - (us + 0.2f)).takeIf { it > 0f }?.let { u.add(Pieza(it, 1, Orientacion.VERTICAL)) }
                         (col.paredAbajo - 2 * us).takeIf { it > 0f }?.let { u.add(Pieza(it, 1, Orientacion.VERTICAL)) }
@@ -270,9 +273,9 @@ object MotorNova {
                 ms.filter { !it.corrediza && it.recorteArriba > 0f }.forEach { f -> u.add(Pieza(f.u, 1)) }
             } else {
                 // INA: solo los fijos de los bordes de la ventana contra muro, acople o libre.
-                val n = (if (!ms.first().corrediza && esMuro(l.izquierda)) 1 else 0) +
-                    (if (!ms.last().corrediza && esMuro(l.derecha)) 1 else 0)
-                if (n > 0) u.add(Pieza(l.alto - 2 * us, n, Orientacion.VERTICAL))
+                // Cada uno con el alto de su tramo: en un vano escalonado el de la punta puede ser más bajo.
+                if (!ms.first().corrediza && esMuro(l.izquierda)) u.add(Pieza(altoDe(l, ms.first()) - 2 * us, 1, Orientacion.VERTICAL))
+                if (!ms.last().corrediza && esMuro(l.derecha)) u.add(Pieza(altoDe(l, ms.last()) - 2 * us, 1, Orientacion.VERTICAL))
             }
         }
 
@@ -419,7 +422,7 @@ object MotorNova {
             else NovaCalculos.descuentoColindanciaFijo(patronLado, f.global)
             // Un fijo con recorte (una viga encima, un escalón debajo) es más bajo: en "polis",
             // 133.6 − 39.2 = 94.4 de hoja.
-            val alto = (if (apa) vDe(f).altoHoja - f.recorte else l.alto) - (us + holgura)
+            val alto = (if (apa) vDe(f).altoHoja - f.recorte else altoDe(l, f)) - (us + holgura)
             // Un fijo contra un lado inclinado lleva el vidrio entero, el rectángulo que lo contiene, y
             // se corta en obra (dictado el 2026-09-26, Vna4: 56.5 de ancho, no los 78 del módulo).
             // En un círculo, el fijo junto a la pared no llega de arriba abajo: su rectángulo es lo más
@@ -497,6 +500,9 @@ object MotorNova {
     }
 
     // ==================== AUXILIARES ====================
+
+    /** El alto del tramo de [m]: el suyo en un vano escalonado, si no el del lado (ver [Tramo.alto]). */
+    private fun altoDe(l: LadoNova, m: M): Float = l.tramos.getOrNull(m.tramo)?.alto ?: l.alto
 
     /**
      * Los módulos con su U de cálculo (N-42). El cruce se reparte en todo el lado: decidido el
@@ -584,7 +590,10 @@ object MotorNova {
                     // Esquina en ángulo (G-09): el tramo del borde suma el ancho de la U.
                     val esquina = (if (i == 0 && l.izquierda == Borde.ESQUINA_ANGULO) v.u.ancho else 0f) +
                         (if (i == l.tramos.lastIndex && l.derecha == Borde.ESQUINA_ANGULO) v.u.ancho else 0f)
-                    poner(t.ancho + esquina, 't')
+                    // La U sigue al vidrio, que pasa por delante del parante de esquina (N-75): recupera lo
+                    // que la estructura del tramo perdió en esa punta.
+                    val parante = (if (i == 0) l.estructuraIzq else 0f) + (if (i == l.tramos.lastIndex) l.estructuraDer else 0f)
+                    poner(t.ancho + parante + esquina, 't')
                 }
                 arriba && t.corredizas > 0 -> poner(null, '-')   // fijo corredizo
                 else -> ms.filter { it.tramo == i }.forEach { m -> poner(if (m.corrediza) null else m.u + aumentoPorHoja, 'f') }

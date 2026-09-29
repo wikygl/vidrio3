@@ -51,16 +51,26 @@ object DesdeDiseno {
         val modulosIguales = anchosSistema.isEmpty() ||
             (anchosSistema.maxOrNull()!! - anchosSistema.minOrNull()!!) <= 0.1f
 
+        val leidosPorLado = grupos.map { indices -> indices.flatMap { tramoDelMotor(d, it, puente, conForma, modulosIguales) } }
+        fun anchoDe(tramos: List<Tramo>) = tramos.sumOf { it.ancho.toDouble() }.toFloat() + puente.anchoParante * (tramos.size - 1)
+        // Inaparente en L, C y serie: el paquete trae cada lado entero (el vidrio no descuenta nada),
+        // pero su estructura llega hasta el parante de esquina (N-75), con el mismo reparto que en
+        // aparente (N-38). Antes el puente y el riel del lado salían del lado entero.
+        val esquinaIna = if (acabado == Acabado.INA && grupos.size > 1)
+            VentanaAutomatica.descuentoEsquinas(leidosPorLado.map { anchoDe(it) }, esquinero) else null
         val lados = grupos.mapIndexed { i, indices ->
             val tramosLado = indices.map { d.tramos[it] }
-            val tramosLeidos = indices.flatMap { tramoDelMotor(d, it, puente, conForma, modulosIguales) }
+            val tramosLeidos = leidosPorLado[i]
+            val (pierdeIzq, pierdeDer) = esquinaIna?.get(i) ?: (0f to 0f)
             // El paquete guarda los anchos truncados a un decimal (143 / 3 → f<47.6>, que suman
             // 142.8). En un lado solo, el ancho de la cabecera es el verdadero: se reescalan los
             // módulos para que sumen el ancho útil, como los reparte el editor.
-            val tramos = if (grupos.size == 1) reescalar(tramosLeidos, d.ancho - puente.anchoParante * (tramosLeidos.size - 1))
-                         else tramosLeidos
-            val anchoLado = if (grupos.size == 1) d.ancho
-                            else tramos.sumOf { it.ancho.toDouble() }.toFloat() + puente.anchoParante * (tramos.size - 1)
+            val anchoLado = if (grupos.size == 1) d.ancho else anchoDe(tramosLeidos)
+            val tramos = when {
+                grupos.size == 1 -> reescalar(tramosLeidos, d.ancho - puente.anchoParante * (tramosLeidos.size - 1))
+                pierdeIzq + pierdeDer > 0f -> reescalar(tramosLeidos, anchoLado - pierdeIzq - pierdeDer - puente.anchoParante * (tramosLeidos.size - 1))
+                else -> tramosLeidos
+            }
             val sistema = tramosLado.first().sistema
             val altoHoja = sistema?.alto?.takeIf { it > 0f && it < d.alto } ?: d.alto
             LadoNova(
@@ -74,7 +84,8 @@ object DesdeDiseno {
                 largosParante = if (conForma && grupos.size == 1)
                     (0 until d.tramos.size - 1).map { HerramientasDiseno.largoDelParante(d, it, puente.anchoParante) }
                         .takeIf { l -> l.all { it != null } }?.map { it!! }
-                else null
+                else null,
+                estructuraIzq = pierdeIzq, estructuraDer = pierdeDer
             )
         }
         // Circular (N-01): el paquete lleva la marca O<1>.
@@ -184,13 +195,16 @@ object DesdeDiseno {
             val incDer = geo.lastOrNull()?.diagonalDer?.takeIf { it > 0f && alto > 0f }?.let { it / alto } ?: 0f
             FranjaTramo(f.esSistema || mods.any { it.corrediza }, alto, mods, anchosRect?.getOrNull(k), incIzq, incDer)
         }
-        if (s.parantes.isEmpty()) return listOf(Tramo(modulos, panos, franjas, puenteTramo, largosPuente, anchoArriba))
+        // En un vano con forma, el alto de ESTE tramo (un escalón puede ser más bajo que la ventana):
+        // es el que se reparten sus franjas en el motor.
+        val altoTramo = if (conForma) d.altoDeTramo(indice).takeIf { it > 0f && abs(it - d.alto) > 0.05f } else null
+        if (s.parantes.isEmpty()) return listOf(Tramo(modulos, panos, franjas, puenteTramo, largosPuente, anchoArriba, alto = altoTramo))
         val cortes = s.parantes.map { it + 1 }.filter { it in 1 until modulos.size }.distinct().sorted()
         val out = mutableListOf<Tramo>()
         var desde = 0
         for (c in cortes + modulos.size) {
             val trozo = modulos.subList(desde, c)
-            out.add(Tramo(trozo, franjas = franjas, puente = puenteTramo))   // sus paños de mocheta se reparten solos (N-62)
+            out.add(Tramo(trozo, franjas = franjas, puente = puenteTramo, alto = altoTramo))   // sus paños de mocheta se reparten solos (N-62)
             desde = c
         }
         return out

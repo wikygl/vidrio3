@@ -5663,7 +5663,7 @@ class SketchMedidasView @JvmOverloads constructor(
         // Sin planta pero con dibujo en perspectiva: la esquina se arma allí, con la lectura de
         // siempre (avisada de que puede no ser exacta).
         vistaConLaEsquina()?.takeIf { it != vistaActiva }?.let { v -> return conVista(v) { esquinaPrincipalEnCm() } }
-        val marcoIndex = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return null
+        val marcoIndex = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return curvaDeFiguraEnCm()
         val marco = elementos[marcoIndex] as Element.Shape
         // La esquina armada sobre figuras se lee de sus paredes, no del marco.
         if (marco.libre) return esquinaLibreEnCm(marcoIndex)
@@ -5787,7 +5787,10 @@ class SketchMedidasView @JvmOverloads constructor(
     fun contornoPrincipalEnCm(): List<Pair<Float, Float>>? {
 
         fun area(e: Element): Float = boundsForElement(e).let { it.width() * it.height() }
-        val composite = elementos.filterIsInstance<Element.Composite>().maxByOrNull { area(it) }
+        // La figura de la ventana curva no es un contorno: es una curva, y viaja como tal (ver
+        // curvaDeFiguraEnCm). Tomada como contorno llegaba a Nova como el rectángulo de su cuerda.
+        val composite = elementos.filterIsInstance<Element.Composite>()
+            .filter { it.template != TEMPLATE_F5 }.maxByOrNull { area(it) }
         // El triángulo se dibuja con su herramienta, así que no es una figura recortada y no tiene
         // contorno guardado: sin esto, un vano triangular llegaba a la calculadora como el
         // rectángulo de su caja y el diseño salía recto.
@@ -5802,6 +5805,28 @@ class SketchMedidasView @JvmOverloads constructor(
         val contorno = elegido.contours.firstOrNull()?.takeIf { it.size >= 3 } ?: return null
         val caja = boundsForElement(elegido)
         return contorno.map { p -> pxToCm(p.x - caja.left) to pxToCm(p.y - caja.top) }
+    }
+
+    /**
+     * La ventana curva dibujada con su figura (la plantilla F5: vista de frente, arriba el arco que
+     * sale y abajo el que entra). No es un vano con contorno sino una ventana curva: viaja como una
+     * esquina de un solo lado curvo, con su desarrollo y su flecha, y Nova la abre como curva
+     * (`ncu`), donde el ancho es el desarrollo (N-08). El desarrollo es el mismo que muestra su cota.
+     *
+     * Hallado el 2026-09-29 (Pipa, 120 × 159 con flecha 40.2): viajaba como el rectángulo de su
+     * cuerda y todo el aluminio horizontal salía con la cuerda, 120, en lugar del desarrollo.
+     */
+    private fun curvaDeFiguraEnCm(): EsquinaMedida? {
+        val figura = elementos.filterIsInstance<Element.Composite>()
+            .filter { it.template == TEMPLATE_F5 }
+            .maxByOrNull { boundsForElement(it).let { b -> b.width() * b.height() } } ?: return null
+        val cuerda = figura.widthCm
+        val alto = figura.heightCm
+        val flecha = figura.sideCms.getOrNull(0)?.getOrNull(2)?.takeIf { it > 0f } ?: return null
+        if (cuerda <= 0f || alto <= 0f) return null
+        // La fórmula es lineal: con los cm da los cm, sin pasar por la pantalla.
+        val desarrollo = longitudMediaElipsePx(cuerda, flecha)
+        return EsquinaMedida(listOf(LadoEsquina(desarrollo, desarrollo, alto, alto, 0f, flecha)), emptyList())
     }
 
     /**

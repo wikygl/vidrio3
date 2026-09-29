@@ -16,6 +16,12 @@ object DisenoAutomatico {
         val anchoMedido: Float,
         /** Ancho con los descuentos de aparente ya hechos (lados libres, esquinero). */
         val anchoCalculo: Float,
+        /**
+         * Lo que ocupa la estructura (tramos y parantes) si no es [anchoCalculo]: en inaparente, el
+         * lado menos su parte del parante de esquina (N-75); el vidrio sigue con [anchoCalculo].
+         * Null = el mismo.
+         */
+        val anchoEstructura: Float? = null,
         val alto: Float,
         val altoMedido: Float = alto,
         /** Altura de hoja escrita; 0 = 5/7 del alto (N-29). */
@@ -85,7 +91,7 @@ object DisenoAutomatico {
             grupos.map { patron(it, e.modulacion) }
         }
         // N-27: los parantes entre tramos ocupan ancho; el resto se reparte entre las hojas.
-        val anchoUtil = e.anchoCalculo - e.puente.anchoParante * (patrones.size - 1).coerceAtLeast(0)
+        val anchoUtil = (e.anchoEstructura ?: e.anchoCalculo) - e.puente.anchoParante * (patrones.size - 1).coerceAtLeast(0)
         val w = if (divisiones > 0) anchoUtil / divisiones else anchoUtil
         val tramos = patrones.map { p -> Tramo(p.map { Modulo(it, w) }) }
         return LadoNova(

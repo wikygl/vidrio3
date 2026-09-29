@@ -297,17 +297,36 @@ object ContornoEnTramos {
      * - Cada escalón deja medio parante a cada lado del corte (N-27): así el eje del parante cae
      *   justo en el borde del escalón y los tramos más los parantes suman el vano.
      */
-    fun escalones(puntos: List<Pair<Float, Float>>, anchoParante: Float = 2.5f): List<Escalon>? {
+    fun escalones(medido: List<Pair<Float, Float>>, anchoParante: Float = 2.5f): List<Escalon>? {
+        val puntos = sinDescuadreLateral(medido)
         val leidas = bandas(puntos)
         if (leidas.isEmpty()) return null
         fun inclinada(b: Banda) =
             abs(b.altoDerCm - b.altoCm) > DESCUADRE_ESCALON || abs(b.caidaDerCm - b.caidaCm) > DESCUADRE_ESCALON
         if (leidas.any { inclinada(it) }) return null
         val altoVano = puntos.maxOf { it.second } - puntos.minOf { it.second }
-        return leidas.mapIndexed { i, b ->
+        // Dos bandas seguidas que solo se diferencian en un descuadre —hasta 2.5 en su alto y en lo que
+        // baja su dintel— son el mismo tramo (N-06, N-101): el dintel de Ele baja 0.6 de punta a punta y
+        // el costado de su columna partía el vano en un tramo de 35.1 y otro de 191.8 (2026-09-29).
+        val juntas = mutableListOf<Banda>()
+        for (b in leidas) {
+            val u = juntas.lastOrNull()
+            val altoU = u?.let { maxOf(it.altoCm, it.altoDerCm) } ?: 0f
+            val caidaU = u?.let { minOf(it.caidaCm, it.caidaDerCm) } ?: 0f
+            val altoB = maxOf(b.altoCm, b.altoDerCm)
+            val caidaB = minOf(b.caidaCm, b.caidaDerCm)
+            if (u != null && abs(altoU - altoB) <= DESCUADRE_ESCALON && abs(caidaU - caidaB) <= DESCUADRE_ESCALON) {
+                val alto = maxOf(altoU, altoB)
+                val caida = minOf(caidaU, caidaB)
+                juntas[juntas.lastIndex] = Banda(u.anchoCm + b.anchoCm, alto, caida, alto, caida)
+            } else {
+                juntas.add(b)
+            }
+        }
+        return juntas.mapIndexed { i, b ->
             val caida = minOf(b.caidaCm, b.caidaDerCm)
             val alto = maxOf(b.altoCm, b.altoDerCm)
-            val lados = (if (i > 0) 1 else 0) + (if (i < leidas.lastIndex) 1 else 0)
+            val lados = (if (i > 0) 1 else 0) + (if (i < juntas.lastIndex) 1 else 0)
             Escalon(
                 ancho = (b.anchoCm - lados * anchoParante / 2f).coerceAtLeast(1f),
                 alto = alto,
@@ -315,6 +334,40 @@ object ContornoEnTramos {
                 entero = caida <= TOLERANCIA && abs(alto - altoVano) <= TOLERANCIA
             )
         }
+    }
+
+    /**
+     * Un lado casi vertical cuyas puntas se apartan hasta 2.5 es descuadre (N-06), no un escalón: sus
+     * x se juntan en una. Es lo mismo que ya se hacía con los desniveles del dintel y del alféizar
+     * (N-101), del otro lado. Sin esto, un lado que se va 1 cm en 66 de alto armaba un tramo de 1 cm
+     * (Formas, la medida 11: `Tl<1>` dos veces) y el 0.3 que se desvía el costado de la columna de
+     * Ele, otro (hallado el 2026-09-29, con vidrios de 0.2 x 42.4).
+     *
+     * Los costados de la ventana se quedan con la medida mayor (N-06): la x más afuera. Un quiebre
+     * de dentro, con la del medio. Solo se usa para repartir los tramos; la silueta que viaja con el
+     * diseño es la medida, tal cual.
+     */
+    fun sinDescuadreLateral(puntos: List<Pair<Float, Float>>): List<Pair<Float, Float>> {
+        if (puntos.size < 3) return puntos
+        val xs = puntos.map { it.first }.distinct().sorted()
+        val grupos = mutableListOf<MutableList<Float>>()
+        for (x in xs) {
+            val g = grupos.lastOrNull()
+            if (g != null && x - g.first() <= DESCUADRE_ESCALON) g.add(x) else grupos.add(mutableListOf(x))
+        }
+        if (grupos.size == xs.size) return puntos
+        val minX = xs.first()
+        val maxX = xs.last()
+        val a = HashMap<Float, Float>()
+        grupos.forEach { g ->
+            val v = when {
+                g.first() == minX -> minX
+                g.last() == maxX -> maxX
+                else -> g.average().toFloat()
+            }
+            g.forEach { a[it] = v }
+        }
+        return puntos.map { (x, y) -> (a[x] ?: x) to y }
     }
 
     /**
@@ -360,11 +413,13 @@ object ContornoEnTramos {
      * punta de un triángulo, van fijos. Los tramos rectos no se tocan: ahí la hoja es la de siempre.
      */
     fun disenoDesdeContorno(
-        puntos: List<Pair<Float, Float>>,
+        medido: List<Pair<Float, Float>>,
         acabado: String = "apa",
         altoHoja: Float = 0f,
         anchoParante: Float = 2.5f
     ): DisenoNova? {
+        // Los tramos se reparten sin los descuadres de los costados; la silueta sigue siendo la medida.
+        val puntos = sinDescuadreLateral(medido)
         val leidas = bandas(puntos)
         if (leidas.isEmpty()) return null
         // Las medidas de la ventana salen del VANO entero, no de sumar lo que mide cada banda: la
@@ -381,7 +436,7 @@ object ContornoEnTramos {
                     caida = if (e.entero) 0f else e.caida
                 )
             }
-            return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(puntos)
+            return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(medido)
         }
         // Hasta el 2026-09-28 el escalonado también pasaba por aquí: la banda recta llevaba la hoja
         // al alto entero del tramo (`s<144.4>; m<0>`), un descuadre de 0.9 la volvía inclinada con
@@ -437,7 +492,7 @@ object ContornoEnTramos {
         }
         // La silueta viaja con el diseño, aparte del reparto: los tramos se pueden borrar y rehacer
         // —limpiar es justo eso— y la forma del hueco sigue siendo la que se midió.
-        return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(puntos)
+        return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(medido)
     }
 
     /** Un trozo de vano ya decidido: si lleva hoja corrediza y con qué alto. */

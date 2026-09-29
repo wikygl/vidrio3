@@ -9,7 +9,12 @@ package crystal.crystal.taller.nova.motor
  * - Lado arriba o abajo libre (APA): el alto pierde el falso puente.
  * - Esquina en ángulo (APA): cada lado pierde su parte del esquinero, con reparto invertido.
  *
- * Inaparente no descuenta nada; su esquina suma el ancho de la U, y eso lo hace el motor.
+ * Inaparente no descuenta nada en el vidrio ni en sus U; su esquina suma el ancho de la U, y eso lo
+ * hace el motor. Su estructura sí pierde el parante de esquina (N-75): el puente, el riel y la U
+ * felpero llegan hasta el parante, y el vidrio pasa por delante.
+ *
+ * Una esquina resuelta con una curva (N-84, G-09) no descuenta ni aumenta: la curva es otro trozo de
+ * la ventana, con su desarrollo, entre dos parantes.
  */
 object VentanaAutomatica {
 
@@ -31,8 +36,14 @@ object VentanaAutomatica {
         val perfilLibre: Float = 2.5f,
         /** Esquinero de las L y C; null = "ninguno" (ni descuento ni parante de esquina). */
         val esquinero: Puente? = null,
-        /** Esquina curva entre lados (curva de esquina): ni aumento ni descuento. */
+        /** Todas las esquinas entre lados son curvas (curva de esquina): ni aumento ni descuento. */
         val esquinaCurva: Boolean = false,
+        /**
+         * La curva de cada esquina, si esa esquina se resolvió con un arco (una por arista entre lados;
+         * null = esquina en ángulo). La curva es un trozo más de la ventana, con su desarrollo de
+         * ancho, entre dos parantes (N-84). Vacío = ninguna.
+         */
+        val curvas: List<LadoMedido?> = emptyList(),
         val repartoManual: List<Int>? = null,
         val corredizasPorTramoNfc: Int = 0
     )
@@ -40,23 +51,40 @@ object VentanaAutomatica {
     fun ventana(e: Entrada): VentanaNova {
         val apa = e.acabado == Acabado.APA
         val n = e.lados.size
-        val anchosEsquina = if (apa && !e.esquinaCurva) descuentoEsquinas(e.lados.map { it.ancho }, e.esquinero)
-                            else List(n) { 0f }
-        val esquina = if (e.esquinaCurva) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
-        val lados = e.lados.mapIndexed { i, l ->
-            val izq = if (i == 0) e.izquierda else esquina
-            val der = if (i == n - 1) e.derecha else esquina
+        // Qué hay en cada arista entre dos lados: ¿una curva?
+        val curvaEn = (0 until (n - 1).coerceAtLeast(0)).map { i -> e.esquinaCurva || e.curvas.getOrNull(i) != null }
+        // El reparto del esquinero, solo en las aristas en ángulo. En aparente lo pierde el lado entero;
+        // en inaparente solo su estructura (N-75).
+        val anchosEsquina = descuentoEsquinas(e.lados.map { it.ancho }, e.esquinero, curvaEn)
+
+        val lados = mutableListOf<LadoNova>()
+        e.lados.forEachIndexed { i, l ->
+            val izq = if (i == 0) e.izquierda else if (curvaEn[i - 1]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
+            val der = if (i == n - 1) e.derecha else if (curvaEn[i]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
             val libresLaterales = listOf(izq, der).count { it == Borde.LIBRE }
-            val anchoCalculo = l.ancho - anchosEsquina[i] - (if (apa) libresLaterales * e.perfilLibre else 0f)
+            val esquina = anchosEsquina[i]
+            val anchoCalculo = l.ancho - (if (apa) esquina.first + esquina.second + libresLaterales * e.perfilLibre else 0f)
             val altoCalculo = l.alto - (if (apa) e.libresVerticales * e.perfilLibre else 0f)
-            DisenoAutomatico.lado(DisenoAutomatico.Entrada(
+            val lado = DisenoAutomatico.lado(DisenoAutomatico.Entrada(
                 anchoMedido = l.ancho, anchoCalculo = anchoCalculo.coerceAtLeast(0f),
+                anchoEstructura = if (apa) null else (anchoCalculo - esquina.first - esquina.second).coerceAtLeast(0f),
                 alto = altoCalculo, altoMedido = l.alto, hoja = l.hoja,
                 acabado = e.acabado, puente = e.puente, divisManual = l.divisManual,
                 modulacion = e.modulacion, repartoManual = e.repartoManual,
                 corredizasPorTramoNfc = e.corredizasPorTramoNfc,
                 izquierda = izq, derecha = der
             ))
+            lados.add(if (apa) lado else lado.copy(estructuraIzq = esquina.first, estructuraDer = esquina.second))
+            // La curva de la arista que sigue: su propio trozo, con su desarrollo (N-08, N-84).
+            if (i < n - 1) e.curvas.getOrNull(i)?.let { c ->
+                lados.add(DisenoAutomatico.lado(DisenoAutomatico.Entrada(
+                    anchoMedido = c.ancho, anchoCalculo = c.ancho,
+                    alto = c.alto - (if (apa) e.libresVerticales * e.perfilLibre else 0f), altoMedido = c.alto,
+                    hoja = c.hoja, acabado = e.acabado, puente = e.puente, divisManual = c.divisManual,
+                    modulacion = e.modulacion, corredizasPorTramoNfc = e.corredizasPorTramoNfc,
+                    izquierda = Borde.ESQUINA_CURVA, derecha = Borde.ESQUINA_CURVA
+                )))
+            }
         }
         return VentanaNova(
             e.acabado, e.modelo, lados, e.u, e.puente, e.cruce, e.mochetaInferior,
@@ -69,22 +97,28 @@ object VentanaAutomatica {
      * N-38: en cada esquina de aparente los dos lados se reparten el esquinero. Si su medida normal
      * y la de esquina son iguales, cada lado descuenta esa; si no, reparto invertido: el lado más
      * ancho se lleva la parte menor. El lado del medio de una C descuenta sus dos esquinas.
+     *
+     * Devuelve, por lado, lo que pierde por su izquierda y por su derecha. Una arista curva
+     * ([curva]) no descuenta nada (G-09).
      */
-    fun descuentoEsquinas(anchos: List<Float>, esquinero: Puente?): List<Float> {
-        val out = FloatArray(anchos.size)
-        if (esquinero == null) return out.toList()
-        val normal = esquinero.altura
-        val deEsquina = esquinero.esquinero
-        for (i in 0 until anchos.size - 1) {
-            if (kotlin.math.abs(deEsquina - normal) < 0.001f) {
-                out[i] += normal; out[i + 1] += normal
-            } else {
-                val mayor = maxOf(normal, deEsquina)
-                val menor = minOf(normal, deEsquina)
-                if (anchos[i] >= anchos[i + 1]) { out[i] += menor; out[i + 1] += mayor }
-                else { out[i] += mayor; out[i + 1] += menor }
+    fun descuentoEsquinas(anchos: List<Float>, esquinero: Puente?, curva: List<Boolean> = emptyList()): List<Pair<Float, Float>> {
+        val izq = FloatArray(anchos.size)
+        val der = FloatArray(anchos.size)
+        if (esquinero != null) {
+            val normal = esquinero.altura
+            val deEsquina = esquinero.esquinero
+            for (i in 0 until anchos.size - 1) {
+                if (curva.getOrNull(i) == true) continue
+                if (kotlin.math.abs(deEsquina - normal) < 0.001f) {
+                    der[i] += normal; izq[i + 1] += normal
+                } else {
+                    val mayor = maxOf(normal, deEsquina)
+                    val menor = minOf(normal, deEsquina)
+                    if (anchos[i] >= anchos[i + 1]) { der[i] += menor; izq[i + 1] += mayor }
+                    else { der[i] += mayor; izq[i + 1] += menor }
+                }
             }
         }
-        return out.toList()
+        return anchos.indices.map { izq[it] to der[it] }
     }
 }

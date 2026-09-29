@@ -127,7 +127,14 @@ data class Tramo(
      * fijo corredizo solo llega hasta donde empieza el corte. En "polis", 190.2 en un tramo de 252.
      * Null = el ancho del tramo.
      */
-    val anchoRielSuperior: Float? = null
+    val anchoRielSuperior: Float? = null,
+    /**
+     * El alto de este tramo en un vano con forma, si no es el del lado: un escalón más bajo (N-66,
+     * N-101). Sus franjas se reparten este alto, no el de la ventana. En Formas el tramo 1 mide 77.2
+     * de los 144.5 del vano, y su mocheta es 77.2 − 55.1 − puente, no 144.5 − 55.1 − puente (hallado
+     * el 2026-09-29: salía un vidrio de mocheta de 87.3 donde va uno de 20.1). Null = el del lado.
+     */
+    val alto: Float? = null
 ) {
     val ancho: Float get() = modulos.sumOf { it.ancho.toDouble() }.toFloat()
     val corredizas: Int get() = modulos.count { it.corrediza }
@@ -157,7 +164,14 @@ data class LadoNova(
      * Lo que mide cada parante entre tramos en un vano con forma (N-94): el alto del vano donde
      * queda. En Formas, con el parante dentro, 77.2. Null = el alto medido del lado.
      */
-    val largosParante: List<Float>? = null
+    val largosParante: List<Float>? = null,
+    /**
+     * Inaparente en L, C y serie (N-75): lo que la estructura pierde en cada punta por el parante de
+     * esquina. Los tramos ya vienen sin eso (su puente y su riel llegan hasta el parante); el vidrio
+     * y sus U no lo pierden, así que la U que corre de punta a punta del lado lo recupera.
+     */
+    val estructuraIzq: Float = 0f,
+    val estructuraDer: Float = 0f
 ) {
     val hayMocheta: Boolean get() = altoHoja < alto
     val modulos: List<Modulo> get() = tramos.flatMap { it.modulos }

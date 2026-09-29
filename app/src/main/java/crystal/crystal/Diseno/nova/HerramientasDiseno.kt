@@ -561,11 +561,42 @@ object HerramientasDiseno {
                            else x1 >= fin - 0.5f && x0 < fin - DESCUADRE_CM && x0 > inicio
                 if (sale) y to (x1 - x0) else null
             }.sortedBy { it.first }
+            if (caras.size == 1) {
+                // Una sola cara dentro del sistema: la columna sigue más allá del puente (o del riel) y
+                // ahí la cierra el perfil, así que la U solo rodea lo que queda dentro (N-98 llevado a
+                // ese caso, 2026-09-29: la columna de Ele, de 61.1 a 158.3 con el sistema desde 63.9).
+                // Si llega al dintel o al alféizar del tramo no es una columna: es una viga o un escalón,
+                // que van por su regla (N-96, el recorte del sistema).
+                val (y, w) = caras[0]
+                val xDentro = if (izquierdo) inicio + w / 2f else fin - w / 2f
+                val arribaDelTramo = d.caidaDeTramo(indiceTramo)
+                val abajoDelTramo = arribaDelTramo + d.altoDeTramo(indiceTramo)
+                return if (!dentroDelVano(puntos, xDentro, y - 1f)) {
+                    // La columna viene de arriba.
+                    if (!dentroDelVano(puntos, xDentro, arribaDelTramo + 0.5f)) null
+                    else CorteLateral(0f, w, y - techo, 0f, piso - y)
+                } else {
+                    // La columna sigue hacia abajo.
+                    if (!dentroDelVano(puntos, xDentro, abajoDelTramo - 0.5f)) null
+                    else CorteLateral(w, 0f, piso - y, y - techo, 0f)
+                }
+            }
             if (caras.size != 2) return null
             val (arriba, abajo) = caras
             return CorteLateral(arriba.second, abajo.second, abajo.first - arriba.first, arriba.first - techo, piso - abajo.first)
         }
         return lado(true) to lado(false)
+    }
+
+    /** Si el punto (x, y) cae dentro del vano (par-impar sobre sus lados). */
+    private fun dentroDelVano(puntos: List<Pair<Float, Float>>, x: Float, y: Float): Boolean {
+        var dentro = false
+        for (i in puntos.indices) {
+            val (ax, ay) = puntos[i]
+            val (bx, by) = puntos[(i + 1) % puntos.size]
+            if ((ay > y) != (by > y) && x < ax + (y - ay) * (bx - ax) / (by - ay)) dentro = !dentro
+        }
+        return dentro
     }
 
     /** La franja [indiceFranja] del tramo en y: (techo, piso), desde el dintel. */

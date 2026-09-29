@@ -395,7 +395,15 @@ class DisenoNovaPantallaTest {
      * puesto elija lo que el dedo tiene debajo, no lo que había ahí sin zoom.
      */
     @Test
-    fun con_el_dibujo_acercado_el_toque_elige_lo_que_tiene_debajo() {
+    fun con_el_dibujo_acercado_el_toque_elige_lo_que_tiene_debajo() =
+        pellizcarYTocarLaFranjaDeArriba(100f, 160f) { assertTrue("el pellizco no acercó el dibujo: $it", it > 1.4f) }
+
+    /** Y alejarlo, para ver el diseño entero cuando lo tapan los botones (2026-09-29). */
+    @Test
+    fun con_el_dibujo_alejado_el_toque_elige_lo_que_tiene_debajo() =
+        pellizcarYTocarLaFranjaDeArriba(200f, 110f) { assertTrue("el pellizco no alejó el dibujo: $it", it < 0.7f) }
+
+    private fun pellizcarYTocarLaFranjaDeArriba(desde: Float, hasta: Float, comprobarZoom: (Float) -> Unit) {
         val desigual = "{nova,apa,[400,200:Tl<200>(s<160>(f<100>c<100>);m<40>(f<200>))" +
             " P<2.5> Tl<200>(s<120>(f<100>c<100>);m<40>(f<200>);m<40>(f<200>))]}"
         ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
@@ -409,16 +417,16 @@ class DisenoNovaPantallaTest {
             val zoom = enPantalla(esc) { act ->
                 val vista = act.findViewById<VistaDiseno>(crystal.crystal.R.id.vistaDiseno)
                 // Desde el centro de la vista: la franja se corre en la pantalla al acercar.
-                pellizcar(vista, vista.width / 2f, vista.height / 2f, 100f, 160f)
+                pellizcar(vista, vista.width / 2f, vista.height / 2f, desde, hasta)
                 vista.zoomParaPruebas()
             }
             esperar()
-            assertTrue("el pellizco no acercó el dibujo: $zoom", zoom > 1.4f)
+            comprobarZoom(zoom)
             val seleccion = enPantalla(esc) { act ->
                 val vista = act.findViewById<VistaDiseno>(crystal.crystal.R.id.vistaDiseno)
                 // La franja de arriba del tramo 2, donde quedó en la pantalla tras acercar.
                 val enPantalla = vista.aPantallaParaPruebas(objetivo.x, objetivo.y)
-                assertTrue("la franja no se movió al acercar", kotlin.math.hypot(enPantalla.x - objetivo.x, enPantalla.y - objetivo.y) > 20f)
+                assertTrue("la franja no se movió con el zoom", kotlin.math.hypot(enPantalla.x - objetivo.x, enPantalla.y - objetivo.y) > 20f)
                 act.tocarLienzoParaPruebas(enPantalla.x, enPantalla.y)
             }
             esperar()
