@@ -27,6 +27,12 @@ class VistaVolumenNova @JvmOverloads constructor(
     private var diseno: DisenoNova? = null
     private var volumen: VolumenDelDiseno? = null
 
+    /** La forma del vano entero en cm ([DisenoNova.siluetaDelVano]); vacía si es el rectángulo. */
+    private var siluetaVano: List<Pair<Float, Float>> = emptyList()
+
+    /** Dónde empieza cada tramo a lo largo de la ventana, en cm, contando los parantes. */
+    private var inicioDeTramo: List<Float> = emptyList()
+
     /** Desde dónde se mira. Se puede girar arrastrando el dedo. */
     var giroGrados: Float = VolumenDelDiseno.GIRO_POR_DEFECTO
         set(value) {
@@ -67,7 +73,13 @@ class VistaVolumenNova @JvmOverloads constructor(
         // La panza de toda la ventana se saca del paquete tal cual: la calculadora curva la mete
         // dentro de la franja de sistema, donde el modelo no la ve.
         val panza = PlantaDelDiseno.panzaDelPaquete(paquete)
-        val planta = d?.let { PlantaDelDiseno.de(it, panza) }
+        // La forma del vano entero —el círculo, la silueta medida, los escalones— recorta las
+        // paredes, que para eso se levantan todas a lo alto de la ventana. Solo en la ventana que
+        // no dobla: en la de esquina cada pared trae su propia silueta (`L<…>`).
+        siluetaVano = d?.takeIf { it.tramos.none { t -> t.pliegue != null } }?.siluetaDelVano().orEmpty()
+        inicioDeTramo = d?.tramos?.runningFold(0f) { x, t -> x + t.ancho + PARANTE }.orEmpty()
+        val aLevantar = if (siluetaVano.size >= 3) d?.copy(tramos = d.tramos.map { it.copy(alto = 0f) }) else d
+        val planta = aLevantar?.let { PlantaDelDiseno.de(it, panza) }
         volumen = planta?.let { VolumenDelDiseno.de(it) }
         planta?.let { giroGrados = giroQueLaPresentaBien(it) }
         invalidate()
@@ -98,6 +110,10 @@ class VistaVolumenNova @JvmOverloads constructor(
     /** Cuántas de sus caras salieron curvas. 0 = la ventana se armó plana. */
     @androidx.annotation.VisibleForTesting
     fun carasCurvasParaPruebas(): Int = volumen?.caras?.count { it.esCurva } ?: 0
+
+    /** Cuántos puntos tiene la forma del vano con la que se recortan las paredes. 0 = rectángulo. */
+    @androidx.annotation.VisibleForTesting
+    fun puntosDeLaFormaParaPruebas(): Int = siluetaVano.size
 
     // Girar la ventana arrastrando: es lo que salva al isométrico de su pega, que desde un solo
     // sitio siempre hay una pared que se ve de canto. A lo ancho gira sobre el suelo; a lo alto
@@ -400,26 +416,56 @@ class VistaVolumenNova @JvmOverloads constructor(
                 close()
             }
         }
-        val formaDeLaPared = contornoDeLaCara ?: cuadro(0f, 0f, 1f, 1f)
+        // La forma del vano entero puesta sobre esta cara. Se pasa a la cara con su sitio a lo largo
+        // de la ventana, así que lo que cae fuera de esta pared queda fuera de su cuadro y se
+        // recorta: cada cara se lleva solo su trozo de círculo o de escalón.
+        val vanoEnLaCara = if (contornoDeLaCara == null && siluetaVano.size >= 3 && tramo != null) {
+            val inicio = inicioDeTramo.getOrElse(cara.indiceTramo) { 0f }
+            val x0Cara = inicio + cara.desdeU * tramo.ancho
+            val anchoCara = ((cara.hastaU - cara.desdeU) * tramo.ancho).coerceAtLeast(0.01f)
+            val desarrollo = (inicioDeTramo.lastOrNull() ?: 0f) - PARANTE
+            val kx = desarrollo / siluetaVano.maxOf { it.first }.coerceAtLeast(0.01f)
+            val altoVano = maxOf(diseno.alto, siluetaVano.maxOf { it.second }).coerceAtLeast(0.01f)
+            Path().apply {
+                siluetaVano.forEachIndexed { i, (xCm, yCm) ->
+                    val p = enLaCara((xCm * kx - x0Cara) / anchoCara, 1f - yCm / altoVano)
+                    if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y)
+                }
+                close()
+            }
+        } else null
+        val formaDeLaPared = contornoDeLaCara
+            ?: vanoEnLaCara?.let { Path().apply { op(cuadro(0f, 0f, 1f, 1f), it, Path.Op.INTERSECT) } }
+            ?: cuadro(0f, 0f, 1f, 1f)
         canvas.drawPath(formaDeLaPared, if (daLaCara) pVidrio else pVidrioFondo)
         // Lo de dentro —franjas y cortes— se queda dentro de la silueta.
         canvas.save()
-        if (contornoDeLaCara != null) canvas.clipPath(contornoDeLaCara)
+        if (contornoDeLaCara != null || vanoEnLaCara != null) canvas.clipPath(formaDeLaPared)
+
+        // Con la forma del vano las paredes suben el alto entero de la ventana, y las franjas de
+        // cada tramo van en su trozo: de su dintel (lo que baja, `caida`) a su alféizar.
+        val (vPiso, vTecho) = if (vanoEnLaCara != null && tramo != null && diseno.alto > 0f) {
+            // El rectángulo del tramo lo da el modelo: en uno inclinado, de su dintel más alto a su
+            // alféizar más bajo (antes, el lado izquierdo; 2026-09-28).
+            val techo = diseno.caidaDeTramo(cara.indiceTramo)
+            val abajo = techo + diseno.altoDeTramo(cara.indiceTramo)
+            (1f - abajo / diseno.alto).coerceIn(0f, 1f) to (1f - techo / diseno.alto).coerceIn(0f, 1f)
+        } else 0f to 1f
 
         // Las franjas, de abajo arriba, y dentro de cada una sus módulos.
+        // Con el mismo reparto que el dibujo y el panel (N-29, N-34): antes una mocheta sin alto
+        // junto a un sistema escrito no tenía sitio y desaparecía (pedido del usuario, 2026-09-28).
         val franjas = tramo?.franjas.orEmpty()
-        val altoDeclarado = franjas.sumOf { it.alto.toDouble() }.toFloat()
-        var v0 = 0f
-        franjas.forEach { franja ->
-            val parte = when {
-                altoDeclarado > 0f && franja.alto > 0f -> franja.alto / altoDeclarado
-                franjas.isNotEmpty() -> 1f / franjas.size
-                else -> 1f
-            }
-            val v1 = (v0 + parte).coerceAtMost(1f)
+        val alturas = HerramientasDiseno.alturasDeFranjas(diseno, cara.indiceTramo)
+        val altoRepartido = alturas.sum()
+        var v0 = vPiso
+        franjas.forEachIndexed { k, franja ->
+            val parte = (if (altoRepartido > 0f) alturas.getOrElse(k) { 0f } / altoRepartido else 1f / franjas.size) *
+                (vTecho - vPiso)
+            val v1 = (v0 + parte).coerceAtMost(vTecho)
             if (v1 > v0 + 0.001f) {
                 // La raya entre franja y franja.
-                if (v0 > 0.001f) {
+                if (v0 > vPiso + 0.001f) {
                     val a = enLaCara(0f, v0)
                     val b = enLaCara(1f, v0)
                     canvas.drawLine(a.x, a.y, b.x, b.y, pDivision)
@@ -451,6 +497,18 @@ class VistaVolumenNova @JvmOverloads constructor(
         // de diez paños. Solo sus rieles, y los cantos donde la pared de verdad empieza y acaba.
         if (!cara.esCurva) {
             canvas.drawPath(formaDeLaPared, pMarco)
+        } else if (vanoEnLaCara != null) {
+            // Curva con forma: el borde del vano que cae en esta faceta, y los cantos donde la
+            // pared empieza y acaba hasta donde llega la forma.
+            canvas.save()
+            canvas.clipPath(cuadro(0f, 0f, 1f, 1f))
+            canvas.drawPath(vanoEnLaCara, pMarco)
+            canvas.restore()
+            canvas.save()
+            canvas.clipPath(formaDeLaPared)
+            if (cara.desdeU < 0.001f) enLaCara(0f, 0f).let { a -> enLaCara(0f, 1f).let { b -> canvas.drawLine(a.x, a.y, b.x, b.y, pMarco) } }
+            if (cara.hastaU > 0.999f) enLaCara(1f, 0f).let { a -> enLaCara(1f, 1f).let { b -> canvas.drawLine(a.x, a.y, b.x, b.y, pMarco) } }
+            canvas.restore()
         } else {
             val abajoI = enLaCara(0f, 0f)
             val abajoD = enLaCara(1f, 0f)

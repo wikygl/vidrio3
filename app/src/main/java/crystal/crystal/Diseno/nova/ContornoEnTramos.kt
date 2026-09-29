@@ -282,8 +282,73 @@ object ContornoEnTramos {
         return if (hubo) arriba to abajo else null
     }
     /**
+     * Un escalón del vano ya listo para ser tramo: su ancho sin los parantes, su alto y lo que baja
+     * su dintel. [entero] si va de dintel a alféizar como la ventana, que no anota ni alto ni caída.
+     */
+    data class Escalon(val ancho: Float, val alto: Float, val caida: Float, val entero: Boolean)
+
+    /**
+     * Los tramos de un vano escalonado, uno por banda, o null si alguna banda es inclinada de verdad
+     * (triángulos, dinteles en pendiente: esas formas van por su propio camino, N-67).
+     *
+     * Es el único sitio donde una banda se vuelve tramo, para el diseño sugerido y para Limpiar:
+     * - Un desnivel de hasta 2.5 es descuadre, no pendiente (N-06, N-66): el tramo queda recto y
+     *   manda su medida mayor. El recorte de Formas baja 0.9 y sigue siendo un escalón.
+     * - Cada escalón deja medio parante a cada lado del corte (N-27): así el eje del parante cae
+     *   justo en el borde del escalón y los tramos más los parantes suman el vano.
+     */
+    fun escalones(puntos: List<Pair<Float, Float>>, anchoParante: Float = 2.5f): List<Escalon>? {
+        val leidas = bandas(puntos)
+        if (leidas.isEmpty()) return null
+        fun inclinada(b: Banda) =
+            abs(b.altoDerCm - b.altoCm) > DESCUADRE_ESCALON || abs(b.caidaDerCm - b.caidaCm) > DESCUADRE_ESCALON
+        if (leidas.any { inclinada(it) }) return null
+        val altoVano = puntos.maxOf { it.second } - puntos.minOf { it.second }
+        return leidas.mapIndexed { i, b ->
+            val caida = minOf(b.caidaCm, b.caidaDerCm)
+            val alto = maxOf(b.altoCm, b.altoDerCm)
+            val lados = (if (i > 0) 1 else 0) + (if (i < leidas.lastIndex) 1 else 0)
+            Escalon(
+                ancho = (b.anchoCm - lados * anchoParante / 2f).coerceAtLeast(1f),
+                alto = alto,
+                caida = caida,
+                entero = caida <= TOLERANCIA && abs(alto - altoVano) <= TOLERANCIA
+            )
+        }
+    }
+
+    /**
+     * Las franjas del sistema y de la mocheta de un tramo recto, con N-29: la hoja que escribió el
+     * vidriero ([pedida]) o, sin ella, 5/7 del alto del tramo con el reparto único
+     * ([HerramientasDiseno.repartirAlto], el mismo del panel, el dibujo, la 3D y el motor). Si la
+     * hoja llega al alto no hay mocheta (N-30): una sola franja, nunca una mocheta de alto 0.
+     */
+    private fun franjasDeEscalon(
+        acabado: String, ancho: Float, alto: Float, pedida: Float, anchoParante: Float
+    ): List<NovaFranja>? {
+        val hoja = if (pedida > 0f) {
+            pedida
+        } else {
+            HerramientasDiseno.repartirAlto(listOf(0f, 0f), listOf(true, false), alto)[0]
+        }
+        val sinMocheta = hoja >= alto - TOLERANCIA
+        val base = DisenoNova.nuevo(
+            acabado = acabado,
+            ancho = ancho,
+            alto = alto,
+            altoHoja = if (sinMocheta) alto else hoja,
+            anchoParante = anchoParante
+        )
+        // `nuevo` reparte el ancho del tramo en sus módulos; aquí solo van sus franjas.
+        return base.tramos.firstOrNull()?.franjas
+    }
+
+    /**
      * El diseño de arranque para ese vano: un tramo por banda, cada uno en su sitio y repartido
      * con las reglas de siempre.
+     *
+     * Un vano escalonado —todos sus lados rectos, con descuadre de hasta 2.5— sale de [escalones]:
+     * cada escalón es un tramo (N-66) con su sistema y su mocheta por N-29.
      *
      * El alto de la ventana es el del vano entero, de lo más alto a lo más bajo. Cada tramo se
      * queda con lo suyo: lo que baja su dintel y lo que mide desde ahí. Los que van de punta a
@@ -306,6 +371,22 @@ object ContornoEnTramos {
         // ventana mide lo que mide el hueco, de punta a punta.
         val alto = puntos.maxOf { it.second } - puntos.minOf { it.second }
         val ancho = puntos.maxOf { it.first } - puntos.minOf { it.first }
+
+        escalones(puntos, anchoParante)?.let { escalones ->
+            val tramos = escalones.map { e ->
+                NovaTramo(
+                    ancho = e.ancho,
+                    franjas = franjasDeEscalon(acabado, e.ancho, e.alto, altoHoja, anchoParante) ?: return null,
+                    alto = if (e.entero) 0f else e.alto,
+                    caida = if (e.entero) 0f else e.caida
+                )
+            }
+            return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(puntos)
+        }
+        // Hasta el 2026-09-28 el escalonado también pasaba por aquí: la banda recta llevaba la hoja
+        // al alto entero del tramo (`s<144.4>; m<0>`), un descuadre de 0.9 la volvía inclinada con
+        // la hoja de la ventana entera (`s<103.2>; m<6.1>`) y los anchos no dejaban sitio a los
+        // parantes. Ahora ese caso sale de [escalones]; lo de abajo queda para los lados inclinados.
         // Contra qué alto se mide si la hoja entra: el que pidió el vidriero o, con el campo vacío,
         // los cinco séptimos del alto con los que la calculadora trabaja cuando nadie lo llena.
         val hoja = if (altoHoja > 0f) min(altoHoja, alto) else alto * 5f / 7f

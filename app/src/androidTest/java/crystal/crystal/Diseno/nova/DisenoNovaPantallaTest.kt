@@ -368,6 +368,95 @@ class DisenoNovaPantallaTest {
         }
     }
 
+    /** Un pellizco de dos dedos que se abren desde [centro], de [desde] a [hasta] de separación. */
+    private fun pellizcar(vista: android.view.View, cx: Float, cy: Float, desde: Float, hasta: Float) {
+        val t0 = android.os.SystemClock.uptimeMillis()
+        val props = Array(2) { android.view.MotionEvent.PointerProperties().apply { id = it; toolType = android.view.MotionEvent.TOOL_TYPE_FINGER } }
+        fun coords(sep: Float) = Array(2) { i ->
+            android.view.MotionEvent.PointerCoords().apply {
+                x = cx + (if (i == 0) -sep else sep) / 2f; y = cy; pressure = 1f; size = 1f
+            }
+        }
+        fun evento(accion: Int, n: Int, sep: Float, dt: Long) = android.view.MotionEvent.obtain(
+            t0, t0 + dt, accion, n, props, coords(sep), 0, 0, 1f, 1f, 0, 0, 0, 0
+        )
+        val secuencia = mutableListOf(
+            evento(android.view.MotionEvent.ACTION_DOWN, 1, desde, 0),
+            evento(android.view.MotionEvent.ACTION_POINTER_DOWN or (1 shl android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT), 2, desde, 10)
+        )
+        for (k in 1..10) secuencia.add(evento(android.view.MotionEvent.ACTION_MOVE, 2, desde + (hasta - desde) * k / 10f, 10L + 10 * k))
+        secuencia.add(evento(android.view.MotionEvent.ACTION_POINTER_UP or (1 shl android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT), 2, hasta, 130))
+        secuencia.add(evento(android.view.MotionEvent.ACTION_UP, 1, hasta, 140))
+        secuencia.forEach { vista.dispatchTouchEvent(it); it.recycle() }
+    }
+
+    /**
+     * Acercar el dibujo con dos dedos (pedido del usuario, 2026-09-29), y que un toque con el zoom
+     * puesto elija lo que el dedo tiene debajo, no lo que había ahí sin zoom.
+     */
+    @Test
+    fun con_el_dibujo_acercado_el_toque_elige_lo_que_tiene_debajo() {
+        val desigual = "{nova,apa,[400,200:Tl<200>(s<160>(f<100>c<100>);m<40>(f<200>))" +
+            " P<2.5> Tl<200>(s<120>(f<100>c<100>);m<40>(f<200>);m<40>(f<200>))]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(desigual) }
+            esperar()
+            val bandas1 = enPantalla(esc) { it.bandasDeFranjaParaPruebas(1) }
+            val (x0, x1) = enPantalla(esc) { it.anchosDeTramoParaPruebas() }[1]
+            val (top, bottom) = bandas1[2]
+            val objetivo = android.graphics.PointF((x0 + x1) / 2f, (top + bottom) / 2f)
+            val zoom = enPantalla(esc) { act ->
+                val vista = act.findViewById<VistaDiseno>(crystal.crystal.R.id.vistaDiseno)
+                // Desde el centro de la vista: la franja se corre en la pantalla al acercar.
+                pellizcar(vista, vista.width / 2f, vista.height / 2f, 100f, 160f)
+                vista.zoomParaPruebas()
+            }
+            esperar()
+            assertTrue("el pellizco no acercó el dibujo: $zoom", zoom > 1.4f)
+            val seleccion = enPantalla(esc) { act ->
+                val vista = act.findViewById<VistaDiseno>(crystal.crystal.R.id.vistaDiseno)
+                // La franja de arriba del tramo 2, donde quedó en la pantalla tras acercar.
+                val enPantalla = vista.aPantallaParaPruebas(objetivo.x, objetivo.y)
+                assertTrue("la franja no se movió al acercar", kotlin.math.hypot(enPantalla.x - objetivo.x, enPantalla.y - objetivo.y) > 20f)
+                act.tocarLienzoParaPruebas(enPantalla.x, enPantalla.y)
+            }
+            esperar()
+            assertEquals("no eligió el tramo que tiene debajo", 1, seleccion.first)
+            assertEquals("no eligió la franja que tiene debajo", 2, seleccion.second)
+        }
+    }
+
+    /**
+     * Un dintel que sube hacia la derecha (medida del usuario, 2026-09-28: 232.4 × 164.2, 109.1 a
+     * la izquierda). El tramo se dibujaba con el alto de su lado izquierdo: sistema y mocheta
+     * apretados en 109.1, dos puentes a la vista y el triángulo de arriba sin franja que tocar.
+     */
+    @Test
+    fun el_triangulo_de_un_dintel_que_sube_es_de_la_mocheta() {
+        val vano = listOf(232.4f to 0f, 232.4f to 164.2f, 0f to 164.2f, 0f to 55.1f)
+        val paquete = ContornoEnTramos.disenoDesdeContorno(vano, "apa", 0f)!!.aPaquete()
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(paquete) }
+            esperar()
+            val bandas = enPantalla(esc) { it.bandasDeFranjaParaPruebas(0) }
+            assertEquals("el tramo no tiene sistema y mocheta", 2, bandas.size)
+            val (sisTop, sisBot) = bandas[0]
+            val (mocTop, mocBot) = bandas[1]
+            // Las franjas llenan el rectángulo entero: 109.1 de sistema y 55.1 de mocheta.
+            val proporcion = (mocBot - mocTop) / (sisBot - sisTop)
+            assertEquals("la mocheta no llega al lado alto", 55.1f / 109.1f, proporcion, 0.03f)
+            // Un toque arriba a la derecha, dentro del triángulo, elige la mocheta.
+            val (x0, x1) = enPantalla(esc) { it.anchosDeTramoParaPruebas() }[0]
+            val seleccion = enPantalla(esc) {
+                it.tocarLienzoParaPruebas(x0 + (x1 - x0) * 0.9f, mocTop + (mocBot - mocTop) * 0.25f)
+            }
+            esperar()
+            assertEquals("el triángulo no se puede seleccionar", 1, seleccion.second)
+        }
+    }
+
     /**
      * El segundo toque en una franja tiene que pasar a elegir módulo —es lo que intensifica el
      * color y abre el ancho del módulo—. En la franja de arriba de un tramo con tres no llegaba.
@@ -1099,6 +1188,74 @@ class DisenoNovaPantallaTest {
             enPantalla(esc) { it.limpiarParaPruebas() }
             esperar()
             circular("al limpiar")
+        }
+    }
+
+    /**
+     * Crear mochetas con el botón sigue N-100 (dictado del usuario, 2026-09-28): la primera deja el
+     * sistema en 5/7; otra antes de editar la anterior, partes iguales; y si se editó una altura,
+     * lo editado se conserva y el cambio solo lo absorben las mochetas.
+     */
+    @Test
+    fun crear_mochetas_con_el_boton_sigue_n100() {
+        val solo = "{nova,apa,[200,160:Tl<200>(s(f<50>c<50>c<50>f<50>))]}"
+        fun alturas(esc: ActivityScenario<DisenoNovaActivity>) = enPantalla(esc) {
+            HerramientasDiseno.alturasDeFranjas(DisenoNova.desdePaquete(it.paqueteParaPruebas())!!, 0)
+        }
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(solo) }
+            esperar()
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas_0", mas = true) }
+            esperar()
+            val una = alturas(esc)
+            assertEquals("la primera no deja 5/7: $una", 160f * 5f / 7f, una[0], 0.1f)
+
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas_0", mas = true) }
+            esperar()
+            val dos = alturas(esc)
+            assertEquals("otra sin editar no reparte a partes iguales: $dos", 3, dos.size)
+            dos.forEach { assertEquals("otra sin editar no reparte a partes iguales: $dos", 160f / 3f, it, 0.1f) }
+
+            // Otra vez desde el sistema solo, pero editando la mocheta antes de crear la segunda.
+            enPantalla(esc) { it.cargarParaPruebas(solo) }
+            esperar()
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas_0", mas = true) }
+            esperar()
+            assertTrue(enPantalla(esc) { it.editarCotaParaPruebas("cotas_franja_0_1", "40") })
+            esperar()
+            enPantalla(esc) { it.pulsarEstructuraParaPruebas("cotas_franjas_0", mas = true) }
+            esperar()
+            val editada = alturas(esc)
+            assertEquals("lo editado no se conservó: $editada", 120f, editada[0], 0.1f)
+            assertEquals("las mochetas no absorben el cambio: $editada", 20f, editada[1], 0.1f)
+            assertEquals("las mochetas no absorben el cambio: $editada", 20f, editada[2], 0.1f)
+        }
+    }
+
+    /**
+     * Una mocheta que el escalón deja en 278.7, partida en dos sin editar, se ve en dos paños
+     * iguales de 139.3, como dice el panel de información (pedido del usuario, 2026-09-28). Los
+     * anchos van sobre el tramo desde N-99 y el dibujo los metía en proporción en el trozo de
+     * vano: salían 92 y 186.
+     */
+    @Test
+    fun la_mocheta_partida_en_un_escalon_se_ve_en_partes_iguales() {
+        val escalon = "{nova,apa,[420.6,117.9:Tl<420.6>(m<46>(f<420.6>);s<71.9>(f<46.7>c<46.7>f<46.7>c<46.7>" +
+            "f<46.7>c<46.7>f<46.7>c<46.7>f<46.8>)) V<0/0|420.6/0|420.6/71.9|278.7/71.9|278.7/117.9|0/117.9>]}"
+        ActivityScenario.launch<DisenoNovaActivity>(intentCon(null)).use { esc ->
+            esperar()
+            enPantalla(esc) { it.cargarParaPruebas(escalon) }
+            esperar()
+            enPantalla(esc) { it.editarParaPruebas { d -> d.conModuloAgregado(0, 0, 0, 'f') } }
+            esperar()
+            val d = enPantalla(esc) { DisenoNova.desdePaquete(it.paqueteParaPruebas())!! }
+            val enElPanel = HerramientasDiseno.geometriaDeModulos(d, 0, 0).map { it.contenido }
+            assertEquals("el modelo no las parte iguales: $enElPanel", enElPanel[0], enElPanel[1], 0.2f)
+            val xs = enPantalla(esc) { it.divisionesParaPruebas(0, 0) }!!
+            val primero = xs[1] - xs[0]
+            val segundo = xs[2] - xs[1]
+            assertEquals("el dibujo no las parte iguales: $xs", 1f, primero / segundo, 0.02f)
         }
     }
 }

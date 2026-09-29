@@ -156,4 +156,28 @@ class VistaVolumenNovaTest {
 
         retrato("vol_curva_parante.png", paquete)
     }
+
+    /**
+     * Las formas del vano se levantan con su forma y no como rectángulos (pedido del usuario,
+     * 2026-09-27): el círculo, la silueta medida, el escalón y el tramo inclinado.
+     */
+    @Test
+    fun las_formas_del_vano_no_salen_rectangulares() {
+        val formas = listOf(
+            "vol_circular.png" to "{nova,apa,[200,180:Tl<200>(s<128.6>(f<50>c<50>c<50>f<50>O<1>);m<51.4>(f<100>f<100>))]}",
+            "vol_triangulo.png" to "{nova,apa,[200,160:Tl<200>(s(f)) V<0/0|200/0|100/160>]}",
+            "vol_escalon.png" to "{nova,apa,[300,180:Tl<150>(s(fc)) P<2.5> Tl<147.5>(H<120>;s(fc))]}",
+            "vol_inclinado.png" to "{nova,apa,[300,180:Tl<300>(H<180,120>;s(fccf))]}"
+        )
+        for ((nombre, paquete) in formas) {
+            retrato(nombre, paquete)
+            val v = vista()
+            v.mostrar(paquete)
+            assertTrue("$nombre se levantó como rectángulo", v.puntosDeLaFormaParaPruebas() >= 3)
+        }
+        // Y el rectángulo sigue siendo rectángulo.
+        val v = vista()
+        v.mostrar("{nova,apa,[200,180:Tl<200>(s(fccf))]}")
+        assertEquals(0, v.puntosDeLaFormaParaPruebas())
+    }
 }

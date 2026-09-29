@@ -39,7 +39,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         /** La silueta del vano dentro del paquete: `V<x/y|x/y|…>`. */
         private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
         /** El círculo (`O<1>`) o el arco (`U<…>`), dentro del sistema o sueltos. */
-        private val RE_FORMA_PAQUETE = Regex("""(?<![A-Za-z])[uUoO]<[^>]*>""")
+        // Detrás de una letra no, salvo de un módulo (f, c) o de un parante (p): `fccfO<1>`.
+        private val RE_FORMA_PAQUETE = Regex("""(?<![A-Za-z&&[^fcpFCP]])[uUoO]<[^>]*>""")
         private const val TAG_FLOTANTE = "flotante_modulos"
         private const val FLOTANTE_MODULOS = 1
         private const val FLOTANTE_FRANJAS = 2
@@ -254,6 +255,8 @@ class DisenoNovaActivity : AppCompatActivity() {
             finish()
         }
         binding.btnLimpiarDiseno.setOnClickListener { limpiarDiseno() }
+        // Al acercar o alejar el dibujo, el mando de franjas sigue pegado debajo de él.
+        binding.vistaDiseno.alCambiarZoom = { pegarFlotanteAlDiseno() }
 
         // El lienzo se sube o se baja solo, según lo que ocupe el bloque de controles: al abrir
         // el panel de cotas con varios tramos el dibujo se encoge en vez de quedar tapado.
@@ -680,11 +683,11 @@ class DisenoNovaActivity : AppCompatActivity() {
         // Arriba o abajo: la mocheta salía siempre encima y para ponerla debajo había que dar un
         // rodeo. Mantener pulsado cualquiera de los dos abre el diálogo con tipo y altura.
         fila.addView(botonPanel("↓", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(tramo, arriba = false) }) {
-            cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(tramo, arriba = false) }
+            agregarMochetaAutomatica(tramo, arriba = false)
             refrescarFlotante()
         }.apply { tag = "flotante_franja_abajo" })
         fila.addView(botonPanel("↑", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(tramo, arriba = true) }) {
-            cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(tramo, arriba = true) }
+            agregarMochetaAutomatica(tramo, arriba = true)
             refrescarFlotante()
         }.apply { tag = "flotante_franja_arriba" })
         modoFlotante = FLOTANTE_FRANJAS
@@ -2239,7 +2242,7 @@ class DisenoNovaActivity : AppCompatActivity() {
             dp = dp,
             botonPanel("−", dp, franjas.size > 1) { cambiarEstructura { d -> d.conFranjaQuitadaEnTramo(i) } },
             botonPanel("+", dp, true, accionLarga = { dialogoAgregarFranjaEnTramo(i) }) {
-                cambiarEstructura { d -> d.conFranjaAgregadaEnTramo(i) }
+                agregarMochetaAutomatica(i)
             }
         ).apply { tag = "cotas_franjas_$i" })
         val campos = mutableListOf<EditText>()
@@ -2547,6 +2550,33 @@ class DisenoNovaActivity : AppCompatActivity() {
      * Al quitar un tramo se cae su marca junto con él —eso lo hace el ajuste de tamaño del panel—
      * y los que quedan conservan la suya, porque solo se quita el último.
      */
+    /**
+     * Cómo quedaron las alturas de cada tramo al crearle una mocheta automática. Si al crear la
+     * siguiente siguen iguales, nadie editó la anterior (N-100, dictado el 2026-09-28).
+     *
+     * Se guardan las alturas y no una marca de "editado" porque las alturas se cambian por muchos
+     * caminos —el panel, el puente, las herramientas—, y comparándolas se enteran todos.
+     */
+    private val alturasTrasMochetaAutomatica = mutableMapOf<Int, List<Float>>()
+
+    /**
+     * Crea una mocheta sin altura pedida en el tramo [tramo] (N-100): la primera deja el sistema en
+     * 5/7; otra antes de editar la anterior reparte el tramo a partes iguales; y si algo se editó,
+     * lo editado se conserva y el cambio solo lo absorben las mochetas.
+     */
+    private fun agregarMochetaAutomatica(tramo: Int, arriba: Boolean = true) {
+        cambiarEstructura { d ->
+            val antes = alturasTrasMochetaAutomatica[tramo]
+            val ahora = HerramientasDiseno.alturasDeFranjas(d, tramo)
+            val sinEditar = antes != null && antes.size == ahora.size &&
+                antes.zip(ahora).all { (a, b) -> kotlin.math.abs(a - b) <= 0.05f }
+            d.conFranjaAgregadaEnTramo(tramo, arriba = arriba, partesIguales = sinEditar)
+        }
+        runCatching { DisenoNova.desdePaquete(paqueteActualLectura()) }.getOrNull()?.let {
+            alturasTrasMochetaAutomatica[tramo] = HerramientasDiseno.alturasDeFranjas(it, tramo)
+        }
+    }
+
     private fun cambiarEstructura(operacion: (DisenoNova) -> DisenoNova) {
         indiceModuloActivo = -1
         if (!aplicarAlModelo(operacion)) {
@@ -2693,6 +2723,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         corteVerticalCm = null
         tramosBlockeados.clear()
         modulosEditados.clear()
+        alturasTrasMochetaAutomatica.clear()
         cerrarFlotanteModulos()
         cargarDesdePaquete(paqueteEnBlanco())
         actualizarVista()
@@ -2711,6 +2742,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         val puesta = vista3D
         if (puesta != null && puesta.visibility == View.VISIBLE) {
             puesta.visibility = View.GONE
+            chipProyeccion3D?.visibility = View.GONE
             chip3D?.text = "◰ ver en 3D"
             return
         }
@@ -2731,7 +2763,43 @@ class DisenoNovaActivity : AppCompatActivity() {
         }
         vista.visibility = View.VISIBLE
         chip3D?.text = "◰ volver al plano"
+        refrescarChipProyeccion3D(vista)
         Toast.makeText(this, "Arrastra para girarla", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Isométrica o perspectiva, como en la vista 3D de Medidas (pedido del usuario, 2026-09-29):
+     * la misma VistaVolumenNova, que ya sabe mirar en perspectiva y acercarse con dos dedos; aquí
+     * faltaba el botón para pasar de una a otra.
+     */
+    private var chipProyeccion3D: TextView? = null
+
+    private fun refrescarChipProyeccion3D(vista: VistaVolumenNova) {
+        val dp = resources.displayMetrics.density
+        val chip = chipProyeccion3D ?: TextView(this).apply {
+            setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+            setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+            textSize = 14f
+            setOnClickListener {
+                val v = vista3D ?: return@setOnClickListener
+                v.perspectiva = !v.perspectiva
+                refrescarChipProyeccion3D(v)
+            }
+            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomToBottom = binding.vistaDiseno.id
+                endToEnd = binding.vistaDiseno.id
+                bottomMargin = (8 * dp).toInt()
+                marginEnd = (12 * dp).toInt()
+            }
+            binding.root.addView(this, lp)
+            elevation = 8 * dp
+            chipProyeccion3D = this
+        }
+        chip.text = if (vista.perspectiva) "◉ perspectiva · pellizca para acercar" else "▱ isométrica · toca para perspectiva"
+        chip.visibility = View.VISIBLE
     }
 
     private fun instalarChip3D() {
@@ -3190,9 +3258,11 @@ class DisenoNovaActivity : AppCompatActivity() {
             androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
             androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
         ).apply {
-            topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            // Debajo del panel de información, no encima: anclado arriba del todo tapaba sus
+            // líneas en la ventana en L (captura del usuario, 2026-09-28).
+            topToBottom = R.id.panelInfoSeleccion
             startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-            topMargin = (12 * dp).toInt()
+            topMargin = (8 * dp).toInt()
             marginStart = (12 * dp).toInt()
         }
         padre.addView(chip, lp)
@@ -3390,6 +3460,9 @@ class DisenoNovaActivity : AppCompatActivity() {
 
     @androidx.annotation.VisibleForTesting
     fun contornoVanoParaPruebas(): List<Pair<Float, Float>> = binding.vistaDiseno.contornoVanoParaPruebas()
+
+    @androidx.annotation.VisibleForTesting
+    fun divisionesParaPruebas(tramo: Int, franja: Int): List<Float>? = binding.vistaDiseno.divisionesParaPruebas(tramo, franja)
 
     @androidx.annotation.VisibleForTesting
     fun circularParaPruebas(): Boolean = binding.vistaDiseno.circularParaPruebas()

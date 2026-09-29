@@ -93,18 +93,27 @@ object HerramientasDiseno {
      */
     fun alturasDeFranjas(d: DisenoNova, indiceTramo: Int): List<Float> {
         val t = d.tramos.getOrNull(indiceTramo) ?: return emptyList()
-        val altoT = d.altoDeTramo(indiceTramo)
-        // Un sistema sin alto escrito, con mochetas, es la hoja de la casa: 5/7 del alto (N-29), como
-        // lo dibuja la vista. Antes se repartía por igual con las mochetas, el dibujo mostraba 5/7 y
-        // Nova no encontraba hoja (el trapecio del usuario llegaba sin puente, 2026-09-26).
-        val conMocheta = t.franjas.any { !it.esSistema }
+        return repartirAlto(t.franjas.map { it.alto }, t.franjas.map { it.esSistema }, d.altoDeTramo(indiceTramo))
+    }
+
+    /**
+     * El reparto del alto [altoT] de un tramo entre sus franjas, de abajo arriba: [altos] los
+     * escritos (0 = se reparte sola) y [esSistema] cuál es sistema. Es la única regla: la usan el
+     * panel, el paquete, el motor, el dibujo y la vista en 3D (pedido del usuario, 2026-09-28: el
+     * dibujo repartía a partes iguales tres franjas sin alto y el panel no).
+     */
+    fun repartirAlto(altos: List<Float>, esSistema: List<Boolean>, altoT: Float): List<Float> {
+        // Sistema y mocheta sin alto escrito: el sistema es la hoja de la casa, 5/7 del alto (N-29).
+        // Antes se repartía por igual, el dibujo mostraba 5/7 y Nova no encontraba hoja (el trapecio
+        // del usuario llegaba sin puente, 2026-09-26). Con tres franjas o más, partes iguales para
+        // todas: con 5/7 la tercera salía raquítica (2026-09-10, confirmado el 2026-09-28, N-100).
         // Solo si NINGUNA franja tiene alto escrito: con la mocheta escrita, el sistema es lo que queda.
-        val sistemaAuto = conMocheta && t.franjas.count { it.esSistema } == 1 && t.franjas.all { it.alto <= 0f }
-        val franjas = if (sistemaAuto) t.franjas.map { if (it.esSistema) it.copy(alto = altoT * 5f / 7f) else it } else t.franjas
-        val fijas = franjas.filter { it.alto > 0f }.sumOf { it.alto.toDouble() }.toFloat()
-        val libres = franjas.count { it.alto <= 0f }
+        val sistemaAuto = altos.size == 2 && esSistema.count { it } == 1 && altos.all { it <= 0f }
+        val escritos = if (sistemaAuto) altos.mapIndexed { k, h -> if (esSistema[k]) altoT * 5f / 7f else h } else altos
+        val fijas = escritos.filter { it > 0f }.sum()
+        val libres = escritos.count { it <= 0f }
         val porLibre = if (libres > 0) ((altoT - fijas) / libres).coerceAtLeast(0f) else 0f
-        val alturas = franjas.map { if (it.alto > 0f) it.alto else porLibre }
+        val alturas = escritos.map { if (it > 0f) it else porLibre }
         // Si no suman el alto del tramo, se estiran en proporción: así los puentes caen donde se ven.
         val suma = alturas.sum()
         return if (suma > 0f && abs(suma - altoT) > 0.05f) alturas.map { it * altoT / suma } else alturas
@@ -870,31 +879,19 @@ object HerramientasDiseno {
         val enBlanco = DisenoNova(acabado, ancho, alto,
             listOf(NovaTramo(ancho, listOf(NovaFranja(true, 0f, listOf(NovaModulo('f', ancho)))))))
         if (vano.size < 3) return enBlanco
-        val bandas = ContornoEnTramos.bandas(vano)
         // Solo el escalonado (lados rectos) se parte por escalones. Lo inclinado —triángulos,
         // dinteles en pendiente— sigue limpiando a un tramo con su silueta: esas formas se
-        // desarrollan aparte, con pruebas (N-67, N-68). Un desnivel de hasta 2.5 cm es descuadre,
-        // no pendiente (N-06): el recorte de Formas baja 0.9 y sigue siendo un escalón.
-        fun inclinada(b: ContornoEnTramos.Banda) =
-            abs(b.altoDerCm - b.altoCm) > DESCUADRE_CM || abs(b.caidaDerCm - b.caidaCm) > DESCUADRE_CM
-        if (bandas.size < 2 || bandas.any { inclinada(it) }) return enBlanco.conContornoVano(vano)
-        val altoVano = vano.maxOf { it.second } - vano.minOf { it.second }
-        val tramos = bandas.mapIndexed { i, b ->
-            // Descuadre de hasta 2.5: manda la medida mayor (N-06). El tramo queda recto.
-            val altoB = maxOf(b.altoCm, b.altoDerCm)
-            val caidaB = minOf(b.caidaCm, b.caidaDerCm)
-            val entero = caidaB <= 0.15f && abs(altoB - altoVano) <= 0.15f
-            // Cada escalón deja medio parante a cada lado del corte: así el eje del parante cae
-            // justo en el borde del escalón, igual que uno puesto a mano con el imán.
-            val lados = (if (i > 0) 1 else 0) + (if (i < bandas.lastIndex) 1 else 0)
-            val anchoTramo = (b.anchoCm - lados * anchoParante / 2f).coerceAtLeast(1f)
+        // desarrollan aparte, con pruebas (N-67, N-68). Los escalones salen de la misma función que
+        // arma el diseño sugerido de Nova (descuadre de 2.5 y medio parante por corte); la versión
+        // propia que había aquí está en el historial (2026-09-28).
+        val escalones = ContornoEnTramos.escalones(vano, anchoParante)
+        if (escalones == null || escalones.size < 2) return enBlanco.conContornoVano(vano)
+        val tramos = escalones.map { e ->
             NovaTramo(
-                ancho = anchoTramo,
-                franjas = listOf(NovaFranja(true, 0f, listOf(NovaModulo('f', anchoTramo)))),
-                alto = if (entero) 0f else altoB,
-                caida = if (entero) 0f else caidaB,
-                altoDer = null,
-                caidaDer = null
+                ancho = e.ancho,
+                franjas = listOf(NovaFranja(true, 0f, listOf(NovaModulo('f', e.ancho)))),
+                alto = if (e.entero) 0f else e.alto,
+                caida = if (e.entero) 0f else e.caida
             )
         }
         return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(vano)

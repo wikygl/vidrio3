@@ -111,12 +111,27 @@ data class NovaTramo(
 }
 
 /** El diseño completo. [etiquetas] son los tags sueltos del paquete (`A<90>`, `U<…>`, `O<1>`). */
+/**
+ * La mocheta lateral de una esquina, del formato viejo: `l<ancho>(módulos){franjas}` (o `r<…>` a la
+ * derecha) dentro de la franja de sistema. [modulos] es el patrón simple de los paréntesis y
+ * [franjas] el diseño completo de las llaves, si lo trae. Se lee aquí para que el dibujo no tenga
+ * lector propio (C-13, N-81).
+ */
+data class NovaLateral(
+    val ancho: Float,
+    val modulos: List<NovaModulo>,
+    val parantes: List<Int> = emptyList(),
+    val franjas: List<NovaFranja> = emptyList()
+)
+
 data class DisenoNova(
     val acabado: String,
     val ancho: Float,
     val alto: Float,
     val tramos: List<NovaTramo>,
-    val etiquetas: List<String> = emptyList()
+    val etiquetas: List<String> = emptyList(),
+    /** Las mochetas laterales de esquina del formato viejo: 'l' a la izquierda, 'r' a la derecha. */
+    val laterales: Map<Char, NovaLateral> = emptyMap()
 ) {
     val nTramos: Int get() = tramos.size
     val nModulos: Int get() = tramos.sumOf { it.nModulosSistema }
@@ -127,12 +142,27 @@ data class DisenoNova(
     val nParantes: Int get() = (tramos.size - 1).coerceAtLeast(0)
 
 
-    /** El alto de un tramo: el suyo si lo tiene, y si no el de la ventana. */
-    fun altoDeTramo(indice: Int): Float =
-        tramos.getOrNull(indice)?.alto?.takeIf { it > 0f } ?: alto
+    /**
+     * El alto de un tramo: el suyo si lo tiene, y si no el de la ventana.
+     *
+     * Un tramo inclinado es el rectángulo que lo contiene (N-68, N-99): de su dintel más alto a su
+     * alféizar más bajo, y la silueta lo recorta. Sus franjas se reparten ese alto. Hasta el
+     * 2026-09-28 valía el lado izquierdo: con el lado alto a la derecha (232.4 × 164.2, 109.1 a la
+     * izquierda), sistema y mocheta se apretaban en 109.1 y el triángulo de arriba quedaba fuera.
+     */
+    fun altoDeTramo(indice: Int): Float {
+        val t = tramos.getOrNull(indice) ?: return alto
+        if (!t.esInclinado) return t.alto.takeIf { it > 0f } ?: alto
+        fun abajo(propio: Float, arriba: Float) = if (propio > 0f) arriba + propio else alto
+        val piso = maxOf(abajo(t.alto, t.caida), abajo(t.altoDerecho, t.caidaDerecha))
+        return piso - caidaDeTramo(indice)
+    }
 
-    /** Cuánto baja el dintel de un tramo respecto al de la ventana. */
-    fun caidaDeTramo(indice: Int): Float = tramos.getOrNull(indice)?.caida ?: 0f
+    /** Cuánto baja el dintel de un tramo respecto al de la ventana; en uno inclinado, su lado más alto. */
+    fun caidaDeTramo(indice: Int): Float {
+        val t = tramos.getOrNull(indice) ?: return 0f
+        return if (t.esInclinado) minOf(t.caida, t.caidaDerecha) else t.caida
+    }
 
     /** ¿Hay tramos recortados por arriba o por abajo? Es la ventana escalonada. */
     val esEscalonada: Boolean
@@ -159,6 +189,28 @@ data class DisenoNova(
         get() = etiquetas.firstOrNull { it.startsWith("V<", ignoreCase = true) }
             ?.let { ContornoEnTramos.desdeEtiqueta(it) }
             .orEmpty()
+
+    /** ¿El vano es un círculo, o una elipse de [ancho] × [alto]? Lo marca la etiqueta `O<1>`. */
+    val esCircular: Boolean
+        get() = etiquetas.any { it.startsWith("O<", ignoreCase = true) }
+
+    /**
+     * La forma del vano entero en la alzada, en cm desde la esquina de arriba a la izquierda: la
+     * elipse del vano circular, la silueta medida o la que dibujan los tramos escalonados o
+     * inclinados. Vacía si el vano es el rectángulo de siempre.
+     *
+     * La vista en 3D recorta con ella las paredes; sin esto, esas formas se levantaban como
+     * rectángulos (pedido del usuario, 2026-09-27).
+     */
+    fun siluetaDelVano(ladosDeElipse: Int = 48): List<Pair<Float, Float>> = when {
+        esCircular -> List(ladosDeElipse) { k ->
+            val a = 2.0 * Math.PI * k / ladosDeElipse
+            (ancho / 2f * (1f + kotlin.math.cos(a).toFloat())) to (alto / 2f * (1f - kotlin.math.sin(a).toFloat()))
+        }
+        contornoVano.size >= 3 -> contornoVano
+        esIrregular -> contornoDesdeTramos()
+        else -> emptyList()
+    }
 
     /**
      * La silueta que dibujan los tramos: su contorno, de la esquina de arriba a la izquierda y en
@@ -603,12 +655,17 @@ data class DisenoNova(
      * alto de la ventana, así la franja nueva nace con medida en vez de con 0. No toca los
      * anchos: una franja más no cambia el ancho de ningún tramo, y volver a repartir borraría
      * los anchos fijados a mano.
+     *
+     * [partesIguales]: la mocheta anterior se creó sola y nadie la editó, así que el alto del
+     * tramo se reparte a partes iguales entre todas sus franjas (N-100, dictado el 2026-09-28).
+     * Lo decide quien llama, que es quien sabe si hubo edición entre una y otra.
      */
     fun conFranjaAgregadaEnTramo(
         indiceTramo: Int,
         esSistema: Boolean = false,
         altoFranja: Float = 0f,
-        arriba: Boolean = true
+        arriba: Boolean = true,
+        partesIguales: Boolean = false
     ): DisenoNova {
         val tramo = tramos.getOrNull(indiceTramo) ?: return this
         val nueva = NovaFranja(esSistema, altoFranja.coerceAtLeast(0f), listOf(NovaModulo('f', tramo.ancho)))
@@ -617,10 +674,16 @@ data class DisenoNova(
         // había que dar un rodeo.
         val franjas = if (arriba) tramo.franjas + nueva else listOf(nueva) + tramo.franjas
         val nuevos = tramos.toMutableList()
-        nuevos[indiceTramo] = tramo.copy(franjas = franjas)
+        val altoT = altoDeTramo(indiceTramo)
+        val automatica = !esSistema && altoFranja <= 0f
+        nuevos[indiceTramo] = tramo.copy(
+            franjas = if (automatica && partesIguales && altoT > 0f) franjas.map { it.copy(alto = altoT / franjas.size) }
+            else franjas
+        )
         val conFranja = copy(tramos = nuevos)
         // Una franja con altura pedida se respeta; la automática se lleva lo que sobra del puente.
-        return if (esSistema || altoFranja > 0f) conFranja else conFranja.conAlturasRepartidas(indiceTramo)
+        return if (!automatica || partesIguales) conFranja
+        else conFranja.conAlturasRepartidas(indiceTramo, altoDelSistema(indiceTramo))
     }
 
     /**
@@ -634,7 +697,7 @@ data class DisenoNova(
         if (idx !in tramo.franjas.indices || tramo.franjas[idx].esSistema) return this
         val nuevos = tramos.toMutableList()
         nuevos[indiceTramo] = tramo.copy(franjas = tramo.franjas.filterIndexed { i, _ -> i != idx })
-        return copy(tramos = nuevos).conAlturasRepartidas(indiceTramo)
+        return copy(tramos = nuevos).conAlturasRepartidas(indiceTramo, altoDelSistema(indiceTramo))
     }
 
     /**
@@ -644,17 +707,36 @@ data class DisenoNova(
      * Nunca agrega ni quita franjas —al revés que [conPuenteCambiado], que sí puede crear la
      * mocheta—: si al tramo no le queda ninguna, el sistema se queda con el alto entero.
      */
-    private fun conAlturasRepartidas(indiceTramo: Int): DisenoNova {
+    /**
+     * El alto que tiene de verdad el sistema del tramo: el escrito —la altura de puente que trajo la
+     * medida, o la editada—, y si no lo tiene, el que le da el reparto (N-29).
+     */
+    private fun altoDelSistema(indiceTramo: Int): Float? {
+        val franjas = tramos.getOrNull(indiceTramo)?.franjas ?: return null
+        val k = franjas.indexOfFirst { it.esSistema }.takeIf { it >= 0 } ?: return null
+        return franjas[k].alto.takeIf { it > 0f } ?: HerramientasDiseno.alturasDeFranjas(this, indiceTramo).getOrNull(k)
+    }
+
+    private fun conAlturasRepartidas(indiceTramo: Int, sistemaAntes: Float? = null): DisenoNova {
         val tramo = tramos.getOrNull(indiceTramo) ?: return this
         val sistema = tramo.franjas.firstOrNull { it.esSistema } ?: return this
         val altoT = altoDeTramo(indiceTramo)
-        if (sistema.alto <= 0f || altoT <= 0f) return this
+        // El alto que el sistema tenía antes de agregar o quitar, escrito o no: sin escribir también
+        // es suyo (5/7, N-29) y se conserva. Antes, con una mocheta editada y el sistema sin escribir,
+        // la mocheta nueva le comía la mitad al sistema (dictado del usuario, 2026-09-28).
+        val hojaAntes = sistemaAntes?.takeIf { it > 0f } ?: sistema.alto
+        if (hojaAntes <= 0f || altoT <= 0f) return this
         val mochetas = tramo.franjas.count { !it.esSistema }
         val franjas = if (mochetas == 0) {
             tramo.franjas.map { if (it.esSistema) it.copy(alto = altoT) else it }
         } else {
-            val porMocheta = (altoT - sistema.alto).coerceAtLeast(0f) / mochetas
-            tramo.franjas.map { if (it.esSistema) it else it.copy(alto = porMocheta) }
+            // Un sistema que llena el tramo no deja sitio a la mocheta: la hoja pasa a ser 5/7 del
+            // alto (N-29) y la mocheta se lleva el resto. Sin esto, en un escalonado —la calculadora
+            // escribe el sistema con el alto entero del tramo— la mocheta salía de 0 y el puente
+            // quedaba encima del dintel, sin verse (pedido del usuario, 2026-09-27).
+            val altoSistema = if (hojaAntes >= altoT - 0.05f) altoT * 5f / 7f else hojaAntes
+            val porMocheta = (altoT - altoSistema).coerceAtLeast(0f) / mochetas
+            tramo.franjas.map { if (it.esSistema) it.copy(alto = altoSistema) else it.copy(alto = porMocheta) }
         }
         if (franjas == tramo.franjas) return this
         val nuevos = tramos.toMutableList()
@@ -817,6 +899,21 @@ data class DisenoNova(
     }
 
     /** Un tramo escrito: su ancho y, dentro, sus tags y sus franjas. */
+    /** Las mochetas laterales escritas como las lee el formato viejo: `l<30>(f){s<110>(fc)}`. */
+    private fun textoDeLaterales(): String = laterales.entries.joinToString("") { (lado, l) ->
+        fun modulos(mods: List<NovaModulo>, parantes: List<Int>) = mods.mapIndexed { i, m ->
+            val escrito = if (m.ancho != null) "${m.tipo}<${df(m.ancho)}>" else m.tipo.toString()
+            if (i in parantes) "$escrito;P;" else escrito
+        }.joinToString("")
+        val ancho = if (l.ancho > 0f) "<${df(l.ancho)}>" else ""
+        val franjas = if (l.franjas.isEmpty()) "" else "{" + l.franjas.joinToString(";") { fr ->
+            val cabeza = if (fr.esSistema) "s" else "m"
+            val mods = modulos(fr.modulos, fr.parantes)
+            if (fr.alto > 0f) "$cabeza<${df(fr.alto)}>($mods)" else "$cabeza($mods)"
+        } + "}"
+        "$lado$ancho(${modulos(l.modulos, l.parantes)})$franjas"
+    }
+
     private fun unTramo(tramo: NovaTramo, indice: Int): String {
         // Con varias franjas, las que no tienen alto escrito salen con el que de verdad tienen (N-29:
         // el sistema 5/7 del alto y las mochetas el resto). Si no, Nova no encontraba la hoja y la
@@ -829,7 +926,10 @@ data class DisenoNova(
             val mods = fr.modulos.mapIndexed { i, m ->
                 val escrito = if (m.ancho != null) "${m.tipo}<${df(m.ancho)}>" else m.tipo.toString()
                 if (i in fr.parantes) "$escrito;P;" else escrito
-            }.joinToString("")
+            }.joinToString("") +
+                // Las mochetas laterales de esquina van en el primer sistema, donde las lee el
+                // formato viejo: sin escribirlas, cualquier edición las borraba.
+                (if (indice == 0 && k == tramo.franjas.indexOfFirst { it.esSistema }) textoDeLaterales() else "")
             // Una franja sin altura se escribe sin `<alto>`, como venía.
             val alto = resueltas?.getOrNull(k) ?: fr.alto
             if (alto > 0f) "$cabeza<${df(alto)}>($mods)" else "$cabeza($mods)"
@@ -875,16 +975,21 @@ data class DisenoNova(
         // La altura es OPCIONAL: los diseños viejos y el de arranque escriben la franja como
         // `s(f)`, sin `<alto>`. Exigirla hacía que el modelo no pudiera leerlos, y entonces las
         // ediciones no hacían nada.
-        private val RE_FRANJA = Regex("""^([smSM])\s*(?:<\s*([\d.,-]+)\s*>)?\s*\(""")
+        // El alto puede venir vacío, `s<>(…)`: así escribe la calculadora el sistema que llena el alto.
+        private val RE_FRANJA = Regex("""^([smSM])\s*(?:<\s*([\d.,-]*)\s*>)?\s*\(""")
         private val RE_MODULO = Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>)?""")
 
         /** Módulos y los parantes de dentro de la franja, en el orden en que vienen escritos. */
         private val RE_MODULO_O_PARANTE =
-            Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>)?|;\s*[pP]\s*;""")
+            // El ancho también entre paréntesis, `f(50)`, y el parante también sin punto y coma:
+            // así los escribía el formato viejo, y el lector del dibujo los aceptaba (C-13).
+            Regex("""([fcFC])\s*(?:<\s*([\d.,-]+)\s*>|\(\s*([\d.,-]+)\s*\))?|;?\s*[pP]\s*;?""")
         private val RE_TRAMO = Regex("""^t[a-z]?\s*<\s*([\d.,-]+)\s*>""", RegexOption.IGNORE_CASE)
         private val RE_ETIQUETA = Regex("""^[UO]<[^>]*>$""", RegexOption.IGNORE_CASE)
         /** El círculo o el arco escritos dentro de una franja: `s(fccfO<1>)`. */
-        private val RE_FORMA_EN_SISTEMA = Regex("""(?<![A-Za-z])[UO]<[^>]*>""", RegexOption.IGNORE_CASE)
+        // Detrás de una letra no, salvo de un módulo (f, c) o de un parante (p): `fccfO<1>` es el
+        // círculo pegado al último fijo, como lo escribe el formato viejo.
+        private val RE_FORMA_EN_SISTEMA = Regex("""(?<![A-Za-z&&[^fcpFCP]])[UO]<[^>]*>""", RegexOption.IGNORE_CASE)
         /** El pliegue que va delante de un tramo: `A<90>`. */
         private val RE_PLIEGUE = Regex("""^[aA]<[^>]*>$""")
         /** Lo que arranca un trozo nuevo: la cabeza de un tramo o un tag suelto. */
@@ -1000,6 +1105,12 @@ data class DisenoNova(
                 etiquetas.add(m.value)
                 cuerpo = cuerpo.removeRange(m.range)
             }
+            // El formato viejo no tiene tramos: sus franjas van sueltas (`s<110>(fccf);m<50>(ff)`).
+            // Es un solo tramo del ancho de la ventana, como lo dibujaba el lector del dibujo.
+            if (cuerpo.trimStart().firstOrNull()?.lowercaseChar() in setOf('s', 'm')) {
+                cuerpo = "Tl<${df(ancho)}>(${cuerpo.trim()})"
+            }
+            val laterales = mutableMapOf<Char, NovaLateral>()
             for (trozo in partirPorTramos(cuerpo)) {
                 val t = trozo.trim()
                 if (t.isEmpty()) continue
@@ -1036,7 +1147,11 @@ data class DisenoNova(
                     RE_CONTORNO_TRAMO.find(tk.trim())?.let { ContornoEnTramos.desdeEtiqueta(it.value) }
                         ?.takeIf { it.size >= 3 }
                 }.orEmpty()
-                val franjas = tokens.mapNotNull { franjaDesdeTexto(it) }
+                // Lo que el formato viejo mete dentro del sistema además de los módulos: las mochetas
+                // laterales de esquina y los segmentos de otra pared, que pasan a ser tramos.
+                val segmentosViejos = mutableListOf<NovaTramo>()
+                val franjas = tokens.map { sacarLoViejoDelSistema(it, laterales, segmentosViejos) }
+                    .mapNotNull { franjaDesdeTexto(it) }
                 if (franjas.isNotEmpty()) {
                     tramos.add(
                         NovaTramo(
@@ -1053,9 +1168,10 @@ data class DisenoNova(
                     )
                     pliegue = null
                 }
+                tramos.addAll(segmentosViejos)
             }
             if (tramos.isEmpty()) return null
-            return DisenoNova(acabado, ancho, alto, tramos, etiquetas)
+            return DisenoNova(acabado, ancho, alto, tramos, etiquetas, laterales)
         }
 
         private fun franjaDesdeTexto(texto: String): NovaFranja? {
@@ -1076,11 +1192,82 @@ data class DisenoNova(
                     if (modulos.isNotEmpty()) parantes.add(modulos.size - 1)
                     return@forEach
                 }
-                val ancho = mm.groupValues[2].takeIf { it.isNotBlank() }?.let { num(it) }
+                val ancho = mm.groupValues[2].ifBlank { mm.groupValues[3] }
+                    .takeIf { it.isNotBlank() }?.let { num(it) }?.takeIf { it > 0f }
                 modulos.add(NovaModulo(tipo.lowercase().first(), ancho))
             }
-            if (modulos.isEmpty()) return null
+            // Una franja sin módulos escritos es un fijo, como la dibujaba el lector del dibujo.
+            if (modulos.isEmpty()) modulos.add(NovaModulo('f'))
             return NovaFranja(esSistema, alto, modulos, parantes)
+        }
+
+        /** Un segmento de otra pared del formato viejo: `a<120>{s<110>(fcf)}` (aleta) o `p<…>{…}` (plano). */
+        private val RE_SEGMENTO_VIEJO = Regex("""([aApP])(?:<\s*(-?[\d.,]+)\s*>)?\{([^}]*)\}""")
+
+        /** La mocheta lateral de esquina del formato viejo: `l<30>(f)`, `l<30>{s<110>(fc)}`, `r<…>`. */
+        private fun reLateral(lado: Char) =
+            Regex("""$lado(?:<\s*(-?[\d.,]+)\s*>)?(?:\(([^)]*)\))?(?:\{([^}]*)\})?""", RegexOption.IGNORE_CASE)
+
+        /** Las franjas de un diseño escrito dentro de llaves: `s<110>(fc);m<50>(f)` o `Tl<…>(…)`. */
+        private fun franjasDeUnDisenoViejo(texto: String): List<NovaFranja> {
+            val cuerpo = texto.substringAfter(":", texto).replace(" ", "")
+            if (cuerpo.isBlank()) return emptyList()
+            val dentro = if (cuerpo.first().lowercaseChar() == 't') interiorDeParentesis(cuerpo) ?: cuerpo else cuerpo
+            return partirNivelSuperior(dentro, ';').mapNotNull { franjaDesdeTexto(it) }
+        }
+
+        /**
+         * Saca de una franja de sistema lo que el formato viejo mete entre sus módulos: los
+         * segmentos de otra pared (van a [segmentos] como tramos) y las mochetas laterales de
+         * esquina (van a [laterales]). Devuelve la franja con solo sus módulos. Las demás franjas
+         * vuelven tal cual. Replica al lector que tenía el dibujo (C-13): primero los segmentos,
+         * después la mocheta de la izquierda y al final la de la derecha.
+         */
+        private fun sacarLoViejoDelSistema(
+            token: String,
+            laterales: MutableMap<Char, NovaLateral>,
+            segmentos: MutableList<NovaTramo>
+        ): String {
+            val t = token.trim()
+            val cab = RE_FRANJA.find(t) ?: return token
+            if (cab.groupValues[1].lowercase() != "s") return token
+            var resto = interiorDeParentesis(t) ?: return token
+            RE_SEGMENTO_VIEJO.findAll(resto).forEach { m ->
+                val franjas = franjasDeUnDisenoViejo(m.groupValues[3])
+                if (franjas.isEmpty()) return@forEach
+                segmentos += NovaTramo(
+                    ancho = m.groupValues[2].takeIf { it.isNotBlank() }?.let { num(it) }?.coerceAtLeast(1f) ?: 1f,
+                    franjas = franjas,
+                    pliegue = if (m.groupValues[1].lowercase() == "a") "A<90>" else null
+                )
+            }
+            resto = RE_SEGMENTO_VIEJO.replace(resto, "")
+            for (lado in listOf('l', 'r')) {
+                val re = reLateral(lado)
+                var ancho = 0f
+                var hay = false
+                var patron: NovaFranja? = null
+                var franjas: List<NovaFranja> = emptyList()
+                for (m in re.findAll(resto)) {
+                    hay = true
+                    val valor = m.groupValues[1].takeIf { it.isNotBlank() }?.let { num(it) } ?: 0f
+                    if (valor > 0f) ancho = maxOf(ancho, valor)
+                    if (m.groupValues[2].isNotBlank()) patron = franjaDesdeTexto("s(${m.groupValues[2]})")
+                    if (m.groupValues[3].isNotBlank()) {
+                        franjas = franjasDeUnDisenoViejo(m.groupValues[3])
+                        franjas.firstOrNull { it.esSistema }?.let { patron = it }
+                    }
+                }
+                if (!hay) continue
+                laterales[lado] = NovaLateral(
+                    ancho = ancho,
+                    modulos = patron?.modulos ?: listOf(NovaModulo('f')),
+                    parantes = patron?.parantes.orEmpty(),
+                    franjas = franjas
+                )
+                resto = re.replace(resto, "")
+            }
+            return t.substring(0, t.indexOf('(') + 1) + resto + ")"
         }
 
         /** ¿Empieza aquí otro trozo? Un tramo (`Tl<`) o un tag suelto (`A<`, `U<`, `O<`). */

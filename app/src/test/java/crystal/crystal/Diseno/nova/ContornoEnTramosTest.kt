@@ -378,4 +378,66 @@ class ContornoEnTramosTest {
         assertEquals("se partió un vano que es un solo tramo: ${d.aPaquete()}", 1, d.nTramos)
         assertTrue("el tramo se quedó sin corredizas", d.nCorredizas >= 1)
     }
+
+    // ==================== EL DISEÑO SUGERIDO SIGUE LAS REGLAS (2026-09-28) ====================
+
+    /** Formas: escalón a la izquierda, dintel que baja 0.1 y recorte abajo a la derecha que baja 0.9. */
+    private val formas = listOf(
+        0f to 144.5f, 256.3f to 144.5f, 256.3f to 109.4f, 338.3f to 108.5f,
+        338.3f to 0f, 104.6f to 0.1f, 104.6f to 67.3f, 0f to 67.3f
+    )
+
+    @Test
+    fun `sin hoja escrita cada tramo del escalonado lleva su sistema de 5-7 y su mocheta`() {
+        // Antes: tramo 2 `s<144.4>; m<0>` (la mocheta se perdía) y tramo 3, por el descuadre de 0.9
+        // leído como pendiente, `s<103.2>; m<6.1>`. N-29, N-30, N-06.
+        val d = ContornoEnTramos.disenoDesdeContorno(formas, "apa", 0f)!!
+        assertEquals(3, d.nTramos)
+        val esperado = listOf(77.2f, 144.5f, 109.4f)
+        d.tramos.forEachIndexed { i, t ->
+            assertEquals("tramo ${i + 1}: ${d.aPaquete()}", 2, t.franjas.size)
+            val (s, m) = t.franjas
+            assertTrue(s.esSistema && !m.esSistema)
+            val altoT = d.altoDeTramo(i)
+            assertEquals("alto del tramo ${i + 1}", esperado[i], altoT, 0.15f)
+            assertEquals("sistema del tramo ${i + 1}", altoT * 5f / 7f, s.alto, 0.1f)
+            assertEquals("mocheta del tramo ${i + 1}", altoT - s.alto, m.alto, 0.1f)
+        }
+    }
+
+    @Test
+    fun `los tramos del escalonado mas sus parantes suman el vano`() {
+        // N-27: cada corte deja medio parante a cada lado, como Limpiar.
+        val d = ContornoEnTramos.disenoDesdeContorno(formas, "apa", 0f)!!
+        val suma = d.tramos.sumOf { it.ancho.toDouble() }.toFloat() + 2 * 2.5f
+        assertEquals(d.aPaquete(), 338.3f, suma, 0.05f)
+        val limpio = HerramientasDiseno.limpioConForma("apa", d.ancho, d.alto, formas)
+        assertEquals(limpio.tramos.map { it.ancho }, d.tramos.map { it.ancho })
+        assertEquals(limpio.tramos.map { it.alto }, d.tramos.map { it.alto })
+    }
+
+    @Test
+    fun `con la hoja escrita el tramo mas bajo que ella no lleva mocheta`() {
+        // N-29: hoja mayor o igual al alto, sin mocheta; una sola franja, nunca una mocheta de 0.
+        val d = ContornoEnTramos.disenoDesdeContorno(formas, "apa", 103.2f)!!
+        assertEquals(1, d.tramos[0].franjas.size)
+        assertEquals(103.2f, d.tramos[1].franjas[0].alto, 0.05f)
+        assertTrue(d.tramos.all { t -> t.franjas.none { !it.esSistema && it.alto <= 0.15f } })
+    }
+
+    @Test
+    fun `un dintel que sube hacia la derecha reparte las franjas en el rectangulo entero`() {
+        // Medida del usuario (lápiz magnético, 2026-09-28): 232.4 × 164.2, 109.1 a la izquierda. El
+        // tramo se leía con el alto del lado izquierdo: sistema 72.5 y mocheta 36.6 apretados en
+        // 109.1, dos puentes a la vista y el triángulo de arriba fuera de toda franja.
+        val vano = listOf(232.4f to 0f, 232.4f to 164.2f, 0f to 164.2f, 0f to 55.1f)
+        val d = DisenoNova.desdePaquete(ContornoEnTramos.disenoDesdeContorno(vano, "apa", 0f)!!.aPaquete())!!
+        assertEquals(164.2f, d.altoDeTramo(0), 0.05f)
+        assertEquals(0f, d.caidaDeTramo(0), 0.05f)
+        val alturas = HerramientasDiseno.alturasDeFranjas(d, 0)
+        assertEquals(109.1f, alturas[0], 0.05f)
+        assertEquals(55.1f, alturas[1], 0.05f)
+        // El puente, en el lado bajo, donde la corrediza todavía entra entera (N-67).
+        assertEquals(listOf(55.1f), HerramientasDiseno.limitesDePuente(d, 0).map { Math.round(it * 10) / 10f })
+    }
 }

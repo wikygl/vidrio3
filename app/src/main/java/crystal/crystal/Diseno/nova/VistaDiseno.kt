@@ -354,7 +354,10 @@ class VistaDiseno @JvmOverloads constructor(
         // Un vano con forma (silueta, escalón, inclinado): el SVG manual no la recorta.
         vanoConForma = contornoVanoCm.size >= 3 ||
             runCatching { DisenoNova.desdePaquete(paqueteSeguro)?.esIrregular == true }.getOrDefault(false)
-        val franjas = parsearModeloConAlturas(formaDentroDelSistema(RE_VANO_PAQUETE.replace(modeloCrudo, "")))
+        // Un solo lector del diseño (C-13): el del modelo, el mismo del panel, la 3D y el motor.
+        val d = DisenoNova.desdePaquete(paqueteSeguro)
+        require(d != null) { "Paquete ilegible: $paqueteSeguro" }
+        val franjas = leerDesdeModelo(d)
         if (this.mochetaLateralCm <= 0f && mochetaLDesdeModeloCm > 0f) {
             this.mochetaLateralCm = mochetaLDesdeModeloCm
         }
@@ -428,7 +431,23 @@ class VistaDiseno @JvmOverloads constructor(
         }
     }
 
-    private fun parsearModeloConAlturas(modelo: String): List<FranjaNova> {
+    /** Una franja del modelo como la usa el dibujo. El parante del dibujo cuenta los módulos a su izquierda. */
+    private fun franjaDelModelo(f: NovaFranja) = FranjaNova(
+        tipo = if (f.esSistema) TipoFranja.SISTEMA else TipoFranja.MOCHETA,
+        modulos = f.modulos.map { if (it.esFijo) TipoModulo.FIJO else TipoModulo.CORREDIZA },
+        alturaCm = f.alto.takeIf { it > 0f },
+        parantePosiciones = f.parantes.map { it + 1 },
+        anchosMod = f.modulos.map { it.ancho ?: 0f }
+    )
+
+    /**
+     * Lo que el dibujo necesita, sacado del modelo [d] y no del texto (C-13, un solo lector del
+     * diseño, N-81). Antes el dibujo tenía su propio lector y el panel, la 3D y el motor el del
+     * modelo: cada diferencia entre los dos era un fallo distinto (la mocheta partida 92/186, las
+     * alturas, el círculo que se perdía). Devuelve las franjas del primer tramo, como el lector
+     * viejo, y deja puestos los tramos, las mochetas laterales y los modos del dibujo.
+     */
+    private fun leerDesdeModelo(d: DisenoNova): List<FranjaNova> {
         esquinaLConParante = false
         esquinaRConParante = false
         mochetaLDesdeModeloCm = 0f
@@ -445,466 +464,106 @@ class VistaDiseno @JvmOverloads constructor(
         modoCircular = false
         modoCUSimétrico = false
 
-        // El contorno del vano ya se leyó en `actualizarDesdePaquete`; aquí solo se quita de en
-        // medio, que no es una franja ni un tramo.
-        val sinVano = RE_VANO_PAQUETE.replace(modelo, "")
-
-        // Nuevo formato T<> o A<90>T<> (ns en serie): delegar a parsearConTramos
-        val modeloNorm = sinVano.replace(" ", "")
-        if (modeloNorm.lowercase().let { it.startsWith("t") || it.startsWith("a<") }) {
-            return parsearConTramos(modeloNorm)
+        d.laterales['l']?.let { l ->
+            esquinaLConParante = true
+            mochetaLDesdeModeloCm = l.ancho
+            mochetaLModulos = l.modulos.map { if (it.esFijo) TipoModulo.FIJO else TipoModulo.CORREDIZA }
+            mochetaLParantes = l.parantes.map { it + 1 }
+            mochetaLFranjas = l.franjas.map { franjaDelModelo(it) }
         }
-
-        val secciones = splitRespetandoParentesis(modeloNorm)
-            .filter { it.isNotEmpty() }
-            // Los tags del tramo —`H<>` con su alto, `D<>` con lo que baja el dintel— no son
-            // franjas: se saltan aquí o el parser los rechaza y el dibujo se cae.
-            .filter { val c = it.first().lowercaseChar(); c == 's' || c == 'm' }
-
-        var segmentosNsExtra: List<SegmentoNs> = emptyList()
-        val franjasParseadas = secciones.map { frag ->
-            val low = frag.lowercase()
-            require(low.startsWith("s(") || low.startsWith("s<") || low.startsWith("m(") || low.startsWith("m<")) {
-                "Franja invalida: $frag"
-            }
-            val tipo = if (low[0] == 's') TipoFranja.SISTEMA else TipoFranja.MOCHETA
-            val altura: Float?
-            val modTxt: String
-            if (low[1] == '<') {
-                val cmTxt = low.substringAfter("<").substringBefore(">").replace(",", ".")
-                altura = cmTxt.toFloatOrNull()
-                modTxt = low.substringAfter(">").substringAfter("(").substringBeforeLast(")")
-            } else {
-                altura = null
-                modTxt = low.substringAfter("(").substringBeforeLast(")")
-            }
-            val circular = parsearIndicadorCircular(modTxt)
-            if (tipo == TipoFranja.SISTEMA && circular.activo) {
-                modoCircular = true
-            }
-            val arco = parsearIndicadorArco(circular.textoSinO)
-            if (tipo == TipoFranja.SISTEMA && arco.activo) {
-                modoArcoCurvo = true
-                flechaArcoCm = arco.flechaCm
-            }
-            val nsData = parsearIndicadoresNs(arco.textoSinU)
-            if (tipo == TipoFranja.SISTEMA && nsData.segmentos.isNotEmpty()) {
-                segmentosNsExtra = nsData.segmentos.mapNotNull { convertirSegmentoNsTag(it) }
-            }
-            val lData = parsearIndicadorEsquina(nsData.textoSinTags, "l")
-            val rData = parsearIndicadorEsquina(lData.textoSinL, "r")
-            val modsSinLR = rData.textoSinL
-            if (tipo == TipoFranja.SISTEMA && lData.tieneEsquina) {
-                esquinaLConParante = true
-                if (lData.mochetaCm > 0f) mochetaLDesdeModeloCm = max(mochetaLDesdeModeloCm, lData.mochetaCm)
-                if (lData.modulosMocheta.isNotEmpty()) mochetaLModulos = lData.modulosMocheta
-                if (lData.parantesMocheta.isNotEmpty()) mochetaLParantes = lData.parantesMocheta
-                if (lData.franjasMocheta.isNotEmpty()) mochetaLFranjas = lData.franjasMocheta
-            }
-            if (tipo == TipoFranja.SISTEMA && rData.tieneEsquina) {
-                esquinaRConParante = true
-                if (rData.mochetaCm > 0f) mochetaRDesdeModeloCm = max(mochetaRDesdeModeloCm, rData.mochetaCm)
-                if (rData.modulosMocheta.isNotEmpty()) mochetaRModulos = rData.modulosMocheta
-                if (rData.parantesMocheta.isNotEmpty()) mochetaRParantes = rData.parantesMocheta
-                if (rData.franjasMocheta.isNotEmpty()) mochetaRFranjas = rData.franjasMocheta
-            }
-            val (mods, parantes, anchos) = parsearModulosConParantes(modsSinLR)
-            FranjaNova(tipo, mods, altura, parantes, anchos)
+        d.laterales['r']?.let { r ->
+            esquinaRConParante = true
+            mochetaRDesdeModeloCm = r.ancho
+            mochetaRModulos = r.modulos.map { if (it.esFijo) TipoModulo.FIJO else TipoModulo.CORREDIZA }
+            mochetaRParantes = r.parantes.map { it + 1 }
+            mochetaRFranjas = r.franjas.map { franjaDelModelo(it) }
         }
+        val arco = d.etiquetas.firstOrNull { it.startsWith("U<", ignoreCase = true) }
+            ?.substringAfter("<")?.substringBefore(">")?.replace(",", ".")?.toFloatOrNull()
 
-        if (segmentosNsExtra.isNotEmpty()) {
-            val baseAncho = if (anchoCm > 0f) anchoCm else 100f
-            segmentosNs = listOf(SegmentoNs(TipoSegmentoNs.PLANO, baseAncho, franjasParseadas)) + segmentosNsExtra
-        }
-
-        return franjasParseadas
-    }
-
-    private data class SegmentoNsTag(
-        val tipo: TipoSegmentoNs,
-        val anchoCm: Float,
-        val diseno: String
-    )
-
-    private data class ParseNsTagsResult(
-        val textoSinTags: String,
-        val segmentos: List<SegmentoNsTag>
-    )
-
-    private fun parsearIndicadoresNs(texto: String): ParseNsTagsResult {
-        val regex = Regex("([ap])(?:<\\s*(-?\\d+(?:[.,]\\d+)?)\\s*>)?\\{([^}]*)\\}", RegexOption.IGNORE_CASE)
-        val segmentos = mutableListOf<SegmentoNsTag>()
-        for (m in regex.findAll(texto)) {
-            val tipoTxt = m.groupValues.getOrNull(1).orEmpty().lowercase()
-            val tipo = if (tipoTxt == "a") TipoSegmentoNs.ALETA else TipoSegmentoNs.PLANO
-            val ancho = m.groupValues.getOrNull(2)?.replace(",", ".")?.toFloatOrNull() ?: 0f
-            val diseno = m.groupValues.getOrNull(3).orEmpty()
-            if (diseno.isNotBlank()) {
-                segmentos.add(SegmentoNsTag(tipo = tipo, anchoCm = ancho, diseno = diseno))
-            }
-        }
-        return ParseNsTagsResult(
-            textoSinTags = texto.replace(regex, ""),
-            segmentos = segmentos
-        )
-    }
-
-    private data class ParseArcoResult(
-        val textoSinU: String,
-        val activo: Boolean,
-        val flechaCm: Float
-    )
-
-    private data class ParseCircularResult(
-        val textoSinO: String,
-        val activo: Boolean
-    )
-
-    private fun parsearIndicadorCircular(texto: String): ParseCircularResult {
-        val regex = Regex("o<\\s*(-?\\d+(?:[.,]\\d+)?)\\s*>", RegexOption.IGNORE_CASE)
-        val m = regex.find(texto)
-        return ParseCircularResult(
-            textoSinO = texto.replace(regex, ""),
-            activo = m != null
-        )
-    }
-
-    private fun parsearIndicadorArco(texto: String): ParseArcoResult {
-        val regex = Regex("u<\\s*(-?\\d+(?:[.,]\\d+)?)\\s*>", RegexOption.IGNORE_CASE)
-        val m = regex.find(texto)
-        val flecha = m?.groupValues?.getOrNull(1)?.replace(",", ".")?.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
-        return ParseArcoResult(
-            textoSinU = texto.replace(regex, ""),
-            activo = m != null,
-            flechaCm = flecha
-        )
-    }
-
-    private fun convertirSegmentoNsTag(tag: SegmentoNsTag): SegmentoNs? {
-        val franjas = parsearFranjasDesdeModeloCompleto(tag.diseno)
-        if (franjas.isEmpty()) return null
-        return SegmentoNs(tipo = tag.tipo, anchoCm = tag.anchoCm.coerceAtLeast(1f), franjas = franjas)
-    }
-
-    private data class ParseEsquinaResult(
-        val textoSinL: String,
-        val mochetaCm: Float,
-        val tieneEsquina: Boolean,
-        val modulosMocheta: List<TipoModulo>,
-        val parantesMocheta: List<Int>,
-        val franjasMocheta: List<FranjaNova>
-    )
-
-    private fun parsearIndicadorEsquina(texto: String, tag: String): ParseEsquinaResult {
-        val regexL = Regex("$tag(?:<\\s*(-?\\d+(?:[.,]\\d+)?)\\s*>)?(?:\\(([^)]*)\\))?(?:\\{([^}]*)\\})?", RegexOption.IGNORE_CASE)
-        var mocheta = 0f
-        var tieneL = false
-        var modulos: List<TipoModulo> = emptyList()
-        var parantes: List<Int> = emptyList()
-        var franjas: List<FranjaNova> = emptyList()
-        for (match in regexL.findAll(texto)) {
-            tieneL = true
-            val valor = match.groupValues.getOrNull(1)?.replace(",", ".")?.toFloatOrNull() ?: 0f
-            if (valor > 0f) mocheta = max(mocheta, valor)
-            val patronMocheta = match.groupValues.getOrNull(2).orEmpty()
-            if (patronMocheta.isNotBlank()) {
-                val parsed = parsearModulosConParantes(patronMocheta)
-                modulos = parsed.first
-                parantes = parsed.second
-                // anchos (parsed.third) no aplica para mocheta lateral simple
-            }
-            val modeloCompleto = match.groupValues.getOrNull(3).orEmpty()
-            if (modeloCompleto.isNotBlank()) {
-                franjas = parsearFranjasDesdeModeloCompleto(modeloCompleto)
-                val primeraSistema = franjas.firstOrNull { it.tipo == TipoFranja.SISTEMA }
-                if (primeraSistema != null && primeraSistema.modulos.isNotEmpty()) {
-                    modulos = primeraSistema.modulos
-                    parantes = primeraSistema.parantePosiciones
-                }
-            }
-        }
-        if (tieneL && modulos.isEmpty()) {
-            modulos = listOf(TipoModulo.FIJO)
-            parantes = emptyList()
-        }
-        return ParseEsquinaResult(
-            textoSinL = texto.replace(regexL, ""),
-            mochetaCm = mocheta,
-            tieneEsquina = tieneL,
-            modulosMocheta = modulos,
-            parantesMocheta = parantes,
-            franjasMocheta = franjas
-        )
-    }
-
-    private fun parsearFranjasDesdeModeloCompleto(modeloCompleto: String): List<FranjaNova> {
-        val modelo = modeloCompleto.substringAfter(":", modeloCompleto)
-        if (modelo.isBlank()) return emptyList()
-        val modeloSinEsp = modelo.replace(" ", "")
-        // Nuevo formato T<>: desenvuelve el primer bloque T<>() y parsea su contenido
-        if (modeloSinEsp.lowercase().startsWith("t")) {
-            val openParen = modeloSinEsp.indexOf('(')
-            if (openParen > 0) {
-                var depth = 0
-                for (j in openParen until modeloSinEsp.length) {
-                    when (modeloSinEsp[j]) {
-                        '(' -> depth++
-                        ')' -> { depth--; if (depth == 0) return parsearFranjasDesdeModeloCompleto(modeloSinEsp.substring(openParen + 1, j)) }
-                    }
-                }
-            }
-        }
-        val secciones = splitRespetandoParentesis(modeloSinEsp)
-            .filter { it.isNotEmpty() }
-        return secciones.mapNotNull { frag ->
-            val low = frag.lowercase()
-            if (!(low.startsWith("s(") || low.startsWith("s<") || low.startsWith("m(") || low.startsWith("m<"))) {
-                return@mapNotNull null
-            }
-            val tipo = if (low[0] == 's') TipoFranja.SISTEMA else TipoFranja.MOCHETA
-            val altura: Float?
-            val modTxt: String
-            if (low.length > 1 && low[1] == '<') {
-                val cmTxt = low.substringAfter("<").substringBefore(">").replace(",", ".")
-                altura = cmTxt.toFloatOrNull()
-                modTxt = low.substringAfter(">").substringAfter("(").substringBeforeLast(")")
-            } else {
-                altura = null
-                modTxt = low.substringAfter("(").substringBeforeLast(")")
-            }
-            val (mods, parantes, anchos) = parsearModulosConParantes(modTxt)
-            FranjaNova(tipo, mods, altura, parantes, anchos)
-        }
-    }
-
-    private fun parsearModulosConParantes(texto: String): Triple<List<TipoModulo>, List<Int>, List<Float>> {
-        val modulos = mutableListOf<TipoModulo>()
-        val parantes = mutableListOf<Int>()
-        val anchos  = mutableListOf<Float>()
-        val reModulo = Regex("""([fcFC])\s*(?:<\s*(-?\d+(?:[.,]\d+)?)\s*>|\(\s*(-?\d+(?:[.,]\d+)?)\s*\))?""")
-        val partes = texto.split(Regex(";?p;?", RegexOption.IGNORE_CASE))
-        for ((idx, parte) in partes.withIndex()) {
-            reModulo.findAll(parte).forEach { m ->
-                val tipo = if (m.groupValues[1].lowercase() == "c") TipoModulo.CORREDIZA else TipoModulo.FIJO
-                val wRaw = m.groupValues[2].ifBlank { m.groupValues[3] }
-                val w = wRaw.replace(',', '.').toFloatOrNull()?.takeIf { it > 0f } ?: 0f
-                modulos.add(tipo)
-                anchos.add(w)
-            }
-            if (idx < partes.lastIndex) parantes.add(modulos.size)
-        }
-        if (modulos.isEmpty()) { modulos.add(TipoModulo.FIJO); anchos.add(0f) }
-        return Triple(modulos, parantes, anchos)
-    }
-
-    private fun splitRespetandoParentesis(texto: String): List<String> {
-        val result = mutableListOf<String>()
-        var depth = 0
-        val current = StringBuilder()
-        for (ch in texto) {
-            when {
-                ch == '(' -> { depth++; current.append(ch) }
-                ch == ')' -> { depth--; current.append(ch) }
-                ch == ';' && depth == 0 -> {
-                    if (current.isNotEmpty()) result.add(current.toString())
-                    current.clear()
-                }
-                else -> current.append(ch)
-            }
-        }
-        if (current.isNotEmpty()) result.add(current.toString())
-        return result
-    }
-
-    // ================= Parseo nuevo formato T<> =================
-
-    /**
-     * Divide el cuerpo del modelo (sin espacios) en elementos top-level:
-     * T<w>(...), A<angulo>, P<medida>
-     */
-    private fun splitTopLevelElementos(cuerpo: String): List<String> {
-        val result = mutableListOf<String>()
-        var i = 0
-        while (i < cuerpo.length) {
-            when (cuerpo[i].lowercaseChar()) {
-                'a', 'p' -> {
-                    if (i + 1 < cuerpo.length && cuerpo[i + 1] == '<') {
-                        val end = cuerpo.indexOf('>', i + 2)
-                        if (end > i) {
-                            result.add(cuerpo.substring(i, end + 1))
-                            i = end + 1
-                        } else i++
-                    } else i++
-                }
-                't' -> {
-                    val openParen = cuerpo.indexOf('(', i)
-                    if (openParen < 0) { i++; continue }
-                    var depth = 0
-                    var j = openParen
-                    while (j < cuerpo.length) {
-                        when (cuerpo[j]) {
-                            '(' -> depth++
-                            ')' -> { depth--; if (depth == 0) break }
-                        }
-                        j++
-                    }
-                    result.add(cuerpo.substring(i, j + 1))
-                    i = j + 1
-                }
-                else -> i++
-            }
-        }
-        return result
-    }
-
-    /**
-     * Parser para el nuevo formato con tramos: "Tb<w>(s<h>(mods);m<hm>(mods)) P<2.5> Tb<w2>(...) A<90> Tb<w3>(...)"
-     * Popula segmentosNs cuando hay más de un tramo o hay separadores A<>.
-     * Retorna las franjas del primer bloque T<>.
-     * Para un único bloque T<>, delega al parser completo (arc/circular/esquinas).
-     */
-    /**
-     * Un tag de tramo trae una medida o dos: `160` vale para los dos lados y `160,140` es
-     * izquierda y derecha, que es como se describe un tramo inclinado.
-     */
-    private fun medidaIzq(tag: String?): Float =
-        tag?.split(",")?.firstOrNull()?.trim()?.replace(",", ".")?.toFloatOrNull() ?: 0f
-
-    private fun medidaDer(tag: String?): Float? =
-        tag?.split(",")?.getOrNull(1)?.trim()?.replace(",", ".")?.toFloatOrNull()
-
-    private fun parsearConTramos(cuerpo: String): List<FranjaNova> {
-        val elementos = splitTopLevelElementos(cuerpo)
-
-        // Extraer todos los bloques T<> con su tipo de segmento y contenido
-        data class BloqueT(val tipo: TipoSegmentoNs, val ancho: Float, val contenido: String)
-        val bloques = mutableListOf<BloqueT>()
-        var tipoSig = TipoSegmentoNs.PLANO
-
-        for (elem in elementos) {
-            val low = elem.lowercase()
-            when {
-                low.startsWith("a<") -> tipoSig = TipoSegmentoNs.ALETA
-                low.startsWith("p<") -> tipoSig = TipoSegmentoNs.PLANO
-                low.startsWith("t")  -> {
-                    val anchoStr = low.substringAfter("<").substringBefore(">")
-                    val anchoTramo = anchoStr.replace(",", ".").toFloatOrNull() ?: anchoCm.coerceAtLeast(1f)
-                    val openParen = elem.indexOf('(')
-                    val contenido = if (openParen >= 0) {
-                        var depth = 0
-                        var closeParen = elem.lastIndex
-                        for (j in openParen until elem.length) {
-                            when (elem[j]) {
-                                '(' -> depth++
-                                ')' -> { depth--; if (depth == 0) { closeParen = j; break } }
-                            }
-                        }
-                        elem.substring(openParen + 1, closeParen)
-                    } else ""
-                    bloques.add(BloqueT(tipoSig, anchoTramo.coerceAtLeast(1f), contenido))
-                    tipoSig = TipoSegmentoNs.PLANO
-                }
-            }
-        }
-
-        // Caso simple: un solo bloque T<> → delegar al parser completo (maneja arc/circular/etc.).
-        // Salvo que ese tramo traiga sus propias medidas: un vano de una sola banda pero inclinado
-        // o escalonado necesita el camino de segmentos, que es el que sabe dibujarlo.
-        if (bloques.size == 1) {
-            val b = bloques[0]
-            // Un lado suelto que trae su silueta (`L<…>`, el editor abre la esquina lado a lado):
-            // con un solo tramo, esa silueta es la del vano entero.
-            if (contornoVanoCm.isEmpty()) {
-                RE_CONTORNO_TRAMO.find(b.contenido)?.let { m ->
-                    contornoVanoCm = siluetaAlAncho(ContornoEnTramos.desdeEtiqueta(m.value), b.ancho)
-                }
-            }
-            val tieneMedidas = RE_ALTO_TRAMO.containsMatchIn(b.contenido) ||
-                RE_CAIDA_TRAMO.containsMatchIn(b.contenido)
-            if (!tieneMedidas) return parsearModeloConAlturas(b.contenido)
-            val franjas = parsearFranjasDesdeModeloCompleto(b.contenido)
-            val alto = RE_ALTO_TRAMO.find(b.contenido)?.groupValues?.get(1)
-            val caida = RE_CAIDA_TRAMO.find(b.contenido)?.groupValues?.get(1)
-            segmentosNs = listOf(
-                SegmentoNs(
-                    b.tipo, b.ancho, franjas,
-                    altoCm = medidaIzq(alto), caidaCm = medidaIzq(caida),
-                    altoDerCm = medidaDer(alto), caidaDerCm = medidaDer(caida)
+        // Un solo tramo: sus franjas, y su silueta si el vano no trae la suya.
+        if (d.tramos.size == 1) {
+            val t = d.tramos[0]
+            val franjas = t.franjas.map { franjaDelModelo(it) }
+            if (contornoVanoCm.isEmpty() && t.contorno.size >= 3) contornoVanoCm = siluetaAlAncho(t.contorno, t.ancho)
+            modoCircular = d.esCircular
+            if (arco != null) { modoArcoCurvo = true; flechaArcoCm = arco.coerceAtLeast(0f) }
+            // Un tramo con sus propias medidas (escalón o dintel inclinado) se dibuja por el
+            // camino de tramos, que es el que sabe dibujarlo.
+            if (t.alto > 0f || t.caida > 0f || t.altoDer != null || t.caidaDer != null) {
+                segmentosNs = listOf(
+                    SegmentoNs(
+                        if (t.pliegue != null) TipoSegmentoNs.ALETA else TipoSegmentoNs.PLANO, t.ancho, franjas,
+                        altoCm = t.alto, caidaCm = t.caida, altoDerCm = t.altoDer, caidaDerCm = t.caidaDer
+                    )
                 )
-            )
+            }
             return franjas
         }
 
-        // Si algún bloque contiene tag de arco (U<>): fusionar tramos en uno curvo
-        val arcoResult = parsearIndicadorArco(bloques.firstOrNull()?.contenido ?: "")
-        if (arcoResult.activo) {
+        // Varios tramos con arco: una sola ventana curva, con los módulos de todos seguidos.
+        if (arco != null) {
             modoArcoCurvo = true
-            flechaArcoCm = arcoResult.flechaCm
-            val mergedSisMods = mutableListOf<TipoModulo>()
-            val mergedParantes = mutableListOf<Int>()
+            flechaArcoCm = arco.coerceAtLeast(0f)
+            val sisMods = mutableListOf<TipoModulo>()
+            val parantes = mutableListOf<Int>()
             var altoSistema: Float? = null
-            val mergedMochMods = mutableListOf<TipoModulo>()
+            val mochMods = mutableListOf<TipoModulo>()
             var altoMocheta: Float? = null
-            for (bloque in bloques) {
-                val fbs = parsearFranjasDesdeModeloCompleto(bloque.contenido)
-                val sis = fbs.firstOrNull { it.tipo == TipoFranja.SISTEMA }
-                if (sis != null) {
-                    if (mergedSisMods.isNotEmpty()) mergedParantes.add(mergedSisMods.size)
-                    mergedSisMods.addAll(sis.modulos)
-                    if (altoSistema == null) altoSistema = sis.alturaCm
+            d.tramos.forEach { t ->
+                t.franjas.firstOrNull { it.esSistema }?.let { s ->
+                    if (sisMods.isNotEmpty()) parantes.add(sisMods.size)
+                    sisMods.addAll(franjaDelModelo(s).modulos)
+                    if (altoSistema == null) altoSistema = s.alto.takeIf { it > 0f }
                 }
-                val moch = fbs.firstOrNull { it.tipo == TipoFranja.MOCHETA }
-                if (moch != null) {
-                    mergedMochMods.addAll(moch.modulos)
-                    if (altoMocheta == null) altoMocheta = moch.alturaCm
+                t.franjas.firstOrNull { !it.esSistema }?.let { m ->
+                    mochMods.addAll(franjaDelModelo(m).modulos)
+                    if (altoMocheta == null) altoMocheta = m.alto.takeIf { it > 0f }
                 }
             }
             val result = mutableListOf<FranjaNova>()
-            if (mergedSisMods.isNotEmpty()) result.add(FranjaNova(TipoFranja.SISTEMA, mergedSisMods, altoSistema, mergedParantes))
-            if (mergedMochMods.isNotEmpty() && altoMocheta != null) result.add(FranjaNova(TipoFranja.MOCHETA, mergedMochMods, altoMocheta, emptyList()))
+            if (sisMods.isNotEmpty()) result.add(FranjaNova(TipoFranja.SISTEMA, sisMods, altoSistema, parantes))
+            if (mochMods.isNotEmpty() && altoMocheta != null) result.add(FranjaNova(TipoFranja.MOCHETA, mochMods, altoMocheta, emptyList()))
             return result.ifEmpty { listOf(FranjaNova(TipoFranja.SISTEMA, listOf(TipoModulo.FIJO), null, emptyList())) }
         }
 
-        // Múltiples bloques → construir segmentosNs
-        val segs = mutableListOf<SegmentoNs>()
-        var primerFranjas: List<FranjaNova> = emptyList()
-        for (bloque in bloques) {
-            // `Q<29.3>` dentro del tramo: su panza, la de una pared curva de esquina. Se saca
-            // antes de leer las franjas, que si no el parser se encuentra un tag que no es suyo.
-            val flecha = RE_CURVA_TRAMO.find(bloque.contenido)
-                ?.groupValues?.get(1)?.replace(",", ".")?.toFloatOrNull() ?: 0f
-            val contenido = if (flecha != 0f) RE_CURVA_TRAMO.replace(bloque.contenido, "")
-            else bloque.contenido
-            val franjas = parsearFranjasDesdeModeloCompleto(contenido)
-            // `H<106.2>` dentro del tramo: su alto propio, el de la ventana escalonada.
-            val altoTramo = RE_ALTO_TRAMO.find(contenido)?.groupValues?.get(1)
-            val caidaTramo = RE_CAIDA_TRAMO.find(contenido)?.groupValues?.get(1)
-            // `L<…>`: la silueta de la pared que arranca en este tramo, si no es un rectángulo.
-            val silueta = RE_CONTORNO_TRAMO.find(contenido)
-                ?.let { ContornoEnTramos.desdeEtiqueta(it.value) }.orEmpty()
-                .let { siluetaAlAncho(it, bloque.ancho) }
-            segs.add(
-                SegmentoNs(
-                    bloque.tipo, bloque.ancho, franjas,
-                    altoCm = medidaIzq(altoTramo), caidaCm = medidaIzq(caidaTramo),
-                    altoDerCm = medidaDer(altoTramo), caidaDerCm = medidaDer(caidaTramo),
-                    flechaCm = flecha,
-                    contornoCm = silueta
-                )
+        // Varios tramos: cada uno es un paño del dibujo, con sus medidas, su curva y su silueta.
+        val segs = d.tramos.map { t ->
+            SegmentoNs(
+                if (t.pliegue != null) TipoSegmentoNs.ALETA else TipoSegmentoNs.PLANO,
+                t.ancho.coerceAtLeast(1f),
+                t.franjas.map { franjaDelModelo(it) },
+                altoCm = t.alto, caidaCm = t.caida, altoDerCm = t.altoDer, caidaDerCm = t.caidaDer,
+                flechaCm = t.flecha,
+                contornoCm = siluetaAlAncho(t.contorno, t.ancho)
             )
-            if (primerFranjas.isEmpty()) primerFranjas = franjas
-        }
+        }.toMutableList()
+        ponerDeFrente(segs)
+        segmentosNs = segs
+        return segs.first().franjas.ifEmpty { listOf(FranjaNova(TipoFranja.SISTEMA, emptyList(), null, emptyList())) }
+    }
 
-        // De frente va el paño MÁS ANCHO, y el resto en perspectiva: es el que más se ve y el que
-        // le da la escala al dibujo. Yendo de frente el primero, una ventana que empieza por su
-        // lado corto —o por su curva— salía casi entera escorzada y no se entendía.
-        //
-        // Los paños que quedan ANTES del de frente doblan hacia la izquierda; de eso se encarga
-        // `modoCUSimétrico`, que es lo que ya hacía la ventana en C, donde el de frente es el del
-        // medio. Con más de tres paños se deja el zigzag de la serie, que es otra lectura.
-        // La serie ("ns") se reconoce porque su paquete arranca con un pliegue, así que su primer
-        // paño ya viene de aleta: esa lleva su propio zigzag y se deja como está. Lo demás —la L,
-        // la C, la ventana de esquina— se lee alrededor de su paño de frente.
+    // El lector propio que tenía el dibujo (parsearModeloConAlturas, parsearConTramos y sus
+    // ayudantes) se retiró el 2026-09-28 con C-13: el dibujo lee con el del modelo. Quedó en el
+    // commit 5c6ccc4 por si hay que compararlo; LectorUnicoTest dio 304 de 305 paquetes iguales
+    // (el otro, un arco que el viejo no marcaba en un tramo con H<>).
+
+    /**
+     * Qué paño va de frente y cuáles en perspectiva. Es cosa del dibujo, no de la lectura: la
+     * comparten el lector viejo y el que lee del modelo (C-13).
+     *
+     * De frente va el paño MÁS ANCHO, y el resto en perspectiva: es el que más se ve y el que
+     * le da la escala al dibujo. Yendo de frente el primero, una ventana que empieza por su
+     * lado corto —o por su curva— salía casi entera escorzada y no se entendía.
+     *
+     * Los paños que quedan ANTES del de frente doblan hacia la izquierda; de eso se encarga
+     * `modoCUSimétrico`, que es lo que ya hacía la ventana en C, donde el de frente es el del
+     * medio. Con más de tres paños se deja el zigzag de la serie, que es otra lectura.
+     * La serie ("ns") se reconoce porque su paquete arranca con un pliegue, así que su primer
+     * paño ya viene de aleta: esa lleva su propio zigzag y se deja como está. Lo demás —la L,
+     * la C, la ventana de esquina— se lee alrededor de su paño de frente.
+     */
+    private fun ponerDeFrente(segs: MutableList<SegmentoNs>) {
         val dobla = segs.any { it.tipo == TipoSegmentoNs.ALETA }
         val esSerie = segs.firstOrNull()?.tipo == TipoSegmentoNs.ALETA
         if (dobla && !esSerie) {
@@ -930,11 +589,6 @@ class VistaDiseno @JvmOverloads constructor(
                     tipo = if (i % 2 == 0) TipoSegmentoNs.ALETA else TipoSegmentoNs.PLANO
                 )
             }
-        }
-
-        segmentosNs = segs
-        return primerFranjas.ifEmpty {
-            listOf(FranjaNova(TipoFranja.SISTEMA, emptyList(), null, emptyList()))
         }
     }
 
@@ -1075,7 +729,124 @@ class VistaDiseno @JvmOverloads constructor(
     )
     private val siluetasPendientes = mutableListOf<SiluetaDePared>()
 
+    // ================== Acercar y alejar (pedido del usuario, 2026-09-29) ==================
+    // Con dos dedos se pellizca para acercar o alejar y se arrastra para moverse. El dibujo se
+    // sigue armando igual, en las coordenadas de siempre, y solo al pintarlo se le aplica la
+    // matriz; los toques de un dedo llegan con la matriz deshecha, así que seleccionar, Mover y el
+    // imán ven el dibujo como si no hubiera zoom. La exportación no lleva zoom.
+
+    private val matrizZoom = android.graphics.Matrix()
+    private val matrizZoomInversa = android.graphics.Matrix()
+    private var zoom = 1f
+    private val ZOOM_MAXIMO = 6f
+    private var pellizcando = false
+    private var separacionInicial = 0f
+    private var zoomInicial = 1f
+    private var medioAnterior = PointF()
+
+    /** Lo avisa la pantalla para recolocar lo que va pegado al dibujo (el mando de franjas). */
+    var alCambiarZoom: (() -> Unit)? = null
+
+    private fun separacionDedos(e: MotionEvent): Float =
+        if (e.pointerCount < 2) 0f else kotlin.math.hypot(e.getX(0) - e.getX(1), e.getY(0) - e.getY(1))
+
+    private fun medioDedos(e: MotionEvent) =
+        PointF((e.getX(0) + e.getX(1)) / 2f, (e.getY(0) + e.getY(1)) / 2f)
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.pointerCount >= 2 || pellizcando) {
+            manejarPellizco(event)
+            return true
+        }
+        if (zoom == 1f) return super.dispatchTouchEvent(event)
+        val copia = MotionEvent.obtain(event)
+        copia.transform(matrizZoomInversa)
+        return try { super.dispatchTouchEvent(copia) } finally { copia.recycle() }
+    }
+
+    private fun manejarPellizco(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (!pellizcando) {
+                    // Lo que empezó el primer dedo (una selección, un arrastre) se cancela.
+                    val cancelar = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                    super.dispatchTouchEvent(cancelar)
+                    cancelar.recycle()
+                    pellizcando = true
+                }
+                separacionInicial = separacionDedos(event)
+                zoomInicial = zoom
+                medioAnterior = medioDedos(event)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (event.pointerCount < 2 || separacionInicial <= 0f) return
+                val medio = medioDedos(event)
+                val nuevo = (zoomInicial * separacionDedos(event) / separacionInicial).coerceIn(1f, ZOOM_MAXIMO)
+                matrizZoom.postScale(nuevo / zoom, nuevo / zoom, medio.x, medio.y)
+                matrizZoom.postTranslate(medio.x - medioAnterior.x, medio.y - medioAnterior.y)
+                zoom = nuevo
+                medioAnterior = medio
+                encajarZoom()
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                // Queda un dedo: se vuelve a medir desde los que siguen, sin saltos.
+                separacionInicial = 0f
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> pellizcando = false
+        }
+    }
+
+    /** Sin dejar huecos: el dibujo acercado siempre cubre la vista, y en 1 vuelve a su sitio. */
+    private fun encajarZoom() {
+        if (zoom <= 1.01f) {
+            zoom = 1f
+            matrizZoom.reset()
+        } else {
+            val v = FloatArray(9)
+            matrizZoom.getValues(v)
+            v[android.graphics.Matrix.MSCALE_X] = zoom
+            v[android.graphics.Matrix.MSCALE_Y] = zoom
+            v[android.graphics.Matrix.MTRANS_X] = v[android.graphics.Matrix.MTRANS_X].coerceIn(width * (1f - zoom), 0f)
+            v[android.graphics.Matrix.MTRANS_Y] = v[android.graphics.Matrix.MTRANS_Y].coerceIn(height * (1f - zoom), 0f)
+            matrizZoom.setValues(v)
+        }
+        matrizZoom.invert(matrizZoomInversa)
+        invalidate()
+        alCambiarZoom?.invoke()
+    }
+
+    @androidx.annotation.VisibleForTesting
+    fun zoomParaPruebas() = zoom
+
+    /** Dónde cae en la pantalla un punto del dibujo, con el zoom puesto. */
+    @androidx.annotation.VisibleForTesting
+    fun aPantallaParaPruebas(x: Float, y: Float): PointF {
+        val p = floatArrayOf(x, y)
+        matrizZoom.mapPoints(p)
+        return PointF(p[0], p[1])
+    }
+
+    /** Vuelve a ver el dibujo entero. */
+    fun quitarZoom() {
+        if (zoom == 1f) return
+        zoom = 1f
+        encajarZoom()
+    }
+
     override fun onDraw(canvas: Canvas) {
+        val conZoom = zoom != 1f && !omitirFondoAlExportar
+        if (conZoom) {
+            canvas.save()
+            canvas.concat(matrizZoom)
+        }
+        try {
+            dibujarTodo(canvas)
+        } finally {
+            if (conZoom) canvas.restore()
+        }
+    }
+
+    private fun dibujarTodo(canvas: Canvas) {
         super.onDraw(canvas)
         cotasPendientes = null
         siluetasPendientes.clear()
@@ -1160,6 +931,29 @@ class VistaDiseno @JvmOverloads constructor(
      * un solo tramo rectangular y aun así verse el hueco de verdad: el triángulo, el escalón o el
      * dintel caído. Sin esto, limpiar el diseño para dibujarlo a mano devolvía un rectángulo.
      */
+    /**
+     * Sobre qué trozo de pantalla se reparten los módulos de una franja cuando el vano la recorta
+     * ([vano], el trozo de vano a su altura; null si no la recorta).
+     *
+     * Los anchos que suman el tramo entero van sobre el tramo, desde su borde izquierdo, y el vano
+     * recorta lo que queda fuera: así los escribe el modelo desde N-99 (2026-09-26), y así los
+     * mide el panel de información. Antes el dibujo los metía en proporción dentro del trozo de
+     * vano, y una mocheta de 278.7 partida en dos iguales salía con 92 y 186 (pedido del usuario,
+     * 2026-09-28). Los que suman el trozo de vano —como los escribía antes la calculadora— y los
+     * que no tienen ancho se siguen repartiendo el trozo de vano.
+     *
+     * Devuelve el trozo y si hay que recortar las divisiones al vano.
+     */
+    private fun trozoDeModulosPx(
+        xIniTramo: Float, xFinTramo: Float, vano: Pair<Float, Float>?,
+        anchosMod: List<Float>, n: Int, escalaPxPorCm: Float
+    ): Pair<Pair<Float, Float>, Boolean> {
+        if (vano == null) return (xIniTramo to xFinTramo) to false
+        val anchoTramoCm = (xFinTramo - xIniTramo) / escalaPxPorCm.coerceAtLeast(0.0001f)
+        val sobreElTramo = anchosMod.size == n && kotlin.math.abs(anchosMod.sum() - anchoTramoCm) <= 1f
+        return if (sobreElTramo) (xIniTramo to xFinTramo) to true else vano to false
+    }
+
     /**
      * El trozo horizontal (en px) que ocupa el vano dentro de la banda [yTopPx]..[yBotPx] de un
      * tramo que va de [xIniPx] a [xFinPx]. Solo con un vano escalonado: con lados inclinados los
@@ -1843,6 +1637,12 @@ class VistaDiseno @JvmOverloads constructor(
             }
             val yArribaTramo = yArribaDe(segmento)
             val yAbajoTramo = yAbajoDe(segmento)
+            // Las franjas se reparten el rectángulo que contiene el tramo, como en el modelo
+            // (DisenoNova.altoDeTramo): en uno inclinado, de su dintel más alto a su alféizar más bajo.
+            // Con el lado izquierdo solo, un vano que sube hacia la derecha dejaba su triángulo fuera.
+            val yTechoTramo = min(yArribaTramo, yArribaDe(segmento, derecha = true))
+            val yPisoTramo = max(yAbajoTramo, yAbajoDe(segmento, derecha = true))
+            val altoLlenoCm = if (segmento.esInclinado) (yPisoTramo - yTechoTramo) / escalaLocal else segmento.altoCm
             if (idx > 0) {
                 // El parante solo existe donde los dos tramos se tocan: hasta donde llega el más corto.
                 val vecino = segmentosNs.getOrNull(idx - 1)
@@ -1933,19 +1733,19 @@ class VistaDiseno @JvmOverloads constructor(
                         canvas.save()
                         canvas.clipPath(recorte)
                     }
-                    lienzo.drawRect(RectF(xIni, yArribaTramo, xFinPano, yAbajoTramo), pMarco)
+                    lienzo.drawRect(RectF(xIni, yTechoTramo, xFinPano, yPisoTramo), pMarco)
                     if (modo == ModoEnsamble.APA) {
                         dibujarAPASoloFranja(
                             canvas = lienzo,
                             franjas = segmento.franjas,
                             xIni = xIni,
                             xFin = xFinPano,
-                            yBotTotal = yAbajoTramo,
+                            yBotTotal = yPisoTramo,
                             anchoVentPx = anchoVentPx,
                             escalaPxPorCm = escalaLocal,
                             populateRangosFranjas = esPrimerPlano,
                             segmentoIndex = segIdx,
-                            altoTramoCm = segmento.altoCm,
+                            altoTramoCm = altoLlenoCm,
                             // El paño que gira se dibuja aparte y doblado: ahí la silueta del
                             // vano no está en las mismas coordenadas.
                             recortarAlVano = !curvo
@@ -1955,14 +1755,14 @@ class VistaDiseno @JvmOverloads constructor(
                             canvas = lienzo,
                             franjas = segmento.franjas,
                             xIni = xIni,
-                            yTopTotal = yArribaTramo,
+                            yTopTotal = yTechoTramo,
                             xFin = xFinPano,
-                            yBotTotal = yAbajoTramo,
+                            yBotTotal = yPisoTramo,
                             anchoVentPx = anchoVentPx,
                             escalaPxPorCm = escalaLocal,
                             populateRangosFranjas = esPrimerPlano,
                             segmentoIndex = segIdx,
-                            altoTramoCm = segmento.altoCm
+                            altoTramoCm = altoLlenoCm
                         )
                     }
                     if (recorte != null) {
@@ -2548,8 +2348,9 @@ class VistaDiseno @JvmOverloads constructor(
             // En un vano escalonado, una franja sin parantes se reparte lo que hay de vano a su
             // altura, no la ventana entera: la mocheta de encima del escalón empieza en el escalón.
             val sinParantes = franja.parantePosiciones.none { it in 1 until n }
-            val (xModIni, xModFin) =
-                (if (sinParantes) trozoDelVanoPx(xIni, xFin, yTop, yBottom) else null) ?: (xIni to xFin)
+            val vanoAqui = if (sinParantes) trozoDelVanoPx(xIni, xFin, yTop, yBottom) else null
+            val (trozoMods, recortar) = trozoDeModulosPx(xIni, xFin, vanoAqui, franja.anchosMod, n, escalaPxPorCm)
+            val (xModIni, xModFin) = trozoMods
             val xs = posicionesModulosConTramos(
                 xIni = xModIni,
                 xFin = xModFin,
@@ -2557,7 +2358,7 @@ class VistaDiseno @JvmOverloads constructor(
                 parantePosiciones = franja.parantePosiciones,
                 parantesXPx = parantesXPx,
                 anchosMod = franja.anchosMod
-            )
+            ).also { if (recortar && vanoAqui != null) for (k in it.indices) it[k] = it[k].coerceIn(vanoAqui.first, vanoAqui.second) }
             divisionesDeFranja[0 to idx] = xs
             val parantesSet = franja.parantePosiciones.toSet()
             for (i in 1 until n) {
@@ -2992,10 +2793,12 @@ class VistaDiseno @JvmOverloads constructor(
             val n = franja.modulos.size.coerceAtLeast(1)
             // En un vano escalonado los módulos se reparten lo que hay de vano en la franja, no
             // el tramo entero: una mocheta encima del escalón empieza donde empieza el vano.
-            val (xModIni, xModFin) =
-                (if (recortarAlVano) trozoDelVanoPx(xIni, xIni + anchoVentPx, yTop, yBottom) else null)
-                    ?: (xIni to xIni + anchoVentPx)
+            val vanoAqui = if (recortarAlVano) trozoDelVanoPx(xIni, xIni + anchoVentPx, yTop, yBottom) else null
+            val (trozoMods, recortar) =
+                trozoDeModulosPx(xIni, xIni + anchoVentPx, vanoAqui, franja.anchosMod, n, escalaPxPorCm)
+            val (xModIni, xModFin) = trozoMods
             val xPos = calcularPosicionesX(xModIni, xModFin - xModIni, n, franja.anchosMod)
+                .also { if (recortar && vanoAqui != null) for (k in it.indices) it[k] = it[k].coerceIn(vanoAqui.first, vanoAqui.second) }
             if (segmentoIndex >= 0) divisionesDeFranja[segmentoIndex to idx] = xPos
             val parantesSet = franja.parantePosiciones.toSet()
             for (i in 1 until n) {
@@ -3289,64 +3092,77 @@ class VistaDiseno @JvmOverloads constructor(
         altoTotal: Float = altoCm
     ): MutableList<Float> {
         val altoCm = if (altoTotal > 0f) altoTotal else this.altoCm
-        val n = franjas.size
-        val alturas = MutableList(n) { 0f }
-        if (n == 0) return alturas
+        // El mismo reparto que el panel, el paquete, el motor y la vista en 3D, en un solo sitio
+        // (N-100, 2026-09-28): el panel daba 5/7 al sistema con tres franjas sin alto y aquí salían
+        // partes iguales. Manda esta regla, la de siempre: 5/7 con dos franjas, iguales con tres.
+        return HerramientasDiseno.repartirAlto(
+            franjas.map { it.alturaCm ?: 0f },
+            franjas.map { it.tipo == TipoFranja.SISTEMA },
+            altoCm
+        ).toMutableList()
 
-        var sumaExp = 0f
-        var hayExp = false
-        for (i in 0 until n) {
-            val h = franjas[i].alturaCm
-            if (h != null && h > 0f) {
-                alturas[i] = h
-                sumaExp += h
-                hayExp = true
-            }
-        }
-
-        val idxS = (0 until n).filter { franjas[it].tipo == TipoFranja.SISTEMA }
-        val idxM = (0 until n).filter { franjas[it].tipo == TipoFranja.MOCHETA }
-
-        // Sin alturas explícitas: con DOS franjas manda la proporción de siempre —5/7 el sistema
-        // y 2/7 la mocheta—. Con tres o más esa regla deja mochetas raquíticas, así que el alto
-        // se reparte en partes iguales; si solo hay un tipo de franja, también.
-        if (!hayExp) {
-            if (idxS.isEmpty() || idxM.isEmpty() || n > 2) {
-                val cuota = altoCm / n
-                for (i in 0 until n) alturas[i] = cuota
-            } else {
-                val totalS = altoCm * (5f / 7f)
-                val totalM = altoCm - totalS
-                val cuotaS = if (idxS.isNotEmpty()) totalS / idxS.size else 0f
-                val cuotaM = if (idxM.isNotEmpty()) totalM / idxM.size else 0f
-                idxS.forEach { alturas[it] = cuotaS }
-                idxM.forEach { alturas[it] = cuotaM }
-            }
-            return alturas
-        }
-
-        // Suma de explícitas excede → escalar proporcionalmente
-        val toler = 0.5f
-        if (sumaExp > altoCm + toler) {
-            val k = altoCm / sumaExp
-            for (i in 0 until n) if (alturas[i] > 0f) alturas[i] *= k
-            return alturas
-        }
-
-        // Repartir resto entre franjas sin altura explícita
-        val resto = (altoCm - sumaExp).coerceAtLeast(0f)
-        val ceros = (0 until n).filter { alturas[it] == 0f }
-        if (ceros.isNotEmpty()) {
-            val cuota = resto / ceros.size
-            ceros.forEach { alturas[it] = cuota }
-        } else if (sumaExp > 0f && resto > 0.5f) {
-            // Todas las franjas tienen altura explícita pero no llenan el alto: el puente no
-            // es una franja, así que su espacio quedaba como hueco arriba. Escalamos para
-            // llenar y que la mocheta apoye sobre el puente (sin vacío superior).
-            val k = altoCm / sumaExp
-            for (i in 0 until n) alturas[i] *= k
-        }
-        return alturas
+        // Versión original (hasta 2026-09-28), por si hay que comparar. Reparte igual que la regla
+        // de HerramientasDiseno; solo cambia la tolerancia para estirar las alturas escritas (aquí
+        // 0.5 cm, allí 0.05).
+        // val altoCm = if (altoTotal > 0f) altoTotal else this.altoCm
+        // val n = franjas.size
+        // val alturas = MutableList(n) { 0f }
+        // if (n == 0) return alturas
+        // 
+        // var sumaExp = 0f
+        // var hayExp = false
+        // for (i in 0 until n) {
+        //     val h = franjas[i].alturaCm
+        //     if (h != null && h > 0f) {
+        //         alturas[i] = h
+        //         sumaExp += h
+        //         hayExp = true
+        //     }
+        // }
+        // 
+        // val idxS = (0 until n).filter { franjas[it].tipo == TipoFranja.SISTEMA }
+        // val idxM = (0 until n).filter { franjas[it].tipo == TipoFranja.MOCHETA }
+        // 
+        // // Sin alturas explícitas: con DOS franjas manda la proporción de siempre —5/7 el sistema
+        // // y 2/7 la mocheta—. Con tres o más esa regla deja mochetas raquíticas, así que el alto
+        // // se reparte en partes iguales; si solo hay un tipo de franja, también.
+        // if (!hayExp) {
+        //     if (idxS.isEmpty() || idxM.isEmpty() || n > 2) {
+        //         val cuota = altoCm / n
+        //         for (i in 0 until n) alturas[i] = cuota
+        //     } else {
+        //         val totalS = altoCm * (5f / 7f)
+        //         val totalM = altoCm - totalS
+        //         val cuotaS = if (idxS.isNotEmpty()) totalS / idxS.size else 0f
+        //         val cuotaM = if (idxM.isNotEmpty()) totalM / idxM.size else 0f
+        //         idxS.forEach { alturas[it] = cuotaS }
+        //         idxM.forEach { alturas[it] = cuotaM }
+        //     }
+        //     return alturas
+        // }
+        // 
+        // // Suma de explícitas excede → escalar proporcionalmente
+        // val toler = 0.5f
+        // if (sumaExp > altoCm + toler) {
+        //     val k = altoCm / sumaExp
+        //     for (i in 0 until n) if (alturas[i] > 0f) alturas[i] *= k
+        //     return alturas
+        // }
+        // 
+        // // Repartir resto entre franjas sin altura explícita
+        // val resto = (altoCm - sumaExp).coerceAtLeast(0f)
+        // val ceros = (0 until n).filter { alturas[it] == 0f }
+        // if (ceros.isNotEmpty()) {
+        //     val cuota = resto / ceros.size
+        //     ceros.forEach { alturas[it] = cuota }
+        // } else if (sumaExp > 0f && resto > 0.5f) {
+        //     // Todas las franjas tienen altura explícita pero no llenan el alto: el puente no
+        //     // es una franja, así que su espacio quedaba como hueco arriba. Escalamos para
+        //     // llenar y que la mocheta apoye sobre el puente (sin vacío superior).
+        //     val k = altoCm / sumaExp
+        //     for (i in 0 until n) alturas[i] *= k
+        // }
+        // return alturas
     }
 
     // ---- INA: mocheta local (arriba/abajo) con tramos de C continuos; reflejo y zócalo ----
@@ -3512,16 +3328,26 @@ class VistaDiseno @JvmOverloads constructor(
         // Texto centrado en la línea
         canvas.drawText(textoAncho, xCentroH, yLineaH + 8f, pTextoCota)
 
-        // Cota vertical (alto) - SIEMPRE fuera del diseño
+        // Cota vertical (alto) - SIEMPRE fuera del diseño.
+        // Va del lado que mide el alto total: el otro lado, si es más bajo, ya lleva su propia cota
+        // (dibujarCotasDePoligono) y la total se montaba encima (el 164.2 del lado derecho salía a
+        // la izquierda, cruzando el 109.1; pedido del usuario, 2026-09-29). Si los dos lados llevan
+        // cota, la total se aparta hasta pasar el número más ancho del lado elegido.
+        val cotasLado = if (conLados) textosDeAltoPorLado() else Pair(emptyList(), emptyList())
         val espacioDisponibleDer = width - x1 - margenPx
         val espacioDisponibleIzq = x0 - margenPx
-        val xLineaV = if (espacioDisponibleDer >= espacioDisponibleIzq) {
+        val aLaDerecha = when {
+            cotasLado.second.isEmpty() && cotasLado.first.isNotEmpty() -> true
+            cotasLado.first.isEmpty() && cotasLado.second.isNotEmpty() -> false
             // Preferir derecha si hay más o igual espacio
-            x1 + offsetV
-        } else {
-            // Poner a la izquierda
-            x0 - offsetV
+            else -> espacioDisponibleDer >= espacioDisponibleIzq
         }
+        val delLado = if (aLaDerecha) cotasLado.second else cotasLado.first
+        // Donde termina el número de la cota del lado: separación 24, hueco 8, el texto y aire.
+        val pasarTexto = delLado.maxOfOrNull { 24f + 8f + pTextoCota.measureText(it) + 16f } ?: 0f
+        val separacionV = max(offsetV, pasarTexto)
+        // Sin salirse de la vista: fuera del lienzo la cota no se ve.
+        val xLineaV = if (aLaDerecha) min(x1 + separacionV, width - 20f) else max(x0 - separacionV, 20f)
 
         val yCentroV = (y0 + y1) / 2
         val textoAlto = fmt(altoCm)
@@ -3560,6 +3386,33 @@ class VistaDiseno @JvmOverloads constructor(
         if (anchoSilueta <= 0f || kotlin.math.abs(anchoSilueta - anchoTramo) < 0.05f) return silueta
         val k = anchoTramo / anchoSilueta
         return silueta.map { (x, y) -> x * k to y }
+    }
+
+    /**
+     * Los números de las cotas de alto que [dibujarCotasDePoligono] pone en el costado izquierdo y
+     * en el derecho del vano (los lados casi verticales que tocan el borde y no miden el alto
+     * total, que ese ya lo dice la cota total). Sirve para no montar la cota total encima.
+     */
+    private fun textosDeAltoPorLado(): Pair<List<String>, List<String>> {
+        val c = contornoVanoCm
+        if (c.size < 3) return Pair(emptyList(), emptyList())
+        fun fmt(v: Float) = if (v % 1 == 0f) v.toInt().toString() else "%.1f".format(v).replace(",", ".")
+        val minX = c.minOf { it.first }
+        val maxX = c.maxOf { it.first }
+        val izq = mutableListOf<String>()
+        val der = mutableListOf<String>()
+        for (i in c.indices) {
+            val (ax, ay) = c[i]
+            val (bx, by) = c[(i + 1) % c.size]
+            if (kotlin.math.abs(bx - ax) >= kotlin.math.abs(by - ay)) continue
+            val medida = sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay))
+            if (medida < 0.05f || kotlin.math.abs(medida - altoCm) < 0.05f) continue
+            when {
+                min(ax, bx) <= minX + 0.5f -> izq.add(fmt(medida))
+                max(ax, bx) >= maxX - 0.5f -> der.add(fmt(medida))
+            }
+        }
+        return Pair(izq, der)
     }
 
     private fun contornoConLados(): Boolean {
@@ -4193,7 +4046,8 @@ class VistaDiseno @JvmOverloads constructor(
         rangosFranjaPorTramo.getOrNull(indiceTramo)?.getOrNull(indiceFranja)
 
     /** El rectángulo que ocupa el dibujo dentro de la vista. */
-    fun rectanguloDiseno(): RectF = RectF(rectDiseno)
+    /** Dónde está el dibujo en la pantalla, con el zoom puesto. */
+    fun rectanguloDiseno(): RectF = RectF(rectDiseno).also { matrizZoom.mapRect(it) }
 
     /** El ancho (izquierda, derecha) de un tramo en pantalla. */
     fun anchoDeTramo(indiceTramo: Int): Pair<Float, Float>? = rangosTramoX.getOrNull(indiceTramo)
@@ -4221,6 +4075,34 @@ class VistaDiseno @JvmOverloads constructor(
 
     /** La silueta del vano que quedó puesta, en cm; vacía si el vano es el rectángulo. */
     fun contornoVanoParaPruebas(): List<Pair<Float, Float>> = contornoVanoCm
+
+    /**
+     * Todo lo que el dibujo leyó del paquete, en texto, para comparar dos lectores (C-13, un solo
+     * lector del diseño): si dan la misma foto, el dibujo sale igual.
+     */
+    @androidx.annotation.VisibleForTesting
+    fun estadoLeidoParaPruebas(): String {
+        fun r(v: Float) = Math.round(v * 10f) / 10f
+        fun fr(f: FranjaNova) = "${f.tipo.name[0]}<${f.alturaCm?.let { r(it) }}>" +
+            f.modulos.joinToString("") { if (it == TipoModulo.CORREDIZA) "c" else "f" } +
+            "|p${f.parantePosiciones}|a${f.anchosMod.map { r(it) }}"
+        fun seg(s: SegmentoNs) = "${s.tipo}:${r(s.anchoCm)}:h${r(s.altoCm)}:d${r(s.caidaCm)}:" +
+            "h'${s.altoDerCm?.let { r(it) }}:d'${s.caidaDerCm?.let { r(it) }}:q${r(s.flechaCm)}:" +
+            "L${s.contornoCm.map { r(it.first) to r(it.second) }}:[${s.franjas.joinToString(";") { fr(it) }}]"
+        return listOf(
+            "modo=$modo ancho=${r(anchoCm)} alto=${r(altoCm)} mL=${r(mochetaLateralCm)} mR=${r(mochetaLateralDerechaCm)}",
+            "franjas=[${franjasAbajoArriba.joinToString(";") { fr(it) }}]",
+            "sistema=${sistemaModulos} p$sistemaParantes a${sistemaAnchos.map { r(it) }} mTop=${r(alturaMochetaTopCm)} mBot=${r(alturaMochetaBottomCm)}",
+            "segmentos=[${segmentosNs.joinToString(" / ") { seg(it) }}]",
+            "arco=$modoArcoCurvo:${r(flechaArcoCm)} circular=$modoCircular cu=$modoCUSimétrico",
+            "esqL=$esquinaLConParante:${r(mochetaLDesdeModeloCm)}:$mochetaLModulos:$mochetaLParantes:[${mochetaLFranjas.joinToString(";") { fr(it) }}]",
+            "esqR=$esquinaRConParante:${r(mochetaRDesdeModeloCm)}:$mochetaRModulos:$mochetaRParantes:[${mochetaRFranjas.joinToString(";") { fr(it) }}]",
+            "vano=${contornoVanoCm.map { r(it.first) to r(it.second) }} conForma=$vanoConForma"
+        ).joinToString("\n")
+    }
+
+    /** Dónde quedaron dibujadas las divisiones de una franja, en px; null si no se dibujó. */
+    fun divisionesParaPruebas(tramo: Int, franja: Int): List<Float>? = divisionesDeFranja[tramo to franja]?.toList()
 
     /** ¿El vano se está dibujando circular (o elíptico)? */
     fun circularParaPruebas(): Boolean = modoCircular
@@ -4367,59 +4249,9 @@ class VistaDiseno @JvmOverloads constructor(
         private const val PAQUETE_NOVA_FALLBACK = "{nova,ina,[150,120:s(f)]}"
         /** Marca de que el dedo bajó fuera del dibujo, teniendo algo elegido. */
         private const val TOQUE_FUERA = -2
-        /** El alto propio de un tramo dentro de su bloque: `H<106.2>`. */
-        private val RE_ALTO_TRAMO = Regex("""[hH]\s*<\s*([\d.,-]+)\s*>""")
-        /** Lo que baja el dintel de ese tramo: `D<20>`. */
-        private val RE_CAIDA_TRAMO = Regex("""[dD]\s*<\s*([\d.,-]+)\s*>""")
-        /**
-         * La panza de un tramo curvo: `Q<29.3>`, la flecha en centímetros.
-         *
-         * Es SOLO de ese tramo, al revés que `U<>`, que curva la ventana entera: una pared curva
-         * de una esquina es un paño más entre paños rectos.
-         */
-        private val RE_CURVA_TRAMO = Regex("""[qQ]\s*<\s*(-?[\d.,]+)\s*>""")
-        /** La silueta de la pared de un tramo: `L<x/y|x/y|…>` (la silueta del Lado). */
-        private val RE_CONTORNO_TRAMO = Regex("""[lL]\s*<[^>]*>""")
         /** El contorno del vano: `V<x/y|x/y|…>`, en centímetros. */
         private val RE_VANO_PAQUETE = Regex("""[vV]<[\d./|,\s-]*>""")
-        /** El círculo (`O<1>`) o el arco (`U<…>`), escritos donde sea del cuerpo. */
-        private val RE_FORMA = Regex("""(?<![A-Za-z])[uUoO]<[^>]*>""")
-        /** La cabeza de la franja de sistema: `s(` o `s<alto>(`. */
-        private val RE_CABEZA_SISTEMA = Regex("""(?<![A-Za-z])[sS](?:<[^>]*>)?\(""")
+
     }
 
-    /**
-     * Mete en la franja de sistema el círculo o el arco que vengan sueltos, que es donde los busca
-     * el dibujo. La pantalla de diseño los guarda como etiquetas de toda la ventana, al final del
-     * paquete; sin esto, al limpiar o cambiar una medida el vano volvía rectángulo (pedido del
-     * usuario, 2026-09-27).
-     */
-    private fun formaDentroDelSistema(cuerpo: String): String {
-        val sueltas = RE_FORMA.findAll(cuerpo).filter { m ->
-            val antes = cuerpo.substring(0, m.range.first)
-            antes.count { it == '(' } == antes.count { it == ')' }
-        }.toList()
-        if (sueltas.isEmpty()) return cuerpo
-        var resto = cuerpo
-        sueltas.asReversed().forEach { resto = resto.removeRange(it.range) }
-        val cabeza = RE_CABEZA_SISTEMA.find(resto) ?: return cuerpo
-        // El paréntesis que cierra el sistema.
-        var nivel = 0
-        var cierre = -1
-        for (j in cabeza.range.last until resto.length) {
-            when (resto[j]) {
-                '(' -> nivel++
-                ')' -> { nivel--; if (nivel == 0) { cierre = j; break } }
-            }
-        }
-        if (cierre < 0) return cuerpo
-        val dentro = resto.substring(cabeza.range.last + 1, cierre)
-        val nuevas = sueltas.map { it.value }
-            .filter { tag -> RE_FORMA.findAll(dentro).none { it.value.first().equals(tag.first(), ignoreCase = true) } }
-            .joinToString("")
-        return resto.substring(0, cierre) + nuevas + resto.substring(cierre)
-    }
 }
-
-
-

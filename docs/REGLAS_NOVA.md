@@ -18,7 +18,7 @@ número. Lo que cambia en el código sale de aquí, con su prueba.
 **Fuentes:** el documento del usuario *Revisión de reglas* (Google Docs, 2026-09-25), las respuestas
 en conversación, `diseño simbólico nova.txt` y la revisión del código del 2026-09-23.
 
-Última revisión: 2026-09-25 (se incorporaron las respuestas de *Revisión de reglas*; después, el
+Última revisión: 2026-09-28 (N-100 y N-101, el diseño sugerido del escalonado). Antes, 2026-09-25 (se incorporaron las respuestas de *Revisión de reglas*; después, el
 puente preestablecido por modelo y por lado, N-03, y la modulación por tramo, N-92).
 
 **Vocabulario.** *Modelo* = dónde van las mochetas (normal, invertido, bandera, compuesto); en el
@@ -231,6 +231,17 @@ vidrios, U y tees son otra cosa (G-05).
   - Vidrio APA: con tubo, `22.5 − (u + 0.3)` (N-63; el dictado original decía "22.5 − alto de la
     U", corregido el 2026-09-25).
   - Vidrio INA: `(160 − 110) / 2 + 1` arriba, `− 0.5` abajo.
+- N-100 ✅ **Crear mochetas en novaDiseño** (dictado el 2026-09-28, aplica N-29 y N-34):
+  1. Si la medida trae altura de puente, se respeta.
+  2. La primera mocheta que se crea deja el sistema en 5/7 del alto y la mocheta con el resto.
+     También si el sistema llenaba el tramo (diseños armados antes del 2026-09-28, cuando la
+     calculadora mandaba el escalonado así; desde entonces llega con N-29, ver N-101).
+  3. Si antes de editar esa mocheta se crea otra, es la bandera: el sistema se queda como está y
+     las mochetas se reparten el resto a partes iguales.
+  4. Si antes de crear se editó una altura, lo editado se conserva: el cambio solo lo absorben las
+     mochetas, aunque alguna haya sido editada.
+  - El mismo reparto (sistema 5/7 y mochetas a partes iguales cuando nada está escrito) vale en el
+    panel, el paquete, el motor, el dibujo y la vista en 3D: `HerramientasDiseno.repartirAlto`.
 - N-35 ✅ Bandera lleva dos corridas de puente (solo la horizontal se duplica); el parante vertical
   entre tramos no se duplica; riel y U felpero siguen en 1 por tramo.
 - N-36 ✅ **El dibujo** muestra la mocheta con los puentes descontados y dibuja cada puente con su
@@ -572,6 +583,32 @@ divisiones, la U del vidrio del centro va con ceil".
     cambia de módulos o se limpia el diseño.
 
   Hecho en el motor y en el panel del editor (`FormasTest`).
+- N-101 ✅ **El diseño sugerido de un vano escalonado sigue las reglas** (pedido el 2026-09-28: "ese
+  diseño sugerido también tiene que seguir las reglas"). Cuando Nova arma el diseño desde el
+  contorno de Medidas, cada escalón es un tramo (N-66) y:
+  - un desnivel de hasta 2.5 es descuadre: el tramo queda recto y manda su medida mayor (N-06);
+  - sin hoja escrita, el sistema es 5/7 del alto **del tramo** y la mocheta el resto (N-29, con el
+    reparto único de N-100); con la hoja escrita, esa hoja, y si llega al alto del tramo no hay
+    mocheta (N-30): una sola franja, **nunca una mocheta de alto 0**;
+  - cada corte deja medio parante a cada lado (N-27): tramos más parantes suman el vano.
+
+  Formas sin hoja escrita: `103.3 × 77.2` (55.1 + 22), `149.2 × 144.5` (103.1 + 41.2), `80.7 ×
+  109.3` (78.1 + 31.2). Antes: el tramo 2 salía `s<144.4>; m<0>` (0.06 de dintel inclinado creaba
+  una mocheta vacía), el 3 `s<103.2>; m<6.1>` (el descuadre de 0.9 se leía como pendiente) y los
+  anchos no dejaban sitio a los parantes (343.3 en un vano de 338.3). El diseño sugerido y Limpiar
+  sacan los escalones de la misma función (`ContornoEnTramos.escalones`). `ContornoEnTramosTest`.
+  - ❓ Con la hoja escrita (103.2) el recorte de Formas, que sube 35, queda con una mocheta de 6.1:
+    es N-29 al pie de la letra (la hoja es menor que el alto del tramo).
+  - 🐞 Los vanos con lados inclinados de verdad (triángulo, trapecio) siguen por el camino viejo:
+    tampoco descuentan el parante entre sus trozos.
+  - **Un tramo inclinado es su rectángulo contenedor** (N-68, N-99; arreglado el 2026-09-28). Sus
+    franjas se reparten desde su dintel más alto hasta su alféizar más bajo, y la silueta las
+    recorta. Esto vale en el modelo (`altoDeTramo`, `caidaDeTramo`), el dibujo, la 3D y el motor.
+    Antes contaba solo el lado izquierdo. En la medida del usuario, 232.4 × 164.2 con 109.1 a la
+    izquierda, sistema y mocheta se apretaban en 109.1 (72.5 + 36.6): se veían dos puentes y el
+    triángulo de arriba no se podía tocar. Ahora queda así: sistema 109.1 y mocheta 55.1, con la
+    mocheta de punta a punta. La corrediza va en el lado bajo, donde entra entera (N-67). Pruebas:
+    `ContornoEnTramosTest` y `el_triangulo_de_un_dintel_que_sube_es_de_la_mocheta` en el celular.
 - N-96 ✅ **Estrategia de cálculo de las formas: partir en rectángulos** (dictado el 2026-09-26). Un
   tramo que no es rectángulo se parte por sus franjas hasta que cada trozo lo sea; cada rectángulo
   se calcula con las reglas que ya existen, identificando sus módulos; al final los materiales que
@@ -783,7 +820,7 @@ novaDiseño; después formas.
 | C-10 | Lista de U editable (ancho, alto, espesor máximo) | G-02, N-40 |
 | C-11 | Ubicar y documentar la excepción de hache en Nova desigual | N-54 |
 | C-12 | Camino desigual: doble puente, mochetas, modelo, esquinas y descuentos APA | N-73, N-74, N-75 |
-| C-13 | Un solo lector del diseño simbólico | N-81 |
+| C-13 | Un solo lector del diseño simbólico. ✔ En parte (2026-09-28): el dibujo de novaDiseño dejó su lector propio y lee con el del modelo (`DisenoNova.desdePaquete`), el mismo del panel, la 3D y el motor. El modelo aprendió lo que solo leía el dibujo: formato viejo sin tramos, `s<>` sin alto, mochetas laterales `l`/`r`, segmentos `a<…>{…}`, anchos `f(50)`, y círculo o arco pegados a un módulo (`fccfO<1>`). `LectorUnicoTest` fija 305 paquetes contra lo que leía el lector viejo (304 iguales; el otro, un arco que el viejo no marcaba). Falta: la pantalla de diseño todavía rearma el paquete con texto en algunos botones (`parsearBloquesTramo`, `reconstruirPaqueteConBloques`), que es C-25 | N-81 |
 | C-14 | Estado de `NovaCalculos` propio de cada calculadora | G-07 |
 | C-15 | `cruce()` de INA sin la tabla vieja de divisiones | N-83 |
 | C-16 | Cadena archivada: altura de puente calculada (no 0), `P<90>` en esquinas, `Tb` bloqueado. ✔ Hecho 2026-09-25: lo editado se conserva y el modelo pasa a `x` | G-06, N-84, N-85, N-89 |

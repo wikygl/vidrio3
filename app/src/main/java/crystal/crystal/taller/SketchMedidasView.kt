@@ -5870,24 +5870,47 @@ class SketchMedidasView @JvmOverloads constructor(
      * cotas con la densidad de aquí y CAMBIARÍA medidas reales (un rectángulo de 101 cm dibujado a
      * 2.75 pasaba a 158.7 cm en un equipo de 1.75, y al reeditarlo se encogía).
      *
-     * Se deduce la densidad con que se dibujó comparando píxeles contra centímetros acotados, se
-     * reescala el trazo y se reponen los centímetros originales tal cual: el dibujo se adapta, la
-     * medida no se toca. El tamaño exacto del gráfico no importa; la medida en cm sí.
+     * La densidad con que se dibujó viene en el apunte (`pxPorCm`, desde el 2026-09-28) y se usa tal
+     * cual. Los apuntes de antes no la traen: se deduce comparando píxeles contra centímetros
+     * acotados. En los dos casos se reescala el trazo y se reponen los centímetros originales tal
+     * cual: el dibujo se adapta, la medida no se toca. El tamaño exacto del gráfico no importa; la
+     * medida en cm sí.
      */
-    private fun normalizarDensidad(cargados: List<Element>) {
-        val pxPorCmDibujo = pxPorCmDelDibujo(cargados) ?: return
+    private fun normalizarDensidad(cargados: List<Element>, pxPorCmGuardado: Float? = null) {
+        val pxPorCmDibujo = pxPorCmGuardado?.takeIf { it > 0.01f } ?: pxPorCmDelDibujo(cargados) ?: return
         if (pxPorCmDibujo <= 0.01f) return
         val factor = resources.displayMetrics.density / pxPorCmDibujo
         if (!factor.isFinite() || factor <= 0f || abs(factor - 1f) < 0.01f) return
         val cotas = capturarCotas(cargados)
+        // Lo anotado en las formas, aparte: al reescalar, refreshCompositeSides lo relee del dibujo
+        // como si el usuario lo hubiera arrastrado, y un lado anotado que el dibujo aún no respeta
+        // (160 dibujado a 105) se perdía. Reescalar para otra pantalla no es editar.
+        val formas = mutableListOf<Element.Composite>()
+        fun juntarFormas(e: Element) {
+            when (e) {
+                is Element.Composite -> formas += e
+                is Element.Group -> e.children.forEach { juntarFormas(it) }
+                else -> Unit
+            }
+        }
+        cargados.forEach { juntarFormas(it) }
+        val anotado = formas.map { LinkedHashMap(it.declarados) }
         val origen = PointF(0f, 0f)
         cargados.forEach { scaleElement(it, factor, origen) }
         restaurarCotas(cargados, cotas)
+        formas.forEachIndexed { i, f -> f.declarados.clear(); f.declarados.putAll(anotado[i]) }
     }
 
     /** Píxeles por centímetro con que se dibujó el apunte (mediana de las figuras acotadas). */
     private fun pxPorCmDelDibujo(cargados: List<Element>): Float? {
         val muestras = mutableListOf<Float>()
+        // Los lados de las formas cerradas, aparte: solo cuentan si no hay otra figura acotada. Sin
+        // ellos, un apunte con solo una forma —el escalonado, desde que la cadena de líneas que da
+        // la vuelta se vuelve forma— no se corregía, y dibujado en el Xiaomi (2.75) se abría en el
+        // moto (1.75) con todo por 1.571 (pedido del usuario, 2026-09-28). Van detrás porque una
+        // forma puede traer medidas anotadas que el dibujo aún no respeta, y con ellas en la
+        // mediana el trapecio de PerspectivaDeVistasTest ya no se rehacía con lo anotado.
+        val deFormas = mutableListOf<Float>()
         fun considerar(element: Element) {
             when (element) {
                 is Element.Group -> element.children.forEach { considerar(it) }
@@ -5899,15 +5922,28 @@ class SketchMedidasView @JvmOverloads constructor(
                         if (element.heightCm > 0.5f && alto > 1f) muestras += alto / element.heightCm
                     }
                     Tool.LINE, Tool.ORTHO_LINE, Tool.ARCO -> {
+                        // La cota a escuadra es una medida de apoyo, no la pieza (igual que en la
+                        // medida del apunte): escrita en 198.3 sobre un lado dibujado de 148.7, la
+                        // escala salía de ella y todo el apunte crecía 4/3 (usuario, 2026-09-28).
                         val largo = distancia(element.start, element.end)
-                        if (element.lengthCm > 0.5f && largo > 1f) muestras += largo / element.lengthCm
+                        if (!esCotaAEscuadra(element.cotaHint) && element.lengthCm > 0.5f && largo > 1f) {
+                            muestras += largo / element.lengthCm
+                        }
                     }
                     Tool.NONE, Tool.FREEHAND, Tool.MAGNET_PEN, Tool.TEXT, Tool.SELECT, Tool.NODO, Tool.ARCO_90 -> Unit
+                }
+                is Element.Composite -> element.contours.forEachIndexed { c, puntos ->
+                    puntos.indices.forEach { i ->
+                        val cm = element.sideCms.getOrNull(c)?.getOrNull(i) ?: return@forEach
+                        val largo = distancia(puntos[i], puntos[(i + 1) % puntos.size])
+                        if (cm > 0.5f && largo > 1f) deFormas += largo / cm
+                    }
                 }
                 else -> Unit
             }
         }
         cargados.forEach { considerar(it) }
+        if (muestras.isEmpty()) muestras += deFormas
         if (muestras.isEmpty()) return null
         return muestras.sorted()[muestras.size / 2]
     }
@@ -5921,7 +5957,10 @@ class SketchMedidasView @JvmOverloads constructor(
                     element.widthCm, element.heightCm, element.diameterCm, element.lengthCm,
                     element.topCm, element.rightCm, element.bottomCm, element.leftCm
                 )
-                is Element.Composite -> cotas += floatArrayOf(element.widthCm, element.heightCm)
+                // Y la medida de cada lado: al reescalar, la forma las relee del dibujo, y un lado
+                // anotado que el dibujo todavía no respeta (160 dibujado a 105) perdía lo anotado.
+                is Element.Composite -> cotas += floatArrayOf(element.widthCm, element.heightCm) +
+                    element.sideCms.flatten().toFloatArray()
                 else -> Unit
             }
         }
@@ -5944,6 +5983,9 @@ class SketchMedidasView @JvmOverloads constructor(
                 is Element.Composite -> {
                     val c = cotas.getOrNull(indice++) ?: return
                     element.widthCm = c[0]; element.heightCm = c[1]
+                    // Los lados, en el mismo orden en que se guardaron (reescalar no cambia cuántos hay).
+                    var k = 2
+                    element.sideCms.forEach { lados -> for (i in lados.indices) lados[i] = c.getOrElse(k++) { lados[i] } }
                 }
                 else -> Unit
             }
@@ -6602,6 +6644,9 @@ class SketchMedidasView @JvmOverloads constructor(
         val items = JSONArray()
         elementosDeVista(Vista.FRONTAL).forEach { element -> items.put(elementJson(element)) }
         root.put("version", 1)
+        // Los píxeles por centímetro con que está dibujado: al abrirlo en otro celular se reescala
+        // con este dato exacto, sin deducirlo de las cotas (pedido del usuario, 2026-09-28).
+        root.put("pxPorCm", resources.displayMetrics.density.toDouble())
         root.put("elements", items)
         val vistas = JSONObject()
         Vista.values().filter { it != Vista.FRONTAL && vistaTieneDibujo(it) }.forEach { v ->
@@ -6624,7 +6669,9 @@ class SketchMedidasView @JvmOverloads constructor(
                 val obj = items.getJSONObject(i)
                 readElementJson(obj)?.let { cargados.add(it) }
             }
-            normalizarDensidad(cargados)
+            // La escala con que se dibujó, si el apunte la trae; si no, se deduce de las cotas.
+            val pxPorCmGuardado = root.optDouble("pxPorCm", 0.0).toFloat().takeIf { it > 0.01f }
+            normalizarDensidad(cargados, pxPorCmGuardado)
             // Las otras vistas del apunte, si las hay: se guardan aparte y la frontal va al lienzo.
             otrasVistas.clear()
             vistaActiva = Vista.FRONTAL
@@ -6638,11 +6685,10 @@ class SketchMedidasView @JvmOverloads constructor(
                     val lista = vistas.optJSONArray(v.name) ?: return@forEach
                     val de = mutableListOf<Element>()
                     for (i in 0 until lista.length()) readElementJson(lista.getJSONObject(i))?.let { de.add(it) }
-                    normalizarDensidad(de)
+                    normalizarDensidad(de, pxPorCmGuardado)
                     if (de.isNotEmpty()) otrasVistas[v] = EstadoDeVista(de, ArrayDeque(), ArrayDeque(), emptyList(), 1f, 0f, 0f)
                 }
             }
-            normalizarDensidad(cargados)
             elementos.clear()
             elementos.addAll(cargados)
             establecerBaseline()   // el sketch cargado es la BASE del historial (undo no lo borra)

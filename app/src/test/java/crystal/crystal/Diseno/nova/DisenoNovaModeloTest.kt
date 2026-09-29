@@ -290,4 +290,80 @@ class DisenoNovaModeloTest {
         val otra = DisenoNova.desdePaquete(e.aPaquete())!!
         assertEquals(1, otra.etiquetas.count { it == "O<1>" })
     }
+
+    @Test
+    fun la_silueta_del_vano_de_cada_forma() {
+        // La vista 3D recorta las paredes con ella (pedido del usuario, 2026-09-27).
+        val elipse = DisenoNova.desdePaquete(
+            "{nova,apa,[200,180:Tl<200>(s<128.6>(f<50>c<50>c<50>f<50>O<1>);m<51.4>(f<100>f<100>))]}"
+        )!!.siluetaDelVano()
+        assertEquals(48, elipse.size)
+        assertEquals(0f, elipse.minOf { it.first }, 0.01f)
+        assertEquals(200f, elipse.maxOf { it.first }, 0.01f)
+        assertEquals(0f, elipse.minOf { it.second }, 0.01f)
+        assertEquals(180f, elipse.maxOf { it.second }, 0.01f)
+
+        val triangulo = DisenoNova.desdePaquete("{nova,apa,[200,160:Tl<200>(s(f)) V<0/0|200/0|100/160>]}")!!
+        assertEquals(listOf(0f to 0f, 200f to 0f, 100f to 160f), triangulo.siluetaDelVano())
+
+        val escalon = DisenoNova.desdePaquete("{nova,apa,[300,180:Tl<150>(s(fc)) P<2.5> Tl<147.5>(H<120>;s(fc))]}")!!
+        assertTrue(escalon.siluetaDelVano().size >= 5)
+
+        val rectangulo = DisenoNova.desdePaquete("{nova,apa,[200,180:Tl<200>(s(fccf))]}")!!
+        assertTrue(rectangulo.siluetaDelVano().isEmpty())
+    }
+
+    @Test
+    fun la_mocheta_nueva_en_un_sistema_que_llena_el_tramo_tiene_su_alto() {
+        // Pedido del usuario (2026-09-27): en un escalonado el sistema viene con el alto entero del
+        // tramo, la mocheta nueva salía de 0 y el puente no se veía. La hoja pasa a 5/7 (N-29).
+        val d = DisenoNova.desdePaquete(
+            "{nova,apa,[446.3,160:Tl<280.3>(s<160>(f<140.1>c<140.1>)) P<2.5> Tl<166>(H<106.2>;s<106.2>(f<83>c<83>))]}"
+        )!!
+        val bajo = d.conFranjaAgregadaEnTramo(1).tramos[1].franjas
+        assertEquals(106.2f * 5f / 7f, bajo.first { it.esSistema }.alto, 0.05f)
+        assertEquals(106.2f * 2f / 7f, bajo.first { !it.esSistema }.alto, 0.05f)
+        val alto = d.conFranjaAgregadaEnTramo(0).tramos[0].franjas
+        assertEquals(160f * 5f / 7f, alto.first { it.esSistema }.alto, 0.05f)
+        assertEquals(160f * 2f / 7f, alto.first { !it.esSistema }.alto, 0.05f)
+        // Un sistema que ya deja sitio lo conserva.
+        val conSitio = DisenoNova.desdePaquete("{nova,apa,[200,160:Tl<200>(s<120>(fc))]}")!!
+            .conFranjaAgregadaEnTramo(0).tramos[0].franjas
+        assertEquals(120f, conSitio.first { it.esSistema }.alto, 0.05f)
+        assertEquals(40f, conSitio.first { !it.esSistema }.alto, 0.05f)
+    }
+
+    @Test
+    fun crear_mochetas_sigue_n100() {
+        // Dictado del usuario (2026-09-28), en un tramo de 160.
+        fun alturas(d: DisenoNova) = HerramientasDiseno.alturasDeFranjas(d, 0).map { Math.round(it * 100) / 100f }
+        val solo = DisenoNova.desdePaquete("{nova,apa,[200,160:Tl<200>(s(fccf))]}")!!
+
+        // 2. La primera mocheta: sistema 5/7 y la mocheta el resto.
+        val una = solo.conFranjaAgregadaEnTramo(0)
+        assertEquals(listOf(114.29f, 45.71f), alturas(una))
+
+        // 3. Otra antes de editar la anterior: el tramo a partes iguales (la pantalla lo sabe y lo pide).
+        val dos = una.conFranjaAgregadaEnTramo(0, partesIguales = true)
+        assertEquals(listOf(53.33f, 53.33f, 53.33f), alturas(dos))
+
+        // 4. Con una altura editada antes de crear: lo editado se conserva y el cambio lo absorben
+        //    las mochetas, aunque la mocheta haya sido editada.
+        val mochetaEditada = DisenoNova.desdePaquete("{nova,apa,[200,160:Tl<200>(s(fccf);m<40>(ff))]}")!!
+        assertEquals(listOf(120f, 20f, 20f), alturas(mochetaEditada.conFranjaAgregadaEnTramo(0)))
+        val sistemaEditado = DisenoNova.desdePaquete("{nova,apa,[200,160:Tl<200>(s<100>(fccf);m<60>(ff))]}")!!
+        assertEquals(listOf(100f, 30f, 30f), alturas(sistemaEditado.conFranjaAgregadaEnTramo(0)))
+
+        // 1. La altura de puente que trae la medida se respeta.
+        val conPuente = DisenoNova.desdePaquete("{nova,apa,[200,160:Tl<200>(s<110>(fccf))]}")!!
+        assertEquals(listOf(110f, 50f), alturas(conPuente.conFranjaAgregadaEnTramo(0)))
+    }
+
+    @Test
+    fun sin_alturas_escritas_dos_franjas_5_7_y_tres_a_partes_iguales() {
+        // Una sola regla para el panel, el paquete, el motor, el dibujo y la 3D (N-100).
+        assertEquals(listOf(100f, 40f), HerramientasDiseno.repartirAlto(listOf(0f, 0f), listOf(true, false), 140f))
+        val tres = HerramientasDiseno.repartirAlto(listOf(0f, 0f, 0f), listOf(false, true, false), 141f)
+        assertEquals(listOf(47f, 47f, 47f), tres)
+    }
 }

@@ -110,3 +110,80 @@ motor. Esa lista de diferencias se le mostrará antes de la fase 3.
 1. **U felpero, fijo corredizo y doble corrediza miden igual que el riel (puente − 0.06).** Hoy
    las tres rutas los sacan igual al puente: es otra pieza a corregir en el motor.
 2. **Plan de la sección 3 aprobado.** Se empieza por la fase 1.
+3. **(2026-09-28) El plan se amplía al flujo completo**, de la medida a los optimizadores, para
+   todas las calculadoras: sección 5.
+
+## 5. El flujo completo: una sola entrada, una sola salida (2026-09-28)
+
+El motor único de la sección 3 resuelve el medio del camino, el cálculo de Nova. Los fallos del
+27 y 28 de septiembre salieron en los extremos: la misma medida cambió de tamaño al abrirse en otro
+celular (×1.571), y el dibujo, el panel, la 3D y el motor leían el diseño cada uno a su manera.
+Usted lo dijo así: **todo en un solo motor, desde el principio del flujo hasta el final.**
+
+### El flujo
+
+```
+ Medidas (general) ─┐
+ Carrito (Main)  ───┼─►  una medida  ─►  calculadora  ─►  piezas  ─►  proyecto  ─►  optimizadores
+ Ingreso manual  ───┘     (entrada)      (sus reglas)     (salida)                   compartir (JSON)
+```
+
+1. **Tres puertas de entrada.** Medidas, que sirve a todas las calculadoras (Nova, mampara, puerta,
+   ropero…); el carrito de MainActivity; y el ingreso escrito en la misma calculadora.
+2. **Todas las calculadoras leen lo mismo.** Cada una solo interpreta los datos según su producto y
+   hace sus propios cálculos. Ninguna vuelve a medir, a adivinar ni a calcular desde el dibujo.
+3. **Todas entregan el resultado en la misma forma**, que leen los optimizadores y que viaja como
+   JSON (formato Crystal) a cualquier versión de la app y a cualquier celular, de cualquier tamaño.
+
+### La regla que une todo
+
+**Los centímetros que usted escribe son la única fuente.** El dibujo en píxeles sirve solo para
+mirar. Ningún dato se vuelve a derivar del dibujo ni depende de la pantalla o la densidad del
+celular. Una misma medida da el mismo resultado entre por la puerta que entre y en el celular que
+sea.
+
+### Cómo está hoy (revisado el 2026-09-28)
+
+| Parte | Dónde | Estado |
+|---|---|---|
+| Entrada desde Medidas | `ColaCalculadoras.MedidaCalc` | La leen 14 calculadoras: buena base. Pero crece con un campo suelto por caso (`contorno`, `esquina`, `contornosLados`, `parantesLados`, `disenoRopero`, `forma`), y el contorno viaja como texto `x,y;x,y`. |
+| Entrada desde el carrito | `EnrutadorPresupuesto.crearIntentCalculadora` | Otra ficha distinta: extras sueltos (`ancho`, `alto`, `cantidad`, `producto`, `color_aluminio`, `tipo_vidrio`). No usa `MedidaCalc`. |
+| Ingreso manual | los campos de cada calculadora | Cada pantalla lee sus propios campos. |
+| El apunte de Medidas | `SketchMedidasView.exportEditableState` | Se guarda en píxeles; los cm se reconstruían adivinando la densidad. Desde el 2026-09-28 guarda también la escala con que se dibujó. Es lo que se comparte hoy como "formato Crystal" de medidas. |
+| Cálculo | cada calculadora | Nova, en camino con el motor único (`taller/nova/motor`). Las demás, cada una con su código. |
+| Salida | `ListaCasilla.procesarArchivarConPrefijo` → `MapStorage` | Cada calculadora archiva los **textos de su pantalla**, por perfil: `[medida, cantidad, ventana, proyecto]`. El motor de Nova ya produce piezas (`MaterialesNova.Pieza`), pero se vuelven texto para archivar. |
+| Optimizadores | `CorteListManager` y planchas | Leen ese mapa del proyecto y filtran las filas por forma (número, entero). Comparten el corte como JSON "formato Crystal". |
+
+### Los tres contratos
+
+Se fijan una vez, por escrito y con pruebas, y todas las calculadoras los cumplen.
+
+1. **Entrada: una medida.** Una sola ficha para las tres puertas, en cm:
+   - producto, cliente y cantidad;
+   - ancho y alto;
+   - la forma del vano: recto, contorno, circular o esquina con sus lados;
+   - acabado, color y vidrio cuando se conocen;
+   - los datos propios del producto, como el diseño del ropero.
+
+   Se hace **ampliando `MedidaCalc`**, no con una ficha nueva al lado. El carrito y el ingreso
+   manual la llenan también. El dibujo va aparte y solo para mirar.
+2. **Salida: piezas.** Cada pieza con su material o perfil, medida en cm, cantidad, orientación
+   (G-01), ventana y proyecto, y color o tipo de vidrio. Es lo que el mapa del proyecto ya guarda
+   como texto: se ordena y se escribe desde las piezas, no desde la pantalla. Los proyectos ya
+   guardados se siguen abriendo (el `serialVersionUID` de `Listado` no se toca).
+3. **Transporte: JSON.** La medida y el resultado viajan como JSON con número de versión. Una app
+   más nueva lee lo viejo; una más vieja ignora lo que no conoce. Lo que se comparte de Medidas
+   lleva los cm, y no solo el dibujo.
+
+### Orden
+
+| Paso | Qué | Cómo se controla |
+|---|---|---|
+| 1 | Escribir los tres contratos con sus pruebas | Una prueba por campo; la misma medida escrita en JSON y leída de vuelta da idéntico |
+| 2 | Las tres puertas llenan la misma ficha | La misma medida por Medidas, por el carrito y a mano da la misma ficha; el mismo apunte en dos densidades de pantalla da los mismos cm |
+| 3 | Nova primero: lee la ficha, calcula con el motor y archiva piezas | La suite de Nova y la comparación de la fase 2, sin diferencias |
+| 4 | Las demás calculadoras, una por una, con su propia comparación antes y después | Cada diferencia explicada por una regla; si no, se investiga |
+| 5 | Optimizadores y compartir leen piezas | El mismo proyecto optimiza igual antes y después |
+
+Mientras tanto, lo que la sección 3 deja pendiente en Nova (C-25, un solo escritor del diseño; C-20,
+circular como forma) se hace dentro de estos contratos, no aparte.
