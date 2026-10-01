@@ -69,6 +69,57 @@ class ControladorColaMedidas(
             configurarGestos(ivDiseno)
             cargarYMostrarOriginal(path)
         }
+        ColaCalculadoras.cola(activity).getOrNull(ColaCalculadoras.indice(activity))?.let { avisarForma(it) }
+    }
+
+    /** La forma que trae la medida y que esta calculadora todavía no calcula. */
+    var forma: FormaDeLaMedida.Forma? = null
+        private set
+
+    /**
+     * Reconoce la forma de la medida (FormaDeLaMedida) y, si no es un rectángulo, lo dice con todas
+     * sus letras: esta calculadora calcula el rectángulo que la contiene. Antes lo hacía en silencio
+     * (hallado el 2026-09-29: la ventana escalonada de Pipa y la puerta recortada de Isabel se
+     * calculaban como rectángulos sin aviso).
+     */
+    private fun avisarForma(item: ColaCalculadoras.MedidaCalc) {
+        val f = runCatching { FormaDeLaMedida.de(item) }.getOrNull()
+        forma = f?.takeIf { it.conForma }
+        val conForma = forma ?: return
+        val nombre = EnrutadorPresupuesto.CALCULADORAS_DISPONIBLES.firstOrNull { it.second == claseActual }?.first
+            ?: "Esta calculadora"
+        val dialogo = AlertDialog.Builder(activity)
+            .setTitle("Medida con forma")
+            .setMessage(FormaDeLaMedida.aviso(conForma, nombre, item.ancho, item.alto))
+            .setPositiveButton("Entendido", null)
+        // Un vano escalonado se puede partir en sus rectángulos (N-96: cada rectángulo con las reglas
+        // que ya existen); lo decide el vidriero (G-03).
+        if (conForma.tipo == FormaDeLaMedida.Tipo.ESCALONADO && conForma.escalones.size > 1) {
+            dialogo.setNegativeButton("Partir en ${conForma.escalones.size}") { _, _ -> partirEnEscalones(item, conForma) }
+        }
+        ultimoAvisoDeForma = dialogo.show()
+    }
+
+    companion object {
+        /** El último aviso de forma mostrado, para las pruebas en el celular (no hay Espresso). */
+        @androidx.annotation.VisibleForTesting
+        var ultimoAvisoDeForma: AlertDialog? = null
+    }
+
+    /**
+     * Cambia la medida escalonada por una medida por escalón, cada una con su ancho y su alto, en el
+     * mismo lugar de la cola. Se calculan y se archivan una por una, como las demás.
+     */
+    private fun partirEnEscalones(item: ColaCalculadoras.MedidaCalc, f: FormaDeLaMedida.Forma) {
+        val indice = ColaCalculadoras.indice(activity)
+        val cola = ColaCalculadoras.cola(activity)
+        if (indice !in cola.indices) return
+        val trozos = f.escalones.map { (w, h) -> item.copy(ancho = w, alto = h, contorno = "", estado = ColaCalculadoras.EstadoCola.PENDIENTE) }
+        val nueva = ArrayList(cola).apply { removeAt(indice); addAll(indice, trozos) }
+        ColaCalculadoras.guardarCola(activity, nueva)
+        navegador.instalarChip()
+        navegador.actualizarChip()
+        cargarMedida(trozos.first(), indice)
     }
 
     /** Llamar al inicio de "Calcular": vuelve del gráfico original al diseño calculado. */
@@ -103,6 +154,7 @@ class ControladorColaMedidas(
         if (ivDiseno != null && item.bocetoArchivo.isNotBlank()) cargarYMostrarOriginal(item.bocetoArchivo)
         etAncho?.requestFocus()
         Toast.makeText(activity, "Medida cargada: revisa y calcula", Toast.LENGTH_SHORT).show()
+        avisarForma(item)
     }
 
     // ---------------- gráfico original en ivDiseno ----------------

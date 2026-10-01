@@ -100,10 +100,31 @@ En lugar de seguir corrigiendo cinco rutas, **un motor único**, sin pantalla, q
 | 1 | Motor nuevo al lado del código actual, con pruebas por regla (N-xx) | Las pruebas de reglas |
 | 2 | Comparar motor nuevo y código actual en muchas ventanas (cada acabado × modelo × modulación, L, C, desigual) | Cada diferencia tiene que estar explicada por una regla de este documento; si no, se investiga |
 | 3 | La pantalla usa el motor nuevo; se ve en los celulares | Pruebas en el moto g04 |
-| 4 | Se retiran las rutas viejas; la lógica escrita a mano queda como comentario de consulta | Suite completa en verde |
+| 4 | Se retiran las rutas viejas; la lógica escrita a mano queda como comentario de consulta | Suite completa en verde. **Hecha el 2026-09-30** (ver abajo) |
 
 Las piezas que hoy salen mal (cuadro de la sección 2) cambiarán de medida o cantidad al pasar al
 motor. Esa lista de diferencias se le mostrará antes de la fase 3.
+
+### Fase 4 hecha (2026-09-30)
+
+Pedido del usuario: "no quiero ningún motor aparte del que está en desarrollo". Desde entonces
+**todo sale del motor único** (`taller/nova/motor`):
+
+- **Materiales**: `MotorNova`, sin respaldo. Si el motor no puede con un caso, la pantalla dice "el
+  motor todavía no calcula este caso" y no muestra materiales (antes se quedaba en silencio con lo
+  de las rutas viejas, y la misma ventana podía salir con uno u otro).
+- **Referencias**: `ReferenciasNova`, con el formato de siempre (la primera línea `An: … x Al: …`
+  es la que se relee al reabrir un producto).
+- **Diseño simbólico**: `EscritorNova` escribe el reparto (tramos, hojas, alturas) desde la misma
+  ventana que se calcula; la pantalla solo pone los adornos de la medida (esquina, panza, círculo,
+  silueta). Antes lo decidía `NovaUIHelper.generarTramosConsolidado` por su cuenta.
+- **Retirado**: `uTexto`, `otrosAluminios`, `vidriosTexto`, `referencias`, `calcularMaterialesNl/Nu`,
+  `calcularDesigual` y 28 funciones que solo ellas usaban (1 305 líneas de `NovaCorrediza`), y los
+  objetos `NovaCalculosDesiguales`, `NovaInaCalculos`, `NovaVidriosHelper`, `NovaPerfilesHelper` y
+  casi todo `NovaUIHelper`. Quedan comentados en `taller/nova/viejo/` para leerlos, y enteros en la
+  etiqueta git `rutas-viejas-nova` (commit e020bc2) para volver a correrlos y comparar.
+- **Pruebas**: las reglas dictadas que fijaban las pruebas del cálculo viejo pasaron al motor
+  (`ReglasDictadasEnElMotorTest`); las viejas quedan comentadas en `test/.../nova/viejo/`.
 
 ## 4. Decisiones del usuario (2026-09-25)
 

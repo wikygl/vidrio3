@@ -1,3 +1,11 @@
+package crystal.crystal.taller.nova.viejo
+
+/*
+ * Fase 2 del motor único: la pantalla vieja contra el motor. Sin rutas viejas (fase 4, 2026-09-30) ya
+ * no hay nada que comparar; queda aquí solo para consulta.
+ */
+
+/*
 package crystal.crystal.taller.nova
 
 import android.view.View
@@ -244,3 +252,5 @@ class ComparacionMotorNovaTest {
         archivo.writeText(cabecera.append("\n").append(informe).toString())
     }
 }
+
+*/

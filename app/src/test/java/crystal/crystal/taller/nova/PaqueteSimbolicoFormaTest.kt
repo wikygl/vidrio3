@@ -30,7 +30,7 @@ class PaqueteSimbolicoFormaTest {
         for (tipo in tipos) for (ancho in listOf(120f, 187.4f, 385.9f)) for (alto in listOf(150f, 246.8f)) {
             for (divisiones in listOf(1, 2, 4, 7)) for (modelo in modelos) for (remate in remates) {
                 val altoHoja = NovaCalculos.altoHoja(alto, alto * 0.6f)
-                val paquete = NovaUIHelper.generarPaqueteSimbolico(
+                val paquete = crystal.crystal.taller.nova.motor.EscritorNova.paqueteAutomatico(
                     tipo, ancho, alto, altoHoja, divisiones, modelo, 0f, remate
                 )
                 casos++

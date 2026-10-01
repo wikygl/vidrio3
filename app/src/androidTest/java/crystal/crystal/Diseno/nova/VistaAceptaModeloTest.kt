@@ -201,15 +201,8 @@ class VistaAceptaModeloTest {
     @Test
     fun la_vista_acepta_la_esquina_curva() {
 
-        fun tramos(ancho: Float): String = crystal.crystal.taller.nova.NovaUIHelper
-            .generarTramosConsolidado(
-                ancho = ancho,
-                alto = 120f,
-                altoHoja = crystal.crystal.taller.nova.NovaCalculos.altoHoja(120f, 90f),
-                divisiones = crystal.crystal.taller.nova.NovaCalculos.divisiones(ancho, 0, "nn"),
-                siNoMoch = crystal.crystal.taller.nova.NovaCalculos.siNoMoch(120f, 90f),
-                texto = "nn"
-            )
+        fun tramos(ancho: Float): String = crystal.crystal.taller.nova.motor.EscritorNova
+            .tramosAutomaticos(ancho = ancho, alto = 120f, altoHoja = crystal.crystal.taller.nova.NovaCalculos.altoHoja(120f, 90f), divisiones = crystal.crystal.taller.nova.NovaCalculos.divisiones(ancho, 0, "nn"))
         // El tag del arco, dentro de la franja de sistema, igual que lo pone la calculadora.
         val sistema = Regex("s(?:<[^>]*>)?\\([^)]*\\)", RegexOption.IGNORE_CASE)
         fun conArco(t: String): String {

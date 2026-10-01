@@ -30,7 +30,7 @@ class LectorUnicoTest {
                 for (ancho in listOf(100f, 199.9f, 330f, 560f))
                     for ((alto, hoja) in listOf(145f to 100f, 210f to 210f)) {
                         runCatching {
-                            NovaUIHelper.generarPaqueteSimbolico(
+                            crystal.crystal.taller.nova.motor.EscritorNova.paqueteAutomatico(
                                 acabado, ancho, alto, NovaCalculos.altoHoja(alto, hoja),
                                 NovaCalculos.divisiones(ancho, 0), mod, 0f, remate
                             )

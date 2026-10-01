@@ -5857,6 +5857,53 @@ class SketchMedidasView @JvmOverloads constructor(
      * (todas las medidas escaladas por el mismo factor). El cálculo por píxeles queda de reserva
      * para apuntes sin figuras acotadas, como los que solo tienen trazo libre o una imagen de fondo.
      */
+    /**
+     * El apunte partido en sus figuras sueltas, cada una como un apunte propio (el mismo formato de
+     * [exportEditableState]); vacío si tiene una sola. Pedido del usuario el 2026-10-01: una medida
+     * de Fide traía tres rectángulos (214.5 × 157.5, 204 × 21 y 200 × 23) y la cola los juntaba en
+     * una sola ventana, con el ancho mayor y el alto mayor de todas.
+     *
+     * Una figura es un rectángulo, un triángulo, un círculo o una forma cerrada que no está dentro de
+     * otra. Lo demás (cotas, puentes, textos, símbolos) va con la figura que lo contiene o, si no lo
+     * contiene ninguna, con la más cercana. Una ventana de esquina o un apunte con vistas es UNA
+     * ventana aunque tenga varias piezas: no se parte.
+     */
+    fun estadosPorFigura(): List<String> {
+        if (tieneVistas() || elementos.indices.any { esMarcoEsquina(it) }) return emptyList()
+        fun esFigura(e: Element) = when (e) {
+            is Element.Composite -> true
+            is Element.Shape -> e.tool == Tool.RECTANGLE || e.tool == Tool.TRIANGLE || e.tool == Tool.CIRCLE
+            else -> false
+        }
+        val cajas = elementos.map { RectF(boundsForElement(it)) }
+        fun contiene(a: RectF, b: RectF) =
+            a.left - 2f <= b.left && a.top - 2f <= b.top && a.right + 2f >= b.right && a.bottom + 2f >= b.bottom
+        val candidatas = elementos.indices.filter { esFigura(elementos[it]) }
+        // Fuera las que están dentro de otra (de dos iguales se queda la primera).
+        val figuras = candidatas.filter { i ->
+            candidatas.none { j -> j != i && contiene(cajas[j], cajas[i]) && (!contiene(cajas[i], cajas[j]) || j < i) }
+        }
+        if (figuras.size < 2) return emptyList()
+        fun distancia(caja: RectF, x: Float, y: Float): Float {
+            val dx = maxOf(caja.left - x, 0f, x - caja.right)
+            val dy = maxOf(caja.top - y, 0f, y - caja.bottom)
+            return kotlin.math.hypot(dx, dy)
+        }
+        val grupos = elementos.indices.groupBy { k ->
+            if (k in figuras) k else figuras.minByOrNull { f -> distancia(cajas[f], cajas[k].centerX(), cajas[k].centerY()) }!!
+        }
+        return figuras.map { f ->
+            val items = JSONArray()
+            grupos[f].orEmpty().sorted().forEach { items.put(elementJson(elementos[it])) }
+            JSONObject().apply {
+                put("version", 1)
+                put("pxPorCm", resources.displayMetrics.density.toDouble())
+                put("elements", items)
+                put("interior", vistaInterior)
+            }.toString()
+        }
+    }
+
     fun medidaPrincipal(): MedidaPrincipal? {
         // Con vistas, la medida es la de la ventana armada: su desarrollo entero por su alto mayor.
         // Es lo que se archiva y lo que se corta, y no depende de en qué vista se esté mirando.

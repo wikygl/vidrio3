@@ -438,6 +438,7 @@ object ContornoEnTramos {
             }
             return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(medido)
         }
+        trapecioLateral(puntos, medido, acabado, altoHoja, anchoParante)?.let { return it }
         // Hasta el 2026-09-28 el escalonado también pasaba por aquí: la banda recta llevaba la hoja
         // al alto entero del tramo (`s<144.4>; m<0>`), un descuadre de 0.9 la volvía inclinada con
         // la hoja de la ventana entera (`s<103.2>; m<6.1>`) y los anchos no dejaban sitio a los
@@ -495,6 +496,59 @@ object ContornoEnTramos {
         return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(medido)
     }
 
+    /**
+     * El vano con un costado inclinado junto a un rectángulo: el trapecio (Vna4 de "polis", dictado
+     * el 2026-09-26 en N-99) o la cara asimétrica de una esquina (Formas 13, 120 abajo y 189 arriba).
+     * Como lo diseñó el usuario: UN tramo, el fijo contra el lado inclinado (su vidrio es el
+     * rectángulo que lo contiene y se corta en obra) y las corredizas en el rectángulo, donde entran
+     * enteras (N-67). El rectángulo se reparte con la regla de los 60 (N-15) y el costado inclinado
+     * lleva su fijo; el orden es el preestablecido (N-22), dado vuelta si hace falta para que el
+     * extremo inclinado quede en fijo. La geometría de cada módulo la mide el motor (N-99).
+     *
+     * Antes pasaba por el camino de los lados inclinados, que partía el triángulo en un tramo aparte y
+     * le acortaba la hoja "a lo que entra": en la punta, 0 (un sistema de alto 0 con una corrediza).
+     * Null si el vano no es de esta forma.
+     */
+    private fun trapecioLateral(
+        puntos: List<Pair<Float, Float>>, medido: List<Pair<Float, Float>>, acabado: String,
+        pedida: Float, anchoParante: Float
+    ): DisenoNova? {
+        val b = bandas(puntos)
+        if (b.size < 2) return null
+        fun inclinada(x: Banda) =
+            abs(x.altoDerCm - x.altoCm) > DESCUADRE_ESCALON || abs(x.caidaDerCm - x.caidaCm) > DESCUADRE_ESCALON
+        val izq = inclinada(b.first())
+        val der = inclinada(b.last())
+        if (!izq && !der) return null
+        val rectas = b.subList(if (izq) 1 else 0, b.size - (if (der) 1 else 0))
+        if (rectas.isEmpty() || rectas.any { inclinada(it) }) return null
+        val alto = puntos.maxOf { it.second } - puntos.minOf { it.second }
+        // El rectángulo va de dintel a alféizar, sin escalones.
+        if (rectas.any { abs(maxOf(it.altoCm, it.altoDerCm) - alto) > DESCUADRE_ESCALON || minOf(it.caidaCm, it.caidaDerCm) > DESCUADRE_ESCALON }) return null
+        // Y el costado inclinado arranca de él: su lado de junto al rectángulo llega a su alto.
+        if (izq && abs(b.first().altoDerCm - alto) > DESCUADRE_ESCALON) return null
+        if (der && abs(b.last().altoCm - alto) > DESCUADRE_ESCALON) return null
+
+        val anchoRect = rectas.sumOf { it.anchoCm.toDouble() }.toFloat()
+        val nRect = NovaCalculos.divisiones(anchoRect, 0)
+        val total = nRect + (if (izq) 1 else 0) + (if (der) 1 else 0)
+        var orden = NovaCalculos.ordenDivis(total, total.toFloat()).filter { it == 'f' || it == 'c' }
+        if (orden.length != total) return null
+        if ((izq && orden.first() != 'f') || (der && orden.last() != 'f')) orden = orden.reversed()
+        if ((izq && orden.first() != 'f') || (der && orden.last() != 'f')) return null
+        val anchos = buildList {
+            if (izq) add(b.first().anchoCm)
+            repeat(nRect) { add(anchoRect / nRect) }
+            if (der) add(b.last().anchoCm)
+        }
+        val ancho = anchos.sum()
+        val franjas = franjasDeEscalon(acabado, ancho, alto, pedida, anchoParante) ?: return null
+        val conModulos = franjas.map { f ->
+            if (!f.esSistema) f else f.copy(modulos = orden.mapIndexed { k, c -> NovaModulo(c, anchos[k]) })
+        }
+        return DisenoNova(acabado, ancho, alto, listOf(NovaTramo(ancho = ancho, franjas = conModulos))).conContornoVano(medido)
+    }
+
     /** Un trozo de vano ya decidido: si lleva hoja corrediza y con qué alto. */
     private data class Trozo(val banda: Banda, val llevaHoja: Boolean, val hoja: Float)
 
@@ -534,7 +588,9 @@ object ContornoEnTramos {
         val anchoDer = banda.anchoCm - anchoIzq
         val cabeIzq = banda.altoCm >= hoja
         val fuera = if (cabeIzq) anchoDer else anchoIzq
-        if (fuera < MODULO_CASA) return listOf(Trozo(banda, true, menor))
+        // La hoja se acorta a lo que entra solo mientras siga siendo una hoja: por debajo del módulo de
+        // la casa van fijos (N-67). En el pentágono de Formas salía una corrediza con sistema de 10.2.
+        if (fuera < MODULO_CASA) return listOf(if (menor >= MODULO_CASA) Trozo(banda, true, menor) else Trozo(banda, false, 0f))
         val caidaCorte = banda.caidaCm + (banda.caidaDerCm - banda.caidaCm) * t
         return listOf(
             Trozo(

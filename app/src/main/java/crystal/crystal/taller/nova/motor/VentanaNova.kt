@@ -134,7 +134,9 @@ data class Tramo(
      * de los 144.5 del vano, y su mocheta es 77.2 − 55.1 − puente, no 144.5 − 55.1 − puente (hallado
      * el 2026-09-29: salía un vidrio de mocheta de 87.3 donde va uno de 20.1). Null = el del lado.
      */
-    val alto: Float? = null
+    val alto: Float? = null,
+    /** Lo que baja el dintel de este tramo respecto del de la ventana, en un vano escalonado. */
+    val caida: Float = 0f
 ) {
     val ancho: Float get() = modulos.sumOf { it.ancho.toDouble() }.toFloat()
     val corredizas: Int get() = modulos.count { it.corrediza }
@@ -171,7 +173,9 @@ data class LadoNova(
      * y sus U no lo pierden, así que la U que corre de punta a punta del lado lo recupera.
      */
     val estructuraIzq: Float = 0f,
-    val estructuraDer: Float = 0f
+    val estructuraDer: Float = 0f,
+    /** Este lado es la curva con la que se resolvió una esquina (N-84), no una pared. */
+    val curvaDeEsquina: Boolean = false
 ) {
     val hayMocheta: Boolean get() = altoHoja < alto
     val modulos: List<Modulo> get() = tramos.flatMap { it.modulos }

@@ -114,9 +114,22 @@ object HerramientasDiseno {
         val libres = escritos.count { it <= 0f }
         val porLibre = if (libres > 0) ((altoT - fijas) / libres).coerceAtLeast(0f) else 0f
         val alturas = escritos.map { if (it > 0f) it else porLibre }
-        // Si no suman el alto del tramo, se estiran en proporción: así los puentes caen donde se ven.
+        // Si no suman el alto del tramo, la diferencia la absorben las mochetas y el sistema se queda
+        // con lo escrito (N-100: lo editado se conserva). Antes se estiraban todas en proporción y una
+        // hoja escrita de 80 salía de 81.7 (s<80>, m<37.5> en 120: la mocheta viene sin el puente).
+        // Sin mochetas, se estiran los sistemas.
         val suma = alturas.sum()
-        return if (suma > 0f && abs(suma - altoT) > 0.05f) alturas.map { it * altoT / suma } else alturas
+        if (suma <= 0f || abs(suma - altoT) <= 0.05f) return alturas
+        // Lo que se pierde al escribir cada alto con un decimal (55.14 → 55.1) no es una diferencia de
+        // verdad: se reparte en proporción, como siempre, para no mover la hoja.
+        if (abs(suma - altoT) <= 0.1f * alturas.size) return alturas.map { it * altoT / suma }
+        val sumaMochetas = alturas.indices.filter { !esSistema[it] }.sumOf { alturas[it].toDouble() }.toFloat()
+        val sumaSistemas = suma - sumaMochetas
+        if (sumaMochetas > 0f && altoT - sumaSistemas > 0f) {
+            val k = (altoT - sumaSistemas) / sumaMochetas
+            return alturas.mapIndexed { i, h -> if (esSistema[i]) h else h * k }
+        }
+        return alturas.map { it * altoT / suma }
     }
 
     /** La y (desde el dintel) de cada división entre franjas del tramo, de abajo arriba. */

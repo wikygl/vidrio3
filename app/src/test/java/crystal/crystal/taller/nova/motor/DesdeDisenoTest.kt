@@ -46,7 +46,7 @@ class DesdeDisenoTest {
                     val automatico = MotorNova.calcular(VentanaNova(acabado, modelo, listOf(lado), u13, puente))
 
                     val remate = when (modelo) { ModeloMocheta.NORMAL -> "nn"; ModeloMocheta.INVERTIDO -> "nr"; ModeloMocheta.BANDERA -> "np" }
-                    val paquete = NovaUIHelper.generarPaqueteSimbolico(
+                    val paquete = EscritorNova.paqueteAutomatico(
                         if (acabado == Acabado.APA) "apa" else "ina", ancho, 145f, 100f, lado.divisiones, mod, 0f, remate
                     )
                     val v = DesdeDiseno.ventana(paquete, u13, puente, modulacion = mod)

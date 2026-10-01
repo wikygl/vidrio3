@@ -83,7 +83,7 @@ object VentanaAutomatica {
                     hoja = c.hoja, acabado = e.acabado, puente = e.puente, divisManual = c.divisManual,
                     modulacion = e.modulacion, corredizasPorTramoNfc = e.corredizasPorTramoNfc,
                     izquierda = Borde.ESQUINA_CURVA, derecha = Borde.ESQUINA_CURVA
-                )))
+                )).copy(curvaDeEsquina = true))
             }
         }
         return VentanaNova(

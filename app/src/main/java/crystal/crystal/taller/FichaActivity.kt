@@ -51,9 +51,8 @@ class FichaActivity : AppCompatActivity() {
             } else {
                 val proyecto = ProyectoManager.getProyectoActivo().orEmpty()
                 val titulo = if (proyecto.isBlank()) vistaActual else "$vistaActual - $proyecto"
-                Toast.makeText(this, "Generando PDF...", Toast.LENGTH_SHORT).show()
                 FichaPdfExport.exportarYCompartir(
-                    context = this,
+                    activity = this,
                     adapter = adapter,
                     titulo = titulo,
                     nombreBase = "${vistaActual}_${proyecto.ifBlank { "crystal" }}"

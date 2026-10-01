@@ -91,8 +91,11 @@ class EsquinaLibreHastaNovaTest {
             assertTrue("no es una esquina: $paquete", d!!.doblaEnEsquina)
             assertEquals("la pared de frente llegó sin silueta: $paquete", 5, d.tramos[0].contorno.size)
             // Y cada pared con su alto: la de al lado es más baja y cuelga del dintel.
-            assertTrue("la pared de al lado no lleva su alto: $paquete", d.tramos[1].alto > 0f && d.tramos[1].alto < d.alto - 1f)
-            assertEquals(d.alto - d.tramos[1].alto, d.tramos[1].caida, 0.1f)
+            // La pared de al lado es la que arranca en el pliegue (la de frente puede llevar varios tramos:
+            // su diseño sale de su silueta, N-101).
+            val aleta = d.tramos.first { it.pliegue != null }
+            assertTrue("la pared de al lado no lleva su alto: $paquete", aleta.alto > 0f && aleta.alto < d.alto - 1f)
+            assertEquals(paquete, d.alto - aleta.alto, aleta.caida, 0.1f)
         }
     }
 }

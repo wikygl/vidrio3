@@ -51,7 +51,28 @@ object DesdeDiseno {
         val modulosIguales = anchosSistema.isEmpty() ||
             (anchosSistema.maxOrNull()!! - anchosSistema.minOrNull()!!) <= 0.1f
 
-        val leidosPorLado = grupos.map { indices -> indices.flatMap { tramoDelMotor(d, it, puente, conForma, modulosIguales) } }
+        // Una cara de la esquina con su silueta (`L<…>`, una cara asimétrica o armada sobre figuras):
+        // se calcula como una ventana con forma, con las reglas de los vanos con forma (N-96, N-99).
+        // Hallado el 2026-09-29 (Formas 13): la cara de 120 abajo y 189 arriba se calculaba como su
+        // rectángulo de 189.
+        val ladosDelDiseno = if (grupos.size > 1) d.separarEnLados() else emptyList()
+        val ladoConForma: List<LadoNova?> = grupos.mapIndexed { i, indices ->
+            val silueta = d.tramos[indices.first()].contorno.takeIf { it.size >= 3 } ?: return@mapIndexed null
+            val lado = ladosDelDiseno.getOrNull(i) ?: return@mapIndexed null
+            // La silueta es la de la pared; en aparente los tramos ya perdieron el esquinero por el
+            // lado de la esquina, así que la pared empieza antes que el primer tramo.
+            val sobra = (silueta.maxOf { it.first } - silueta.minOf { it.first } - lado.ancho).coerceAtLeast(0f)
+            val corrimiento = when {
+                i == 0 -> 0f
+                i == grupos.lastIndex -> sobra
+                else -> sobra / 2f
+            }
+            val conSuVano = lado.conContornoVano(silueta.map { (x, y) -> x - corrimiento to y })
+            ventana(conSuVano.aPaquete(), u, puente, cruce, modulacion = modulacion)?.lados?.singleOrNull()
+        }
+        val leidosPorLado = grupos.mapIndexed { i, indices ->
+            ladoConForma[i]?.tramos ?: indices.flatMap { tramoDelMotor(d, it, puente, conForma, modulosIguales) }
+        }
         fun anchoDe(tramos: List<Tramo>) = tramos.sumOf { it.ancho.toDouble() }.toFloat() + puente.anchoParante * (tramos.size - 1)
         // Inaparente en L, C y serie: el paquete trae cada lado entero (el vidrio no descuenta nada),
         // pero su estructura llega hasta el parante de esquina (N-75), con el mismo reparto que en
@@ -69,6 +90,16 @@ object DesdeDiseno {
             val tramos = when {
                 grupos.size == 1 -> reescalar(tramosLeidos, d.ancho - puente.anchoParante * (tramosLeidos.size - 1))
                 pierdeIzq + pierdeDer > 0f -> reescalar(tramosLeidos, anchoLado - pierdeIzq - pierdeDer - puente.anchoParante * (tramosLeidos.size - 1))
+                    // Lo que se midió sobre la pared (el puente y el riel superior de una cara con
+                    // forma) también llega solo hasta el parante de esquina (N-75): en la L de Ele la
+                    // cara con el dintel inclinado salía con el puente de la pared entera, 210.9.
+                    .mapIndexed { k, t ->
+                        val pierde = (if (k == 0) pierdeIzq else 0f) + (if (k == tramosLeidos.lastIndex) pierdeDer else 0f)
+                        if (pierde <= 0f) t else t.copy(
+                            largosPuente = t.largosPuente?.map { (it - pierde).coerceAtLeast(0f) },
+                            anchoRielSuperior = t.anchoRielSuperior?.let { (it - pierde).coerceAtLeast(0f) }
+                        )
+                    }
                 else -> tramosLeidos
             }
             val sistema = tramosLado.first().sistema
@@ -84,7 +115,7 @@ object DesdeDiseno {
                 largosParante = if (conForma && grupos.size == 1)
                     (0 until d.tramos.size - 1).map { HerramientasDiseno.largoDelParante(d, it, puente.anchoParante) }
                         .takeIf { l -> l.all { it != null } }?.map { it!! }
-                else null,
+                else ladoConForma[i]?.largosParante,
                 estructuraIzq = pierdeIzq, estructuraDer = pierdeDer
             )
         }
@@ -198,13 +229,14 @@ object DesdeDiseno {
         // En un vano con forma, el alto de ESTE tramo (un escalón puede ser más bajo que la ventana):
         // es el que se reparten sus franjas en el motor.
         val altoTramo = if (conForma) d.altoDeTramo(indice).takeIf { it > 0f && abs(it - d.alto) > 0.05f } else null
-        if (s.parantes.isEmpty()) return listOf(Tramo(modulos, panos, franjas, puenteTramo, largosPuente, anchoArriba, alto = altoTramo))
+        val caidaTramo = if (conForma) d.caidaDeTramo(indice).coerceAtLeast(0f) else 0f
+        if (s.parantes.isEmpty()) return listOf(Tramo(modulos, panos, franjas, puenteTramo, largosPuente, anchoArriba, alto = altoTramo, caida = caidaTramo))
         val cortes = s.parantes.map { it + 1 }.filter { it in 1 until modulos.size }.distinct().sorted()
         val out = mutableListOf<Tramo>()
         var desde = 0
         for (c in cortes + modulos.size) {
             val trozo = modulos.subList(desde, c)
-            out.add(Tramo(trozo, franjas = franjas, puente = puenteTramo, alto = altoTramo))   // sus paños de mocheta se reparten solos (N-62)
+            out.add(Tramo(trozo, franjas = franjas, puente = puenteTramo, alto = altoTramo, caida = caidaTramo))   // sus paños de mocheta se reparten solos (N-62)
             desde = c
         }
         return out

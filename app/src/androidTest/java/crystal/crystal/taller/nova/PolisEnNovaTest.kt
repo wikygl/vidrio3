@@ -41,7 +41,6 @@ class PolisEnNovaTest {
                 campo(a, "puente").set(a, "tubo 2⅜ x 1"); campo(a, "tubo").set(a, 2.5f)
                 b.etU.setText("1.5"); b.etCruce.setText("0.7")
                 llamar(a, "recibirDisenoEditado", polis2)
-                llamar(a, "calcularDesigual")
                 llamar(a, "aplicarMotor")
                 val u = b.txU.text.toString()
                 listOf("37.9 = 1", "37.6 = 1", "97.2 = 1", "15.7 = 1", "18.4 = 1", "134.3 = 1")
@@ -104,7 +103,6 @@ class PolisEnNovaTest {
                 campo(a, "puente").set(a, "tubo 2⅜ x 1"); campo(a, "tubo").set(a, 2.5f)
                 b.etU.setText("1"); b.etCruce.setText("0.7")
                 llamar(a, "recibirDisenoEditado", polis)
-                llamar(a, "calcularDesigual")
                 llamar(a, "aplicarMotor")
 
                 val vidrios = b.txV.text.toString()

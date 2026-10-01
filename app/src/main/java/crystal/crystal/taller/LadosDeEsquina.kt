@@ -82,6 +82,37 @@ data class EsquinaMedida(
     fun gradosDe(arista: Int): Float? = angulos.getOrNull(arista)?.toFloatOrNull()
 
     /**
+     * La silueta de cada cara que no es un rectángulo, sacada de sus propias medidas (null = la cara
+     * es su rectángulo). Hallado por el usuario el 2026-09-29 en Formas (259 × 138.4): la segunda cara
+     * mide 120 abajo y 189 arriba, y llegaba a novaDiseño como un rectángulo de 189.
+     *
+     * Solo cuenta lo que pasa del descuadre (2.5, N-06). Las caras se tocan en la esquina con una
+     * arista vertical, así que lo que sobra de un ancho va a la punta libre: a la izquierda en la
+     * primera cara, a la derecha en la última (una cara del medio no tiene punta libre y se queda con
+     * su rectángulo). Dos altos distintos inclinan el dintel; el alféizar va corrido. En cm, con la y
+     * hacia abajo desde la esquina de arriba a la izquierda de la cara, como [LadosLibres].
+     */
+    fun siluetasAsimetricas(): List<List<Pair<Float, Float>>?> = lados.mapIndexed { i, l ->
+        if (l.esCurva) return@mapIndexed null
+        val difAncho = kotlin.math.abs(l.anchoAbajo - l.anchoArriba) > DESCUADRE
+        val difAlto = kotlin.math.abs(l.altoIzq - l.altoDer) > DESCUADRE
+        if (!difAncho && !difAlto) return@mapIndexed null
+        val primera = i == 0
+        val ultima = i == lados.lastIndex
+        if (difAncho && !primera && !ultima && !difAlto) return@mapIndexed null
+        val w = maxOf(l.anchoAbajo, l.anchoArriba)
+        val h = maxOf(l.altoIzq, l.altoDer)
+        // Con una sola cara que sobra por las dos puntas, la izquierda; si es la última, a la derecha.
+        val sobraALaIzquierda = difAncho && primera && !(ultima && lados.size > 1)
+        val arriba = if (difAncho && (primera || ultima)) l.anchoArriba else w
+        val abajo = if (difAncho && (primera || ultima)) l.anchoAbajo else w
+        val yIzq = h - (if (difAlto) l.altoIzq else h)
+        val yDer = h - (if (difAlto) l.altoDer else h)
+        if (sobraALaIzquierda) listOf(w - arriba to yIzq, w to yDer, w to h, w - abajo to h)
+        else listOf(0f to yIzq, arriba to yDer, abajo to h, 0f to h)
+    }
+
+    /**
      * La geometría de Nova que le toca; null si no hay nada que armar.
      *
      * Si TODAS sus paredes son curvas, la ventana es curva y va en `ncu`: no es una L ni una C, no
@@ -101,6 +132,9 @@ data class EsquinaMedida(
     companion object {
         /** Marca de arista resuelta con una curva, en lugar de los grados. */
         const val CURVA = "c"
+
+        /** Hasta aquí dos medidas de la misma cara son descuadre, no forma (N-06). */
+        const val DESCUADRE = 2.5f
 
         /** El texto de una arista curva: `c<desarrollo>|<cuerda>|<alto>|<puente>`. */
         fun textoDeCurva(c: CurvaEsquina): String =

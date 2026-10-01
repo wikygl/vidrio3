@@ -1,3 +1,12 @@
+package crystal.crystal.taller.nova.viejo
+
+/*
+ * NovaPerfilesHelper: parte del cálculo viejo de Nova corrediza, retirado el 2026-09-30 (fase 4 del motor
+ * único). Queda aquí SOLO para leerlo y comparar si aparece un error: no se compila ni se llama.
+ * Para volver a correrlo tal como estaba, la etiqueta de git `rutas-viejas-nova` (commit e020bc2).
+ */
+
+/*
 package crystal.crystal.taller.nova
 
 import android.annotation.SuppressLint
@@ -502,3 +511,5 @@ object NovaPerfilesHelper {
         val portafelpa: String
     )
 }
+
+*/

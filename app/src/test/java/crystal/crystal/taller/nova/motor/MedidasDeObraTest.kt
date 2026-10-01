@@ -31,7 +31,8 @@ class MedidasDeObraTest {
      * la ventana: el tramo 1 salía con un vidrio de mocheta de 102.8 x 87.3 y U de 85.8.
      *
      * Tramo 1: hoja 77.2 × 5/7 = 55.14, mocheta 22.06, espacio 20.56 → vidrio (Múltiple) 102.8 x 20,
-     * U de mocheta 18.5. Tramo 3: hoja 78.14, espacio 29.76 → 80.2 x 29.2, U 27.7.
+     * U de mocheta 20.56 − 1 = 19.5 (con Múltiple una sola U, dictado el 2026-10-01). Tramo 3: hoja
+     * 78.14, espacio 29.76 → 80.2 x 29.2, U 28.7.
      */
     @Test
     fun formas_cada_escalon_con_su_mocheta() {
@@ -42,8 +43,8 @@ class MedidasDeObraTest {
         assertTrue(vidrios.toString(), "148.8 x 39.2 = 1" in vidrios)
         assertTrue(vidrios.toString(), "80.2 x 29.2 = 1" in vidrios)
         assertFalse(vidrios.toString(), vidrios.any { it.startsWith("102.8 x 87") })
-        assertTrue(u.toString(), "18.5 = 2" in u)
-        assertTrue(u.toString(), "27.7 = 2" in u)
+        assertTrue(u.toString(), "19.5 = 2" in u)
+        assertTrue(u.toString(), "28.7 = 2" in u)
     }
 
     /**
@@ -89,6 +90,81 @@ class MedidasDeObraTest {
         val u = lineas(MaterialesNova.texto(m.u))
         assertTrue(u.toString(), listOf("37.1 = 1", "94.4 = 1", "63.1 = 1").all { it in u })
         assertTrue(lineas(MaterialesNova.texto(m.puente)).toString(), "193.1 = 1" in lineas(MaterialesNova.texto(m.puente)))
+    }
+
+    /**
+     * Formas 13, la L de 70 + 189 (alto 120), con la altura de puente editada en novaDiseño en los
+     * dos lados: 100 en el primero y 80 en el segundo. Cada lado calcula con la suya (portafelpa =
+     * hoja − 1.6): 98.4 y 78.4.
+     */
+    @Test
+    fun la_l_editada_calcula_cada_lado_con_su_puente() {
+        val p = "{nova,apa,[64,120:Tl<64>(s<100>(f<32>c<32>);m<18.5>(f<64>)) A<90> " +
+            "Tl<186.5>(s<80>(f<46.6>c<46.6>c<46.6>f<46.6>);m<37.5>(f<93.2>f<93.2>))]}"
+        val m = MotorNova.calcular(DesdeDiseno.ventana(p, u38, multiple, esquinero = tubo238)!!)
+        val pf = lineas(MaterialesNova.texto(m.portafelpa))
+        assertTrue(pf.toString(), pf.any { it.startsWith("98.4 = ") } && pf.any { it.startsWith("78.4 = ") })
+    }
+
+    /**
+     * Formas en inaparente: la U de cada borde sigue al vidrio y solo va en una pieza lo que apoya
+     * seguido (N-93). Arriba el tramo 1 tiene el dintel 67.3 más abajo: su U es la suya, 103.3 + medio
+     * parante = 104.5, y la de los tramos 2 y 3 va aparte, 1.25 + 149.34 + 2.5 + 80.72 = 233.8 (los tramos del vano de 338.4). Antes
+     * salía una sola de 338.4. Abajo, el fijo del tramo 2 y el del tramo 3 están a distinta altura
+     * (144.5 y 109.4) y ya no se juntan en una U de 92.2.
+     */
+    @Test
+    fun formas_en_inaparente_la_u_se_corta_en_cada_escalon() {
+        val m = desdeContorno("0,144.5;256.4,144.5;256.4,109.5;338.4,108.5;338.4,0;104.6,0.1;104.6,67.3;0,67.3", "ina")
+        val u = lineas(MaterialesNova.texto(m.u))
+        assertTrue(u.toString(), "104.5 = 1" in u && "233.8 = 1" in u)
+        assertFalse(u.toString(), u.any { it.startsWith("338.4") || it.startsWith("92.2") })
+        // Y el fijo junto a cada pared de escalón lleva su U parante (N-43): la pared de 67.3 sobre
+        // el tramo 1 (67.3 − 2 = 65.3) y la de 35.1 bajo el tramo 3 (35.1 − 2 = 33.1).
+        assertTrue(u.toString(), "65.3 = 1" in u && "33.1 = 1" in u)
+    }
+
+    /** Full fijos en inaparente invertido: el fijo va de piso a techo y lleva su U arriba y abajo (N-47). */
+    @Test
+    fun full_fijos_inaparente_invertido_lleva_sus_u() {
+        val lado = DisenoAutomatico.lado(DisenoAutomatico.Entrada(anchoMedido = 160f, anchoCalculo = 160f, alto = 130f,
+            hoja = 0f, acabado = Acabado.INA, puente = tubo238, modulacion = "nff"))
+        val m = MotorNova.calcular(VentanaNova(Acabado.INA, ModeloMocheta.INVERTIDO, listOf(lado), u38, tubo238))
+        assertTrue(lineas(MaterialesNova.texto(m.u)).toString(), "160 = 2" in lineas(MaterialesNova.texto(m.u)))
+    }
+
+    /**
+     * La L de Ele en inaparente (80 + 210.9, la segunda cara con el dintel que baja 4.6): la cara con
+     * forma mide su puente sobre la pared, pero en inaparente la estructura llega hasta el parante de
+     * esquina (N-75), con el reparto de N-38: la cara ancha pierde 2.5 → 208.4, la angosta 6 → 74.
+     * Salía 210.9 (2026-09-30).
+     */
+    @Test
+    fun ele_inaparente_la_cara_con_forma_tambien_llega_al_parante_de_esquina() {
+        val p = "{nova,ina,[80,166:Tl<80>(Q<14.9>;s<120>(f<40>c<40>);m<43.5>(f<80>)) A<90.1> Tl<210.9>(H<166,161.4>;D<0,4.6>;" +
+            "L<0/0|210.9/4.6|210.9/166|0/166>;s<120>(f<52.7>c<52.7>c<52.7>f<52.7>);m<46>(f<105.4>f<105.4>))]}"
+        val m = MotorNova.calcular(DesdeDiseno.ventana(p, u38, tubo238, esquinero = tubo238)!!)
+        val puente = lineas(MaterialesNova.texto(m.puente))
+        assertTrue(puente.toString(), "208.4 = 1" in puente && "74 = 1" in puente)
+    }
+
+    /**
+     * El trapecio en el diseño sugerido, como Vna4 (N-99): un tramo, el fijo contra el lado inclinado
+     * y las corredizas en el rectángulo (N-67). La cara de Formas 13 (120 abajo, 189 arriba, alto
+     * 120): el rectángulo de 120 lleva 2 módulos (N-15) y el costado inclinado su fijo, `f c f` de
+     * 60, 60 y 69. Antes salía un tramo de triángulo con sistema de alto 0 y una corrediza dentro.
+     */
+    @Test
+    fun el_trapecio_sugerido_pone_la_corrediza_en_el_rectangulo() {
+        val cara = ContornoEnTramos.disenoDesdeContorno(puntos("0,0;189,0;120,120;0,120"), "apa", 90f)!!
+        assertTrue(cara.tramos.size == 1)
+        val mods = cara.tramos[0].sistema!!.modulos
+        assertTrue(mods.joinToString("") { it.tipo.toString() }, mods.joinToString("") { it.tipo.toString() } == "fcf")
+        assertTrue(mods.map { it.ancho }.toString(), kotlin.math.abs(mods[2].ancho!! - 69f) < 0.1f && kotlin.math.abs(mods[0].ancho!! - 60f) < 0.1f)
+        val m = MotorNova.calcular(DesdeDiseno.ventana(cara.aPaquete(), u38, multiple)!!)
+        // Ninguna pieza de una hoja que no existe: el puente de 1.5, portafelpas de un palmo.
+        assertFalse(lineas(MaterialesNova.texto(m.puente)).toString(), m.puente.any { it.medida < 10f })
+        assertFalse(lineas(MaterialesNova.texto(m.portafelpa)).toString(), m.portafelpa.any { it.medida < 60f })
     }
 
     private val tubo238 = Puente("tubo 2⅜ x 1", 2.5f, 6f)

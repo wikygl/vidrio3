@@ -1,7 +1,6 @@
 package crystal.crystal.taller.nova.motor
 
 import crystal.crystal.taller.nova.NovaCalculos
-import crystal.crystal.taller.nova.NovaPerfilesHelper
 import kotlin.math.ceil
 
 /**
@@ -77,6 +76,25 @@ object MotorNova {
         }
         return total
     }
+
+    /**
+     * La vertical de un tramo como la calcula el motor, para escribir el diseño y las referencias
+     * con los mismos números que los materiales: su altura de hoja y sus mochetas como espacio
+     * (N-31), la de abajo primero.
+     */
+    data class VerticalTramo(val altoHoja: Float, val mochetas: List<Pair<Boolean, Float>>) {
+        /** true = arriba. */
+        val hayMocheta: Boolean get() = mochetas.isNotEmpty()
+    }
+
+    fun verticalDe(v: VentanaNova, l: LadoNova, t: Tramo): VerticalTramo {
+        val vt = vertical(v, l, t)
+        return VerticalTramo(vt.altoHoja, vt.mochetas.sortedBy { if (it.ubicacion == Ubicacion.ABAJO) 0 else 1 }
+            .map { (it.ubicacion == Ubicacion.ARRIBA) to it.espacio })
+    }
+
+    /** La U de fijo de los módulos del lado (N-42): la misma para todos con tramos automáticos. */
+    fun uDeFijo(v: VentanaNova, l: LadoNova): Float = modulos(v, l).firstOrNull()?.u ?: 0f
 
     // ==================== LA VERTICAL DE CADA TRAMO ====================
 
@@ -189,9 +207,11 @@ object MotorNova {
                     // La franja lleva U abajo y arriba; con Múltiple (o gorrito) la de arriba la trae el puente.
                     val n = if (vert[i].hayMocheta && (t.puente ?: v.puente).esMultipleOGorrito) 1 else 2
                     u.add(Pieza(t.ancho, n))
-                } else if (!vert.all { it.soloAbajo }) u.add(Pieza(l.anchoCalculo + aumentoLado, 2))
+                } else u.add(Pieza(l.anchoCalculo + aumentoLado, 2))
             }
-            fullFijos -> if (apa || !vert[0].soloAbajo) u.add(Pieza(ms.first().u + aumentoLado, 2))
+            // En inaparente el fijo va de piso a techo: lleva su U arriba y abajo también en invertido
+            // (N-47, N-48). Antes en invertido se quedaba sin ninguna de las dos.
+            fullFijos -> u.add(Pieza(ms.first().u + aumentoLado, 2))
             // Un fijo contra un lado inclinado: su U de fijo es su borde de abajo, "como 2 o 3 cm"
             // (dictado el 2026-09-26, Vna4: 2.7 + su parte de cruce), no el ancho del módulo.
             apa -> rachasDeFijos(ms, cruzaParantes = false).forEach { racha ->
@@ -276,6 +296,25 @@ object MotorNova {
                 // Cada uno con el alto de su tramo: en un vano escalonado el de la punta puede ser más bajo.
                 if (!ms.first().corrediza && esMuro(l.izquierda)) u.add(Pieza(altoDe(l, ms.first()) - 2 * us, 1, Orientacion.VERTICAL))
                 if (!ms.last().corrediza && esMuro(l.derecha)) u.add(Pieza(altoDe(l, ms.last()) - 2 * us, 1, Orientacion.VERTICAL))
+                // En un escalón, el tramo que sube (o baja) más que el de al lado tiene en ese trozo la
+                // pared del escalón junto a su fijo: lleva U parante del alto del escalón, entre las dos U
+                // horizontales (N-43, 2026-09-29). En Formas: 67.3 − 2u sobre el tramo 1.
+                for (i in 1 until l.tramos.size) {
+                    val a = l.tramos[i - 1]; val b = l.tramos[i]
+                    val topeA = a.caida; val topeB = b.caida
+                    val pisoA = a.caida + (a.alto ?: l.alto); val pisoB = b.caida + (b.alto ?: l.alto)
+                    fun fijoJunto(t: Int, primero: Boolean) = ms.filter { it.tramo == t }.let { if (primero) it.firstOrNull() else it.lastOrNull() }?.takeIf { !it.corrediza }
+                    // Arriba: el que tiene el dintel más alto.
+                    if (kotlin.math.abs(topeA - topeB) > 2.5f) {
+                        val f = if (topeB < topeA) fijoJunto(i, true) else fijoJunto(i - 1, false)
+                        if (f != null) u.add(Pieza(kotlin.math.abs(topeA - topeB) - 2 * us, 1, Orientacion.VERTICAL))
+                    }
+                    // Abajo: el que tiene el alféizar más bajo.
+                    if (kotlin.math.abs(pisoA - pisoB) > 2.5f) {
+                        val f = if (pisoB > pisoA) fijoJunto(i, true) else fijoJunto(i - 1, false)
+                        if (f != null) u.add(Pieza(kotlin.math.abs(pisoA - pisoB) - 2 * us, 1, Orientacion.VERTICAL))
+                    }
+                }
             }
         }
 
@@ -284,10 +323,15 @@ object MotorNova {
             if (apa) {
                 // Un costado inclinado de la mocheta lleva su U en diagonal: el largo del lado menos el
                 // alto de la U (dictado el 2026-09-26, Vna4: 43.3 de mocheta → 48.1 − 1).
-                vert.forEach { vt -> vt.mochetas.forEach { m ->
+                // Con Múltiple o gorrito el costado solo topa la U de arriba (el canal de abajo lo trae
+                // el propio puente): mocheta − u. Con los demás, U arriba y abajo: mocheta − 2u. Es el
+                // código original del usuario (NovaApa: `altoMocheta − us`) y el mismo criterio del tee
+                // (N-57); dictado de nuevo el 2026-10-01. Antes el motor restaba 2u con todos.
+                vert.forEachIndexed { i, vt -> vt.mochetas.forEach { m ->
+                    val nU = if ((l.tramos[i].puente ?: v.puente).esMultipleOGorrito) 1 else 2
                     listOf(m.inclinacionIzq, m.inclinacionDer).forEach { k ->
-                        if (k > 0f) u.add(Pieza(m.espacio * k - us, 1, Orientacion.DIAGONAL))
-                        else u.add(Pieza(m.espacio - 2 * us, 1, Orientacion.VERTICAL))
+                        if (k > 0f) u.add(Pieza(m.espacio * k - nU * us, 1, Orientacion.DIAGONAL))
+                        else u.add(Pieza(m.espacio - nU * us, 1, Orientacion.VERTICAL))
                     }
                 } }
             } else {
@@ -409,7 +453,8 @@ object MotorNova {
             vert[i].mochetas.forEach { m ->
                 val nTees = (panosDe(t, m).size - 1).coerceAtLeast(0)
                 if (nTees == 0) return@forEach
-                val valor = NovaPerfilesHelper.calcularTe(m.espacio, us, (t.puente ?: v.puente).nombre)
+                // N-57: alto de la mocheta − u con Múltiple o gorrito, − 2u con los demás puentes.
+                val valor = m.espacio - (if ((t.puente ?: v.puente).esMultipleOGorrito) 1f else 2f) * us
                 if (valor > 0f) tee.add(Pieza(valor, nTees, Orientacion.VERTICAL))
             }
         }
@@ -583,8 +628,18 @@ object MotorNova {
         val elementos = mutableListOf<Float?>()
         val tipo = mutableListOf<Char>()   // 'f' fijo, 't' tramo cubierto, 'p' parante, '-' corte
         fun poner(e: Float?, t: Char) { elementos.add(e); tipo.add(if (e == null) '-' else t) }
+        // El borde de cada tramo, desde el dintel de la ventana: en un vano escalonado cambia de un
+        // tramo a otro, y la U no puede seguir de largo por un escalón (N-93: solo va en una pieza lo
+        // que apoya SEGUIDO en ese borde). Hallado el 2026-09-29 en Formas: arriba salía una U de 338.4
+        // de punta a punta con los dinteles a 0 y a 67.3.
+        fun bordeDe(t: Tramo) = if (arriba) t.caida else t.caida + (t.alto ?: l.alto)
         l.tramos.forEachIndexed { i, t ->
-            if (i > 0) poner(v.puente.anchoParante, 'p')
+            if (i > 0) {
+                val escalon = kotlin.math.abs(bordeDe(t) - bordeDe(l.tramos[i - 1])) > 2.5f
+                // En el escalón cae el eje del parante (N-101): cada lado se queda con su mitad.
+                if (escalon) { poner(v.puente.anchoParante / 2f, 'h'); poner(null, '-'); poner(v.puente.anchoParante / 2f, 'h') }
+                else poner(v.puente.anchoParante, 'p')
+            }
             when {
                 vert[i].mochetas.any { it.ubicacion == borde } -> {
                     // Esquina en ángulo (G-09): el tramo del borde suma el ancho de la U.
@@ -608,6 +663,11 @@ object MotorNova {
                 tipo[k] == '-' || (tipo[k] == 'p' && siguiente == '-') -> {
                     if (abierta) out.add(actual)
                     actual = 0f; abierta = false
+                }
+                // Medio parante junto a un escalón: solo lo lleva un tramo cubierto (un fijo ya trae el suyo).
+                tipo[k] == 'h' -> {
+                    val vecino = if (tipo.getOrNull(k - 1) == '-') tipo.getOrNull(k + 1) else tipo.getOrNull(k - 1)
+                    if (vecino == 't') { actual += e!!; abierta = true }
                 }
                 tipo[k] == 'p' -> if (abierta) {
                     val tramos = (if (tipo[k - 1] == 't') 1 else 0) + (if (siguiente == 't') 1 else 0)

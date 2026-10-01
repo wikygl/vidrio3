@@ -344,8 +344,15 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
     100 − 80 → 20; con U-3/8, (20 − 1) + 1.5 = 20.5.
   - Invertido: `(alto − altoHoja) − u` (sin el +1.5). Hecho (C-21).
   - Bandera: la mocheta de arriba como normal (+1.5) y la de abajo como invertido (sin él).
-- N-45 ✅ **U de mocheta** (APA): `altoMocheta − 2u` por tramos; con Múltiple o gorrito 1 por
-  tramo, con los demás 2. (La mocheta es una superficie: ancho de mocheta × alto de mocheta.)
+- N-45 ✅ **U de mocheta** (APA). La horizontal, el ancho de la mocheta: con Múltiple o gorrito 1
+  por tramo (la de abajo la trae el puente), con los demás 2. (La mocheta es una superficie: ancho
+  de mocheta × alto de mocheta.)
+  - **Los costados** (dictado de nuevo el 2026-10-01): con **Múltiple o gorrito**, `mocheta − u`
+    (solo topa la U de arriba; el canal de abajo lo trae el puente); con los **demás puentes**,
+    `mocheta − 2u` (U arriba y abajo). Es lo que hacía el código original del usuario (NovaApa:
+    `altoMocheta − us`) y el mismo criterio del tee (N-57). Un costado inclinado, igual sobre su
+    diagonal (Vna4: 48.1 − 1 = 47). El motor restaba 2u con todos los puentes hasta ese día.
+    145 × 140, hoja 100, U-13: Múltiple `37 = 2`, tubo `34.5 = 2`.
 - N-46 ✅ **U superior** (INA): el ancho, 1 pieza; **en bandera, 2**. Con esquina: ancho del lado +
   ancho de la U. Es un caso de N-93.
 - N-93 ✅ **La U de cada borde en inaparente** (dictado el 2026-09-25). La U horizontal sigue al vidrio
@@ -471,6 +478,23 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   riel, U felpero) llega hasta el parante de esquina, con el reparto de N-38; el vidrio y sus U no
   descuentan nada (la U superior sigue siendo el lado + el ancho de la U). En Ele (80 + 210.9) el
   puente pasó de 80 y 210.9 a 74 y 208.4, lo mismo que en aparente.
+- **La cara asimétrica de una esquina** (hallado por el usuario el 2026-09-29, Formas 259 × 138.4:
+  la segunda cara mide 120 abajo y 189 arriba). La esquina del botón v.esquina no traía silueta y la
+  cara llegaba a novaDiseño como su rectángulo de 189. Ahora la silueta sale de sus medidas (lo que
+  pasa de 2.5, N-06): lo que sobra de un ancho va a la punta libre (izquierda en la primera cara,
+  derecha en la última); dos altos distintos inclinan el dintel. Nova la calcula desde el diseño y
+  esa cara con las reglas de las formas (N-96, N-99).
+  - **El diseño sugerido de una cara con silueta sale de su contorno** (2026-09-30), con N-101,
+    como el de un vano de un solo paño. La cara de Formas 13 es un trapecio: `f c f` (60, 60 y el
+    fijo inclinado de 69, ver N-99 abajo).
+- **El trapecio sugerido** (2026-09-30, por analogía con Vna4, N-99): un tramo, el fijo contra el lado
+  inclinado y las corredizas en el rectángulo (N-67). El rectángulo se reparte con la regla de los 60
+  y el costado inclinado lleva su fijo. ❓ En Vna4 el usuario puso 3 hojas (`f c f`); con esta cuenta
+  salen 4 (`f c c f`: 133.2 del rectángulo pide 3). Confirmar cuántas.
+- **La altura de puente editada en cada lado** (2026-09-29): al volver de novaDiseño, las
+  referencias salen lado por lado con su puente; salían como una sola ventana. Y la hoja escrita se
+  conserva: si las franjas no suman el alto (la mocheta viene sin el puente), la diferencia la
+  absorben las mochetas (N-100); antes se estiraba todo y una hoja de 80 salía de 81.7.
 - **La ventana curva dibujada con su figura** (la plantilla de la curva vista de frente) llega a Nova
   como curva, con su desarrollo de ancho (N-08). Antes llegaba como el rectángulo de su cuerda: en
   Pipa, 120 de cuerda con flecha 40.2, todo el aluminio horizontal salía de 120 en lugar de 158.9.
@@ -611,6 +635,12 @@ divisiones, la U del vidrio del centro va con ceil".
   - **Cada escalón calcula su mocheta con SU alto** (corregido el 2026-09-29, `Tramo.alto` en el
     motor): en Formas el tramo 1 mide 77.2 y su vidrio de mocheta es 102.8 x 20, no 102.8 x 87.3
     (se tomaba el alto del vano entero). Lo mismo el fijo y la U parante de inaparente.
+  - **Inaparente en un escalón** (2026-09-29, deducido de N-93 y N-43): la U de arriba y la de abajo
+    se cortan en cada escalón (solo va en una pieza lo que apoya seguido) y cada lado se queda con medio
+    parante; el fijo junto a la pared del escalón lleva U parante del alto del escalón − 2u. En Formas:
+    arriba `104.5` y `233.8` en lugar de `338.4`; U parante `65.3` y `33.1`. ❓ Una corrediza junto a
+    la pared de un escalón (su mocheta) todavía no lleva esa U.
+  - **Full fijos en inaparente invertido** lleva su U arriba y abajo (N-47); se quedaba sin ninguna.
   - **Un costado casi vertical que se desvía hasta 2.5 es descuadre** (2026-09-29): no arma un tramo.
     Formas 11 salía con dos tramos de 1 cm (vidrios de 0.2 x 42.4 en Ele). Y dos trozos seguidos que
     solo se diferencian en un descuadre son el mismo tramo.

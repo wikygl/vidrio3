@@ -29,8 +29,9 @@ class MotorNovaTest {
     fun aparente_145_por_140_con_multiple() {
         // 3 hojas fcf. U de fijos (145 + 2 × 0.7) / 3 = 48.8. Mocheta 140 − 100 − 1.5 = 38.5.
         val m = plana(Acabado.APA, 145f, 140f, 100f, multiple)
-        // H: U de fijos, U de mocheta del tramo (Múltiple: 1). V: U parante 100 − 1.7, U mocheta 38.5 − 3.
-        assertEquals("48.8 = 2\n145 = 1\n98.3 = 2\n35.5 = 2", t(m.u))
+        // H: U de fijos, U de mocheta del tramo (Múltiple: 1). V: U parante 100 − 1.7, U mocheta
+        // 38.5 − 1.5: con Múltiple el costado solo topa la U de arriba (dictado el 2026-10-01; antes − 3).
+        assertEquals("48.8 = 2\n145 = 1\n98.3 = 2\n37 = 2", t(m.u))
         assertEquals("145 = 1", t(m.puente))
         assertEquals("144.9 = 1", t(m.riel))       // N-51: puente − 0.06
         assertEquals("", t(m.rielSuperior))        // con Múltiple arriba no va

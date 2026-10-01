@@ -2652,14 +2652,120 @@ class MedidaActivity : AppCompatActivity() {
     }
 
     private fun lanzarColaCalculadoras(txtFile: File, seleccionadas: List<BocetoProyecto>) {
-        val cola = construirColaCalculadoras(txtFile, seleccionadas)
-        if (cola.isEmpty()) {
-            mostrar("Ninguna medida se pudo enviar a una calculadora")
-            return
+        // Una medida con varias figuras sueltas pregunta qué hacer con ellas (pedido del usuario el
+        // 2026-10-01: la medida de Fide traía tres rectángulos y salía como una sola ventana).
+        val figuras = figurasDeLosBocetos(txtFile, seleccionadas)
+        decidirFiguras(seleccionadas.filter { figuras.containsKey(it.archivo) }, figuras, mutableMapOf()) { decisiones ->
+            val cola = construirColaCalculadoras(txtFile, seleccionadas, decisiones)
+            if (cola.isEmpty()) {
+                mostrar("Ninguna medida se pudo enviar a una calculadora")
+                return@decidirFiguras
+            }
+            if (!ColaCalculadoras.lanzar(this, cola, 0)) {
+                mostrar("No se pudo abrir la calculadora")
+            }
         }
-        if (!ColaCalculadoras.lanzar(this, cola, 0)) {
-            mostrar("No se pudo abrir la calculadora")
+    }
+
+    /** Una figura de una medida: su apunte solo, y cómo se la nombra al preguntar. */
+    private data class FiguraDeMedida(val estado: String, val etiqueta: String)
+
+    /** Una figura que se manda, y a qué calculadora (el producto que la enruta). */
+    private data class FiguraAEnviar(val estado: String, val producto: String)
+
+    /**
+     * Las figuras sueltas de cada medida que tiene más de una (SketchMedidasView.estadosPorFigura),
+     * por archivo de boceto. Las de una sola figura no aparecen.
+     */
+    private fun figurasDeLosBocetos(txtFile: File, bocetos: List<BocetoProyecto>): Map<String, List<FiguraDeMedida>> {
+        val dir = txtFile.parentFile ?: obtenerDirectorioMedidas()
+        val estadoActual = if (binding.sketchMedidas.hasDrawing()) binding.sketchMedidas.exportEditableState() else null
+        val out = linkedMapOf<String, List<FiguraDeMedida>>()
+        try {
+            for (boceto in bocetos) {
+                val file = File(dir, boceto.archivo)
+                if (!file.exists() || !file.extension.equals("json", ignoreCase = true)) continue
+                binding.sketchMedidas.clear()
+                if (!binding.sketchMedidas.loadEditableState(file.readText())) continue
+                val estados = binding.sketchMedidas.estadosPorFigura()
+                if (estados.size < 2) continue
+                out[boceto.archivo] = estados.mapIndexed { i, estado ->
+                    binding.sketchMedidas.clear()
+                    binding.sketchMedidas.loadEditableState(estado)
+                    val m = binding.sketchMedidas.medidaPrincipal()
+                    FiguraDeMedida(estado, "Figura ${i + 1}: " + (m?.let { "${crystal.crystal.taller.nova.NovaCalculos.df1(it.anchoCm)} x ${crystal.crystal.taller.nova.NovaCalculos.df1(it.altoCm)}" } ?: "sin medida"))
+                }
+            }
+        } finally {
+            binding.sketchMedidas.clear()
+            if (estadoActual != null) binding.sketchMedidas.loadEditableState(estadoActual)
+            if (modo3d) refrescarTiraDeVistas()
+            binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
         }
+        return out
+    }
+
+    /**
+     * Pregunta, medida por medida, qué hacer con sus figuras: mandarlas todas a su calculadora, cada
+     * una a la que se elija, o elegir una sola. Al terminar llama a [fin] con lo decidido; si se
+     * cancela, no se manda nada.
+     */
+    private fun decidirFiguras(
+        pendientes: List<BocetoProyecto>,
+        figuras: Map<String, List<FiguraDeMedida>>,
+        decisiones: MutableMap<String, List<FiguraAEnviar>>,
+        fin: (Map<String, List<FiguraAEnviar>>) -> Unit
+    ) {
+        val boceto = pendientes.firstOrNull() ?: return fin(decisiones)
+        val lista = figuras[boceto.archivo].orEmpty()
+        val resto = pendientes.drop(1)
+        val siguiente = { decidirFiguras(resto, figuras, decisiones, fin) }
+        val calculadora = EnrutadorPresupuesto.CALCULADORAS_DISPONIBLES
+            .firstOrNull { it.second == EnrutadorPresupuesto.destinoPara(boceto.producto) }?.first ?: boceto.producto
+        val opciones = arrayOf(
+            "Enviar las ${lista.size} a $calculadora",
+            "Enviar cada una a su calculadora",
+            "Elegir una sola"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("La medida tiene ${lista.size} figuras")
+            .setMessage(null)
+            .setItems(opciones) { _, which ->
+                when (which) {
+                    0 -> { decisiones[boceto.archivo] = lista.map { FiguraAEnviar(it.estado, boceto.producto) }; siguiente() }
+                    1 -> elegirCalculadoraPorFigura(lista, 0, mutableListOf()) { elegidas ->
+                        decisiones[boceto.archivo] = elegidas; siguiente()
+                    }
+                    else -> AlertDialog.Builder(this)
+                        .setTitle("¿Cuál de las figuras?")
+                        .setItems(lista.map { it.etiqueta }.toTypedArray()) { _, i ->
+                            decisiones[boceto.archivo] = listOf(FiguraAEnviar(lista[i].estado, boceto.producto)); siguiente()
+                        }
+                        .setNegativeButton("Cancelar", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** Una por una, a qué calculadora va cada figura ("No enviar" la deja fuera). */
+    private fun elegirCalculadoraPorFigura(
+        lista: List<FiguraDeMedida>,
+        i: Int,
+        elegidas: MutableList<FiguraAEnviar>,
+        fin: (List<FiguraAEnviar>) -> Unit
+    ) {
+        val figura = lista.getOrNull(i) ?: return fin(elegidas)
+        val nombres = EnrutadorPresupuesto.NOMBRES_CALCULADORAS
+        AlertDialog.Builder(this)
+            .setTitle("${figura.etiqueta}: ¿a qué calculadora?")
+            .setItems((nombres + "No enviar").toTypedArray()) { _, k ->
+                if (k < nombres.size) elegidas.add(FiguraAEnviar(figura.estado, nombres[k]))
+                elegirCalculadoraPorFigura(lista, i + 1, elegidas, fin)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     // Carga cada boceto en el lienzo para leer su medida mayor real (medidaPrincipal toma el mayor
@@ -2668,7 +2774,9 @@ class MedidaActivity : AppCompatActivity() {
     // no tienen por qué costar tiempo.
     private fun construirColaCalculadoras(
         txtFile: File,
-        bocetos: List<BocetoProyecto>
+        bocetos: List<BocetoProyecto>,
+        /** Por archivo de boceto, las figuras que se mandan de una medida con varias (y a dónde). */
+        figurasElegidas: Map<String, List<FiguraAEnviar>> = emptyMap()
     ): List<ColaCalculadoras.MedidaCalc> {
         val dir = txtFile.parentFile ?: obtenerDirectorioMedidas()
         val texto = runCatching { txtFile.readText() }.getOrDefault("")
@@ -2679,23 +2787,11 @@ class MedidaActivity : AppCompatActivity() {
         val graficosDir = File(cacheDir, "medidascalc").apply { mkdirs() }
         val resultado = mutableListOf<ColaCalculadoras.MedidaCalc>()
 
-        try {
-            bocetos.forEachIndexed { index, boceto ->
-                if (EnrutadorPresupuesto.destinoPara(boceto.producto) == null) return@forEachIndexed
-                val file = File(dir, boceto.archivo)
-                if (!file.exists()) return@forEachIndexed
-
-                binding.sketchMedidas.clear()
-                val cargado = if (file.extension.equals("json", ignoreCase = true)) {
-                    binding.sketchMedidas.loadEditableState(file.readText())
-                } else {
-                    binding.sketchMedidas.loadBackground(file)
-                    true
-                }
-                if (!cargado) return@forEachIndexed
-                val medida = binding.sketchMedidas.medidaPrincipal() ?: return@forEachIndexed
-
-                val png = File(graficosDir, "orig_${System.currentTimeMillis()}_$index.png")
+        // La ficha de lo que haya en el lienzo (la medida entera, o una figura de ella), para [producto].
+        fun agregarFicha(producto: String, index: Int) {
+            if (EnrutadorPresupuesto.destinoPara(producto) == null) return
+            val medida = binding.sketchMedidas.medidaPrincipal() ?: return
+            val png = File(graficosDir, "orig_${System.currentTimeMillis()}_${index}_${resultado.size}.png")
                 val rutaGrafico = runCatching {
                     binding.sketchMedidas.exportBitmap().let { bmp ->
                         png.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -2710,7 +2806,7 @@ class MedidaActivity : AppCompatActivity() {
                     .orEmpty()
                 resultado.add(
                     ColaCalculadoras.MedidaCalc(
-                        producto = boceto.producto,
+                        producto = producto,
                         ancho = medida.anchoCm,
                         alto = medida.altoCm,
                         cantidad = 1f,
@@ -2732,6 +2828,28 @@ class MedidaActivity : AppCompatActivity() {
                         forma = if (binding.sketchMedidas.esCircularPrincipal()) "circular" else ""
                     )
                 )
+        }
+
+        try {
+            bocetos.forEachIndexed { index, boceto ->
+                val file = File(dir, boceto.archivo)
+                if (!file.exists()) return@forEachIndexed
+                // Una medida con varias figuras: cada figura elegida, como medida propia.
+                figurasElegidas[boceto.archivo]?.let { elegidas ->
+                    elegidas.forEach { f ->
+                        binding.sketchMedidas.clear()
+                        if (binding.sketchMedidas.loadEditableState(f.estado)) agregarFicha(f.producto, index)
+                    }
+                    return@forEachIndexed
+                }
+                binding.sketchMedidas.clear()
+                val cargado = if (file.extension.equals("json", ignoreCase = true)) {
+                    binding.sketchMedidas.loadEditableState(file.readText())
+                } else {
+                    binding.sketchMedidas.loadBackground(file)
+                    true
+                }
+                if (cargado) agregarFicha(boceto.producto, index)
             }
         } finally {
             binding.sketchMedidas.clear()

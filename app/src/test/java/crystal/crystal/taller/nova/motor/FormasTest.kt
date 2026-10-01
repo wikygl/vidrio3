@@ -148,7 +148,9 @@ class FormasTest {
         val p = "{nova,apa,[208.6,156.8:Tl<208.6>(s<112>(f<78>c<65.2>f<65.2>);m<44.8>(f<104.3>f<104.3>))" +
             "V<0/0|208.6/0|208.6/156.8|75.4/156.8>]}"
         val m = MotorNova.calcular(DesdeDiseno.ventana(p, PerfilU(1f, 1f), Puente("Múltiple", 1.5f, 5f))!!)
-        assertEquals(listOf("110.8 = 1", "123.2 = 1", "208.6 = 1", "3.1 = 1", "41.3 = 1", "47 = 1", "65.7 = 1"), t(m.u))
+        // El costado recto de la mocheta: 43.3 − 1 = 42.3, con Múltiple una sola U (dictado el
+        // 2026-10-01; antes 41.3 con − 2u). La diagonal ya restaba una: 48.1 − 1 = 47.
+        assertEquals(listOf("110.8 = 1", "123.2 = 1", "208.6 = 1", "3.1 = 1", "42.3 = 1", "47 = 1", "65.7 = 1"), t(m.u))
         assertEquals(listOf("187.7 = 1"), t(m.puente))
         assertEquals(listOf("133.7 = 1"), t(m.riel))
         assertEquals(listOf("110.4 = 4"), t(m.portafelpa))

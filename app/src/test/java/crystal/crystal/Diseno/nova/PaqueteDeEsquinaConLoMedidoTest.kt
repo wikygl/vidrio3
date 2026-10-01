@@ -16,8 +16,8 @@ class PaqueteDeEsquinaConLoMedidoTest {
 
     @Test
     fun el_paquete_de_la_calculadora_admite_la_silueta_y_el_parante() {
-        val base = NovaUIHelper.generarTramosConsolidado(277.6f, 221.9f, 152f, 3, 1, "nn")
-        val aleta = NovaUIHelper.generarTramosConsolidado(62f, 162f, 152f, 1, 1, "nn")
+        val base = crystal.crystal.taller.nova.motor.EscritorNova.tramosAutomaticos(277.6f, 221.9f, 152f, 3)
+        val aleta = crystal.crystal.taller.nova.motor.EscritorNova.tramosAutomaticos(62f, 162f, 152f, 1)
         val paquete = "{nova,apa,[277.6,221.9:$base A<90> $aleta]}"
         val d = DisenoNova.desdePaquete(paquete)
         assertNotNull("el modelo no lee el paquete de la calculadora: $paquete", d)
