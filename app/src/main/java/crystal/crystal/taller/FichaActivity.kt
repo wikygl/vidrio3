@@ -304,7 +304,7 @@ class FichaActivity : AppCompatActivity() {
 
                 clientesMap.getOrPut(cliente) { mutableMapOf() }
                     .getOrPut(clave) { mutableListOf() }
-                    .add("$dato1 = $dato2 -> $ventana")
+                    .add("$dato1 = $dato2${marcaCurva(lista)} -> $ventana")
             }
         }
 
@@ -372,13 +372,24 @@ class FichaActivity : AppCompatActivity() {
                 val clave = if (sufijo.isNotBlank() && !nombreLista.contains(sufijo, ignoreCase = true))
                     "$nombreLista [$sufijo]" else nombreLista
 
-                val linea = if (cliente.isNotBlank()) "$dato1 = $dato2 -> $ventana, $cliente"
-                            else "$dato1 = $dato2 -> $ventana"
+                val linea = if (cliente.isNotBlank()) "$dato1 = $dato2${marcaCurva(lista)} -> $ventana, $cliente"
+                            else "$dato1 = $dato2${marcaCurva(lista)} -> $ventana"
                 materialesFiltrados.getOrPut(clave) { mutableListOf() }.add(linea)
             }
         }
 
         return materialesFiltrados
+    }
+
+    /**
+     * " curvo" si la pieza se curva después del corte (N-102), para separarla, con cómo queda la cara
+     * del vidrio ("curvo espejo convexa") o, si no la tiene dicha, hacia dónde va la panza ("curvo afuera").
+     */
+    private fun marcaCurva(lista: List<String>): String {
+        val l = crystal.crystal.casilla.ListaCasilla
+        if (!l.esCurva(lista)) return ""
+        val detalle = lista.getOrNull(l.POS_CARA).orEmpty().trim().ifBlank { lista.getOrNull(l.POS_PANZA).orEmpty().trim() }
+        return " ${l.MARCA_CURVO}" + if (detalle.isNotBlank()) " $detalle" else ""
     }
 
     /**

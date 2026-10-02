@@ -416,7 +416,15 @@ object ContornoEnTramos {
         medido: List<Pair<Float, Float>>,
         acabado: String = "apa",
         altoHoja: Float = 0f,
-        anchoParante: Float = 2.5f
+        anchoParante: Float = 2.5f,
+        /**
+         * Las divisiones que escribió el vidriero en Nova; 0 = la regla de los 60. Mandan (N-16), con
+         * hojas iguales, donde la forma da un solo grupo de hojas: un lado o el dintel inclinado
+         * (Fide), el trapecio (las del rectángulo más el fijo de cada costado inclinado). En un vano de
+         * varios tramos el reparto entre ellos se hace en novaDiseño (dictado el 2026-10-01) y aquí
+         * se quedan las de la regla: quien llama lo nota porque el diseño no trae esa cantidad.
+         */
+        divisiones: Int = 0
     ): DisenoNova? {
         // Los tramos se reparten sin los descuadres de los costados; la silueta sigue siendo la medida.
         val puntos = sinDescuadreLateral(medido)
@@ -438,7 +446,7 @@ object ContornoEnTramos {
             }
             return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(medido)
         }
-        trapecioLateral(puntos, medido, acabado, altoHoja, anchoParante)?.let { return it }
+        trapecioLateral(puntos, medido, acabado, altoHoja, anchoParante, divisiones)?.let { return it }
         // Hasta el 2026-09-28 el escalonado también pasaba por aquí: la banda recta llevaba la hoja
         // al alto entero del tramo (`s<144.4>; m<0>`), un descuadre de 0.9 la volvía inclinada con
         // la hoja de la ventana entera (`s<103.2>; m<6.1>`) y los anchos no dejaban sitio a los
@@ -452,6 +460,8 @@ object ContornoEnTramos {
         // Los trozos inclinados seguidos que sí admiten la hoja son UN rectángulo partido por los
         // picos del vano: sus módulos se reparten juntos. Contándolos por separado, el rectángulo
         // central de un triángulo salía en dos mitades y ninguna daba para una hoja.
+        // Las divisiones escritas solo si todo el vano es un grupo (ver [divisiones]).
+        val unSoloGrupo = trozos.isNotEmpty() && trozos.all { it.banda.esInclinada && it.llevaHoja }
         var i = 0
         while (i < trozos.size) {
             if (!(trozos[i].banda.esInclinada && trozos[i].llevaHoja)) { i++; continue }
@@ -459,7 +469,8 @@ object ContornoEnTramos {
             while (fin + 1 < trozos.size &&
                 trozos[fin + 1].banda.esInclinada && trozos[fin + 1].llevaHoja
             ) fin++
-            repartirGrupo(trozos, i, fin).forEachIndexed { k, fr -> franjasPorTrozo[i + k] = fr }
+            repartirGrupo(trozos, i, fin, if (unSoloGrupo) divisiones else 0)
+                .forEachIndexed { k, fr -> franjasPorTrozo[i + k] = fr }
             i = fin + 1
         }
 
@@ -511,7 +522,7 @@ object ContornoEnTramos {
      */
     private fun trapecioLateral(
         puntos: List<Pair<Float, Float>>, medido: List<Pair<Float, Float>>, acabado: String,
-        pedida: Float, anchoParante: Float
+        pedida: Float, anchoParante: Float, divisiones: Int = 0
     ): DisenoNova? {
         val b = bandas(puntos)
         if (b.size < 2) return null
@@ -530,8 +541,11 @@ object ContornoEnTramos {
         if (der && abs(b.last().altoCm - alto) > DESCUADRE_ESCALON) return null
 
         val anchoRect = rectas.sumOf { it.anchoCm.toDouble() }.toFloat()
-        val nRect = NovaCalculos.divisiones(anchoRect, 0)
-        val total = nRect + (if (izq) 1 else 0) + (if (der) 1 else 0)
+        val laterales = (if (izq) 1 else 0) + (if (der) 1 else 0)
+        // Las escritas son las de la ventana entera: el rectángulo se queda con las que no son el
+        // fijo de cada costado inclinado.
+        val nRect = if (divisiones > laterales) divisiones - laterales else NovaCalculos.divisiones(anchoRect, 0)
+        val total = nRect + laterales
         var orden = NovaCalculos.ordenDivis(total, total.toFloat()).filter { it == 'f' || it == 'c' }
         if (orden.length != total) return null
         if ((izq && orden.first() != 'f') || (der && orden.last() != 'f')) orden = orden.reversed()
@@ -612,11 +626,11 @@ object ContornoEnTramos {
      * después cada trozo se queda con los suyos en el orden en que salieron: así la corrediza cae
      * donde tiene que caer aunque el pico del vano parta el rectángulo en dos.
      */
-    private fun repartirGrupo(trozos: List<Trozo>, desde: Int, hasta: Int): List<List<NovaFranja>> {
+    private fun repartirGrupo(trozos: List<Trozo>, desde: Int, hasta: Int, escritas: Int = 0): List<List<NovaFranja>> {
         val anchos = (desde..hasta).map { trozos[it].banda.anchoCm }
         val anchoGrupo = anchos.sum()
         val hoja = trozos[desde].hoja
-        val divs = NovaCalculos.divisiones(anchoGrupo, 0)
+        val divs = NovaCalculos.divisiones(anchoGrupo, escritas)
         val tipos = NovaCalculos.ordenDivis(divs, anchoGrupo)
             .filter { it == 'f' || it == 'c' }
             .ifEmpty { "f" }
@@ -626,7 +640,8 @@ object ContornoEnTramos {
             val hasta2 = (leidos + cuotas[k]).coerceAtMost(tipos.length)
             val mios = (if (leidos < hasta2) tipos.substring(leidos, hasta2) else "").ifEmpty { "f" }
             leidos += cuotas[k]
-            val alturaLlena = altoLleno(trozos[desde + k].banda)
+            val banda = trozos[desde + k].banda
+            val alturaLlena = altoLleno(banda)
             val franjas = mutableListOf(
                 NovaFranja(
                     esSistema = true,
@@ -635,12 +650,34 @@ object ContornoEnTramos {
                 )
             )
             val altoMocheta = (alturaLlena - hoja).coerceAtLeast(0f)
-            if (altoMocheta > TOLERANCIA) {
-                franjas.addAll(franjasDeFijos(anchoTrozo, altoMocheta, sistema = false))
+            if (altoMocheta > TOLERANCIA && alfeizarInclinado(banda) && dintelInclinado(banda)) {
+                // Los dos bordes inclinados (2026-10-02, 88.4 × 174.2 con 114.4 a la derecha): no hay
+                // borde recto donde apoyar el sistema, que es un rectángulo (N-66). Va en bandera: una
+                // mocheta abajo con lo que sube el alféizar, el sistema sobre lo más alto del alféizar y
+                // arriba la mocheta con el resto.
+                val abajo = abs((banda.caidaDerCm + banda.altoDerCm) - (banda.caidaCm + banda.altoCm))
+                val arriba = (altoMocheta - abajo).coerceAtLeast(0f)
+                if (abajo > TOLERANCIA) franjas.addAll(0, franjasDeFijos(anchoTrozo, abajo, sistema = false))
+                if (arriba > TOLERANCIA) franjas.addAll(franjasDeFijos(anchoTrozo, arriba, sistema = false))
+            } else if (altoMocheta > TOLERANCIA) {
+                // El sistema es un rectángulo (N-66): se apoya en el borde recto. Con el alféizar
+                // inclinado y el dintel recto cuelga del dintel y la mocheta va abajo, invertido
+                // (2026-10-01, el vano de Fide al revés). Antes iba siempre abajo, sobre el alféizar
+                // inclinado.
+                val mocheta = franjasDeFijos(anchoTrozo, altoMocheta, sistema = false)
+                if (alfeizarInclinado(banda) && !dintelInclinado(banda)) franjas.addAll(0, mocheta)
+                else franjas.addAll(mocheta)
             }
             franjas
         }
     }
+
+    /** ¿El borde de arriba de la banda (el dintel) baja de un lado al otro? */
+    private fun dintelInclinado(b: Banda): Boolean = abs(b.caidaDerCm - b.caidaCm) > TOLERANCIA
+
+    /** ¿El borde de abajo de la banda (el alféizar) sube de un lado al otro? */
+    private fun alfeizarInclinado(b: Banda): Boolean =
+        abs((b.caidaDerCm + b.altoDerCm) - (b.caidaCm + b.altoCm)) > TOLERANCIA
 
     /** Cuántos módulos se lleva cada trozo: por su ancho, y ninguno se queda sin uno. */
     private fun repartirModulos(anchos: List<Float>, total: Int): List<Int> {

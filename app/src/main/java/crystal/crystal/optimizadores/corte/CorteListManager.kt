@@ -192,7 +192,13 @@ class CorteListManager(private val context: Context) {
             if (dato1 != null && dato2 != null) {
                 val proyecto = subLista.getOrElse(3) { "" }.trim()
                 val referenciaBase = if (proyecto.isNotBlank()) "$ventanaNum $proyecto" else ventanaNum
-                val referencia = agregarListaAReferencia(referenciaBase, nombreBase)
+                // Una pieza que se curva después del corte (N-102) lo dice en su etiqueta, al final,
+                // con hacia dónde va su panza (la roladora la curva de un lado o del otro):
+                // "Vna5 pipa,u-13 curvo afuera".
+                val l = crystal.crystal.casilla.ListaCasilla
+                val panza = subLista.getOrNull(l.POS_PANZA).orEmpty().trim()
+                val referencia = agregarListaAReferencia(referenciaBase, nombreBase) +
+                    if (l.esCurva(subLista)) " ${l.MARCA_CURVO}" + (if (panza.isNotBlank()) " $panza" else "") else ""
                 listaResultado.add(PiezaCorte(dato1, dato2, referencia, true))
             } else {
                 errores++

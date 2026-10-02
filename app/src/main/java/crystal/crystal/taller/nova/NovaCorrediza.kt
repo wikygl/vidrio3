@@ -67,6 +67,11 @@ class NovaCorrediza : AppCompatActivity() {
     private var referenciasFull: String = ""
     private var referenciasColapsable = false
     private var referenciasExpandida = false
+    // Detalle de cada material (curvado de Nova curva): la vista corta es la que se archiva.
+    private var materialesCompactos: Map<TextView, String> = emptyMap()
+    private var materialesDetalle: Map<TextView, String> = emptyMap()
+    private var materialesArchivo: Map<TextView, String> = emptyMap()
+    private var materialesDesplegados = false
     // Nombres para tvNombreModelo (geometría + modelo, colores distintos)
     private var nombreGeometria: String = "Plano"
     private var nombreModelo: String = "normal"
@@ -108,6 +113,14 @@ class NovaCorrediza : AppCompatActivity() {
     private var metaTipoVidrio: String = ""
     private var metaAcabadoSuperficial: String = ""
     private var metaObservaciones: String = ""
+    /**
+     * Las caras del vidrio curvo, dichas al archivar (2026-10-01): null si no se preguntó (no hay
+     * vidrio curvo, o se omitió el diálogo). Con ellas se archiva si la cara especial queda cóncava
+     * o convexa en cada vidrio.
+     */
+    private var metaCaras: crystal.crystal.taller.nova.motor.CurvadoNova.Caras? = null
+    /** Los materiales del último cálculo, para rehacer lo que se archiva con las caras. */
+    private var ultimosMateriales: crystal.crystal.taller.nova.motor.MaterialesNova? = null
     // Encuentro: lados que colindan (1) o quedan al vacío (0), orden Arriba-Derecha-Abajo-Izquierda.
     private var metaEncuentro: String = "1111"
     // Forma (vista frontal): plano | circular | poligonal.
@@ -181,6 +194,11 @@ class NovaCorrediza : AppCompatActivity() {
             } else {
                 binding.ivDiseno.setImageURI(uri)
             }
+            // Lo que se ve ahora es el diseño, no el apunte original. Sin esto, si el dibujo llegaba
+            // mientras se mostraba el apunte (al cargar una medida con forma), Calcular "volvía al
+            // diseño" poniendo la imagen guardada de antes: el rectángulo (Fide, 2026-10-01).
+            mostrandoBocetoOriginal = false
+            disenoCalculadoGuardado = binding.ivDiseno.drawable
         }
     }
 
@@ -197,8 +215,8 @@ class NovaCorrediza : AppCompatActivity() {
      * El diseño que vuelve de novaDiseño. Es ahora EL diseño: su hoja y su medida pasan a ser la
      * referencia del vano con forma. Sin esto, si la hoja del diseño editado no era la con que se
      * armó desde el contorno, el siguiente Calcular rehacía el vano desde el contorno
-     * ([rehacerDisenoSiCambioLaHoja]) y lo editado se perdía. Si después el vidriero escribe otra
-     * hoja, sí se rehace, como siempre.
+     * ([rehacerDesdeLaFormaSiCambio]) y lo editado se perdía. Si después el vidriero escribe otra
+     * hoja u otras divisiones, sí se rehace, como siempre.
      */
     private fun recibirDisenoEditado(paquete: String) {
         cargarDesdePaqueteDiseno(paquete)
@@ -240,6 +258,7 @@ class NovaCorrediza : AppCompatActivity() {
         configurarCliente()
         spinnerTubo()
         configurarLimpiezaDesigual()
+        configurarRecalculoDeMaterial()
         binding.fcLayout.visibility = View.GONE
 
         // Estado inicial aparente
@@ -259,6 +278,8 @@ class NovaCorrediza : AppCompatActivity() {
             // motor y el dibujo: sin cambiarlo ahí, el título cambiaba de color y la ventana seguía
             // calculándose en el acabado anterior.
             if (ultimoPaquete.isNotBlank()) ultimoPaquete = conAcabado(ultimoPaquete, tipoPaquete())
+            // Un diseño cargado se dibuja de nuevo en el acabado nuevo (el automático se rehace al calcular).
+            if (modulosDesiguales.isNotEmpty()) redibujarDiseno()
             actualizarModo()
         }
 
@@ -378,6 +399,10 @@ class NovaCorrediza : AppCompatActivity() {
         hacerCopiable(binding.txPr, "diseno_simbolico_v2")
         // La U se copia con un toque: es la lista que más se consulta y se pasa a otro lado.
         hacerCopiable(binding.txU, "u_nova", conToque = true)
+        binding.tvDetalleMateriales.setOnClickListener {
+            materialesDesplegados = !materialesDesplegados
+            mostrarMateriales()
+        }
 
         // Pre-carga desde presupuesto
         intent.getFloatExtra("ancho", -1f).let { if (it > 0) binding.etAncho.setText(df1(it)) }
@@ -610,9 +635,8 @@ class NovaCorrediza : AppCompatActivity() {
                     return@setOnClickListener
                 }
 
-                // El vano con forma se rehace si cambió el alto de hoja: es el dato que decide dónde
-                // cabe la corrediza.
-                rehacerDisenoSiCambioLaHoja()
+                // El vano con forma se rehace desde ella si cambió el alto de hoja o las divisiones.
+                rehacerDesdeLaFormaSiCambio()
                 // Con un diseño cargado, medidas cambiadas no lo sueltan en silencio: se pregunta.
                 if (!confirmarMedidasDelDiseno()) return@setOnClickListener
 
@@ -656,6 +680,19 @@ class NovaCorrediza : AppCompatActivity() {
         }
     }
 
+
+    /** G-02: el nombre de la U según su alto (1 → u-3/8, 1.5 → u-13, 1.2 → u-1/2, 1.9 → u-3/4). */
+    private fun nombreDeLaU(): String {
+        val alto = binding.etU.text?.toString()?.replace(",", ".")?.toFloatOrNull() ?: 1.5f
+        fun es(v: Float) = kotlin.math.abs(alto - v) < 0.01f
+        return when {
+            es(1f) -> "u-3/8"
+            es(1.5f) -> getString(R.string.u_13)
+            es(1.2f) -> "u-1/2"
+            es(1.9f) -> "u-3/4"
+            else -> "u ${df1(alto)}"
+        }
+    }
 
     /** G-02: el ancho de la U según su alto (U-3/8 1 × 1, U-13 1 × 1.5, U-1/2 1.2 × 1.2, U-3/4 1.2 × 1.9). */
     private fun perfilUMotor(): crystal.crystal.taller.nova.motor.PerfilU {
@@ -769,7 +806,7 @@ class NovaCorrediza : AppCompatActivity() {
      */
     private fun aplicarMotor() {
         val calculo = runCatching {
-            val v = ventanaDelMotor() ?: error("no hay ventana que calcular")
+            val v = conSusCurvas(ventanaDelMotor() ?: error("no hay ventana que calcular"))
             v to crystal.crystal.taller.nova.motor.MotorNova.calcular(v)
         }
         val (v, m) = calculo.getOrElse { e ->
@@ -777,6 +814,7 @@ class NovaCorrediza : AppCompatActivity() {
                 "El motor todavía no calcula este caso.\n(${e.message ?: e.javaClass.simpleName})"))
             binding.lyUf.visibility = View.GONE
             binding.lyFalsoPuente.visibility = View.GONE
+            prepararDetalleMateriales(null)
             aplicarVistaReferencias()
             Toast.makeText(this, "Este caso todavía no lo calcula el motor: no hay materiales", Toast.LENGTH_LONG).show()
             return
@@ -805,6 +843,92 @@ class NovaCorrediza : AppCompatActivity() {
         val falso = t.texto(m.falsoPuente)
         binding.txFalsoPuente.text = falso
         binding.lyFalsoPuente.visibility = if (falso.isNotBlank()) View.VISIBLE else View.GONE
+        prepararDetalleMateriales(m)
+    }
+
+    /**
+     * Qué lados se curvan y con qué radio (N-102); no cambia ninguna medida.
+     * - Nova curva: el radio de su curva. En una S, cada arco es su tramo y lleva el suyo, con el
+     *   signo de su panza; si los tramos ya no son los de los arcos (se cambiaron las divisiones),
+     *   el de la curva equivalente.
+     * - L, C y serie: la curva con que se resolvió una esquina, con su desarrollo y su cuerda.
+     */
+    private fun conSusCurvas(v: crystal.crystal.taller.nova.motor.VentanaNova): crystal.crystal.taller.nova.motor.VentanaNova {
+        if (texto == "ncu" && v.lados.size == 1) {
+            val l = v.lados[0]
+            val arcos = arcosDeLaMedida()
+            val radios = if (arcos != null && arcos.size == l.tramos.size) {
+                arcos.map { a ->
+                    val r = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(a.ancho, kotlin.math.abs(a.flecha))?.radio ?: 0f
+                    if (a.flecha < 0f) -r else r
+                }
+            } else {
+                val desarrollo = binding.etAncho.text?.toString()?.replace(",", ".")?.toFloatOrNull() ?: 0f
+                // La panza, mirando desde adentro (como se mide): un arco de Medidas con la flecha
+                // negativa se mete hacia quien mira, hacia adentro. Escrita a mano, hacia afuera.
+                val haciaAdentro = esquinaDeLaMedida?.lados?.singleOrNull()?.let { it.esCurva && it.flecha < 0f } == true
+                listOfNotNull(geometriaCurva(desarrollo, 1)?.takeIf { it.flecha > 0f }?.radio?.let { if (haciaAdentro) -it else it })
+            }
+            return v.copy(lados = listOf(l.copy(radios = radios)))
+        }
+        val medida = esquinaDeLaMedida ?: return v
+        val curvas = medida.lados.indices.mapNotNull { medida.curvaDe(it) }
+        if (curvas.isEmpty()) return v
+        return v.copy(lados = v.lados.map { l ->
+            if (!l.curvaDeEsquina) return@map l
+            val c = curvas.firstOrNull { kotlin.math.abs(it.desarrollo - l.anchoMedido) < 0.05f } ?: return@map l
+            val r = crystal.crystal.taller.ArcoEsquina.deDesarrolloYCuerda(c.desarrollo, c.cuerda)?.radio ?: return@map l
+            l.copy(radios = listOf(r))
+        })
+    }
+
+    /**
+     * El detalle de cada material, que se ve con el ▼ de "Cálculos", y lo que se archiva. Por ahora
+     * el detalle es el curvado (CurvadoNova, N-102): debajo de cada pieza curva, su cuerda, su flecha
+     * y, en los perfiles, la ampliación para la roladora. Se archiva lo curvo con su ampliación y la
+     * marca "curvo". Sin curva no hay detalle, el ▼ no aparece y se archiva lo de la pantalla.
+     */
+    private fun prepararDetalleMateriales(m: crystal.crystal.taller.nova.motor.MaterialesNova?) {
+        ultimosMateriales = m
+        val b = binding
+        val curvado = crystal.crystal.taller.nova.motor.CurvadoNova
+        val listas = if (m == null || !m.hayCurva) emptyList() else listOf(
+            b.txU to m.u, b.txP to m.puente, b.txR to m.riel, b.txFc to m.rielSuperior,
+            b.txUf to m.dobleCorrediza, b.txPf to m.portafelpa, b.txTe to m.tee, b.txTo to m.tope,
+            b.txH to m.hache, b.txT to m.parante, b.txFalsoPuente to m.falsoPuente
+        )
+        val vidrios = if (m == null || !m.hayCurva) null else m.vidrios
+        val detalles = listas.associate { (tv, piezas) -> tv to curvado.texto(piezas) } +
+            listOfNotNull(vidrios?.let { b.txV to curvado.textoVidrios(it) })
+        val archivo = listas.associate { (tv, piezas) -> tv to curvado.textoArchivo(piezas) } +
+            listOfNotNull(vidrios?.let { b.txV to curvado.textoArchivoVidrios(it) })
+        materialesCompactos = detalles.keys.associateWith { it.text.toString() }
+        materialesDetalle = detalles
+            .filter { (tv, detalle) -> detalle.isNotBlank() && detalle != materialesCompactos[tv] }
+        materialesArchivo = archivo.filter { (tv, t) -> t != materialesCompactos[tv] }
+        binding.tvDetalleMateriales.visibility = if (materialesDetalle.isEmpty()) View.GONE else View.VISIBLE
+        mostrarMateriales()
+    }
+
+    private fun mostrarMateriales() {
+        val desplegar = materialesDesplegados && materialesDetalle.isNotEmpty()
+        binding.tvDetalleMateriales.text = if (desplegar) "▲" else "▼"
+        for (tv in materialesCompactos.keys) {
+            tv.text = materialesDetalle[tv]?.takeIf { desplegar } ?: materialesCompactos[tv]
+        }
+    }
+
+    /**
+     * Lo que se archiva o se devuelve, en pantalla mientras se lee: la lista corta, con lo curvo
+     * ampliado y marcado (`118 = 1 curvo`). Después se vuelve a [mostrarMateriales].
+     */
+    private fun mostrarMaterialesParaArchivar() {
+        // Los vidrios curvos, con las caras que se dijeron al archivar (cóncava o convexa).
+        val vidrios = ultimosMateriales?.takeIf { it.hayCurva && metaCaras != null }
+            ?.let { crystal.crystal.taller.nova.motor.CurvadoNova.textoArchivoVidrios(it.vidrios, metaCaras) }
+        for (tv in materialesCompactos.keys) {
+            tv.text = vidrios?.takeIf { tv === binding.txV } ?: materialesArchivo[tv] ?: materialesCompactos[tv]
+        }
     }
 
     // ==================== CÁLCULO DESIGUAL ====================
@@ -889,6 +1013,9 @@ class NovaCorrediza : AppCompatActivity() {
 
     private fun aplicarMateriales(estado: EstadoMateriales) {
         binding.txU.text = estado.u
+        // El nombre va con la U con que se calculó: estaba fijo en "u-13" y con una U de 1 la
+        // lista (y lo archivado, que toma este nombre) seguía diciendo u-13.
+        binding.tvU.text = nombreDeLaU()
         binding.txP.text = estado.p
         binding.txR.text = estado.r
         binding.txFc.text = estado.fc
@@ -1260,6 +1387,8 @@ class NovaCorrediza : AppCompatActivity() {
             // lo lee el motor. Desde aquí no se cambiaba y un vano con forma elegido en inaparente
             // se seguía calculando en aparente (hallado el 2026-09-29).
             if (ultimoPaquete.isNotBlank()) ultimoPaquete = conAcabado(ultimoPaquete, tipoPaquete())
+            // Un diseño cargado se dibuja de nuevo en el acabado nuevo (el automático se rehace al calcular).
+            if (modulosDesiguales.isNotEmpty()) redibujarDiseno()
             actualizarModo()
         }
 
@@ -2087,6 +2216,27 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     @SuppressLint("SetTextI18n")
+    /**
+     * Vuelve a dibujar el diseño cargado ([ultimoPaquete]) sin abrir el editor. Se llama al cargarlo y
+     * al cambiar el acabado: el dibujo de INA no es el de APA (los fijos van de piso a techo), y antes
+     * el cambio solo tocaba la cabecera del paquete y el dibujo se quedaba en el acabado anterior
+     * (2026-10-01, Fide en INA).
+     */
+    private fun redibujarDiseno() {
+        if (ultimoPaquete.isBlank()) return
+        val intentRender = Intent(this, DisenoNovaActivity::class.java).apply {
+            putExtra(DisenoNovaActivity.EXTRA_PAQUETE, ultimoPaquete)
+            putExtra(DisenoNovaActivity.EXTRA_HEADLESS, true)
+            putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>") || modulosDesiguales.isNotEmpty()) "png" else "svg")
+            putExtra(DisenoNovaActivity.EXTRA_RET_PADDING_PX, 4)
+            putExtra(DisenoNovaActivity.EXTRA_MOCHETA_LATERAL_CM, mochetaLateralDisenoNl())
+            putExtra(DisenoNovaActivity.EXTRA_ENCUENTRO_VACIO, metaEncuentro)
+            putExtra(DisenoNovaActivity.EXTRA_DIRECCION, metaDireccion)
+            putExtra(DisenoNovaActivity.EXTRA_US_CM, binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f)
+        }
+        lanzarDiseno.launch(intentRender)
+    }
+
     private fun cargarDesdePaqueteDiseno(paquete: String?) {
         cargandoDiseno = true
         try {
@@ -2260,18 +2410,7 @@ class NovaCorrediza : AppCompatActivity() {
             val tipoMsg = if (modulosDesiguales.isNotEmpty()) " (desigual)" else ""
             Toast.makeText(this, "Diseño cargado: ${df1(ancho)} x ${df1(alto)}$tipoMsg", Toast.LENGTH_SHORT).show()
 
-            // Relanzar render headless para actualizar la imagen
-            val intentRender = Intent(this, DisenoNovaActivity::class.java).apply {
-                putExtra(DisenoNovaActivity.EXTRA_PAQUETE, ultimoPaquete)
-                putExtra(DisenoNovaActivity.EXTRA_HEADLESS, true)
-                putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>") || modulosDesiguales.isNotEmpty()) "png" else "svg")
-                putExtra(DisenoNovaActivity.EXTRA_RET_PADDING_PX, 4)
-                putExtra(DisenoNovaActivity.EXTRA_MOCHETA_LATERAL_CM, mochetaLateralDisenoNl())
-                putExtra(DisenoNovaActivity.EXTRA_ENCUENTRO_VACIO, metaEncuentro)
-                putExtra(DisenoNovaActivity.EXTRA_DIRECCION, metaDireccion)
-                putExtra(DisenoNovaActivity.EXTRA_US_CM, binding.etU.text?.toString()?.toFloatOrNull() ?: 1.5f)
-            }
-            lanzarDiseno.launch(intentRender)
+            redibujarDiseno()
 
         } catch (e: Exception) {
             Toast.makeText(this, "Error al cargar diseño: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -2332,30 +2471,88 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etAlto.addTextChangedListener(watcher)
     }
 
+    private val recalculoDeMaterial = Runnable {
+        if (ultimoPaquete.isNotBlank() && !cargandoDiseno) binding.btCalcular.performClick()
+    }
+
+    /**
+     * La U del marco y el cruce son datos de material: si ya se calculó, cambiarlos rehace el
+     * cálculo solo, como el puente ([recalcularSiYaFueCalculado]). Antes se leían únicamente al
+     * tocar Calcular y la lista de U se quedaba con la medida vieja (2026-10-01). Se espera a que
+     * el vidriero termine de escribir: "1.5" pasa por "1." y no vale recalcular con cada tecla.
+     */
+    private fun configurarRecalculoDeMaterial() {
+        // El cruce en 0 vale (es "el de siempre", [cruce]); una U de 0 no.
+        fun watcher(admiteCero: Boolean) = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                binding.btCalcular.removeCallbacks(recalculoDeMaterial)
+                val valor = s?.toString()?.trim()?.replace(",", ".")?.toFloatOrNull() ?: return
+                if (valor < 0f || (valor == 0f && !admiteCero) || ultimoPaquete.isBlank()) return
+                binding.btCalcular.postDelayed(recalculoDeMaterial, 700)
+            }
+        }
+        binding.etU.addTextChangedListener(watcher(admiteCero = false))
+        binding.etCruce.addTextChangedListener(watcher(admiteCero = true))
+    }
+
     /** Las medidas con que llegó el diseño (ancho, alto, hoja, divisiones), para saber si se tocaron. */
     private var medidasDelDiseno: List<String>? = null
 
     private fun medidasEnPantalla(): List<String> =
         listOf(binding.etAncho, binding.etAlto, binding.etHoja, binding.etPartes).map { it.text?.toString()?.trim().orEmpty() }
 
+    /** Vuelve a poner en los campos las medidas con que quedó el diseño, sin soltarlo. */
+    private fun volverALasMedidasDelDiseno(delDiseno: List<String>) {
+        cargandoDiseno = true
+        try {
+            listOf(binding.etAncho, binding.etAlto, binding.etHoja, binding.etPartes)
+                .forEachIndexed { i, et -> et.setText(delDiseno[i]) }
+        } finally {
+            cargandoDiseno = false
+        }
+    }
+
     /**
      * Antes de calcular con un diseño cargado: si el ancho, el alto, la hoja o las divisiones ya no
      * son los del diseño, pregunta si se conserva el diseño (vuelven sus medidas) o se descarta y se
-     * calcula el automático. Devuelve true si se puede seguir calculando ya.
+     * calcula el automático; en un vano con forma, si se abre novaDiseño. Devuelve true si se puede
+     * seguir calculando ya.
      */
     private fun confirmarMedidasDelDiseno(): Boolean {
         val delDiseno = medidasDelDiseno ?: return true
         if (modulosDesiguales.isEmpty()) return true
         val ahora = medidasEnPantalla()
         val nombres = listOf("ancho", "alto", "hoja", "divisiones")
-        fun igual(a: String, b: String): Boolean {
-            val x = a.replace(",", ".").toFloatOrNull()
-            val y = b.replace(",", ".").toFloatOrNull()
-            return if (x != null && y != null) kotlin.math.abs(x - y) <= 0.05f else a == b
-        }
-        val cambios = nombres.indices.filter { !igual(delDiseno[it], ahora[it]) }
+        val cambios = nombres.indices.filter { !mismaMedida(delDiseno[it], ahora[it]) }
             .map { "${nombres[it]}: ${delDiseno[it].ifBlank { "vacío" }} → ${ahora[it].ifBlank { "vacío" }}" }
         if (cambios.isEmpty()) return true
+        // El ancho o el alto de un vano con lados desiguales (más de 2.5, N-06: solo entonces viaja el
+        // contorno de Medidas) no se editan en Nova: se cambian en novaDiseño, como los anchos
+        // desiguales o el reparto entre tramos (dictado el 2026-10-01). La hoja y las divisiones sí se
+        // cambian aquí y el diseño ya se rehízo desde la forma ([rehacerDesdeLaFormaSiCambio]). Antes
+        // la única salida era "descartar", que calculaba la ventana automática, y la automática no
+        // conoce el contorno: salía rectangular (Fide). Un vano dentro del descuadre es rectangular y
+        // se edita normal.
+        val anchoOAltoCambiado = !mismaMedida(delDiseno[0], ahora[0]) || !mismaMedida(delDiseno[1], ahora[1])
+        if (contornoMedida.isNotBlank() && anchoOAltoCambiado) {
+            AlertDialog.Builder(this)
+                .setTitle("El vano tiene forma")
+                .setMessage(cambios.joinToString("\n") +
+                    "\n\nSus lados son desiguales: el ancho y el alto no se editan aquí, se cambian en novaDiseño.")
+                .setPositiveButton("Abrir novaDiseño") { _, _ ->
+                    volverALasMedidasDelDiseno(delDiseno)
+                    abrirDisenoInteractivo()
+                }
+                .setNegativeButton("Conservar el diseño") { _, _ ->
+                    volverALasMedidasDelDiseno(delDiseno)
+                    binding.btCalcular.performClick()
+                }
+                .setNeutralButton("Cancelar", null)
+                .show()
+            return false
+        }
         AlertDialog.Builder(this)
             .setTitle("Las medidas ya no son las del diseño")
             .setMessage(cambios.joinToString("\n") +
@@ -3258,6 +3455,15 @@ class NovaCorrediza : AppCompatActivity() {
         // la medida que se acaba de cargar, no los de la que entró al abrir la pantalla.
         intent.putExtra("cantidad", item.cantidad)
         intent.putExtra("producto", item.producto)
+        // La geometría de la medida anterior (curva, L, C o serie) no vale para esta: si la nueva
+        // es plana se quedaba en la curva, con su flecha y su reparto (Pipa, 2026-10-01). Se vuelve
+        // a plano; si la nueva es otra esquina, cargarEsquinaDeMedida la pone de nuevo.
+        if (texto in textosGeometria) {
+            seleccionarDesdePanel(R.drawable.vplano, "nn")
+            binding.etFlecha.setText("")
+            binding.etCuerda.setText("")
+        }
+        NovaCalculos.repartoManual = null
         binding.etAncho.setText(df1(item.ancho))
         binding.etAlto.setText(df1(item.alto))
         cargarYMostrarBocetoOriginal(item.bocetoArchivo)
@@ -3568,7 +3774,7 @@ class NovaCorrediza : AppCompatActivity() {
         return false
     }
 
-    private fun cargarDisenoDelContorno(contorno: String): Boolean {
+    private fun cargarDisenoDelContorno(contorno: String, divisiones: Int = 0): Boolean {
 
         // Cada medida trae el suyo: el de la anterior no vale para esta.
         contornoMedida = ""
@@ -3581,7 +3787,7 @@ class NovaCorrediza : AppCompatActivity() {
         }
         val hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
         val diseno = runCatching {
-            ContornoEnTramos.disenoDesdeContorno(puntos, acabado, hoja)
+            ContornoEnTramos.disenoDesdeContorno(puntos, acabado, hoja, divisiones = divisiones)
         }.getOrNull() ?: return false
         if (!diseno.esIrregular) return false
         cargarDesdePaqueteDiseno(diseno.aPaquete())
@@ -3592,26 +3798,47 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     /**
-     * Rehace el diseño del vano cuando el vidriero escribe otro alto de hoja.
+     * Rehace el diseño del vano con forma cuando el vidriero escribe otro alto de hoja u otra
+     * cantidad de divisiones: las dos se cambian en Nova (dictado el 2026-10-01). Lo demás —el ancho
+     * o el alto de un vano con lados desiguales, anchos desiguales, el reparto entre varios tramos—
+     * se hace en novaDiseño ([confirmarMedidasDelDiseno]).
      *
      * En un vano con forma la hoja no es un dato más: es la que dice DÓNDE cabe la corrediza —el
      * rectángulo del medio de un triángulo, lo que queda bajo un dintel caído— y con ella cambia el
-     * reparto entero. Escribirla soltaba el diseño como cualquier otra edición a mano y la ventana
-     * volvía a salir rectangular, justo al dar el dato que hacía falta.
+     * reparto entero. Las divisiones, con hojas iguales (N-16), mandan donde la forma da un solo grupo
+     * de hojas; en un vano de varios tramos se quedan las de la regla de los 60 y se avisa.
      *
-     * Solo se rehace si el ancho y el alto siguen siendo los del vano: con otra medida en los campos
-     * el vidriero está en otra cosa y su diseño no se toca.
+     * Solo se rehace si el ancho y el alto siguen siendo los del diseño. Antes solo miraba la hoja,
+     * contra un valor guardado aparte, y cambiar las divisiones acababa en "descartar": rectangular.
      */
-    private fun rehacerDisenoSiCambioLaHoja() {
+    private fun rehacerDesdeLaFormaSiCambio() {
         if (contornoMedida.isBlank()) return
-        val hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
-        if (kotlin.math.abs(hoja - hojaDelDiseno) <= 0.05f) return
-        val ancho = binding.etAncho.text?.toString()?.toFloatOrNull() ?: 0f
-        val alto = binding.etAlto.text?.toString()?.toFloatOrNull() ?: 0f
-        if (kotlin.math.abs(ancho - medidaDelDiseno.first) > 0.15f ||
-            kotlin.math.abs(alto - medidaDelDiseno.second) > 0.15f
-        ) return
-        cargarDisenoDelContorno(contornoMedida)
+        val delDiseno = medidasDelDiseno ?: return
+        val ahora = medidasEnPantalla()
+        if (!mismaMedida(delDiseno[0], ahora[0]) || !mismaMedida(delDiseno[1], ahora[1])) return
+        if (mismaMedida(delDiseno[2], ahora[2]) && mismaMedida(delDiseno[3], ahora[3])) return
+        val pedidas = ahora[3].toIntOrNull() ?: 0
+        val contorno = contornoMedida
+        if (!cargarDisenoDelContorno(contorno, pedidas)) {
+            contornoMedida = contorno
+            Toast.makeText(this, "No se pudo rehacer el diseño desde la forma del vano", Toast.LENGTH_LONG).show()
+            return
+        }
+        val quedaron = modulosDesiguales.size
+        if (pedidas > 0 && quedaron != pedidas) {
+            Toast.makeText(
+                this,
+                "Vano de varios tramos: el reparto entre tramos se hace en novaDiseño. Quedaron $quedaron (regla de los 60)",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    /** Dos medidas de los campos son la misma (a la décima), o el mismo texto si no son números. */
+    private fun mismaMedida(a: String, b: String): Boolean {
+        val x = a.replace(",", ".").toFloatOrNull()
+        val y = b.replace(",", ".").toFloatOrNull()
+        return if (x != null && y != null) kotlin.math.abs(x - y) <= 0.05f else a == b
     }
 
     private fun mostrarDialogoMetadatosProduccion(onContinuar: () -> Unit) {
@@ -3641,17 +3868,60 @@ class NovaCorrediza : AppCompatActivity() {
         contenedor.addView(etAcabadoSup)
         contenedor.addView(etObs)
 
+        // Vidrio curvo: ¿tiene caras? (dictado el 2026-10-01). Un reflejante tiene espejo por una
+        // cara y color por la otra: al curvarlo, una queda cóncava y la otra convexa, y en una S cambia
+        // de un arco al otro. Sin caras el vidrio se voltea y no pasa nada. Con caras se pregunta cuál
+        // se ve desde adentro, y con eso cada vidrio se archiva con su cara cóncava o convexa.
+        val hayVidrioCurvo = ultimosMateriales?.vidrios?.any { it.curva.isNotEmpty() } == true
+        val anteriores = metaCaras
+        val cbCaras = android.widget.CheckBox(this).apply {
+            text = "El vidrio curvo tiene caras (reflejante, espejo, low-e…)"
+            isChecked = anteriores?.tiene == true
+        }
+        val etCara = EditText(this).apply {
+            hint = "Cara especial (ej: espejo)"
+            setText(anteriores?.nombre?.takeIf { it.isNotBlank() } ?: "espejo")
+        }
+        val tvDesdeAdentro = TextView(this).apply { text = "Desde adentro se ve:" }
+        val rgLado = android.widget.RadioGroup(this)
+        val rbEspecial = android.widget.RadioButton(this).apply { id = View.generateViewId(); text = "la cara especial" }
+        val rbOtra = android.widget.RadioButton(this).apply { id = View.generateViewId(); text = "la otra cara" }
+        rgLado.addView(rbEspecial)
+        rgLado.addView(rbOtra)
+        rgLado.check(if (anteriores?.tiene == true && !anteriores.haciaAdentro) rbOtra.id else rbEspecial.id)
+        fun mostrarCaras() {
+            val v = if (cbCaras.isChecked) View.VISIBLE else View.GONE
+            etCara.visibility = v; tvDesdeAdentro.visibility = v; rgLado.visibility = v
+        }
+        if (hayVidrioCurvo) {
+            contenedor.addView(cbCaras)
+            contenedor.addView(etCara)
+            contenedor.addView(tvDesdeAdentro)
+            contenedor.addView(rgLado)
+            cbCaras.setOnCheckedChangeListener { _, _ -> mostrarCaras() }
+            mostrarCaras()
+        }
+
         AlertDialog.Builder(this)
             .setTitle("Metadatos para Diseño Simbólico V2")
-            .setView(contenedor)
+            .setView(android.widget.ScrollView(this).apply { addView(contenedor) })
             .setPositiveButton("Guardar y archivar") { _, _ ->
                 metaColorAluminio = etColor.text?.toString()?.trim().orEmpty()
                 metaTipoVidrio = etVidrio.text?.toString()?.trim().orEmpty()
                 metaAcabadoSuperficial = etAcabadoSup.text?.toString()?.trim().orEmpty()
                 metaObservaciones = etObs.text?.toString()?.trim().orEmpty()
+                metaCaras = when {
+                    !hayVidrioCurvo -> null
+                    !cbCaras.isChecked -> crystal.crystal.taller.nova.motor.CurvadoNova.SIN_CARAS
+                    else -> crystal.crystal.taller.nova.motor.CurvadoNova.Caras(
+                        nombre = etCara.text?.toString()?.trim().orEmpty().ifBlank { "especial" },
+                        haciaAdentro = rgLado.checkedRadioButtonId == rbEspecial.id
+                    )
+                }
                 onContinuar()
             }
             .setNeutralButton("Omitir") { _, _ ->
+                metaCaras = null
                 onContinuar()
             }
             .setNegativeButton("Cancelar", null)
@@ -3659,6 +3929,7 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     private fun devolverResultadoMasivo() {
+        mostrarMaterialesParaArchivar()
         val calculadora = when (tipoNova) {
             TipoNova.APA -> "Nova Aparente"
             TipoNova.INA -> "Nova Inaparente"
@@ -3712,6 +3983,8 @@ class NovaCorrediza : AppCompatActivity() {
 
         // Si la vista de referencias está contraída, archivar el texto completo (sin spans).
         if (referenciasColapsable) binding.txReferencias.text = referenciasFull
+        // Se archiva la lista corta, con lo curvo ampliado y marcado (N-102), aunque se vea el detalle.
+        mostrarMaterialesParaArchivar()
 
         // Los números se reservan ANTES del bucle: dentro, nada se ha guardado todavía y
         // obtenerSiguienteContadorPorPrefijo devolvería el mismo para todas las copias.
@@ -3815,6 +4088,7 @@ class NovaCorrediza : AppCompatActivity() {
 
         // Restaurar la vista compactable tras archivar.
         if (referenciasColapsable) renderReferencias()
+        mostrarMateriales()
 
         MapStorage.guardarMap(this, mapListas)
         ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)

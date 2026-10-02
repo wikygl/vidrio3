@@ -7,6 +7,31 @@ object ListaCasilla {
 
     var contadorVentanas = 0
 
+    /**
+     * Una pieza que se curva después del corte (N-102): en el texto va `118 = 1 curvo` y en la
+     * lista archivada lleva [MARCA_CURVO] en la posición [POS_MARCA] (después de la ventana y del
+     * proyecto), para que la etiqueta del corte diga a dónde va.
+     */
+    const val MARCA_CURVO = "curvo"
+    const val POS_MARCA = 4
+    /** La cuerda y la flecha de la pieza curva terminada, si las trae (`118 = 1 curvo C102.8 F14.2`). */
+    const val POS_CUERDA = 5
+    const val POS_FLECHA = 6
+    /** Hacia dónde va la panza, mirando desde adentro: `afuera` o `adentro`. */
+    const val POS_PANZA = 7
+    /** En un vidrio con caras, cómo queda la especial (`espejo convexa`), o `sin caras`. */
+    const val POS_CARA = 8
+
+    fun esCurva(entrada: List<String>): Boolean = entrada.getOrNull(POS_MARCA) == MARCA_CURVO
+
+    /**
+     * `1 curvo C102.8 F14.2 afuera [espejo convexa]` → cantidad, cuerda, flecha, panza y cara (lo de
+     * después de `curvo` puede faltar); null si no lleva la marca.
+     */
+    private val conMarca = Regex(
+        """^(\S+)\s+$MARCA_CURVO(?:\s+C([\d.]+))?(?:\s+F([\d.]+))?(?:\s+(afuera|adentro))?(?:\s+\[([^\]]*)])?$"""
+    )
+
     fun obtenerNombreLista(tv: TextView): String {
         return tv.text.toString()
     }
@@ -20,9 +45,17 @@ object ListaCasilla {
             val partes = linea.split("=")
             if (partes.size == 2) {
                 val primerElemento = partes[0].trim()
-                val segundoElemento = partes[1].trim()
+                var segundoElemento = partes[1].trim()
+                val curva = conMarca.find(segundoElemento)
+                if (curva != null) segundoElemento = curva.groupValues[1]
                 if (esEntradaVacia(primerElemento, segundoElemento)) continue
-                lista.add(mutableListOf(primerElemento, segundoElemento, ""))
+                lista.add(
+                    if (curva != null) mutableListOf(
+                        primerElemento, segundoElemento, "", "", MARCA_CURVO,
+                        curva.groupValues[2], curva.groupValues[3], curva.groupValues[4], curva.groupValues[5]
+                    )
+                    else mutableListOf(primerElemento, segundoElemento, "")
+                )
             }
         }
         return lista

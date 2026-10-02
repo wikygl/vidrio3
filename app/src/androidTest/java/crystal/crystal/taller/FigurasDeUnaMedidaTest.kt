@@ -45,6 +45,35 @@ class FigurasDeUnaMedidaTest {
         assertEquals(204f to 21f, medidas[2])
     }
 
+    /**
+     * La de Fide con una esquina movida (2026-10-01): la figura grande mide 214.5 abajo, 180 a la
+     * izquierda y 148.8 a la derecha; el dintel inclinado mide 216.8. Llegaba a Nova como un
+     * rectángulo de 216.8 × 180 y el diseño salía recto. Ahora viaja su contorno, el ancho es el de
+     * la caja (214.5) y el diseño lleva el dintel inclinado.
+     */
+    @Test
+    fun el_rectangulo_con_una_esquina_movida_viaja_con_su_contorno() {
+        val v = vista()
+        assertTrue(v.loadEditableState(asset("fide_dintel_inclinado.json")))
+        val grande = v.estadosPorFigura().map { e -> vista().also { assertTrue(it.loadEditableState(e)) } }
+            .maxByOrNull { it.medidaPrincipal()!!.altoCm }!!
+        val medida = grande.medidaPrincipal()!!
+        assertEquals(214.5f, medida.anchoCm, 0.2f)
+        assertEquals(180f, medida.altoCm, 0.2f)
+        val contorno = grande.contornoPrincipalEnCm()!!
+        assertEquals(4, contorno.size)
+        // La esquina de arriba a la derecha baja 31.2: el lado derecho mide 148.8.
+        assertEquals(31.2f, contorno[1].second, 0.2f)
+        val diseno = crystal.crystal.Diseno.nova.ContornoEnTramos.disenoDesdeContorno(contorno, "apa", 0f)!!
+        assertTrue("el diseño salió recto", diseno.esIrregular)
+        assertEquals(214.5f, diseno.ancho, 0.2f)
+        // Los dos rectángulos de verdad siguen sin contorno.
+        val chicos = v.estadosPorFigura().map { e -> vista().also { it.loadEditableState(e) } }
+            .filter { it.medidaPrincipal()!!.altoCm < 30f }
+        assertEquals(2, chicos.size)
+        assertTrue(chicos.all { it.contornoPrincipalEnCm() == null })
+    }
+
     /** No falla: deja en los archivos de la app qué medidas del celular tienen varias figuras. */
     @Test
     fun informe_de_las_medidas_con_varias_figuras() {

@@ -100,7 +100,15 @@ data class FranjaTramo(
      * es una diagonal (Vna4: 43.3 de mocheta → 48.1 de lado).
      */
     val inclinacionIzq: Float = 0f,
-    val inclinacionDer: Float = 0f
+    val inclinacionDer: Float = 0f,
+    /**
+     * Cuánto baja su borde de arriba en cada costado respecto de su [alto], cuando es la franja de
+     * arriba de un tramo con el dintel inclinado (dictado el 2026-10-01, Fide: 0 a la izquierda y
+     * 31.2 a la derecha). Con esto su U de arriba es el dintel inclinado y cada U de costado tiene su
+     * propia medida. 0 y 0: el borde de arriba es recto.
+     */
+    val bajaIzq: Float = 0f,
+    val bajaDer: Float = 0f
 )
 
 /**
@@ -175,7 +183,13 @@ data class LadoNova(
     val estructuraIzq: Float = 0f,
     val estructuraDer: Float = 0f,
     /** Este lado es la curva con la que se resolvió una esquina (N-84), no una pared. */
-    val curvaDeEsquina: Boolean = false
+    val curvaDeEsquina: Boolean = false,
+    /**
+     * El radio de la curva del lado, para el curvado (N-102): uno para el lado entero, o uno por
+     * tramo (una S, cada arco su tramo; con signo, negativo hacia adentro). Vacío: el lado es recto.
+     * No cambia ninguna medida, solo dice qué se curva y cómo.
+     */
+    val radios: List<Float> = emptyList()
 ) {
     val hayMocheta: Boolean get() = altoHoja < alto
     val modulos: List<Modulo> get() = tramos.flatMap { it.modulos }

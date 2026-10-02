@@ -440,4 +440,30 @@ class ContornoEnTramosTest {
         // El puente, en el lado bajo, donde la corrediza todavía entra entera (N-67).
         assertEquals(listOf(55.1f), HerramientasDiseno.limitesDePuente(d, 0).map { Math.round(it * 10) / 10f })
     }
+
+    /** Fide (2026-10-01): 214.5 de ancho, 180 a la izquierda y 148.8 a la derecha, el dintel inclinado. */
+    private val fide = listOf(0f to 0f, 214.5f to 31.2f, 214.5f to 180f, 0f to 180f)
+
+    private fun modulosDelSistema(d: DisenoNova) =
+        d.tramos.flatMap { t -> t.franjas.filter { it.esSistema }.flatMap { it.modulos } }
+
+    @Test
+    fun `sin divisiones escritas el dintel inclinado de Fide sale con la regla de los 60`() {
+        val d = ContornoEnTramos.disenoDesdeContorno(fide, "apa", 0f)!!
+        assertEquals("fccf", modulosDelSistema(d).map { it.tipo }.joinToString(""))
+        assertTrue("el diseño salió recto", d.esIrregular)
+    }
+
+    /**
+     * Las divisiones escritas en Nova mandan, con hojas iguales (N-16; dictado el 2026-10-01): con 3,
+     * Fide se rehace desde su forma con `fcf` y el dintel sigue inclinado. Los anchos desiguales o el
+     * reparto entre varios tramos se hacen en novaDiseño.
+     */
+    @Test
+    fun `con divisiones escritas el dintel inclinado de Fide las respeta y conserva la forma`() {
+        val d = ContornoEnTramos.disenoDesdeContorno(fide, "apa", 0f, divisiones = 3)!!
+        assertEquals("fcf", modulosDelSistema(d).map { it.tipo }.joinToString(""))
+        assertTrue("el diseño salió recto", d.esIrregular)
+        assertEquals(214.5f, modulosDelSistema(d).sumOf { (it.ancho ?: 0f).toDouble() }.toFloat(), 0.05f)
+    }
 }

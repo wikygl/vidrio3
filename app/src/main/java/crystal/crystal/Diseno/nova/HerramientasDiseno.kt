@@ -276,8 +276,11 @@ object HerramientasDiseno {
         val mochetaAbajo = !deAbajo.esSistema && deArriba.esSistema
         val arriba = if (mochetaAbajo) y else y - altoPuente
         val inicio = iniciosDeTramos(d, anchoParante)[indiceTramo]
-        return listOf(arriba + 0.05f, arriba + altoPuente / 2f, arriba + altoPuente - 0.05f)
-            .mapNotNull { anchoDelVanoEn(puntos, it, inicio, inicio + t.ancho) }.maxOrNull()
+        fun ancho(yy: Float) = anchoDelVanoEn(puntos, yy, inicio, inicio + t.ancho)
+        // Sus dos cantos en el canto mismo (ver [enElBorde]): contra una pendiente, el más largo.
+        return listOfNotNull(
+            enElBorde(::ancho, arriba, 1f), ancho(arriba + altoPuente / 2f), enElBorde(::ancho, arriba + altoPuente, -1f)
+        ).maxOrNull()?.coerceAtMost(t.ancho)
     }
 
     /** El diseño con el parante [indice] dejado como dice [opcion]. */
@@ -483,11 +486,33 @@ object HerramientasDiseno {
 
     /** Lo más a la izquierda y lo más a la derecha que llega el vano en la banda [techo]..[piso]. */
     private fun extensionEnBanda(puntos: List<Pair<Float, Float>>, techo: Float, piso: Float, xIni: Float, xFin: Float): Pair<Float, Float>? {
-        val ys = (listOf(techo + 0.05f, (techo + piso) / 2f, piso - 0.05f) +
+        val ys = (listOf((techo + piso) / 2f) +
             puntos.map { it.second }.filter { it > techo + 0.05f && it < piso - 0.05f }.flatMap { listOf(it - 0.05f, it + 0.05f) })
-        val tramos = ys.mapNotNull { extensionEn(puntos, it, xIni, xFin) }
+        // Los dos bordes, en el borde mismo (ver [enElBorde]).
+        val tramos = ys.mapNotNull { extensionEn(puntos, it, xIni, xFin) } +
+            listOfNotNull(extensionEnElBorde(puntos, techo, 1f, xIni, xFin), extensionEnElBorde(puntos, piso, -1f, xIni, xFin))
         if (tramos.isEmpty()) return null
         return tramos.minOf { it.first } to tramos.maxOf { it.second }
+    }
+
+    /**
+     * Lo que da una medida del vano justo en el borde horizontal [y] de una pieza que sigue hacia
+     * [adentro] (1 hacia abajo, −1 hacia arriba). Se mide a 0.05 y a 0.55 adentro y se prolonga la
+     * recta hasta el borde: contra una pendiente es el canto entero, el más largo de la pieza cortada
+     * en ángulo (dictado el 2026-10-01: en el vano de Fide al revés el puente y la U de la mocheta
+     * miden 261.6, y medidos 0.05 adentro daban 261.3). En un escalón la medida no cambia dentro de
+     * la pieza y queda lo de antes; un salto brusco en ese medio centímetro no se prolonga.
+     */
+    private fun enElBorde(medida: (Float) -> Float?, y: Float, adentro: Float): Float? {
+        val cerca = medida(y + adentro * 0.05f) ?: return null
+        val lejos = medida(y + adentro * 0.55f) ?: return cerca
+        return if (abs(cerca - lejos) <= DESCUADRE_CM) cerca + (cerca - lejos) * 0.1f else cerca
+    }
+
+    private fun extensionEnElBorde(puntos: List<Pair<Float, Float>>, y: Float, adentro: Float, xIni: Float, xFin: Float): Pair<Float, Float>? {
+        val izq = enElBorde({ extensionEn(puntos, it, xIni, xFin)?.first }, y, adentro) ?: return null
+        val der = enElBorde({ extensionEn(puntos, it, xIni, xFin)?.second }, y, adentro) ?: return null
+        return izq.coerceAtLeast(xIni) to der.coerceAtMost(xFin)
     }
 
     /**

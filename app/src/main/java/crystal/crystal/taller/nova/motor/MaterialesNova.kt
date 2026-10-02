@@ -5,9 +5,30 @@ import crystal.crystal.taller.nova.NovaCalculos
 /** G-01: en las listas va primero lo horizontal, después lo diagonal, al final lo vertical. */
 enum class Orientacion { HORIZONTAL, DIAGONAL, VERTICAL }
 
-data class Pieza(val medida: Float, val cantidad: Int, val orientacion: Orientacion = Orientacion.HORIZONTAL)
+/**
+ * Un trozo curvo de una pieza (N-102): su largo sobre un arco de [radio]. El radio lleva signo: en
+ * una S, negativo es la panza hacia adentro.
+ */
+data class Arco(val largo: Float, val radio: Float)
 
-data class Vidrio(val ancho: Float, val alto: Float, val cantidad: Int = 1)
+data class Pieza(
+    val medida: Float,
+    val cantidad: Int,
+    val orientacion: Orientacion = Orientacion.HORIZONTAL,
+    /** El tramo del lado donde va; −1 si es del lado entero. Sirve para saber en qué arco se curva. */
+    val tramo: Int = -1,
+    /** Si va curvada (N-102), sus trozos, cada uno sobre su arco. Vacío: recta. */
+    val curva: List<Arco> = emptyList()
+)
+
+data class Vidrio(
+    val ancho: Float,
+    val alto: Float,
+    val cantidad: Int = 1,
+    val tramo: Int = -1,
+    /** Si va curvado, por su ancho (N-102). */
+    val curva: List<Arco> = emptyList()
+)
 
 /** Cómo se llama el riel superior (N-52, N-52b). */
 enum class RielSuperior(val etiqueta: String) {
@@ -51,6 +72,23 @@ data class MaterialesNova(
         hache = hache + o.hache, parante = parante + o.parante,
         falsoPuente = falsoPuente + o.falsoPuente, vidrios = vidrios + o.vidrios
     )
+
+    /** Las mismas piezas, cambiadas una por una (para marcar su tramo o su curva). */
+    fun cadaPieza(p: (Pieza) -> Pieza, vidrio: (Vidrio) -> Vidrio) = copy(
+        u = u.map(p), puente = puente.map(p), riel = riel.map(p), rielSuperior = rielSuperior.map(p),
+        dobleCorrediza = dobleCorrediza.map(p), portafelpa = portafelpa.map(p), tee = tee.map(p),
+        tope = tope.map(p), hache = hache.map(p), parante = parante.map(p),
+        falsoPuente = falsoPuente.map(p), vidrios = vidrios.map(vidrio)
+    )
+
+    /** Todo es del tramo [i] (lo que se calculó como un sistema aparte dentro de él). */
+    fun enTramo(i: Int) = cadaPieza({ it.copy(tramo = i) }, { it.copy(tramo = i) })
+
+    /** Si algo de la ventana va curvado (N-102). */
+    val hayCurva: Boolean
+        get() = vidrios.any { it.curva.isNotEmpty() } ||
+            listOf(u, puente, riel, rielSuperior, dobleCorrediza, portafelpa, tee, tope, hache, parante, falsoPuente)
+                .any { l -> l.any { it.curva.isNotEmpty() } }
 
     companion object {
         /**

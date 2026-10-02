@@ -224,7 +224,28 @@ object DesdeDiseno {
             val geo = if (conForma) HerramientasDiseno.geometriaDeModulos(d, indice, k, puente.anchoParante) else emptyList()
             val incIzq = geo.firstOrNull()?.diagonalIzq?.takeIf { it > 0f && alto > 0f }?.let { it / alto } ?: 0f
             val incDer = geo.lastOrNull()?.diagonalDer?.takeIf { it > 0f && alto > 0f }?.let { it / alto } ?: 0f
-            FranjaTramo(f.esSistema || mods.any { it.corrediza }, alto, mods, anchosRect?.getOrNull(k), incIzq, incDer)
+            // La mocheta de arriba de un tramo con el dintel inclinado: cuánto baja su borde de arriba
+            // en cada costado respecto de su lado más alto, que es con el que se mide [alto].
+            val dintelInclinado = conForma && k == t.franjas.lastIndex && !f.esSistema && abs(t.caidaDerecha - t.caida) > 0.05f
+            // Y la mocheta de abajo de un tramo con el alféizar inclinado (invertido, el sistema
+            // cuelga del dintel recto, N-66): cuánto sube su borde de abajo en cada costado respecto de
+            // su punto más bajo (2026-10-01, el vano de Fide al revés). El motor lo trata igual.
+            fun piso(propio: Float, arriba: Float) = if (propio > 0f) arriba + propio else d.alto
+            val pisoIzq = piso(t.alto, t.caida)
+            val pisoDer = piso(t.altoDerecho, t.caidaDerecha)
+            val alfeizarInclinado = conForma && k == 0 && t.franjas.size > 1 && !f.esSistema && abs(pisoDer - pisoIzq) > 0.05f
+            val (bajaIzq, bajaDer) = when {
+                dintelInclinado -> {
+                    val arriba = d.caidaDeTramo(indice)
+                    (t.caida - arriba) to (t.caidaDerecha - arriba)
+                }
+                alfeizarInclinado -> {
+                    val abajo = maxOf(pisoIzq, pisoDer)
+                    (abajo - pisoIzq) to (abajo - pisoDer)
+                }
+                else -> 0f to 0f
+            }
+            FranjaTramo(f.esSistema || mods.any { it.corrediza }, alto, mods, anchosRect?.getOrNull(k), incIzq, incDer, bajaIzq, bajaDer)
         }
         // En un vano con forma, el alto de ESTE tramo (un escalón puede ser más bajo que la ventana):
         // es el que se reparten sus franjas en el motor.
@@ -234,9 +255,20 @@ object DesdeDiseno {
         val cortes = s.parantes.map { it + 1 }.filter { it in 1 until modulos.size }.distinct().sorted()
         val out = mutableListOf<Tramo>()
         var desde = 0
+        var x = 0f
         for (c in cortes + modulos.size) {
             val trozo = modulos.subList(desde, c)
-            out.add(Tramo(trozo, franjas = franjas, puente = puenteTramo, alto = altoTramo, caida = caidaTramo))   // sus paños de mocheta se reparten solos (N-62)
+            val anchoTrozo = trozo.sumOf { it.ancho.toDouble() }.toFloat()
+            // Con el dintel inclinado cada trozo baja lo suyo: la pendiente se reparte por donde cae
+            // (como el largo de un recto, dictado el 2026-10-01).
+            fun bajaEn(f: FranjaTramo, xx: Float) =
+                if (t.ancho > 0f) f.bajaIzq + (f.bajaDer - f.bajaIzq) * (xx / t.ancho).coerceIn(0f, 1f) else f.bajaIzq
+            val suyas = franjas.map { f ->
+                if (f.bajaIzq == 0f && f.bajaDer == 0f) f
+                else f.copy(bajaIzq = bajaEn(f, x), bajaDer = bajaEn(f, x + anchoTrozo))
+            }
+            out.add(Tramo(trozo, franjas = suyas, puente = puenteTramo, alto = altoTramo, caida = caidaTramo))   // sus paños de mocheta se reparten solos (N-62)
+            x += anchoTrozo + puente.anchoParante
             desde = c
         }
         return out

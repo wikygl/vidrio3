@@ -5800,6 +5800,16 @@ class SketchMedidasView @JvmOverloads constructor(
         if (triangulo != null && (composite == null || area(triangulo) > area(composite))) {
             return contornoDeTriangulo(triangulo).takeIf { it.size >= 3 }
         }
+        // Un rectángulo al que se le movió una esquina (Fide, 2026-10-01: 214.5 abajo, 180 a la
+        // izquierda y 148.8 a la derecha, el dintel inclinado) tampoco es una figura recortada: sin
+        // esto llegaba a Nova como su rectángulo y el diseño salía recto.
+        val cuadrilatero = elementos.filterIsInstance<Element.Shape>()
+            .filter { it.tool == Tool.RECTANGLE }
+            .mapNotNull { s -> contornoDeCuadrilatero(s)?.let { s to it } }
+            .maxByOrNull { area(it.first) }
+        if (cuadrilatero != null && (composite == null || area(cuadrilatero.first) > area(composite))) {
+            return cuadrilatero.second
+        }
         val elegido = composite ?: return null
         // Tres puntos ya son un vano: un triángulo recortado es una ventana como cualquier otra.
         val contorno = elegido.contours.firstOrNull()?.takeIf { it.size >= 3 } ?: return null
@@ -5827,6 +5837,27 @@ class SketchMedidasView @JvmOverloads constructor(
         // La fórmula es lineal: con los cm da los cm, sin pasar por la pantalla.
         val desarrollo = longitudMediaElipsePx(cuerda, flecha)
         return EsquinaMedida(listOf(LadoEsquina(desarrollo, desarrollo, alto, alto, 0f, flecha)), emptyList())
+    }
+
+    /**
+     * Las cuatro esquinas de un rectángulo al que se le movió alguna, en centímetros y referidas a la
+     * esquina de arriba a la izquierda de su caja (la Y hacia abajo, como los demás contornos).
+     *
+     * Null si sigue siendo un rectángulo: si ninguna esquina se aparta más de 2.5 de la de su caja es
+     * descuadre, no forma (N-06), y la medida va como siempre.
+     */
+    private fun contornoDeCuadrilatero(s: Element.Shape): List<Pair<Float, Float>>? {
+        if (s.tool != Tool.RECTANGLE) return null
+        val esquinas = listOf(s.topLeft, s.topRight, s.bottomRight, s.bottomLeft)
+        val x0 = esquinas.minOf { it.x }
+        val y0 = esquinas.minOf { it.y }
+        val cm = esquinas.map { pxToCm(it.x - x0) to pxToCm(it.y - y0) }
+        val ancho = cm.maxOf { it.first }
+        val alto = cm.maxOf { it.second }
+        if (ancho <= 0f || alto <= 0f) return null
+        val caja = listOf(0f to 0f, ancho to 0f, ancho to alto, 0f to alto)
+        val aparte = cm.zip(caja).maxOf { (p, q) -> kotlin.math.hypot(p.first - q.first, p.second - q.second) }
+        return cm.takeIf { aparte > EsquinaMedida.DESCUADRE }
     }
 
     /**
@@ -6075,8 +6106,16 @@ class SketchMedidasView @JvmOverloads constructor(
                 is Element.Group -> element.children.forEach { considerar(it) }
                 is Element.Shape -> when (element.tool) {
                     Tool.RECTANGLE -> {
-                        horizontal = maxOf(horizontal, element.widthCm, element.topCm, element.bottomCm)
-                        vertical = maxOf(vertical, element.heightCm, element.leftCm, element.rightCm)
+                        val cuadrilatero = contornoDeCuadrilatero(element)
+                        if (cuadrilatero != null) {
+                            // Con una esquina movida, el vano es la caja que lo contiene: un dintel
+                            // inclinado mide más que el ancho (Fide: 216.8 de dintel, 214.5 de ancho).
+                            horizontal = maxOf(horizontal, cuadrilatero.maxOf { it.first })
+                            vertical = maxOf(vertical, cuadrilatero.maxOf { it.second })
+                        } else {
+                            horizontal = maxOf(horizontal, element.widthCm, element.topCm, element.bottomCm)
+                            vertical = maxOf(vertical, element.heightCm, element.leftCm, element.rightCm)
+                        }
                     }
                     Tool.TRIANGLE, Tool.CIRCLE -> {
                         horizontal = maxOf(horizontal, element.widthCm)

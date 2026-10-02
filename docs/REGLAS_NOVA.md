@@ -178,6 +178,59 @@ vidrios, U y tees son otra cosa (G-05).
   volúmenes distintos de plano, la misma lógica **por lado**. En circular, la misma lógica con la
   de la forma. Lo que falte se completa.
 - N-21 ✅ 189.6 con 3 divisiones era error del ejemplo o decisión del usuario (G-03).
+- **Un vano con forma desde Nova** (2026-10-01, Fide: dintel inclinado 214.5 × 180, 148.8 a la
+  derecha). Respuestas del usuario:
+  1. **En Nova se cambian la hoja y las divisiones**, con hojas iguales como en la regla de los 60
+     (N-15, N-16): el diseño se rehace solo desde la forma, sin preguntar. Lo que no es hojas
+     iguales —Nova desigual, anchos distintos, el reparto entre varios tramos—, aunque el vano tenga
+     un solo tramo, se hace en novaDiseño. (Una primera lectura bloqueaba también la hoja y la
+     cantidad de divisiones; corregido el mismo día.)
+  2. **El ancho y el alto de un vano con lados desiguales** (más de 2.5, N-06, que es cuando viaja el
+     contorno) no se editan en Nova: se cambian en novaDiseño. Dentro del descuadre el vano es
+     rectangular y se edita normal.
+  Si se cambian el ancho o el alto, Calcular ya no ofrece "descartar" (la ventana automática no
+  conoce el contorno y salía rectangular): ofrece abrir novaDiseño o conservar el diseño. Pendiente en el motor único: la ventana automática
+  (`VentanaAutomatica`) no conoce el contorno; el diseño desde la forma sale de `ContornoEnTramos`
+  y entra al motor por el lector único.
+- **La mocheta bajo un dintel inclinado** (dictado el 2026-10-01, Fide): la **U de arriba** es el
+  dintel, el largo que trae el diseño de la medida (√(214.5² + 31.2²) = 216.7, truncado como todo,
+  aceptado por el usuario; si el tramo se parte, cada parte lleva lo suyo, como un recto); la de
+  abajo, sobre el puente, recta (con Múltiple no va). **Cada U de costado con su propia medida**: la
+  mocheta menos lo que baja el dintel de ese lado (47.4 y 16.2). En INA, la U de cada borde con la
+  mocheta de su lado. **Cada tee mide lo que baja el dintel donde queda**: con dos paños, el lado
+  alto menos la mitad de lo que baja (Fide: 48.9 − 1.5 − 31.2 / 2 = 31.8). **Los vidrios de mocheta**:
+  cada paño es el rectángulo que lo contiene (N-99), mismo ancho y el alto de su lado más alto
+  (Fide: 106.7 × 48.4 y 106.7 × 32.8). **En INA** lo que llega al dintel mide lo suyo en su lugar:
+  U parante de cada costado (177 y 145.8), la U de arriba por el dintel (216.7), cada fijo con el alto
+  de su lado más alto (178.3 y 154.9) y la mocheta, el rectángulo que la contiene (52.4 − 7.8 = 44.6).
+  **La U parante bajo la U inclinada** (dictado el mismo día): se corta en ángulo y mide su canto
+  más largo, el que queda más alto en el ancho de la U, menos una U. Del lado bajo el dintel sube
+  hacia adentro y la pieza sale más larga que restando dos U: INA 146 (antes 145.8), mocheta APA 16.4
+  (antes 16.2). Del lado alto el canto largo es el de la pared y queda lo de siempre: INA 177
+  (corregido por el usuario; contando la U inclinada más gruesa en vertical, u / coseno, salía 176.9).
+  **El alféizar inclinado** (el vano de Fide al revés, 261.6 × 172, 115.2 a la derecha; dictado el
+  mismo día). El sistema es un rectángulo (N-66): con el dintel recto y el alféizar inclinado cuelga
+  del dintel y la mocheta va abajo, invertido, con tubo (N-03). Antes iba abajo, sobre el alféizar
+  inclinado. La mocheta de abajo lleva lo mismo que la de arriba bajo el dintel: abajo la U inclinada
+  (267.4), arriba la recta sobre el puente, cada costado su medida (el de la punta no lleva), paños
+  del mismo ancho y distinto alto, tee en su lugar; en INA, la U de abajo por el alféizar, cada fijo y
+  cada U parante con lo suyo. **El puente y la U recta de la mocheta miden su canto largo**, el que
+  toca el sistema: 261.6, el ancho entero (corregido por el usuario: se medían 0.05 adentro de la
+  pendiente y daban 261.3). Lo mismo para todo lo que el vano mide en el borde de una franja contra
+  una pendiente (`HerramientasDiseno.enElBorde`); en un escalón no cambia nada. Prueba `DintelInclinadoTest`.
+  **Los dos bordes inclinados** (2026-10-02, 88.4 × 174.2 con 114.4 a la derecha): sin borde recto
+  donde apoyar el sistema va en **bandera** con tubo: mocheta abajo con lo que sube el alféizar
+  (27.1), el sistema sobre lo más alto del alféizar y arriba la mocheta con el resto (32.7). Cada
+  mocheta sigue su borde como las de arriba y abajo; donde una llega en punta al costado no lleva U.
+  ✅ Respuesta del usuario (mismo día): **el sistema se cuadra donde cabe entero un rectángulo,
+  dejando de lado la regla de bandera** (el reparto mitad y mitad de N-34). Los 110 de su dibujo los
+  hizo a mano en novaDiseño, bajando la mocheta de abajo y subiendo la de arriba hasta que el sistema
+  cupo; no salen de la regla. Con la hoja de siempre el rectángulo es lo que mide el lado bajo
+  (114.4); si la hoja escrita es menor, se apoya sobre lo más alto del alféizar y lo que sobra va a la
+  mocheta de arriba, que también cumple.
+  ✅ La mocheta INA bajo un borde inclinado es el rectángulo que la contiene (N-99), y el vano al
+  revés (261.6) lleva las 5 hojas de la regla de los 60: confirmados por el usuario el 2026-10-02.
+  Prueba `DintelInclinadoTest`.
 - N-22 ✅ **Orden preestablecido**: 2 `fc` · 3 `fcf` · 4 `fccf` · 5 `fcfcf` · 6 `fcffcf` · 7
   `fcfcfcf` · 8 `fccffccf`…; lo demás depende de la modulación.
 - N-23 ✅ Por modulación (fijos / corredizas): clásico según el orden · full fijos todas/0 · full
@@ -498,6 +551,63 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 - **La ventana curva dibujada con su figura** (la plantilla de la curva vista de frente) llega a Nova
   como curva, con su desarrollo de ancho (N-08). Antes llegaba como el rectángulo de su cuerda: en
   Pipa, 120 de cuerda con flecha 40.2, todo el aluminio horizontal salía de 120 en lugar de 158.9.
+- N-102 ✅ **El curvado** (dictado el 2026-10-01). Nova curva, antes de instalarse, pasa por la
+  roladora: cada perfil **horizontal** lleva su **cuerda** (C) y su **flecha** (F), calculadas con
+  el arco de la pieza (su medida) sobre el radio de la curva medida, y su **ampliación**: la roladora
+  sujeta el perfil **5 cm en cada punta**, así que se corta la medida + 10 (108 → 118) y, curvado,
+  se recorta. Lo vertical no se curva. En pantalla va en la vista completa (el ▼ de "Cálculos"):
+
+  ```
+  108 = 1
+  C = 97
+  F = 16.1
+  Ampliación 118 = 1
+  ```
+
+  (números del ejemplo del usuario, ilustrativos). **Los vidrios también** (dictado el mismo día):
+  su ancho es el arco y llevan C y F, **sin ampliación** (`60.4 x 126.9 = 4`, `C = 59.4`,
+  `F = 4.5` en radio 100). Respuestas del usuario (mismo día):
+  1. **El radio es el de la línea medida.** Los perfiles van como 1 cm más adentro, pero correrlos en
+     paralelo no cambia nada y, si cambia, es preferible que la medida quede grande.
+  2. **Se archiva con la ampliación** y con la marca **curvo**, para saber a dónde mandar la pieza
+     después del corte: `118 = 1 curvo` (el vidrio, `60.4 x 126.9 = 4 curvo`, sin ampliación). Va en
+     su misma lista (u-13, puente…), porque sale de la misma barra; la marca queda en la lista
+     archivada y aparece en la ficha y en la etiqueta del optimizador (`Vna5 pipa,u-13 curvo`).
+  3. **Las esquinas curvas de L, C y serie** se tratan igual: el lado de la curva se curva con el
+     radio de su desarrollo y su cuerda; las paredes rectas, no.
+  4. **En una S, cada pieza con el radio del arco donde va.** Cada arco es su tramo; el puente, el
+     riel o el vidrio de un tramo toman su arco, y lo que pasa por varios (la U de lado a lado) se
+     curva por trozos, cada uno con su largo, C, F y hacia dónde va la panza. Si las divisiones se
+     cambiaron y los tramos ya no son los arcos, se usa la curva equivalente.
+
+  **Lista para el curvador o el horno** (Taller → Herramientas → vidrios curvos, mismo día): junta
+  los vidrios archivados como curvos de los proyectos que se elijan, con desarrollo, alto, cantidad,
+  cuerda, flecha, radio, tipo de vidrio y ventana, y se comparte como texto. Por eso cada pieza curva
+  se archiva también con su cuerda y su flecha (`60.4 x 126.9 = 4 curvo C59.4 F4.5`; las de varios
+  arcos, solo `curvo`). Código: `optimizadores/ListaVidriosCurvos.kt`, prueba `ListaVidriosCurvosTest`.
+
+  **Las caras del vidrio curvo** (dictado el mismo día). Un reflejante tiene color por una cara y
+  espejo por la otra: al curvarlo una queda cóncava y la otra convexa, y en una S cambia de un arco
+  al otro.
+  1. **La dirección se toma desde adentro.** Fuera del 3D todo se mide desde adentro (en 3D la medida
+     ya lo dice): una flecha negativa de Medidas es una panza hacia adentro. Escrita a mano en Nova, y
+     en la curva de una esquina de L, C o serie, hacia afuera.
+  2. **Las caras se preguntan al archivar**, porque Medidas no sabe nada del vidrio: si la ventana
+     lleva vidrio curvo, el diálogo pregunta si tiene caras. Sin caras, el vidrio se voltea y no pasa
+     nada (`[sin caras]`). Con caras, cuál es la especial (espejo) y si es la que se ve desde adentro.
+  3. **Se dice cóncava o convexa** (el curvador lo entiende, y si no, lo aprende). Panza hacia afuera:
+     la cara de afuera queda convexa y la de adentro cóncava; hacia adentro, al revés.
+     `60 x 120 = 2 curvo C59.1 F4.4 afuera [espejo convexa]`. Dos vidrios iguales con la cara al
+     revés no se suman; la lista los ordena por cara, y la etiqueta de planchas y la ficha lo llevan.
+     Los perfiles llevan hacia dónde va su panza (`u-13 curvo afuera`), por la roladora.
+  4. **Cambiar de cara sin recalcular** (mismo día): en vidrios curvos, el toque largo en un vidrio
+     de la lista lo muestra en planta (interior abajo, exterior arriba, la panza hacia donde va).
+     Encima del arco está el nombre de la cara de afuera (espejo o color); al tocarlo pasa a la otra,
+     la clasificación cambia (cóncava ↔ convexa) y se guarda en la pieza archivada del proyecto.
+     Código: `VistaCaraCurvo.kt`, `ListaVidriosCurvos.alternarCara`.
+
+  Código: `motor/CurvadoNova.kt` (las piezas llevan su tramo, `LadoNova.radios`), prueba
+  `CurvadoNovaTest`. Las medidas del motor no cambian: solo se marca qué se curva.
 
 ---
 

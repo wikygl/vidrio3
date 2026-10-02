@@ -1,87 +1,331 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Vidrios curvos, con el estilo de Corte Planchas: cabecera Crystal, el listado a la izquierda y
+     las medidas a la derecha; abajo, el dibujo del vidrio. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:orientation="vertical"
+    tools:context=".optimizadores.VidrioCurvoActivity">
 
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/contenedorDatos"
+    <!-- Cabecera igual a Corte Planchas -->
+    <LinearLayout
+        android:id="@+id/lyCabeza"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        app:layout_constraintTop_toTopOf="parent">
+        android:background="@color/color"
+        android:orientation="horizontal"
+        android:paddingStart="4.5dp"
+        android:paddingTop="4.5dp"
+        android:paddingEnd="4.5dp"
+        android:paddingBottom="4.5dp">
 
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.6"
+            android:orientation="vertical">
 
-            <androidx.appcompat.widget.AppCompatEditText
-                android:id="@+id/etDesarrollo"
-                android:layout_width="0dp"
+            <TextView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="Desarrollo"
-                android:inputType="numberDecimal" />
+                android:layout_marginBottom="-6dp"
+                android:text="@string/crystal"
+                android:textColor="@color/blanco"
+                android:textSize="24sp" />
 
-            <androidx.appcompat.widget.AppCompatEditText
-                android:id="@+id/etCuerda"
-                android:layout_width="0dp"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="Cuerda"
-                android:inputType="numberDecimal" />
+                android:layout_gravity="end"
+                android:text="Vidrios Curvos"
+                android:textColor="@color/blanco"
+                tools:ignore="HardcodedText,TextContrastCheck" />
         </LinearLayout>
 
+        <!-- Enviar la lista: chat de Crystal o compartir (WhatsApp, correo…) -->
+        <ImageButton
+            android:id="@+id/btMensajes"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_margin="1.8dp"
+            android:layout_weight="1"
+            android:background="@color/color"
+            android:contentDescription="@string/todo"
+            app:srcCompat="@drawable/ic_mensajes"
+            tools:ignore="TouchTargetSizeCheck" />
+
+        <!-- Calculadora flotante, como en los optimizadores -->
+        <ImageButton
+            android:id="@+id/btCalculadora"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_margin="1.8dp"
+            android:layout_weight="1"
+            android:background="@color/color"
+            android:contentDescription="@string/todo"
+            app:srcCompat="@drawable/ic_clcv"
+            tools:ignore="TouchTargetSizeCheck" />
+    </LinearLayout>
+
+    <!-- Cuerpo: col1 (listado) + col2 (medidas) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:baselineAligned="false"
+        android:orientation="horizontal">
+
+        <!-- Col 1: los vidrios curvos de los proyectos -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_width="0dp"
+            android:layout_height="236dp"
+            android:layout_marginStart="9dp"
+            android:layout_marginTop="9dp"
+            android:layout_marginEnd="4.5dp"
+            android:layout_weight="1.27"
+            android:background="@drawable/corner"
+            android:orientation="vertical">
 
-            <androidx.appcompat.widget.AppCompatEditText
-                android:id="@+id/etFlecha"
-                android:layout_width="0dp"
+            <TextView
+                android:id="@+id/tvListado"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="Flecha"
-                android:inputType="numberDecimal" />
+                android:background="@drawable/corner2"
+                android:backgroundTint="@color/color"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="Vidrios curvos"
+                android:textColor="@color/blanco"
+                tools:ignore="HardcodedText,TouchTargetSizeCheck,TextContrastCheck" />
 
-            <androidx.appcompat.widget.AppCompatEditText
-                android:id="@+id/etLargo"
-                android:layout_width="0dp"
+            <TextView
+                android:id="@+id/tvProyectos"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="Largo"
-                android:inputType="numberDecimal" />
+                android:background="@drawable/cornere"
+                android:gravity="center"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:text="Toque para elegir proyectos"
+                android:textSize="11sp"
+                tools:ignore="HardcodedText,SmallSp" />
+
+            <ListView
+                android:id="@+id/listaCurvos"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
         </LinearLayout>
 
-        <androidx.appcompat.widget.AppCompatButton
-            android:id="@+id/btDibujar"
+        <!-- Col 2: las medidas del vidrio que se dibuja -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="236dp"
+            android:layout_marginStart="4.5dp"
+            android:layout_marginTop="9dp"
+            android:layout_marginEnd="9dp"
+            android:layout_weight="1"
+            android:background="@drawable/corner"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/corner2"
+                android:backgroundTint="@color/color"
+                android:gravity="center"
+                android:text="Medidas"
+                android:textColor="@color/blanco"
+                tools:ignore="HardcodedText,TextContrastCheck" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="3dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/botoncircular"
+                        android:paddingStart="6dp"
+                        android:text="Desarrollo"
+                        tools:ignore="HardcodedText,RtlSymmetry" />
+
+                    <EditText
+                        android:id="@+id/etDesarrollo"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:autofillHints="@string/todo"
+                        android:backgroundTint="@color/color"
+                        android:inputType="numberDecimal"
+                        tools:ignore="LabelFor,TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="3dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/botoncircular"
+                        android:paddingStart="6dp"
+                        android:text="Cuerda"
+                        tools:ignore="HardcodedText,RtlSymmetry" />
+
+                    <EditText
+                        android:id="@+id/etCuerda"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:autofillHints="@string/todo"
+                        android:backgroundTint="@color/celeste"
+                        android:inputType="numberDecimal"
+                        tools:ignore="LabelFor,TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="3dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/botoncircular"
+                        android:paddingStart="6dp"
+                        android:text="Flecha"
+                        tools:ignore="HardcodedText,RtlSymmetry" />
+
+                    <EditText
+                        android:id="@+id/etFlecha"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:autofillHints="@string/todo"
+                        android:backgroundTint="@color/color"
+                        android:inputType="numberDecimal"
+                        tools:ignore="LabelFor,TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="3dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/botoncircular"
+                        android:paddingStart="6dp"
+                        android:text="Alto"
+                        tools:ignore="HardcodedText,RtlSymmetry" />
+
+                    <EditText
+                        android:id="@+id/etLargo"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:autofillHints="@string/todo"
+                        android:backgroundTint="@color/celeste"
+                        android:inputType="numberDecimal"
+                        tools:ignore="LabelFor,TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Botones de acción -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:layout_marginEnd="9dp"
+                android:layout_marginBottom="6dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btLimpiar"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_marginEnd="4.5dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/color"
+                    android:text="@string/limpiar"
+                    android:textColor="@color/blanco"
+                    tools:ignore="ButtonStyle,TouchTargetSizeCheck,TextContrastCheck" />
+
+                <Button
+                    android:id="@+id/btDibujar"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="4.5dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/botoncircular"
+                    android:backgroundTint="@color/verde"
+                    android:text="Dibujar"
+                    android:textColor="@color/blanco"
+                    tools:ignore="ButtonStyle,HardcodedText,TouchTargetSizeCheck,TextContrastCheck" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- El dibujo del vidrio -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_margin="9dp"
+        android:layout_weight="1"
+        android:background="@drawable/corner"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvMensaje"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="#2E7D32"
-            android:text="GENERAR DIBUJO"
-            android:textColor="#FFFFFF" />
-    </androidx.appcompat.widget.LinearLayoutCompat>
+            android:background="@drawable/corner2"
+            android:backgroundTint="@color/color"
+            android:gravity="center"
+            android:padding="2dp"
+            android:text="Dibujo"
+            android:textColor="@color/blanco"
+            tools:ignore="HardcodedText,TextContrastCheck" />
 
-    <androidx.appcompat.widget.AppCompatTextView
-        android:id="@+id/tvMensaje"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:padding="4dp"
-        android:textColor="#E53935"
-        android:textSize="13sp"
-        app:layout_constraintTop_toBottomOf="@+id/contenedorDatos" />
+        <!-- En planta: interior abajo, exterior arriba; tocar la cara de afuera la cambia. -->
+        <crystal.crystal.optimizadores.VistaCaraCurvo
+            android:id="@+id/vistaCaras"
+            android:layout_width="match_parent"
+            android:layout_height="150dp" />
 
-    <crystal.crystal.optimizadores.VistaVidrioCurvo
-        android:id="@+id/vistaCurvo"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="#FDFDFD"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvMensaje" />
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <crystal.crystal.optimizadores.VistaVidrioCurvo
+            android:id="@+id/vistaCurvo"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#FDFDFD" />
+    </LinearLayout>
+</LinearLayout>

@@ -30,8 +30,12 @@ object MotorNova {
         /** El ancho de su rectángulo en un vano con forma (N-96); null = el del tramo. */
         val ancho: Float? = null,
         /** Cuánto se alarga cada costado inclinado por cm de alto (ver [FranjaTramo.inclinacionIzq]). */
-        val inclinacionIzq: Float = 0f, val inclinacionDer: Float = 0f
-    )
+        val inclinacionIzq: Float = 0f, val inclinacionDer: Float = 0f,
+        /** Cuánto baja su borde de arriba en cada costado: el dintel inclinado (ver [FranjaTramo.bajaIzq]). */
+        val bajaIzq: Float = 0f, val bajaDer: Float = 0f
+    ) {
+        val dintelInclinado: Boolean get() = kotlin.math.abs(bajaDer - bajaIzq) > 0.05f
+    }
 
     /** Una franja de sistema que no es la principal (N-88): se calcula como un sistema propio. */
     private data class SistemaExtra(val alto: Float, val modulos: List<Modulo>)
@@ -67,7 +71,7 @@ object MotorNova {
 
     fun calcular(v: VentanaNova): MaterialesNova {
         var total = MaterialesNova()
-        v.lados.forEach { total += lado(v, it) }
+        v.lados.forEach { total += CurvadoNova.curvar(lado(v, it), it) }
         // Parante de esquina (L, C, serie): el alto mayor de los dos lados, uno por esquina.
         if (v.esquinero != null) {
             val esquinas = v.lados.zipWithNext().filter { (a, _) -> a.derecha.esEsquina }
@@ -150,7 +154,7 @@ object MotorNova {
         val suma = mochetas.sumOf { it.value.alto.toDouble() }.toFloat()
         val lista = mochetas.map { (i, f) ->
             val parte = if (suma > 0f) disponible * f.alto / suma else disponible / mochetas.size
-            Mocheta(if (i < iSistema) Ubicacion.ABAJO else Ubicacion.ARRIBA, parte - h * cargas[i], parte, f.ancho, f.inclinacionIzq, f.inclinacionDer)
+            Mocheta(if (i < iSistema) Ubicacion.ABAJO else Ubicacion.ARRIBA, parte - h * cargas[i], parte, f.ancho, f.inclinacionIzq, f.inclinacionDer, f.bajaIzq, f.bajaDer)
         }
         // Mismo orden que las del modelo (la de arriba primero), para que las listas salgan iguales.
         val ordenadas = lista.sortedBy { it.ubicacion.ordinal }
@@ -206,7 +210,7 @@ object MotorNova {
                 if (apa) l.tramos.forEachIndexed { i, t ->
                     // La franja lleva U abajo y arriba; con Múltiple (o gorrito) la de arriba la trae el puente.
                     val n = if (vert[i].hayMocheta && (t.puente ?: v.puente).esMultipleOGorrito) 1 else 2
-                    u.add(Pieza(t.ancho, n))
+                    u.add(Pieza(t.ancho, n, tramo = i))
                 } else u.add(Pieza(l.anchoCalculo + aumentoLado, 2))
             }
             // En inaparente el fijo va de piso a techo: lleva su U arriba y abajo también en invertido
@@ -215,9 +219,8 @@ object MotorNova {
             // Un fijo contra un lado inclinado: su U de fijo es su borde de abajo, "como 2 o 3 cm"
             // (dictado el 2026-09-26, Vna4: 2.7 + su parte de cruce), no el ancho del módulo.
             apa -> rachasDeFijos(ms, cruzaParantes = false).forEach { racha ->
-                u.add(Pieza(racha.sumOf { m ->
-                    (m.inclinado?.let { m.u - it.faltaAbajo } ?: (m.u + aumentoPorHoja)).toDouble()
-                }.toFloat(), 1))
+                val trozos = racha.map { m -> m.tramo to (m.inclinado?.let { m.u - it.faltaAbajo } ?: (m.u + aumentoPorHoja)) }
+                u.add(Pieza(trozos.sumOf { it.second.toDouble() }.toFloat(), 1, curva = CurvadoNova.arcos(l, trozos)))
             }
             // INA con corredizas: la U de cada borde (ver uDelBorde), que reemplaza a la U de fijos
             // y a la U superior e inferior de lado a lado.
@@ -227,7 +230,9 @@ object MotorNova {
                 uDelBorde(v, l, ms, vert, arriba = true, aumentoPorHoja).forEach { u.add(Pieza(it, 1)) }
             }
             else -> rachasDeFijos(ms, cruzaParantes = true).forEach { racha ->
-                u.add(Pieza(racha.sumOf { (it.u + aumentoPorHoja).toDouble() }.toFloat(), 1))
+                // La racha puede cruzar parantes: en una S, cada trozo se curva en su arco.
+                val trozos = racha.map { it.tramo to (it.u + aumentoPorHoja) }
+                u.add(Pieza(trozos.sumOf { it.second.toDouble() }.toFloat(), 1, curva = CurvadoNova.arcos(l, trozos)))
             }
         }
         // Antes, en INA: U de fijos por racha (sin ellas en invertido) y además
@@ -245,7 +250,19 @@ object MotorNova {
             // Formas la mocheta del tramo 2 mide 151.7, no el ancho del tramo.
             l.tramos.forEachIndexed { i, t ->
                 val porTramoN = if ((t.puente ?: v.puente).esMultipleOGorrito) 1 else 2
-                vert[i].mochetas.forEach { m -> u.add(Pieza(m.ancho ?: t.ancho, porTramoN)) }
+                vert[i].mochetas.forEach { m ->
+                    val w = m.ancho ?: t.ancho
+                    if (!m.dintelInclinado) {
+                        u.add(Pieza(w, porTramoN, tramo = i))
+                        return@forEach
+                    }
+                    // Con el dintel inclinado (dictado el 2026-10-01, Fide): la U de arriba es el
+                    // dintel, su largo sobre este tramo (en un tramo solo, el de la medida; partido en
+                    // tramos, cada uno su parte, como en uno recto). La de abajo, sobre el puente,
+                    // sigue recta, y con Múltiple o gorrito no va (la trae el puente).
+                    if (porTramoN == 2) u.add(Pieza(w, 1, tramo = i))
+                    u.add(Pieza(kotlin.math.hypot(w, m.bajaDer - m.bajaIzq), 1, Orientacion.DIAGONAL, tramo = i))
+                }
             }
         }
 
@@ -281,8 +298,8 @@ object MotorNova {
                         // corredizo y la horizontal (− u − 0.2, como N-43); la de abajo entre la
                         // horizontal y la U de fijos (− 2u).
                         // Una cara en 0: la columna sigue más allá del puente o del riel, que la cierra.
-                        if (col.caraArriba > 0f) u.add(Pieza(col.caraArriba + us, 1))
-                        if (col.caraAbajo > 0f) u.add(Pieza(col.caraAbajo + us, 1))
+                        if (col.caraArriba > 0f) u.add(Pieza(col.caraArriba + us, 1, tramo = i))
+                        if (col.caraAbajo > 0f) u.add(Pieza(col.caraAbajo + us, 1, tramo = i))
                         u.add(Pieza(col.alto, 1, Orientacion.VERTICAL))
                         (col.paredArriba - (us + 0.2f)).takeIf { it > 0f }?.let { u.add(Pieza(it, 1, Orientacion.VERTICAL)) }
                         (col.paredAbajo - 2 * us).takeIf { it > 0f }?.let { u.add(Pieza(it, 1, Orientacion.VERTICAL)) }
@@ -290,12 +307,19 @@ object MotorNova {
                 }
                 // La U en la cara horizontal del corte, sobre el fijo (dictado el 2026-09-26): del
                 // largo de su U de fijo. El fijo corredizo solo llega hasta donde empieza el corte.
-                ms.filter { !it.corrediza && it.recorteArriba > 0f }.forEach { f -> u.add(Pieza(f.u, 1)) }
+                ms.filter { !it.corrediza && it.recorteArriba > 0f }.forEach { f -> u.add(Pieza(f.u, 1, tramo = f.tramo)) }
             } else {
                 // INA: solo los fijos de los bordes de la ventana contra muro, acople o libre.
                 // Cada uno con el alto de su tramo: en un vano escalonado el de la punta puede ser más bajo.
-                if (!ms.first().corrediza && esMuro(l.izquierda)) u.add(Pieza(altoDe(l, ms.first()) - 2 * us, 1, Orientacion.VERTICAL))
-                if (!ms.last().corrediza && esMuro(l.derecha)) u.add(Pieza(altoDe(l, ms.last()) - 2 * us, 1, Orientacion.VERTICAL))
+                // Con el dintel inclinado, cada costado con su propia medida, por su canto más largo
+                // (2026-10-01, ver [arribaDeLaUParante]).
+                // Lo mismo abajo con el alféizar inclinado. Recto, cada borde quita una U.
+                fun bordes(t: Tramo, izquierdo: Boolean) =
+                    listOf(dintelDe(t), alfeizarDe(t)).sumOf { (a, b) -> arribaDeLaUParante(a, b, t.ancho, us, izquierdo).toDouble() }.toFloat()
+                if (!ms.first().corrediza && esMuro(l.izquierda))
+                    u.add(Pieza(altoDe(l, ms.first()) - bordes(l.tramos.first(), true), 1, Orientacion.VERTICAL))
+                if (!ms.last().corrediza && esMuro(l.derecha))
+                    u.add(Pieza(altoDe(l, ms.last()) - bordes(l.tramos.last(), false), 1, Orientacion.VERTICAL))
                 // En un escalón, el tramo que sube (o baja) más que el de al lado tiene en ese trozo la
                 // pared del escalón junto a su fijo: lleva U parante del alto del escalón, entre las dos U
                 // horizontales (N-43, 2026-09-29). En Formas: 67.3 − 2u sobre el tramo 1.
@@ -327,25 +351,38 @@ object MotorNova {
                 // el propio puente): mocheta − u. Con los demás, U arriba y abajo: mocheta − 2u. Es el
                 // código original del usuario (NovaApa: `altoMocheta − us`) y el mismo criterio del tee
                 // (N-57); dictado de nuevo el 2026-10-01. Antes el motor restaba 2u con todos.
+                // Con el dintel inclinado, cada costado con su propia medida (dictado el 2026-10-01):
+                // la mocheta menos lo que baja el dintel de ese lado.
                 vert.forEachIndexed { i, vt -> vt.mochetas.forEach { m ->
                     val nU = if ((l.tramos[i].puente ?: v.puente).esMultipleOGorrito) 1 else 2
-                    listOf(m.inclinacionIzq, m.inclinacionDer).forEach { k ->
-                        if (k > 0f) u.add(Pieza(m.espacio * k - nU * us, 1, Orientacion.DIAGONAL))
-                        else u.add(Pieza(m.espacio - nU * us, 1, Orientacion.VERTICAL))
+                    val w = m.ancho ?: l.tramos[i].ancho
+                    listOf(Triple(m.inclinacionIzq, m.bajaIzq, true), Triple(m.inclinacionDer, m.bajaDer, false)).forEach { (k, baja, izquierdo) ->
+                        // Una mocheta que llega en punta a ese costado no lleva U ahí (2026-10-02): por
+                        // el canto largo quedaba una astilla de medio centímetro.
+                        if (m.dintelInclinado && m.espacio - baja <= 0.05f) return@forEach
+                        if (k > 0f) u.add(Pieza((m.espacio - baja) * k - nU * us, 1, Orientacion.DIAGONAL))
+                        // Arriba la U del dintel (por su canto más largo, [arribaDeLaUParante]); abajo,
+                        // la de la mocheta si va (sin Múltiple).
+                        else u.add(Pieza(m.espacio - arribaDeLaUParante(m.bajaIzq, m.bajaDer, w, us, izquierdo) - (nU - 1) * us, 1, Orientacion.VERTICAL))
                     }
                 } }
             } else {
                 // INA: 1 por cada corrediza de los bordes de la ventana contra muro o acople. Arriba
                 // +1.5; abajo (invertido y la inferior de bandera) sin él.
-                fun enBorde(m: M, borde: Borde) {
+                // Con el dintel inclinado, la de cada borde con la mocheta de su lado (2026-10-01).
+                fun enBorde(m: M, borde: Borde, izquierdo: Boolean) {
                     if (!m.corrediza || !esMuro(borde)) return
                     vDe(m).mochetas.forEach { mo ->
+                        // En punta contra ese borde no lleva U (2026-10-02).
+                        if (mo.dintelInclinado && mo.directo - (if (izquierdo) mo.bajaIzq else mo.bajaDer) <= 0.05f) return@forEach
                         val mas = if (mo.ubicacion == Ubicacion.ARRIBA) 1.5f else 0f
-                        u.add(Pieza(mo.directo - us + mas, 1, Orientacion.VERTICAL))
+                        // Lo que baja el dintel ahí, por el canto más largo de la U ([arribaDeLaUParante]).
+                        val baja = arribaDeLaUParante(mo.bajaIzq, mo.bajaDer, l.tramos[m.tramo].ancho, us, izquierdo) - us
+                        u.add(Pieza(mo.directo - baja - us + mas, 1, Orientacion.VERTICAL))
                     }
                 }
-                enBorde(ms.first(), l.izquierda)
-                enBorde(ms.last(), l.derecha)
+                enBorde(ms.first(), l.izquierda, izquierdo = true)
+                enBorde(ms.last(), l.derecha, izquierdo = false)
             }
         }
 
@@ -357,8 +394,8 @@ object MotorNova {
         l.tramos.forEachIndexed { i, t ->
             if (vert[i].corridas <= 0) return@forEachIndexed
             val largos = t.largosPuente
-            if (largos != null && largos.size == vert[i].corridas) largos.forEach { puente.add(Pieza(it, 1)) }
-            else puente.add(Pieza(t.ancho, vert[i].corridas))
+            if (largos != null && largos.size == vert[i].corridas) largos.forEach { puente.add(Pieza(it, 1, tramo = i)) }
+            else puente.add(Pieza(t.ancho, vert[i].corridas, tramo = i))
         }
         val falsoPuente = mutableListOf<Pieza>()
         if (v.libresVerticales > 0) {
@@ -402,17 +439,17 @@ object MotorNova {
             // 2026-09-26, Vna4: 133.2 + 1.2 × tan = 133.8, − 0.06).
             val medidaRiel = rielAbajo(t, vert[i].altoHoja) - 0.06f
             if (esFull(t)) {
-                riel.add(Pieza(medidaRiel, t.corredizas))
-                val doble = Pieza(medida, ceil(t.corredizas / 2.0).toInt())
+                riel.add(Pieza(medidaRiel, t.corredizas, tramo = i))
+                val doble = Pieza(medida, ceil(t.corredizas / 2.0).toInt(), tramo = i)
                 if (dobleAparte) dobleCorrediza.add(doble) else rielSup.add(doble)
                 return@forEachIndexed
             }
-            riel.add(Pieza(medidaRiel, 1))
+            riel.add(Pieza(medidaRiel, 1, tramo = i))
             // Como la pantalla: no va cuando hay mocheta arriba con puente Múltiple, que ya lo trae.
             val lleva = !vert[i].hayMocheta || vert[i].soloAbajo || !(t.puente ?: v.puente).esMultiple
             // Si el vano corta el borde de arriba del sistema (una viga), el fijo corredizo solo llega
             // hasta donde empieza el corte (dictado el 2026-09-26): en "polis", 190.2 − 0.06.
-            if (lleva) rielSup.add(Pieza(t.anchoRielSuperior?.let { it - 0.06f } ?: medida, 1))
+            if (lleva) rielSup.add(Pieza(t.anchoRielSuperior?.let { it - 0.06f } ?: medida, 1, tramo = i))
         }
         // Antes:
         //     riel.add(Pieza(medida, if (todoCorredizas) t.corredizas else 1))
@@ -420,7 +457,7 @@ object MotorNova {
         //     if (lleva) rielSup.add(Pieza(medida, if (todoCorredizas) ceil(t.corredizas / 2.0).toInt() else 1))
 
         // ---------- Hache, portafelpa, tope (N-54, N-55, N-56) ----------
-        val hache = ms.filter { it.corrediza }.map { Pieza(it.u, 1) }
+        val hache = ms.filter { it.corrediza }.map { Pieza(it.u, 1, tramo = it.tramo) }
         val portafelpa = mutableListOf<Pieza>()
         val tope = mutableListOf<Pieza>()
         porTramo.forEach { (i, t) ->
@@ -451,11 +488,24 @@ object MotorNova {
         val tee = mutableListOf<Pieza>()
         if (apa) l.tramos.forEachIndexed { i, t ->
             vert[i].mochetas.forEach { m ->
-                val nTees = (panosDe(t, m).size - 1).coerceAtLeast(0)
+                val panos = panosDe(t, m)
+                val nTees = (panos.size - 1).coerceAtLeast(0)
                 if (nTees == 0) return@forEach
                 // N-57: alto de la mocheta − u con Múltiple o gorrito, − 2u con los demás puentes.
                 val valor = m.espacio - (if ((t.puente ?: v.puente).esMultipleOGorrito) 1f else 2f) * us
-                if (valor > 0f) tee.add(Pieza(valor, nTees, Orientacion.VERTICAL))
+                if (!m.dintelInclinado) {
+                    if (valor > 0f) tee.add(Pieza(valor, nTees, Orientacion.VERTICAL))
+                    return@forEach
+                }
+                // Bajo un dintel inclinado cada tee mide lo que baja el dintel donde queda (dictado el
+                // 2026-10-01): con dos paños, en el medio, el lado alto menos la mitad de la diferencia.
+                val ancho = panos.sum().takeIf { it > 0f } ?: return@forEach
+                var x = 0f
+                panos.dropLast(1).forEach { p ->
+                    x += p
+                    val baja = m.bajaIzq + (m.bajaDer - m.bajaIzq) * x / ancho
+                    (valor - baja).takeIf { it > 0f }?.let { tee.add(Pieza(it, 1, Orientacion.VERTICAL)) }
+                }
             }
         }
 
@@ -467,7 +517,10 @@ object MotorNova {
             else NovaCalculos.descuentoColindanciaFijo(patronLado, f.global)
             // Un fijo con recorte (una viga encima, un escalón debajo) es más bajo: en "polis",
             // 133.6 − 39.2 = 94.4 de hoja.
-            val alto = (if (apa) vDe(f).altoHoja - f.recorte else altoDe(l, f)) - (us + holgura)
+            // En INA el fijo llega al dintel: bajo uno inclinado, el rectángulo que lo contiene es el
+            // alto de su lado más alto (N-99; 2026-10-01, los dos fijos de Fide no miden lo mismo).
+            val bajaDelFijo = if (apa) 0f else inicioEnSuTramo(ms, f).let { x0 -> bajaMinima(l.tramos[f.tramo], x0, x0 + f.ancho) }
+            val alto = (if (apa) vDe(f).altoHoja - f.recorte else altoDe(l, f) - bajaDelFijo) - (us + holgura)
             // Un fijo contra un lado inclinado lleva el vidrio entero, el rectángulo que lo contiene, y
             // se corta en obra (dictado el 2026-09-26, Vna4: 56.5 de ancho, no los 78 del módulo).
             // En un círculo, el fijo junto a la pared no llega de arriba abajo: su rectángulo es lo más
@@ -477,7 +530,7 @@ object MotorNova {
                 minOf(alto, c.altoEntre(x0, x0 + f.ancho) - (us + holgura))
             } ?: alto
             val u = f.inclinado?.let { f.u - it.faltaContenido } ?: f.u
-            vidrios.add(Vidrio(u - descuento, altoCirculo))
+            vidrios.add(Vidrio(u - descuento, altoCirculo, tramo = f.tramo))
         }
 
         // ---------- Vidrios corredizos (N-58, N-59) ----------
@@ -488,7 +541,7 @@ object MotorNova {
         ms.filter { it.corrediza }.forEach { c ->
             val full = l.modulacion == "nfc" || (fullPorTramo && soloCorredizas(l.tramos[c.tramo]))
             val ancho = if (full) c.u else c.u - 1.4f
-            vidrios.add(Vidrio(ancho, vDe(c).altoHoja - 3.5f))
+            vidrios.add(Vidrio(ancho, vDe(c).altoHoja - 3.5f, tramo = c.tramo))
         }
 
         // ---------- Vidrios de mocheta (N-62, N-63, N-64) ----------
@@ -498,7 +551,18 @@ object MotorNova {
                     // N-63 (dictado 2026-09-25): con los demás puentes, mocheta − (u + 0.3); también
                     // en bandera. Antes: `m.espacio - us + 0.3f`.
                     val alto = if ((t.puente ?: v.puente).esMultipleOGorrito) m.espacio - 0.5f else m.espacio - (us + 0.3f)
-                    panosDe(t, m).forEach { w -> vidrios.add(Vidrio(w - 0.5f, alto)) }
+                    // Bajo un dintel inclinado cada paño es el rectángulo que lo contiene (N-99): el
+                    // alto de su lado más alto (2026-10-01, Fide: mismo ancho, distinto alto).
+                    val panos = panosDe(t, m)
+                    val total = panos.sum()
+                    var x = 0f
+                    panos.forEach { w ->
+                        val baja = if (m.dintelInclinado && total > 0f) {
+                            minOf(m.bajaIzq + (m.bajaDer - m.bajaIzq) * x / total, m.bajaIzq + (m.bajaDer - m.bajaIzq) * (x + w) / total)
+                        } else 0f
+                        vidrios.add(Vidrio(w - 0.5f, alto - baja, tramo = i))
+                        x += w
+                    }
                 }
             }
         } else {
@@ -513,9 +577,25 @@ object MotorNova {
                 val espacio = t.sumOf { it.anchoVidrio.toDouble() }.toFloat() -
                     t.filter { !it.corrediza }.sumOf { it.u.toDouble() }.toFloat()
                 val anchos = rachas(t.map { it.corrediza }, true).map { n -> espacio * n / nc - 2 * GRUNA_MOCHETA_INA }
+                // Dónde está cada racha de corredizas en el tramo, para el dintel inclinado.
+                val donde = mutableListOf<Pair<Float, Float>>()
+                var x = 0f
+                t.forEachIndexed { k, m ->
+                    if (m.corrediza && (k == 0 || !t[k - 1].corrediza)) donde.add(x to x)
+                    x += m.ancho
+                    if (m.corrediza) donde[donde.lastIndex] = donde.last().first to x
+                }
                 vert[i].mochetas.forEach { m ->
                     val alto = if (m.ubicacion == Ubicacion.ARRIBA) m.directo + 1f else m.directo - 0.5f
-                    anchos.forEach { w -> vidrios.add(Vidrio(w, alto)) }
+                    anchos.forEachIndexed { k, w ->
+                        // Contra un dintel o un alféizar inclinado, el rectángulo que la contiene (N-99):
+                        // el alto de su lado más alto (2026-10-01).
+                        val ancho = l.tramos[i].ancho
+                        val baja = donde.getOrNull(k)?.takeIf { m.dintelInclinado }?.let { (x0, x1) ->
+                            minOf(interpolar(m.bajaIzq to m.bajaDer, ancho, x0), interpolar(m.bajaIzq to m.bajaDer, ancho, x1))
+                        } ?: 0f
+                        vidrios.add(Vidrio(w, alto - baja, tramo = i))
+                    }
                 }
             }
         }
@@ -538,13 +618,66 @@ object MotorNova {
                     altoHoja = e.alto, tramos = listOf(Tramo(e.modulos)),
                     izquierda = Borde.MURO, derecha = Borde.MURO
                 )
-                total += lado(v.copy(libresVerticales = 0), sub)
+                total += lado(v.copy(libresVerticales = 0), sub).enTramo(i)
             }
         }
         return total
     }
 
     // ==================== AUXILIARES ====================
+
+    // ---------- El dintel o el alféizar inclinado (dictado el 2026-10-01, Fide y Fide al revés) ----------
+    // Lo que toca el borde inclinado mide lo suyo en su lugar: cada costado su propia medida, y el
+    // vidrio, el rectángulo que lo contiene (N-99), es decir el alto de su lado más alto. La inclinación
+    // la trae la franja que toca ese borde: la de arriba con el dintel, la de abajo con el alféizar
+    // ([FranjaTramo.bajaIzq]). El sistema no la lleva nunca: es un rectángulo (N-66).
+
+    /** Cuánto baja el dintel del tramo en cada costado; 0 y 0 si es recto. */
+    private fun dintelDe(t: Tramo): Pair<Float, Float> =
+        t.franjas?.lastOrNull()?.let { it.bajaIzq to it.bajaDer } ?: (0f to 0f)
+
+    /** Cuánto sube el alféizar del tramo en cada costado; 0 y 0 si es recto. */
+    private fun alfeizarDe(t: Tramo): Pair<Float, Float> =
+        t.franjas?.takeIf { it.size > 1 }?.firstOrNull()?.let { it.bajaIzq to it.bajaDer } ?: (0f to 0f)
+
+    private fun interpolar(borde: Pair<Float, Float>, ancho: Float, x: Float): Float =
+        if (ancho > 0f) borde.first + (borde.second - borde.first) * (x / ancho).coerceIn(0f, 1f) else borde.first
+
+    /** Lo que el tramo es más bajo a [x] cm de su costado izquierdo: lo que baja el dintel y sube el alféizar. */
+    private fun bajaEn(t: Tramo, x: Float): Float =
+        interpolar(dintelDe(t), t.ancho, x) + interpolar(alfeizarDe(t), t.ancho, x)
+
+    /** Lo menos que el tramo es más bajo entre [x0] y [x1]: el lado alto de lo que está ahí. */
+    private fun bajaMinima(t: Tramo, x0: Float, x1: Float): Float = minOf(bajaEn(t, x0), bajaEn(t, x1))
+
+    /** Cuánto se alarga lo que corre por un borde por cada cm de ancho: 1 si el borde es recto. */
+    private fun largoPorAncho(borde: Pair<Float, Float>, ancho: Float): Float {
+        val (izq, der) = borde
+        return if (ancho > 0f && kotlin.math.abs(der - izq) > 0.05f) kotlin.math.hypot(ancho, der - izq) / ancho else 1f
+    }
+
+    /**
+     * Lo que se le quita arriba a una U parante de un costado cuando la U de arriba corre por un dintel
+     * inclinado (dictado el 2026-10-01): la U parante se corta en ángulo y mide su canto más largo,
+     * el que queda más alto en su ancho ([us]), menos una U. Del lado bajo el dintel sube hacia
+     * adentro y la pieza sale más larga que restando dos U (Fide INA: 146, no 145.8); del lado alto
+     * el canto largo es el de la pared y queda lo de siempre (177). Con el dintel recto, lo que baja
+     * ahí más una U.
+     *
+     * Antes de lo dictado se contaba además la U inclinada más gruesa en vertical (u / coseno), y el
+     * lado alto salía 176.9: el usuario lo corrigió a 177.
+     */
+    private fun arribaDeLaUParante(bajaIzq: Float, bajaDer: Float, ancho: Float, us: Float, izquierdo: Boolean): Float {
+        val bajaAfuera = if (izquierdo) bajaIzq else bajaDer
+        if (ancho <= 0f || kotlin.math.abs(bajaDer - bajaIzq) <= 0.05f) return bajaAfuera + us
+        val pendiente = (bajaDer - bajaIzq) / ancho
+        val bajaAdentro = bajaAfuera + (if (izquierdo) pendiente else -pendiente) * us
+        return minOf(bajaAfuera, bajaAdentro) + us
+    }
+
+    /** Dónde empieza [m] dentro de su tramo, desde el costado izquierdo. */
+    private fun inicioEnSuTramo(ms: List<M>, m: M): Float =
+        ms.filter { it.tramo == m.tramo }.takeWhile { it !== m }.sumOf { it.ancho.toDouble() }.toFloat()
 
     /** El alto del tramo de [m]: el suyo en un vano escalonado, si no el del lado (ver [Tramo.alto]). */
     private fun altoDe(l: LadoNova, m: M): Float = l.tramos.getOrNull(m.tramo)?.alto ?: l.alto
@@ -627,13 +760,17 @@ object MotorNova {
         // Todo en float; df1 solo al presentar.
         val elementos = mutableListOf<Float?>()
         val tipo = mutableListOf<Char>()   // 'f' fijo, 't' tramo cubierto, 'p' parante, '-' corte
-        fun poner(e: Float?, t: Char) { elementos.add(e); tipo.add(if (e == null) '-' else t) }
+        var porAncho = 1f   // lo que mide cada cm de ancho en el borde (ver el dintel inclinado, abajo)
+        fun poner(e: Float?, t: Char) { elementos.add(e?.let { it * porAncho }); tipo.add(if (e == null) '-' else t) }
         // El borde de cada tramo, desde el dintel de la ventana: en un vano escalonado cambia de un
         // tramo a otro, y la U no puede seguir de largo por un escalón (N-93: solo va en una pieza lo
         // que apoya SEGUIDO en ese borde). Hallado el 2026-09-29 en Formas: arriba salía una U de 338.4
         // de punta a punta con los dinteles a 0 y a 67.3.
         fun bordeDe(t: Tramo) = if (arriba) t.caida else t.caida + (t.alto ?: l.alto)
         l.tramos.forEachIndexed { i, t ->
+            // Arriba, bajo un dintel inclinado, la U corre por el dintel: cada cm de ancho mide más
+            // (2026-10-01, Fide: 214.5 de ancho, 216.7 de dintel).
+            porAncho = largoPorAncho(if (arriba) dintelDe(t) else alfeizarDe(t), t.ancho)
             if (i > 0) {
                 val escalon = kotlin.math.abs(bordeDe(t) - bordeDe(l.tramos[i - 1])) > 2.5f
                 // En el escalón cae el eje del parante (N-101): cada lado se queda con su mitad.

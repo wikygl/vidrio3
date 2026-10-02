@@ -178,7 +178,7 @@ class PlanchaListManager(private val context: Context) {
             // Solo el número del id (primer token): los ids viejos traen ", cliente" (puerta) o
             // " proyecto" (nova); cualquiera se descarta para no duplicar ni mostrar el cliente.
             val ventanaNum = ventana.split(',', ' ').first().trim()
-            val info = if (proyecto.isNotBlank()) "$ventanaNum $proyecto" else ventanaNum
+            val info = (if (proyecto.isNotBlank()) "$ventanaNum $proyecto" else ventanaNum) + marcaCurva(subLista)
             resultado.add(ItemListaPlanchas(ancho = ancho, alto = alto, cantidad = cant, info = info))
         }
 
@@ -186,6 +186,17 @@ class PlanchaListManager(private val context: Context) {
             Toast.makeText(context, "No se encontraron vidrios en esta lista.", Toast.LENGTH_SHORT).show()
         }
         return resultado
+    }
+
+    /**
+     * Un vidrio que se curva después del corte (N-102) lo dice en su etiqueta, con cómo queda su
+     * cara especial si la tiene, para separarlo: " curvo espejo convexa".
+     */
+    private fun marcaCurva(subLista: List<String>): String {
+        val l = crystal.crystal.casilla.ListaCasilla
+        if (!l.esCurva(subLista)) return ""
+        val cara = subLista.getOrNull(l.POS_CARA).orEmpty().trim()
+        return " ${l.MARCA_CURVO}" + if (cara.isNotBlank()) " $cara" else ""
     }
 
     private fun esEntradaVidrio(subLista: List<String>): Boolean {
