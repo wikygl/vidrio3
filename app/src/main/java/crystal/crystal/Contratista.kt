@@ -11,7 +11,10 @@ data class DatosContratista(
     var documento: String,
     var direccion: String,
     var telefono: String,
-    var predeterminado: Boolean = false
+    var predeterminado: Boolean = false,
+    // La firma del contratista (PNG en base64): es la suya en todos sus contratos, así que se
+    // guarda con su perfil. Nula en los perfiles de antes.
+    var firmaBase64: String? = null
 )
 
 /** Guarda varios perfiles de contratista en SharedPreferences (ContratoPrefs). */

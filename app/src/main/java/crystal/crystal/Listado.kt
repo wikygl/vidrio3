@@ -41,7 +41,19 @@ data class Listado(
      *
      * En null, el ítem no está en ningún ambiente y sale al final, sin encabezado.
      */
-    var ambiente: String? = null
+    var ambiente: String? = null,
+    /**
+     * La opción que ESCOGIÓ el cliente, por su letra en la proforma de elección: 0 es la A, 1 la B…
+     *
+     * La escogida pasa a ser el ítem —su producto, su precio, su imagen y su costo—, así que la
+     * proforma de siempre, el total y el contrato ya salen con ella sin saber nada de opciones. La
+     * que era el ítem se guarda entre las opciones, en el sitio de la escogida, y con esta letra
+     * se sabe deshacer el cambio: las letras no se mueven aunque el cliente cambie de idea. Las
+     * lee y las escribe [crystal.crystal.pos.OpcionesDeProforma].
+     *
+     * En null, todavía no se eligió y el ítem es su opción A.
+     */
+    var opcionElegida: Int? = null
 ) : Serializable {
 
     companion object {
@@ -55,7 +67,8 @@ data class Listado(
          * que **agregar un campo lo cambia** y rompe todo lo ya guardado. Este es el valor que
          * tenía la clase antes de sumarle [productoId]; al fijarlo, los archivos viejos se siguen
          * leyendo y el campo nuevo simplemente queda en null. Con [opciones] se hizo lo mismo: se
-         * añadió con valor por defecto y este número NO se tocó.
+         * añadió con valor por defecto y este número NO se tocó, y lo mismo con [ambiente] y
+         * [opcionElegida].
          *
          * Si en el futuro se agregan más campos, hay que dejar este número tal cual y darles
          * siempre un valor por defecto.

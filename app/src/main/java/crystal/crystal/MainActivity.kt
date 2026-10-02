@@ -913,7 +913,11 @@ class MainActivity : AppCompatActivity() {
                 val cabeza = buildString {
                     if (ambiente.isNotEmpty()) append("[$ambiente] ")
                     val cuantas = crystal.crystal.pos.OpcionesDeProforma.de(datos).size
-                    if (cuantas > 0) append("(+$cuantas) ")
+                    val elegida = crystal.crystal.pos.OpcionesDeProforma.elegida(datos)
+                    // Con la escogida se ve cuál fue: la línea ya es esa opción y suma su costo.
+                    if (cuantas > 0 && elegida != null) {
+                        append("(✔${crystal.crystal.pos.OpcionesDeProforma.letra(elegida)} de ${cuantas + 1}) ")
+                    } else if (cuantas > 0) append("(+$cuantas) ")
                 }
                 val conCabeza = cabeza + text
 
@@ -1802,9 +1806,42 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "No hay elementos para contrato", Toast.LENGTH_SHORT).show()
             return
         }
+        // El contrato es de lo que el cliente escogió: si en algún ítem todavía no se eligió, se
+        // avisa antes, porque iría con la opción A.
+        val faltan = crystal.crystal.pos.OpcionesDeProforma.faltanElegir(lista)
+        if (faltan > 0) {
+            AlertDialog.Builder(this)
+                .setTitle("Opciones sin elegir")
+                .setMessage(
+                    "${if (faltan == 1) "Un ítem tiene" else "$faltan ítems tienen"} opciones y " +
+                        "todavía no se eligió cuál escogió el cliente; en el contrato iría la " +
+                        "opción A.\n\nPara elegir: toque el ítem → Opciones → Elegir la que escogió el cliente."
+                )
+                .setPositiveButton("Continuar así") { _, _ -> abrirContratoConLoElegido() }
+                .setNegativeButton("Cancelar", null)
+                .show()
+            return
+        }
+        abrirContratoConLoElegido()
+    }
 
+    private fun abrirContratoConLoElegido() {
+        // El cliente del registro va solo si sigue siendo el de la pantalla: si después se escribió
+        // otro nombre a mano, el contrato es para ese otro.
+        val escrito = binding.clienteEditxt.text.toString().trim()
+        val delRegistro = clienteSeleccionado?.takeIf {
+            escrito == it.getTextoCompleto().trim() || escrito.equals(it.nombreCompleto.trim(), ignoreCase = true)
+        }
         val intent = Intent(this, ContratoActivity::class.java).apply {
-            putExtra(ContratoActivity.EXTRA_CLIENTE, binding.clienteEditxt.text.toString())
+            putExtra(ContratoActivity.EXTRA_CLIENTE, delRegistro?.nombreCompleto ?: escrito)
+            putExtra(ContratoActivity.EXTRA_CLIENTE_ID, delRegistro?.id)
+            // El membrete de la proforma: el contrato sale en el mismo papel de la tienda.
+            putExtra(
+                ContratoActivity.EXTRA_MEMBRETE,
+                com.google.gson.Gson().toJson(
+                    crystal.crystal.pos.DatosDeLaProforma.membrete(sharedPreferences, posManager.datosEmpresa)
+                )
+            )
             putExtra(ContratoActivity.EXTRA_LISTA, ArrayList(lista))
             putExtra(ContratoActivity.EXTRA_TOTAL, binding.precioTotal.text.toString())
             putExtra(ContratoActivity.EXTRA_METROS, binding.metrosTotal.text.toString())
@@ -2457,11 +2494,9 @@ class MainActivity : AppCompatActivity() {
             // La opción pide su imagen y se elige con el anexador de siempre; al volver, la
             // imagen sabe a qué opción pertenece.
             manager.alPedirImagen = { posicion, cual ->
-                // La de la primera fila es la del propio ítem: su imagen va donde siempre, y por
-                // eso ahí no se apunta ninguna opción esperando.
-                opcionEsperandoImagen =
-                    if (cual == crystal.crystal.pos.OpcionesManager.LA_DEL_ITEM) null
-                    else posicion to cual
+                // Cada opción por su letra, también la que está en el ítem: el manager sabe dónde
+                // guardarla.
+                opcionEsperandoImagen = posicion to cual
                 selectedPosition = posicion
                 mostrarOpcionesAnexar(posicion)
             }
@@ -2568,23 +2603,34 @@ class MainActivity : AppCompatActivity() {
         )
         pdfGenerator.cliente = crystal.crystal.pos.DatosDeLaProforma.cliente(cliente, clienteSeleccionado)
         // Si algún ítem tiene opciones caben dos proformas distintas, y no se puede adivinar cuál
-        // se quiere: la de siempre, que suma, o la de elección, que enseña cada medida con sus
-        // materiales y NO suma, porque el cliente escoge uno.
+        // se quiere: la de elección, que enseña cada medida con sus materiales y NO suma, porque
+        // el cliente escoge uno; o la conjunta, que suma como siempre con lo que ya escogió.
         if (crystal.crystal.pos.OpcionesDeProforma.hayEnLaLista(lista)) {
-            AlertDialog.Builder(this)
-                .setTitle("¿Qué proforma?")
-                .setMessage(
-                    "Hay ítems con opciones. La proforma de opciones enseña cada medida con sus " +
-                        "materiales y sus precios, sin sumar; la normal suma los ítems como siempre."
+            val faltan = crystal.crystal.pos.OpcionesDeProforma.faltanElegir(lista)
+            val deOpciones = { pdfGenerator.generarOpcionesYCompartir(cliente, lista) }
+            val conjunta = {
+                pdfGenerator.generarYCompartir(cliente, lista, binding.precioTotal.text.toString())
+            }
+            val dialogo = AlertDialog.Builder(this).setTitle("¿Qué proforma?")
+            if (faltan == 0) {
+                // Ya se eligió en todos: lo de ahora es la proforma conjunta, con su total.
+                dialogo.setMessage(
+                    "Ya está elegida la opción de cada ítem. La proforma con lo elegido suma " +
+                        "lo que escogió el cliente; la de opciones vuelve a enseñar todas, sin sumar."
                 )
-                .setPositiveButton("De opciones") { _, _ ->
-                    pdfGenerator.generarOpcionesYCompartir(cliente, lista)
-                }
-                .setNegativeButton("Normal") { _, _ ->
-                    pdfGenerator.generarYCompartir(cliente, lista, binding.precioTotal.text.toString())
-                }
-                .setNeutralButton("Cancelar", null)
-                .show()
+                    .setPositiveButton("Con lo elegido") { _, _ -> conjunta() }
+                    .setNegativeButton("De opciones") { _, _ -> deOpciones() }
+            } else {
+                dialogo.setMessage(
+                    "Hay ítems con opciones. La proforma de opciones enseña cada medida con sus " +
+                        "materiales y sus precios, sin sumar. La que suma lleva lo elegido, y en " +
+                        "${if (faltan == 1) "el ítem" else "los $faltan ítems"} sin elegir, la opción A.\n\n" +
+                        "Para elegir: toque el ítem → Opciones → Elegir la que escogió el cliente."
+                )
+                    .setPositiveButton("De opciones") { _, _ -> deOpciones() }
+                    .setNegativeButton("La que suma") { _, _ -> conjunta() }
+            }
+            dialogo.setNeutralButton("Cancelar", null).show()
             return
         }
         pdfGenerator.generarYCompartir(cliente, lista, binding.precioTotal.text.toString())

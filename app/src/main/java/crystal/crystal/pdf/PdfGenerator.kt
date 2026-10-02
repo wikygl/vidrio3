@@ -71,7 +71,7 @@ class PdfGenerator private constructor(
      * Va arriba del todo y antes del título, que es donde se mira primero para saber de quién es el
      * papel. Los datos son los mismos que ya usa el ticket: una tienda no tiene dos direcciones.
      */
-    private fun ponerMembrete(document: Document) {
+    internal fun ponerMembrete(document: Document) {
         val m = membrete ?: return
         if (!m.hayMembrete) return
         val negrita = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD)
@@ -144,7 +144,7 @@ class PdfGenerator private constructor(
      * la lectura: se ve la marca de la tienda detrás de los números. Vale PNG, JPG y SVG —el SVG se
      * rasteriza antes, que iText no lo dibuja—.
      */
-    private fun ponerSello(pdfDoc: PdfDocument, ruta: String) {
+    internal fun ponerSello(pdfDoc: PdfDocument, ruta: String) {
         val bitmap = rasterizarSello(ruta) ?: return
         val stream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
@@ -351,26 +351,29 @@ class PdfGenerator private constructor(
             }
             bloque.add(Paragraph(textoMedidas).setFontSize(12f))
 
-            // Las opciones: la del propio ítem primero —es la que se apuntó al medir— y detrás las
-            // demás, en el orden en que se escribieron.
-            val opciones = listOf(crystal.crystal.pos.OpcionesDeProforma.comoEstaApuntado(item)) +
-                crystal.crystal.pos.OpcionesDeProforma.de(item)
+            // Las opciones por su letra: la A es la que se apuntó al medir y detrás las demás, en
+            // el orden en que se escribieron. Si el cliente ya escogió una, las letras no se
+            // mueven: la escogida sale marcada en su sitio.
+            val opciones = crystal.crystal.pos.OpcionesDeProforma.todas(item)
+            val elegida = crystal.crystal.pos.OpcionesDeProforma.elegida(item)
             val tablaOpciones = Table(UnitValue.createPercentArray(floatArrayOf(8f, 30f, 32f, 30f)))
             tablaOpciones.setWidth(UnitValue.createPercentValue(100f))
             opciones.forEachIndexed { orden, opcion ->
-                val letra = ('A' + orden).toString()
-                tablaOpciones.addCell(
-                    Cell().add(Paragraph(letra).setFont(negrita).setBold())
-                        .setPadding(6f)
-                )
+                val letra = crystal.crystal.pos.OpcionesDeProforma.letra(orden)
+                val celdaLetra = Cell().add(Paragraph(letra).setFont(negrita).setBold()).setPadding(6f)
+                if (orden == elegida) {
+                    celdaLetra.add(Paragraph("Elegida").setFontSize(8f))
+                    celdaLetra.setBackgroundColor(ColorConstants.LIGHT_GRAY)
+                }
+                tablaOpciones.addCell(celdaLetra)
                 tablaOpciones.addCell(
                     Cell().add(Paragraph(opcion.producto)).setPadding(6f)
                 )
                 // La imagen de la opción, en SU recuadro: un arenado laminado y un policarbonato no
-                // se parecen en nada, y el cliente elige mirando. La de la primera es la del ítem,
-                // y va aquí como las demás: enseñándola solo arriba, esa opción parecía no tener.
+                // se parecen en nada, y el cliente elige mirando. La que está en el ítem trae la
+                // del ítem, y va aquí como las demás: enseñándola solo arriba, parecía no tener.
                 val celdaFoto = Cell().setPadding(6f)
-                val deDondeSale = if (orden == 0) item.uri else opcion.imagen
+                val deDondeSale = opcion.imagen
                 if (deDondeSale.isNotBlank()) {
                     val foto = crearImagenPdf(primeraImagen(deDondeSale), 130f, 78f)
                     // Si la imagen no se puede leer se dice, en vez de dejar el hueco callado: así

@@ -160,4 +160,94 @@ class OpcionesDeProformaTest {
         assertEquals(756f, item.costo, 0.5f)
         assertEquals(item.costo, OpcionesDeProforma.precioPorLaCantidad(item, nueva), 0.5f)
     }
+
+    /** Una ventana con sus tres opciones: A la apuntada, B arenado y C policarbonato. */
+    private fun ventanaConOpciones() = ventana(cantidad = 2f).apply {
+        uri = "/fotos/a.jpg"
+        OpcionesDeProforma.guardar(
+            this,
+            listOf(
+                OpcionDeProforma("Arenado laminado", 180f, "/fotos/b.jpg"),
+                OpcionDeProforma("Policarbonato", 95f, "/fotos/c.jpg")
+            )
+        )
+    }
+
+    /**
+     * Al elegir, la escogida pasa a ser el ítem —producto, precio, imagen y costo—, que es lo que
+     * suman la proforma conjunta, el total de la lista y el contrato.
+     */
+    @Test
+    fun la_elegida_pasa_a_ser_el_item() {
+        val item = ventanaConOpciones()
+        assertNull(OpcionesDeProforma.elegida(item))
+        assertEquals(1, OpcionesDeProforma.faltanElegir(listOf(item, ventana())))
+
+        OpcionesDeProforma.elegir(item, 1)
+
+        assertEquals("Arenado laminado", item.producto)
+        assertEquals(180f, item.precio, 0.01f)
+        assertEquals("/fotos/b.jpg", item.uri)
+        // 1.8 m² a 180 son 324 la pieza, y 648 las dos.
+        assertEquals(648f, item.costo, 0.5f)
+        assertEquals(1, OpcionesDeProforma.elegida(item))
+        assertEquals(0, OpcionesDeProforma.faltanElegir(listOf(item, ventana())))
+    }
+
+    /** Las letras no se mueven al elegir: la B sigue siendo la B, y la A no se pierde. */
+    @Test
+    fun las_letras_no_se_mueven_al_elegir() {
+        val item = ventanaConOpciones()
+        OpcionesDeProforma.elegir(item, 2)
+        val todas = OpcionesDeProforma.todas(item)
+        assertEquals(
+            listOf("Ventana vidrio 6mm", "Arenado laminado", "Policarbonato"),
+            todas.map { it.producto }
+        )
+        assertEquals(
+            listOf("/fotos/a.jpg", "/fotos/b.jpg", "/fotos/c.jpg"),
+            todas.map { it.imagen }
+        )
+        assertEquals("Policarbonato", item.producto)
+    }
+
+    /** El cliente cambia de idea: de la C a la B, y después a ninguna, que deja el ítem en su A. */
+    @Test
+    fun se_puede_cambiar_de_idea() {
+        val item = ventanaConOpciones()
+        val costoDeLaA = item.costo
+        OpcionesDeProforma.elegir(item, 2)
+        OpcionesDeProforma.elegir(item, 1)
+        assertEquals("Arenado laminado", item.producto)
+        assertEquals(1, OpcionesDeProforma.elegida(item))
+
+        OpcionesDeProforma.elegir(item, null)
+        assertEquals("Ventana vidrio 6mm", item.producto)
+        assertEquals("/fotos/a.jpg", item.uri)
+        assertEquals(costoDeLaA, item.costo, 0.5f)
+        assertNull(OpcionesDeProforma.elegida(item))
+        assertEquals(2, OpcionesDeProforma.de(item).size)
+    }
+
+    /** Un ítem con varias imágenes —una por línea— no las pierde al pasar a ser una opción. */
+    @Test
+    fun las_imagenes_del_item_viajan_a_su_opcion() {
+        val item = ventanaConOpciones().apply { uri = "/fotos/a1.jpg\n/fotos/a2.jpg" }
+        OpcionesDeProforma.elegir(item, 1)
+        OpcionesDeProforma.elegir(item, 0)
+        assertEquals("/fotos/a1.jpg\n/fotos/a2.jpg", item.uri)
+    }
+
+    /** Añadir una opción o una foto no le rehace el costo a un ítem que no cambió de material. */
+    @Test
+    fun anadir_una_opcion_no_toca_el_costo() {
+        val item = ventana().apply { costo = 999f }
+        OpcionesDeProforma.ponerTodas(
+            item,
+            OpcionesDeProforma.todas(item) + OpcionDeProforma("Serie 80", 210f),
+            null
+        )
+        assertEquals(999f, item.costo, 0.01f)
+        assertEquals(1, OpcionesDeProforma.de(item).size)
+    }
 }

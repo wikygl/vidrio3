@@ -14,7 +14,11 @@ data class ClienteContrato(
     var documento: String,
     var direccion: String,
     var telefono: String,
-    var firmaBase64: String = ""   // PNG de la firma en base64, opcional
+    var firmaBase64: String = "",   // PNG de la firma en base64, opcional
+    // Si es una empresa, quién firma por ella. Nulos en los guardados de antes (Gson no pone
+    // los valores por defecto), por eso se leen con orEmpty().
+    var representante: String? = null,
+    var documentoRepresentante: String? = null
 )
 
 object ClienteContratoStore {
