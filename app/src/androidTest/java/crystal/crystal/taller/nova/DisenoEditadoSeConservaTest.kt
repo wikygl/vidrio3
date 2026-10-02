@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
  *
  * Con un vano de contorno (el escalonado real de 446.3 × 160), el diseño editado a mano volvía a
  * Nova y el siguiente Calcular lo rehacía desde el contorno si la hoja del diseño editado no era
- * la con que se armó: `rehacerDisenoSiCambioLaHoja` comparaba contra la hoja vieja.
+ * la con que se armó: `rehacerDisenoSiCambioLaHoja` (hoy `rehacerDesdeLaFormaSiCambio`) comparaba contra la hoja vieja.
  */
 @RunWith(AndroidJUnit4::class)
 class DisenoEditadoSeConservaTest {
@@ -44,7 +44,7 @@ class DisenoEditadoSeConservaTest {
                 assertNotEquals(delContorno, editado)
 
                 llamar(a, "recibirDisenoEditado", editado)
-                llamar(a, "rehacerDisenoSiCambioLaHoja")   // lo primero que hace Calcular
+                llamar(a, "rehacerDesdeLaFormaSiCambio")   // lo primero que hace Calcular
                 assertEquals(editado, campo(a, "ultimoPaquete").get(a))
 
                 // Pedido del usuario (2026-09-26): cambiar la U o el cruce no suelta el diseño (antes la
@@ -63,7 +63,7 @@ class DisenoEditadoSeConservaTest {
 
                 // Si después el vidriero escribe otra hoja, el vano sí se rehace desde el contorno.
                 b.etHoja.setText("80")
-                llamar(a, "rehacerDisenoSiCambioLaHoja")
+                llamar(a, "rehacerDesdeLaFormaSiCambio")
                 assertNotEquals(editado, campo(a, "ultimoPaquete").get(a))
             }
         }

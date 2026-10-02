@@ -199,6 +199,29 @@
 
         <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
 
+        <!-- ============ VISTA (ventana que dobla) ============ -->
+        <!-- Se mira desde adentro, como se mide; desde afuera, si el cliente lo quiere (2026-10-02). -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Vista (L, C, serie, curva)"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            />
+
+        <RadioGroup
+            android:id="@+id/dgRgVista"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <RadioButton android:id="@+id/dgRbVistaAdentro" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Desde adentro" />
+            <RadioButton android:id="@+id/dgRbVistaAfuera" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Desde afuera" />
+        </RadioGroup>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="10dp" android:background="#22000000" />
+
         <!-- ============ MODELO (remate) ============ -->
         <TextView
             android:layout_width="wrap_content"

@@ -71,7 +71,11 @@ object MotorNova {
 
     fun calcular(v: VentanaNova): MaterialesNova {
         var total = MaterialesNova()
-        v.lados.forEach { total += CurvadoNova.curvar(lado(v, it), it) }
+        v.lados.forEachIndexed { i, l ->
+            val izq = colindanciaDeEsquina(v, i, i - 1, l.izquierda)
+            val der = colindanciaDeEsquina(v, i, i + 1, l.derecha)
+            total += CurvadoNova.curvar(lado(v, l, izq, der), l)
+        }
         // Parante de esquina (L, C, serie): el alto mayor de los dos lados, uno por esquina.
         if (v.esquinero != null) {
             val esquinas = v.lados.zipWithNext().filter { (a, _) -> a.derecha.esEsquina }
@@ -168,7 +172,26 @@ object MotorNova {
 
     // ==================== UN LADO ====================
 
-    private fun lado(v: VentanaNova, l: LadoNova): MaterialesNova {
+    /**
+     * Lo que descuenta el vidrio fijo del lado [i] en la punta que da al lado [otro], en INA (dictado
+     * el 2026-10-02). En una esquina en ángulo los dos fijos se encuentran: el del lado más ancho
+     * descuenta lo de una pared (0.5) y el otro lo de vidrio con vidrio (0.2). Con los dos lados del
+     * mismo ancho, el 0.5 va al primero. Contra muro, acople o libre, y en APA, lo de siempre: 0.5.
+     */
+    private fun colindanciaDeEsquina(v: VentanaNova, i: Int, otro: Int, borde: Borde): Float {
+        if (v.acabado != Acabado.INA || borde != Borde.ESQUINA_ANGULO) return NovaCalculos.COLINDANCIA_PARED
+        val este = v.lados[i]
+        val vecino = v.lados.getOrNull(otro) ?: return NovaCalculos.COLINDANCIA_PARED
+        val mayor = este.anchoMedido > vecino.anchoMedido ||
+            (kotlin.math.abs(este.anchoMedido - vecino.anchoMedido) < 0.05f && i < otro)
+        return if (mayor) NovaCalculos.COLINDANCIA_PARED else NovaCalculos.COLINDANCIA_FIJO
+    }
+
+    private fun lado(
+        v: VentanaNova, l: LadoNova,
+        colindanciaIzq: Float = NovaCalculos.COLINDANCIA_PARED,
+        colindanciaDer: Float = NovaCalculos.COLINDANCIA_PARED
+    ): MaterialesNova {
         if (l.modulos.isEmpty()) return MaterialesNova()
         val apa = v.acabado == Acabado.APA
         val us = v.u.alto
@@ -190,7 +213,8 @@ object MotorNova {
 
         // Esquina en ángulo de INA (G-09, N-42): se suma el ancho de la U al ancho del lado y se
         // reparte entre las hojas, como el cruce. Ejemplo dictado: (120 + 0.7 + 1) / 2 = 60.8.
-        // Solo en las U; los vidrios no cambian. En esquina curva, nada.
+        // Lo llevan las U, la hache y los vidrios, que salen de la U de fijo (dictado el 2026-10-02; antes
+        // solo las U). En esquina curva, nada.
         val esquinasAngulo = if (apa) 0 else listOf(l.izquierda, l.derecha).count { it == Borde.ESQUINA_ANGULO }
         val aumentoLado = v.u.ancho * esquinasAngulo
         val aumentoPorHoja = if (l.divisiones > 0) aumentoLado / l.divisiones else 0f
@@ -457,7 +481,9 @@ object MotorNova {
         //     if (lleva) rielSup.add(Pieza(medida, if (todoCorredizas) ceil(t.corredizas / 2.0).toInt() else 1))
 
         // ---------- Hache, portafelpa, tope (N-54, N-55, N-56) ----------
-        val hache = ms.filter { it.corrediza }.map { Pieza(it.u, 1, tramo = it.tramo) }
+        // En la esquina en ángulo de INA la hache también lleva su parte del ancho de la U, como la U de
+        // fijo (G-09, N-42; dictado el 2026-10-02: en la L salía 60.3 y es 60.8, la misma de la U de fijo).
+        val hache = ms.filter { it.corrediza }.map { Pieza(it.u + aumentoPorHoja, 1, tramo = it.tramo) }
         val portafelpa = mutableListOf<Pieza>()
         val tope = mutableListOf<Pieza>()
         porTramo.forEach { (i, t) ->
@@ -514,7 +540,10 @@ object MotorNova {
         ms.filter { !it.corrediza }.forEach { f ->
             val descuento = if (fullFijos) NovaCalculos.GRUNA
             else if (apa) NovaCalculos.descuentoColindanciaFijo(porTramo.getValue(f.tramo).map { if (it.corrediza) 'c' else 'f' }, f.pos)
-            else NovaCalculos.descuentoColindanciaFijo(patronLado, f.global)
+            else NovaCalculos.descuentoColindanciaFijo(patronLado, f.global) -
+                // En la esquina, lo que le toca a este lado (ver [colindanciaDeEsquina]).
+                (if (f.global == 0) NovaCalculos.COLINDANCIA_PARED - colindanciaIzq else 0f) -
+                (if (f.global == patronLado.lastIndex) NovaCalculos.COLINDANCIA_PARED - colindanciaDer else 0f)
             // Un fijo con recorte (una viga encima, un escalón debajo) es más bajo: en "polis",
             // 133.6 − 39.2 = 94.4 de hoja.
             // En INA el fijo llega al dintel: bajo uno inclinado, el rectángulo que lo contiene es el
@@ -529,7 +558,9 @@ object MotorNova {
                 val x0 = ms.takeWhile { it !== f }.sumOf { it.ancho.toDouble() }.toFloat()
                 minOf(alto, c.altoEntre(x0, x0 + f.ancho) - (us + holgura))
             } ?: alto
-            val u = f.inclinado?.let { f.u - it.faltaContenido } ?: f.u
+            // El vidrio sale de la U de fijo, con su parte del ancho de la U en la esquina en ángulo de
+            // INA (dictado el 2026-10-02: la U es 60.8 y el vidrio 60.3; salía 59.8, sin ese 0.5).
+            val u = (f.inclinado?.let { f.u - it.faltaContenido } ?: f.u) + aumentoPorHoja
             vidrios.add(Vidrio(u - descuento, altoCirculo, tramo = f.tramo))
         }
 
@@ -540,7 +571,8 @@ object MotorNova {
         val fullPorTramo = l.modulacion !in setOf("ncc", "n3c")
         ms.filter { it.corrediza }.forEach { c ->
             val full = l.modulacion == "nfc" || (fullPorTramo && soloCorredizas(l.tramos[c.tramo]))
-            val ancho = if (full) c.u else c.u - 1.4f
+            // Como el fijo, desde la U de su hoja, con su parte del ancho de la U en la esquina de INA.
+            val ancho = (if (full) c.u else c.u - 1.4f) + aumentoPorHoja
             vidrios.add(Vidrio(ancho, vDe(c).altoHoja - 3.5f, tramo = c.tramo))
         }
 
@@ -574,8 +606,10 @@ object MotorNova {
             porTramo.forEach { (i, t) ->
                 val nc = t.count { it.corrediza }
                 if (nc == 0 || !vert[i].hayMocheta) return@forEach
+                // En la esquina en ángulo cada hoja lleva su parte del ancho de la U (G-09, N-42); lo de
+                // las corredizas es de la mocheta, o su vidrio queda corto (dictado el 2026-10-02).
                 val espacio = t.sumOf { it.anchoVidrio.toDouble() }.toFloat() -
-                    t.filter { !it.corrediza }.sumOf { it.u.toDouble() }.toFloat()
+                    t.filter { !it.corrediza }.sumOf { it.u.toDouble() }.toFloat() + nc * aumentoPorHoja
                 val anchos = rachas(t.map { it.corrediza }, true).map { n -> espacio * n / nc - 2 * GRUNA_MOCHETA_INA }
                 // Dónde está cada racha de corredizas en el tramo, para el dintel inclinado.
                 val donde = mutableListOf<Pair<Float, Float>>()

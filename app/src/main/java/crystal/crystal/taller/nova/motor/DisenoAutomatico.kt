@@ -89,7 +89,7 @@ object DisenoAutomatico {
             listOf(base.flatMap { patron(it, "ncfc") })
         } else {
             grupos.map { patron(it, e.modulacion) }
-        }
+        }.let { if (e.acabado == Acabado.INA) sinCorredizaEnLaEsquina(it, e.izquierda, e.derecha) else it }
         // N-27: los parantes entre tramos ocupan ancho; el resto se reparte entre las hojas.
         val anchoUtil = (e.anchoEstructura ?: e.anchoCalculo) - e.puente.anchoParante * (patrones.size - 1).coerceAtLeast(0)
         val w = if (divisiones > 0) anchoUtil / divisiones else anchoUtil
@@ -105,6 +105,27 @@ object DisenoAutomatico {
             derecha = e.derecha,
             modulacion = e.modulacion
         )
+    }
+
+    /**
+     * En inaparente una corrediza nunca va en una esquina (dictado el 2026-10-02): en una L de dos
+     * hojas por lado salía `fc P fc`, con la corrediza del lado 1 contra la esquina; va `cf P fc`. El
+     * tramo que toca una esquina en ángulo con una corrediza se da vuelta, si así queda un fijo en la
+     * esquina sin poner una corrediza en la otra punta si también es esquina. Si ni dado vuelta se
+     * puede (todas corredizas, o dos hojas entre dos esquinas), queda como estaba.
+     */
+    private fun sinCorredizaEnLaEsquina(patrones: List<List<Boolean>>, izquierda: Borde, derecha: Borde): List<List<Boolean>> {
+        if (patrones.isEmpty()) return patrones
+        val enIzq = izquierda == Borde.ESQUINA_ANGULO
+        val enDer = derecha == Borde.ESQUINA_ANGULO
+        fun bien(p: List<Boolean>, primero: Boolean, ultimo: Boolean) =
+            !((primero && enIzq && p.first()) || (ultimo && enDer && p.last()))
+        return patrones.mapIndexed { i, p ->
+            val primero = i == 0
+            val ultimo = i == patrones.lastIndex
+            if (p.isEmpty() || bien(p, primero, ultimo)) p
+            else p.reversed().takeIf { bien(it, primero, ultimo) } ?: p
+        }
     }
 
     private fun cadaN(divisiones: Int, n: Int): List<Int> {

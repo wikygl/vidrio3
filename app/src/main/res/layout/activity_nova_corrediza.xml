@@ -381,6 +381,18 @@
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
 
+                        <!-- El lado que se está escribiendo (L, C, serie): va con sus casillas y no en
+                             el título fijo de arriba, que al desplazar quedaba junto a otro lado. -->
+                        <TextView
+                            android:id="@+id/tvLadoActual"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingStart="6dp"
+                            android:textColor="@color/color"
+                            android:textStyle="bold"
+                            android:visibility="gone"
+                            tools:ignore="RtlSymmetry" />
+
                         <LinearLayout
                             android:id="@+id/ancho"
                             android:layout_width="match_parent"
@@ -545,6 +557,7 @@
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
 
+                            <!-- "Otros datos" no decía nada: se quitó (2026-10-02). -->
                             <TextView
                                 android:id="@+id/txDatos"
                                 android:layout_width="match_parent"
@@ -552,8 +565,8 @@
                                 android:layout_marginStart="3dp"
                                 android:layout_weight="0.54"
                                 android:paddingStart="6dp"
-                                android:text="@string/otros_datos"
                                 android:textColor="@color/color"
+                                android:visibility="gone"
                                 tools:ignore="RtlSymmetry" />
 
                             <Spinner
@@ -596,6 +609,18 @@
                                 android:text="@string/_0"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
                         </LinearLayout>
+
+                        <!-- Los lados ya escritos, cada uno con su nombre encima. -->
+                        <TextView
+                            android:id="@+id/tvLado1"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingStart="6dp"
+                            android:text="Lado 1"
+                            android:textColor="@color/color"
+                            android:textStyle="bold"
+                            android:visibility="gone"
+                            tools:ignore="HardcodedText,RtlSymmetry" />
 
                         <LinearLayout
                             android:id="@+id/lyAncho2"
@@ -705,14 +730,15 @@
                         </LinearLayout>
 
                         <TextView
-                            android:id="@+id/tvLado1"
+                            android:id="@+id/tvLado2"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:paddingStart="6dp"
-                            android:text="Lado 1"
+                            android:text="Lado 2"
                             android:textColor="@color/color"
                             android:textStyle="bold"
-                            android:visibility="gone" />
+                            android:visibility="gone"
+                            tools:ignore="HardcodedText,RtlSymmetry" />
 
                         <LinearLayout
                             android:id="@+id/lyAncho3"
@@ -819,6 +845,18 @@
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
                         </LinearLayout>
 
+                        <!-- La esquina de la L: vacía, en ángulo; con valores, curva (2026-10-02). -->
+                        <TextView
+                            android:id="@+id/tvEsquinaCurva"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingStart="6dp"
+                            android:text="Esquina curva"
+                            android:textColor="@color/color"
+                            android:textStyle="bold"
+                            android:visibility="gone"
+                            tools:ignore="HardcodedText,RtlSymmetry" />
+
                         <LinearLayout
                             android:id="@+id/lyFlecha"
                             android:layout_width="match_parent"
@@ -873,6 +911,32 @@
                                 android:text="@string/_0"
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,
                                 TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyDesarrollo"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Desarrollo"
+                                tools:ignore="HardcodedText,RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etDesarrollo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
                         </LinearLayout>
 
                         <LinearLayout

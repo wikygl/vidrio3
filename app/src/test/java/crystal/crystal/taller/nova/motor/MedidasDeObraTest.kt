@@ -1,6 +1,7 @@
 package crystal.crystal.taller.nova.motor
 
 import crystal.crystal.Diseno.nova.ContornoEnTramos
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -213,6 +214,34 @@ class MedidasDeObraTest {
         assertTrue(lineas(MaterialesNova.texto(m.riel)).toString(), "117.4 = 1" in lineas(MaterialesNova.texto(m.riel)))
         val u = lineas(MaterialesNova.texto(m.u))
         assertTrue(u.toString(), "121 = 1" in u && "41 = 2" in u)
+    }
+
+    /**
+     * La L inaparente en ángulo de 120 + 120, dos hojas por lado (dictado el 2026-10-02):
+     * - una corrediza nunca va en la esquina: salía `fc P fc` y va `cf P fc`, el fijo en la esquina;
+     * - la hache lleva su parte del ancho de la U, como la U de fijo: (120 + 0.7 + 1) / 2 = 60.8; salía
+     *   60.3, sin el ancho de la U.
+     */
+    @Test
+    fun l_inaparente_sin_corrediza_en_la_esquina_y_la_hache_con_el_ancho_de_la_u() {
+        val v = VentanaAutomatica.ventana(VentanaAutomatica.Entrada(
+            Acabado.INA, ModeloMocheta.NORMAL, "nn",
+            listOf(VentanaAutomatica.LadoMedido(120f, 100f, 80f, 2), VentanaAutomatica.LadoMedido(120f, 100f, 80f, 2)),
+            PerfilU(1f, 1.5f), tubo238, esquinero = tubo238
+        ))
+        val orden = v.lados.joinToString(" P ") { l -> l.modulos.joinToString("") { if (it.corrediza) "c" else "f" } }
+        assertEquals("cf P fc", orden)
+        val m = MotorNova.calcular(v)
+        assertEquals("60.8 = 2", MaterialesNova.texto(m.hache))
+        assertTrue(lineas(MaterialesNova.texto(m.u)).toString(), "60.8 = 2" in lineas(MaterialesNova.texto(m.u)))
+        // Los vidrios salen de la U de fijo (60.85), no del módulo sin el ancho de la U. En la esquina se
+        // encuentran los dos fijos: el del lado más ancho (aquí iguales, el primero) descuenta 0.5 y el
+        // otro 0.2, el de vidrio con vidrio: 60.3 y 60.6. Las corredizas, 60.35 − 1.4 + 0.5 = 59.4.
+        val vidrios = lineas(MaterialesNova.textoVidrios(m.vidrios))
+        assertTrue(vidrios.toString(), "60.3 x 98.3 = 1" in vidrios && "60.6 x 98.3 = 1" in vidrios)
+        assertTrue(vidrios.toString(), "59.4 x 76.5 = 2" in vidrios)
+        // La mocheta sobre la corrediza también lleva su parte: 120 − 60.35 + 0.5 − 0.6 = 59.5 (salía 59).
+        assertTrue(vidrios.toString(), "59.5 x 21 = 2" in vidrios)
     }
 
     /**

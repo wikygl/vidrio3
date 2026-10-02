@@ -228,11 +228,22 @@ vidrios, U y tees son otra cosa (G-05).
   cupo; no salen de la regla. Con la hoja de siempre el rectángulo es lo que mide el lado bajo
   (114.4); si la hoja escrita es menor, se apoya sobre lo más alto del alféizar y lo que sobra va a la
   mocheta de arriba, que también cumple.
+  **La casilla de mocheta inferior** (dictado el 2026-10-02: así se tiene más control): cuando la
+  forma queda en bandera aparece, con la mocheta inferior del diseño medida como en N-34 (sin el
+  puente). Cambiarla y calcular rehace el diseño desde la forma con esa mocheta, sin sacar al sistema
+  de su rectángulo: abajo, por lo menos lo que sube el alféizar; arriba, lo que baja el dintel. Si lo
+  pedido no cabe queda en el límite y Nova lo dice.
   ✅ La mocheta INA bajo un borde inclinado es el rectángulo que la contiene (N-99), y el vano al
   revés (261.6) lleva las 5 hojas de la regla de los 60: confirmados por el usuario el 2026-10-02.
   Prueba `DintelInclinadoTest`.
 - N-22 ✅ **Orden preestablecido**: 2 `fc` · 3 `fcf` · 4 `fccf` · 5 `fcfcf` · 6 `fcffcf` · 7
   `fcfcfcf` · 8 `fccffccf`…; lo demás depende de la modulación.
+- N-103 ✅ **En INA una corrediza nunca va en una esquina** (dictado el 2026-10-02). En una L en
+  ángulo de dos hojas por lado salía `fc P fc`, con la corrediza del lado 1 contra la esquina; va
+  `cf P fc`. El tramo que toca una esquina en ángulo con una corrediza se da vuelta, si así queda un
+  fijo en la esquina sin poner una corrediza en la otra punta. ❓ Si ni dado vuelta se puede (dos
+  hojas entre dos esquinas, en el lado del medio de una C; full corredizas), hoy queda como estaba.
+  Código: `DisenoAutomatico.sinCorredizaEnLaEsquina`, prueba en `MedidasDeObraTest`.
 - N-23 ✅ Por modulación (fijos / corredizas): clásico según el orden · full fijos todas/0 · full
   corredizas 0/todas · doble corrediza 0/2 · triple 0/3 · ncfc el inverso del clásico. Las
   combinaciones de nfc, n3c, etc. están en el diálogo.
@@ -379,7 +390,13 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 
 - N-42 ✅ **U de fijos**: APA `(ancho − parantes + cruces × cruce) / divisiones`; INA
   `(ancho + cruces × cruce) / divisiones`, **más un ancho de U por cada esquina** en ángulo, que se
-  reparte entre las hojas como el cruce (`(120 + 0.7 + 1) / 2 = 60.8`). Los fijos seguidos van en
+  reparte entre las hojas como el cruce (`(120 + 0.7 + 1) / 2 = 60.8`). **La hache y los vidrios
+  también lo llevan**: salen de la U de fijo, como antes del motor único (dictado el 2026-10-02: en la
+  L la hache salía 60.3 y el vidrio 59.8, 1 cm menos que la U, cuando la holgura es 0.5). **En la
+  esquina se encuentran los dos fijos: el del lado más ancho descuenta 0.5 y el otro 0.2**, el de
+  vidrio con vidrio (con los dos iguales, da lo mismo cuál: el primero lleva el 0.5): 60.3 y 60.6.
+  **La mocheta de INA sobre las corredizas también lo lleva**, o su vidrio queda corto (59.5, no 59).
+  El ancho de U de la esquina modifica todo lo que sale de las hojas. Los fijos seguidos van en
   una sola U. ✅ (2026-09-25) **Con tramos automáticos y ninguno bloqueado, todos los módulos son
   iguales**: el cruce se reparte en toda la ventana, aunque los tramos tengan distinto número de hojas
   (420 en 4 + 3 hojas: hache `60 = 3`). ✅ (2026-09-25) **Los cruces se cuentan por tramo**: un tramo
@@ -520,6 +537,28 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 | Plana | ✔ | ✔ |
 | En L, en C, serie | ✔ | ✔ cada lado aparte; esquina según G-09 |
 | Curva | ✔ | ✔ el ancho es el arco (N-08) |
+
+- **La esquina de la L escrita a mano** (dictado el 2026-10-02): en Nova, debajo del lado 1, el
+  bloque "Esquina curva" con flecha, cuerda y desarrollo. Vacío, la esquina es en ángulo; con algún
+  valor, curva, por el mismo camino que la esquina curva que llega de Medidas (N-84). Con dos de las
+  tres medidas el arco queda dicho; con una sola se toma un cuarto de círculo (la L dobla 90°). El
+  lado que se escribe se nombra junto a sus casillas ("Lado 2"), ya no en el título; "Otros datos"
+  se quitó. Prueba `EsquinaCurvaEscritaTest`.
+- **La imagen de Nova de una ventana que dobla** (L, C, serie, esquina curva; pedido del usuario el
+  mismo día) sale de la vista 3D en perspectiva, no del dibujo plano, que la finge doblada y se ve
+  deforme. La vista 3D dibuja ahora las piezas con su medida sobre cada pared: el puente como banda
+  de su alto, el parante con su ancho, la hache abajo de la corrediza y las tres rayas del vidrio.
+  Correcciones del usuario (mismo día): **se mira desde adentro**, que es como se mide y se trabaja;
+  **desde afuera es una opción** (diálogo de opciones de Nova, "Vista"). La imagen va **con el estilo
+  del dibujo plano** (vidrio blanco, piezas en negro) y con el puente, el parante y la hache 3.5 veces
+  más gruesos que su medida (con el doble se confundían con las líneas comunes), que si no en la
+  imagen chica no se distinguen. También el parante entre una pared y la siguiente (la esquina, las
+  puntas de la curva), que salía como la raya del marco. El lado 1 va de frente y se gira hacia el lado
+  que deja la ventana más abierta. En INA se dibuja como en el plano: los fijos de piso a techo y la
+  mocheta solo sobre cada racha de corredizas, como un recuadro; la estructura no se ve: sin puente y
+  con los parantes como línea, y a la vista solo la hache; al cambiar el acabado, Nova recalcula y
+  redibuja sola. La vista 3D de novaDiseño sigue con su azul. La ventana plana sigue
+  con el dibujo de siempre.
 
 - En esquinero **cada lado es otro tramo**, unido por un parante de esquina `P<90>` (N-84).
 - En una esquina curva, al empezar y al terminar el arco van parantes: el arco es otro tramo (N-84).

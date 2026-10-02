@@ -455,6 +455,23 @@ class ContornoEnTramosTest {
     }
 
     /**
+     * La bandera de dos bordes inclinados (88.4 × 174.2, 114.4 a la derecha) con la mocheta inferior
+     * escrita en Nova (2026-10-02). Con hoja 100 sobran 74.2 para las dos mochetas; abajo va por lo
+     * menos lo que sube el alféizar (27.1) y arriba lo que baja el dintel (32.7), así que la de abajo
+     * va de 27.1 a 41.5. Escrita 35, queda 35; escrita 50, se queda en 41.5: el sistema no saldría
+     * del rectángulo donde cabe.
+     */
+    @Test
+    fun `la mocheta inferior escrita mueve el sistema sin sacarlo de su rectangulo`() {
+        val vano = listOf(0f to 0f, 88.4f to 32.7f, 88.4f to 147.1f, 0f to 174.2f)
+        fun abajo(inferior: Float) = ContornoEnTramos.disenoDesdeContorno(vano, "apa", 100f, mochetaInferior = inferior)!!
+            .tramos[0].franjas.let { f -> assertTrue(f.map { it.esSistema } == listOf(false, true, false)); f[0].alto }
+        assertEquals(27.1f, abajo(0f), 0.05f)
+        assertEquals(35f, abajo(35f), 0.05f)
+        assertEquals(41.5f, abajo(50f), 0.05f)
+    }
+
+    /**
      * Las divisiones escritas en Nova mandan, con hojas iguales (N-16; dictado el 2026-10-01): con 3,
      * Fide se rehace desde su forma con `fcf` y el dintel sigue inclinado. Los anchos desiguales o el
      * reparto entre varios tramos se hacen en novaDiseño.

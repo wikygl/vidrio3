@@ -424,7 +424,13 @@ object ContornoEnTramos {
          * varios tramos el reparto entre ellos se hace en novaDiseño (dictado el 2026-10-01) y aquí
          * se quedan las de la regla: quien llama lo nota porque el diseño no trae esa cantidad.
          */
-        divisiones: Int = 0
+        divisiones: Int = 0,
+        /**
+         * La mocheta de abajo de una bandera de dos bordes inclinados, como franja (con su puente),
+         * escrita en Nova; 0 = lo que sube el alféizar. Se ajusta a lo que deja al sistema entero
+         * dentro del rectángulo donde cabe (2026-10-02).
+         */
+        mochetaInferior: Float = 0f
     ): DisenoNova? {
         // Los tramos se reparten sin los descuadres de los costados; la silueta sigue siendo la medida.
         val puntos = sinDescuadreLateral(medido)
@@ -469,7 +475,7 @@ object ContornoEnTramos {
             while (fin + 1 < trozos.size &&
                 trozos[fin + 1].banda.esInclinada && trozos[fin + 1].llevaHoja
             ) fin++
-            repartirGrupo(trozos, i, fin, if (unSoloGrupo) divisiones else 0)
+            repartirGrupo(trozos, i, fin, if (unSoloGrupo) divisiones else 0, mochetaInferior)
                 .forEachIndexed { k, fr -> franjasPorTrozo[i + k] = fr }
             i = fin + 1
         }
@@ -626,7 +632,7 @@ object ContornoEnTramos {
      * después cada trozo se queda con los suyos en el orden en que salieron: así la corrediza cae
      * donde tiene que caer aunque el pico del vano parta el rectángulo en dos.
      */
-    private fun repartirGrupo(trozos: List<Trozo>, desde: Int, hasta: Int, escritas: Int = 0): List<List<NovaFranja>> {
+    private fun repartirGrupo(trozos: List<Trozo>, desde: Int, hasta: Int, escritas: Int = 0, mochetaInferior: Float = 0f): List<List<NovaFranja>> {
         val anchos = (desde..hasta).map { trozos[it].banda.anchoCm }
         val anchoGrupo = anchos.sum()
         val hoja = trozos[desde].hoja
@@ -654,8 +660,13 @@ object ContornoEnTramos {
                 // Los dos bordes inclinados (2026-10-02, 88.4 × 174.2 con 114.4 a la derecha): no hay
                 // borde recto donde apoyar el sistema, que es un rectángulo (N-66). Va en bandera: una
                 // mocheta abajo con lo que sube el alféizar, el sistema sobre lo más alto del alféizar y
-                // arriba la mocheta con el resto.
-                val abajo = abs((banda.caidaDerCm + banda.altoDerCm) - (banda.caidaCm + banda.altoCm))
+                // arriba la mocheta con el resto. La mocheta inferior escrita en Nova lo sube o lo baja
+                // (2026-10-02), sin que el sistema salga del rectángulo: abajo, por lo menos lo que sube
+                // el alféizar; arriba, por lo menos lo que baja el dintel.
+                val subeAlfeizar = abs((banda.caidaDerCm + banda.altoDerCm) - (banda.caidaCm + banda.altoCm))
+                val bajaDintel = abs(banda.caidaDerCm - banda.caidaCm)
+                val maximo = maxOf(subeAlfeizar, altoMocheta - bajaDintel)
+                val abajo = if (mochetaInferior > 0f) mochetaInferior.coerceIn(subeAlfeizar, maximo) else subeAlfeizar
                 val arriba = (altoMocheta - abajo).coerceAtLeast(0f)
                 if (abajo > TOLERANCIA) franjas.addAll(0, franjasDeFijos(anchoTrozo, abajo, sistema = false))
                 if (arriba > TOLERANCIA) franjas.addAll(franjasDeFijos(anchoTrozo, arriba, sistema = false))

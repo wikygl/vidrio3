@@ -47,6 +47,11 @@ class DisenoNovaActivity : AppCompatActivity() {
         const val EXTRA_PAQUETE = "extra_paquete_diseno"
         const val EXTRA_MOCHETA_LATERAL_CM = "extra_mocheta_lateral_cm"
         const val EXTRA_HEADLESS = "extra_headless"
+        /** La imagen de una ventana que dobla, desde afuera (por defecto, desde adentro). */
+        const val EXTRA_VISTA_EXTERIOR = "extra_vista_exterior"
+        /** El tamaño en px del recuadro donde se va a mostrar la imagen de una ventana que dobla. */
+        const val EXTRA_ANCHO_PX = "extra_ancho_px"
+        const val EXTRA_ALTO_PX = "extra_alto_px"
         const val EXTRA_RET_PADDING_PX = "extra_ret_padding_px"
         const val EXTRA_OUTPUT_FORMAT = "extra_output_format" // "svg" | "png"
         const val EXTRA_US_CM = "extra_us_cm"
@@ -133,6 +138,18 @@ class DisenoNovaActivity : AppCompatActivity() {
         val formato = intent.getStringExtra(EXTRA_OUTPUT_FORMAT) ?: "png"
 
         if (headless) {
+            // Una ventana que dobla (L, C, serie, esquina curva) se muestra en Nova en perspectiva, con
+            // sus piezas: el dibujo plano la finge doblada y se ve deforme (pedido del usuario, 2026-10-02).
+            if (formato != "svg") imagenEnPerspectiva(paqueteIntent)?.let { bmp ->
+                val uri = guardarPngEnCacheYUri(bmp, "diseno_${System.currentTimeMillis()}.png")
+                setResult(RESULT_OK, Intent().apply {
+                    putExtra(RESULT_URI, uri.toString())
+                    data = uri
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                })
+                finish()
+                return
+            }
             val vista = VistaDiseno(this).apply {
                 actualizarDesdePaquete(paqueteIntent, 0f, 0f, mochetaLateralCm)
                 setEncuentroVacio(encuentroVacio)
@@ -2664,6 +2681,71 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun df1(defo: Float): String {
         return if (defo % 1f == 0f) defo.toInt().toString()
         else "%.1f".format(defo).replace(",", ".")
+    }
+
+    /**
+     * La ventana que dobla dibujada con la vista 3D en perspectiva, recortada a lo dibujado; null si
+     * no dobla (la plana sigue con el dibujo de siempre) o si no se pudo armar.
+     */
+    private fun imagenEnPerspectiva(paquete: String): android.graphics.Bitmap? {
+        val d = runCatching { DisenoNova.desdePaquete(paquete) }.getOrNull() ?: return null
+        if (!d.doblaEnEsquina) return null
+        val vista = VistaVolumenNova(this)
+        if (!vista.mostrar(paquete)) return null
+        vista.perspectiva = true
+        // Con el estilo del dibujo plano y las piezas más gruesas, para que en la imagen chica de
+        // Nova se lean (2026-10-02: el puente, el parante y la hache casi no se veían).
+        vista.estiloDibujo = true
+        vista.escalaPiezas = 3.5f
+        // El lado 1 de frente, desde adentro (como se mide) o desde afuera si se pidió, con el
+        // horizonte a media altura de la ventana: el ojo mirándola de frente, sin subir la mirada
+        // (pedido del usuario, 2026-10-02). Las horizontales casi no se inclinan y se ven menos
+        // escalonadas.
+        vista.elevacionGrados = 0f
+        vista.mirarDeFrente(desdeAfuera = intent.getBooleanExtra(EXTRA_VISTA_EXTERIOR, false))
+        // El ojo, lejos en proporción a la ventana: muy cerca, una ventana grande se deforma.
+        vista.distanciaCm = maxOf(800f, vista.tamanoCm() * 4f)
+        // Del tamaño del recuadro de Nova donde se va a ver, con los trazos para ese tamaño (2026-10-02).
+        // Generada más grande y achicada al mostrarla, las líneas finas quedaban por debajo de un punto
+        // y se perdían, sobre todo en las ventanas grandes, que se achican más para entrar.
+        val w = intent.getIntExtra(EXTRA_ANCHO_PX, 0).takeIf { it > 50 } ?: 800
+        val h = intent.getIntExtra(EXTRA_ALTO_PX, 0).takeIf { it > 50 } ?: 600
+        vista.trazosPara(w)
+        vista.measure(
+            View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
+        )
+        vista.layout(0, 0, w, h)
+        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(bmp).apply {
+            drawColor(android.graphics.Color.WHITE)
+            vista.draw(this)
+        }
+        return recortadoALoDibujado(bmp)
+    }
+
+    /** El bitmap sin el blanco de alrededor, con un poco de aire. */
+    private fun recortadoALoDibujado(bmp: android.graphics.Bitmap): android.graphics.Bitmap {
+        val w = bmp.width
+        val h = bmp.height
+        val px = IntArray(w * h)
+        bmp.getPixels(px, 0, w, 0, 0, w, h)
+        var x0 = w; var y0 = h; var x1 = -1; var y1 = -1
+        for (y in 0 until h) for (x in 0 until w) {
+            if (px[y * w + x] != android.graphics.Color.WHITE) {
+                if (x < x0) x0 = x
+                if (x > x1) x1 = x
+                if (y < y0) y0 = y
+                if (y > y1) y1 = y
+            }
+        }
+        if (x1 < x0 || y1 < y0) return bmp
+        val aire = 12
+        val l = (x0 - aire).coerceAtLeast(0)
+        val t = (y0 - aire).coerceAtLeast(0)
+        val r = (x1 + aire).coerceAtMost(w - 1)
+        val b = (y1 + aire).coerceAtMost(h - 1)
+        return android.graphics.Bitmap.createBitmap(bmp, l, t, r - l + 1, b - t + 1)
     }
 
     // =========================== ARCHIVOS (headless) ===========================

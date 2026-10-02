@@ -278,8 +278,8 @@ class NovaCorrediza : AppCompatActivity() {
             // motor y el dibujo: sin cambiarlo ahí, el título cambiaba de color y la ventana seguía
             // calculándose en el acabado anterior.
             if (ultimoPaquete.isNotBlank()) ultimoPaquete = conAcabado(ultimoPaquete, tipoPaquete())
-            // Un diseño cargado se dibuja de nuevo en el acabado nuevo (el automático se rehace al calcular).
-            if (modulosDesiguales.isNotEmpty()) redibujarDiseno()
+            // El diseño y los materiales en el acabado nuevo (ver [alCambiarAcabado]).
+            alCambiarAcabado()
             actualizarModo()
         }
 
@@ -634,6 +634,8 @@ class NovaCorrediza : AppCompatActivity() {
                         Toast.LENGTH_LONG).show()
                     return@setOnClickListener
                 }
+                // La esquina de la L escrita a mano: en ángulo si sus casillas están vacías, curva si no.
+                if (texto == "nl") aplicarEsquinaEscrita()
 
                 // El vano con forma se rehace desde ella si cambió el alto de hoja o las divisiones.
                 rehacerDesdeLaFormaSiCambio()
@@ -663,6 +665,9 @@ class NovaCorrediza : AppCompatActivity() {
                     val intent = Intent(this, DisenoNovaActivity::class.java).apply {
                         putExtra(DisenoNovaActivity.EXTRA_PAQUETE, ultimoPaquete)
                         putExtra(DisenoNovaActivity.EXTRA_HEADLESS, true)
+                        putExtra(DisenoNovaActivity.EXTRA_VISTA_EXTERIOR, vistaExterior)
+                        putExtra(DisenoNovaActivity.EXTRA_ANCHO_PX, binding.ivDiseno.width)
+                        putExtra(DisenoNovaActivity.EXTRA_ALTO_PX, binding.ivDiseno.height)
                         putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>") || modulosDesiguales.isNotEmpty()) "png" else "svg")
                         putExtra(DisenoNovaActivity.EXTRA_RET_PADDING_PX, 4)
                         putExtra(DisenoNovaActivity.EXTRA_MOCHETA_LATERAL_CM, mochetaLateralDisenoNl())
@@ -1151,8 +1156,7 @@ class NovaCorrediza : AppCompatActivity() {
             binding.btAgregar.visibility = View.GONE
             binding.btAgregar.isEnabled = false
             contadorLado = 2
-            binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
-            actualizarTxDatosLadoNl(1)
+            mostrarLadoActual()
         } else {
             val medida = MedidaNl(ancho, alto, hoja, divisManual)
             if (texto == "nu") {
@@ -1173,8 +1177,7 @@ class NovaCorrediza : AppCompatActivity() {
                         binding.etHoja.setText("")
                         binding.etPartes.setText("0")
                         contadorLado = 2
-                        binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
-                        actualizarTxDatosLadoNl(1)
+                        mostrarLadoActual()
                     }
                     2 -> {
                         segundaMedidaNu = medida
@@ -1186,15 +1189,15 @@ class NovaCorrediza : AppCompatActivity() {
                         binding.lyAlto3.visibility = View.VISIBLE
                         binding.lyPuente3.visibility = View.VISIBLE
                         binding.lyDivi3.visibility = View.VISIBLE
+                        binding.tvLado2.visibility = View.VISIBLE
                         binding.etAncho.setText("")
                         binding.etAlto.setText("")
                         binding.etHoja.setText("")
                         binding.etPartes.setText("0")
                         contadorLado = 3
-                        binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+                        mostrarLadoActual()
                         binding.btAgregar.visibility = View.GONE
                         binding.btAgregar.isEnabled = false
-                        actualizarTxDatosLadoNl(2)
                     }
                 }
             } else if (texto == "ns") {
@@ -1204,8 +1207,7 @@ class NovaCorrediza : AppCompatActivity() {
                 binding.etHoja.setText("")
                 binding.etPartes.setText("0")
                 contadorLado += 1
-                binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
-                actualizarTxDatosLadoNl(ladosNs.size)
+                mostrarLadoActual()
             }
         }
     }
@@ -1377,6 +1379,14 @@ class NovaCorrediza : AppCompatActivity() {
             TipoNova.PIV -> dlg.dgRbPiv.isChecked = true
         }
         dlg.dgRbPiv.visibility = View.GONE   // Nova pivotante oculto en v1
+        // Desde dónde se mira la imagen de una ventana que dobla (2026-10-02): desde adentro, como
+        // se mide; desde afuera si el cliente la quiere ver así.
+        dlg.dgRgVista.check(if (vistaExterior) dlg.dgRbVistaAfuera.id else dlg.dgRbVistaAdentro.id)
+        dlg.dgRgVista.setOnCheckedChangeListener { _, checkedId ->
+            vistaExterior = checkedId == dlg.dgRbVistaAfuera.id
+            if (ultimoPaquete.isNotBlank()) redibujarDiseno()
+        }
+
         dlg.dgRgAcabado.setOnCheckedChangeListener { _, checkedId ->
             tipoNova = when (checkedId) {
                 R.id.dgRbIna -> TipoNova.INA
@@ -1387,8 +1397,8 @@ class NovaCorrediza : AppCompatActivity() {
             // lo lee el motor. Desde aquí no se cambiaba y un vano con forma elegido en inaparente
             // se seguía calculando en aparente (hallado el 2026-09-29).
             if (ultimoPaquete.isNotBlank()) ultimoPaquete = conAcabado(ultimoPaquete, tipoPaquete())
-            // Un diseño cargado se dibuja de nuevo en el acabado nuevo (el automático se rehace al calcular).
-            if (modulosDesiguales.isNotEmpty()) redibujarDiseno()
+            // El diseño y los materiales en el acabado nuevo (ver [alCambiarAcabado]).
+            alCambiarAcabado()
             actualizarModo()
         }
 
@@ -1666,22 +1676,25 @@ class NovaCorrediza : AppCompatActivity() {
 
         when (tipo) {
             "nl" -> {
+                // La esquina de la L: vacía, en ángulo; con valores, curva (2026-10-02).
+                binding.tvEsquinaCurva.visibility = View.VISIBLE
                 binding.lyFlecha.visibility = View.VISIBLE
                 binding.lyCuerda.visibility = View.VISIBLE
+                binding.lyDesarrollo.visibility = View.VISIBLE
                 maxLados = 2; contadorLado = 1
-                binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+                mostrarLadoActual()
                 binding.btAgregar.visibility = View.VISIBLE
                 binding.btAgregar.isEnabled = true; otros = true
             }
             "nu" -> {
                 maxLados = 3; contadorLado = 1
-                binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+                mostrarLadoActual()
                 binding.btAgregar.visibility = View.VISIBLE
                 binding.btAgregar.isEnabled = true; otros = true
             }
             "ns" -> {
                 maxLados = -1; contadorLado = 1
-                binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+                mostrarLadoActual()
                 binding.btAgregar.visibility = View.VISIBLE
                 binding.btAgregar.isEnabled = true; otros = true
             }
@@ -1690,10 +1703,12 @@ class NovaCorrediza : AppCompatActivity() {
                 binding.lyCuerda.visibility = View.VISIBLE
                 binding.btAgregar.visibility = View.GONE
                 binding.btAgregar.isEnabled = false; otros = true
+                mostrarLadoActual()
             }
             else -> {
                 binding.btAgregar.visibility = View.GONE
                 binding.btAgregar.isEnabled = false; otros = false
+                mostrarLadoActual()
             }
         }
 
@@ -2028,7 +2043,9 @@ class NovaCorrediza : AppCompatActivity() {
     }
 
     private fun actualizarVisibilidadMochetaInferior() {
-        binding.lyMochetaInf.visibility = if (esModeloDoblePuente()) View.VISIBLE else View.GONE
+        // También cuando la bandera sale de la forma del vano (2026-10-02).
+        val banderaDeLaForma = mochetaInfDelDiseno != null && contornoMedida.isNotBlank()
+        binding.lyMochetaInf.visibility = if (esModeloDoblePuente() || banderaDeLaForma) View.VISIBLE else View.GONE
     }
 
     private fun mochetaInferiorDoblePuente(): Float {
@@ -2227,6 +2244,9 @@ class NovaCorrediza : AppCompatActivity() {
         val intentRender = Intent(this, DisenoNovaActivity::class.java).apply {
             putExtra(DisenoNovaActivity.EXTRA_PAQUETE, ultimoPaquete)
             putExtra(DisenoNovaActivity.EXTRA_HEADLESS, true)
+            putExtra(DisenoNovaActivity.EXTRA_VISTA_EXTERIOR, vistaExterior)
+            putExtra(DisenoNovaActivity.EXTRA_ANCHO_PX, binding.ivDiseno.width)
+            putExtra(DisenoNovaActivity.EXTRA_ALTO_PX, binding.ivDiseno.height)
             putExtra(DisenoNovaActivity.EXTRA_OUTPUT_FORMAT, if (texto == "nl" || texto == "nu" || texto == "ns" || texto == "ncu" || texto == "nci" || ultimoPaquete.contains("P<2.5>") || modulosDesiguales.isNotEmpty()) "png" else "svg")
             putExtra(DisenoNovaActivity.EXTRA_RET_PADDING_PX, 4)
             putExtra(DisenoNovaActivity.EXTRA_MOCHETA_LATERAL_CM, mochetaLateralDisenoNl())
@@ -2943,6 +2963,7 @@ class NovaCorrediza : AppCompatActivity() {
 
     private fun limpiarEstadoNl() {
         esquinaDeLaMedida = null
+        esquinaEscrita = false
         siluetasDeLaMedida = emptyList()
         parantesDeLaMedida = emptyList()
         materialesNlArchivables = null
@@ -2972,12 +2993,98 @@ class NovaCorrediza : AppCompatActivity() {
         binding.lyDivi3.visibility = View.GONE
         binding.lyFlecha.visibility = View.GONE
         binding.lyCuerda.visibility = View.GONE
-        binding.txDatos.setText(R.string.otros_datos)
+        binding.tvLado2.visibility = View.GONE
+        binding.tvEsquinaCurva.visibility = View.GONE
+        binding.lyDesarrollo.visibility = View.GONE
+        binding.etDesarrollo.setText("")
     }
 
+    /**
+     * Al pasar de aparente a inaparente o al revés (2026-10-02: el diseño no cambiaba): un diseño
+     * cargado se dibuja de nuevo en el acabado nuevo, y si ya se había calculado se vuelve a calcular
+     * solo, como al cambiar el puente o la U, para que materiales y dibujo sean del acabado nuevo.
+     */
+    private fun alCambiarAcabado() {
+        if (modulosDesiguales.isNotEmpty()) redibujarDiseno()
+        if (ultimoPaquete.isNotBlank()) binding.btCalcular.post { binding.btCalcular.performClick() }
+    }
+
+    /** La imagen de una ventana que dobla se ve desde afuera (por defecto, desde adentro). */
+    private var vistaExterior = false
+
+    /** La esquina de [esquinaDeLaMedida] la armaron las casillas de esquina curva, no Medidas. */
+    private var esquinaEscrita = false
+
+    /**
+     * La esquina de la L escrita a mano (2026-10-02): con las casillas de esquina curva vacías, en
+     * ángulo; con algún valor, curva. Se arma como la esquina curva que llega de Medidas (una arista
+     * `c<desarrollo>|<cuerda>|<alto>|<puente>` en [esquinaDeLaMedida]), y desde ahí el motor la
+     * calcula como un lado más (N-84) y el diseño la dibuja con su arco: es el mismo camino.
+     * Si la esquina vino de Medidas y las casillas están vacías, se queda la de Medidas.
+     */
+    private fun aplicarEsquinaEscrita() {
+        val lado1 = obtenerPrimeraMedidaNlEditable() ?: return
+        val curva = curvaEscrita(lado1.alto, lado1.hoja)
+        if (curva == null) {
+            if (esquinaEscrita) {
+                esquinaDeLaMedida = null
+                esquinaEscrita = false
+            }
+            return
+        }
+        fun num(et: EditText) = et.text?.toString()?.trim()?.replace(",", ".")?.toFloatOrNull() ?: 0f
+        fun lado(ancho: Float, alto: Float, puente: Float) = crystal.crystal.taller.LadoEsquina(ancho, ancho, alto, alto, puente)
+        esquinaDeLaMedida = EsquinaMedida(
+            listOf(
+                lado(lado1.ancho, lado1.alto, lado1.hoja),
+                lado(num(binding.etAncho), num(binding.etAlto), num(binding.etHoja))
+            ),
+            listOf(EsquinaMedida.textoDeCurva(curva))
+        )
+        esquinaEscrita = true
+    }
+
+    /**
+     * La curva de las casillas de esquina curva; null si están vacías. Con dos de las tres medidas
+     * (flecha, cuerda, desarrollo) el arco queda dicho. Con una sola, la curva dobla lo que dobla la
+     * L, 90°: un cuarto de círculo.
+     */
+    private fun curvaEscrita(alto: Float, puente: Float): CurvaEsquina? {
+        fun valor(et: EditText) = et.text?.toString()?.trim()?.replace(",", ".")?.toFloatOrNull()?.takeIf { it > 0f }
+        val f = valor(binding.etFlecha)
+        val c = valor(binding.etCuerda)
+        val d = valor(binding.etDesarrollo)
+        val a = crystal.crystal.taller.ArcoEsquina
+        val arco = when {
+            d != null && c != null -> a.deDesarrolloYCuerda(d, c)
+            d != null && f != null -> a.deDesarrolloYFlecha(d, f)
+            c != null && f != null -> a.deCuerdaYFlecha(c, f)
+            else -> null
+        }
+        val (desarrollo, cuerda) = arco?.let { it.desarrollo to it.cuerda } ?: run {
+            val raiz2 = kotlin.math.sqrt(2.0).toFloat()
+            val radio = when {
+                d != null -> d / (Math.PI / 2).toFloat()
+                c != null -> c / raiz2
+                f != null -> f / (1f - kotlin.math.cos(Math.PI / 4).toFloat())
+                else -> return null
+            }
+            (radio * (Math.PI / 2).toFloat()) to (radio * raiz2)
+        }
+        return CurvaEsquina(desarrollo, cuerda, alto, puente)
+    }
+
+    /**
+     * El lado que se está escribiendo en L, C y serie, encima de sus casillas (2026-10-02). Antes iba
+     * en el título fijo ("Medidas y Cantidad\nLado 2") y al desplazar quedaba junto a otro lado; y
+     * "Otros datos\nLado 1" junto al selector de diseño no decía nada.
+     */
     @SuppressLint("SetTextI18n")
-    private fun actualizarTxDatosLadoNl(lado: Int) {
-        binding.txDatos.text = "Otros datos\nLado $lado"
+    private fun mostrarLadoActual() {
+        binding.tvMedidas.setText(R.string.medidas_y_cantidad)
+        val compuesta = texto == "nl" || texto == "nu" || texto == "ns"
+        binding.tvLadoActual.text = "Lado $contadorLado"
+        binding.tvLadoActual.visibility = if (compuesta) View.VISIBLE else View.GONE
     }
 
     private fun mochetaLateralDisenoNl(): Float {
@@ -3263,8 +3370,7 @@ class NovaCorrediza : AppCompatActivity() {
         binding.tvLado1.visibility = View.GONE
         contadorLado = 1
         maxLados = 2
-        binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
-        binding.txDatos.setText(R.string.otros_datos)
+        mostrarLadoActual()
         binding.btAgregar.visibility = View.VISIBLE
         binding.btAgregar.isEnabled = true
     }
@@ -3578,7 +3684,7 @@ class NovaCorrediza : AppCompatActivity() {
             return true
         }
         contadorLado = 1
-        binding.tvMedidas.text = "Medidas y Cantidad\nLado$contadorLado"
+        mostrarLadoActual()
         medida.lados.dropLast(1).forEach { agregarLado(it.ancho, it.alto, it.puente, 0) }
         val ultimo = medida.lados.last()
         binding.etAncho.setText(df1(ultimo.ancho))
@@ -3774,10 +3880,13 @@ class NovaCorrediza : AppCompatActivity() {
         return false
     }
 
-    private fun cargarDisenoDelContorno(contorno: String, divisiones: Int = 0): Boolean {
+    @JvmOverloads
+    private fun cargarDisenoDelContorno(contorno: String, divisiones: Int = 0, mochetaInferior: Float = 0f): Boolean {
 
         // Cada medida trae el suyo: el de la anterior no vale para esta.
         contornoMedida = ""
+        mochetaInfDelDiseno = null
+        actualizarVisibilidadMochetaInferior()
         val puntos = ContornoEnTramos.desdeTexto(contorno)
         if (puntos.size < 3) return false
         val acabado = when (tipoNova) {
@@ -3786,16 +3895,37 @@ class NovaCorrediza : AppCompatActivity() {
             else -> "ina"
         }
         val hoja = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
+        // La mocheta inferior escrita es la de la regla de bandera (N-34, sin el puente); la franja
+        // del diseño lleva el puente dentro.
+        val franjaInferior = if (mochetaInferior > 0f) mochetaInferior + alturaPuenteBandera() else 0f
         val diseno = runCatching {
-            ContornoEnTramos.disenoDesdeContorno(puntos, acabado, hoja, divisiones = divisiones)
+            ContornoEnTramos.disenoDesdeContorno(puntos, acabado, hoja, divisiones = divisiones, mochetaInferior = franjaInferior)
         }.getOrNull() ?: return false
         if (!diseno.esIrregular) return false
         cargarDesdePaqueteDiseno(diseno.aPaquete())
         contornoMedida = contorno
         hojaDelDiseno = binding.etHoja.text?.toString()?.toFloatOrNull() ?: 0f
         medidaDelDiseno = diseno.ancho to diseno.alto
+        // Si la forma quedó en bandera, su mocheta inferior va a la casilla, que aparece (dictado el
+        // 2026-10-02: así se tiene más control). Cambiarla rehace el diseño ([rehacerDesdeLaFormaSiCambio]).
+        diseno.tramos.firstOrNull { t -> t.franjas.map { it.esSistema } == listOf(false, true, false) }?.let { t ->
+            cargandoDiseno = true
+            try {
+                binding.etMochetaInf.setText(df1((t.franjas[0].alto - alturaPuenteBandera()).coerceAtLeast(0f)))
+            } finally {
+                cargandoDiseno = false
+            }
+            mochetaInfDelDiseno = binding.etMochetaInf.text?.toString()?.trim().orEmpty()
+        }
+        actualizarVisibilidadMochetaInferior()
         return true
     }
+
+    /** La mocheta inferior de la bandera que salió de la forma del vano, como quedó en la casilla; null si no hay. */
+    private var mochetaInfDelDiseno: String? = null
+
+    /** El puente de una bandera: no admite Múltiple y lleva tubo (N-03); con otro puente, el suyo. */
+    private fun alturaPuenteBandera(): Float = if (esPuenteMultiple()) 2.5f else puenteMotor().altura
 
     /**
      * Rehace el diseño del vano con forma cuando el vidriero escribe otro alto de hoja u otra
@@ -3816,13 +3946,27 @@ class NovaCorrediza : AppCompatActivity() {
         val delDiseno = medidasDelDiseno ?: return
         val ahora = medidasEnPantalla()
         if (!mismaMedida(delDiseno[0], ahora[0]) || !mismaMedida(delDiseno[1], ahora[1])) return
-        if (mismaMedida(delDiseno[2], ahora[2]) && mismaMedida(delDiseno[3], ahora[3])) return
+        // La mocheta inferior de una bandera que salió de la forma también se cambia aquí (2026-10-02).
+        val infDelDiseno = mochetaInfDelDiseno
+        val infAhora = binding.etMochetaInf.text?.toString()?.trim().orEmpty()
+        val infCambiada = infDelDiseno != null && !mismaMedida(infDelDiseno, infAhora)
+        if (mismaMedida(delDiseno[2], ahora[2]) && mismaMedida(delDiseno[3], ahora[3]) && !infCambiada) return
         val pedidas = ahora[3].toIntOrNull() ?: 0
+        val inferior = if (infDelDiseno != null) infAhora.replace(",", ".").toFloatOrNull() ?: 0f else 0f
         val contorno = contornoMedida
-        if (!cargarDisenoDelContorno(contorno, pedidas)) {
+        if (!cargarDisenoDelContorno(contorno, pedidas, inferior)) {
             contornoMedida = contorno
             Toast.makeText(this, "No se pudo rehacer el diseño desde la forma del vano", Toast.LENGTH_LONG).show()
             return
+        }
+        // Si la pedida sacaba al sistema del rectángulo donde cabe, quedó en el límite: se dice.
+        val quedo = mochetaInfDelDiseno
+        if (infCambiada && inferior > 0f && quedo != null && !mismaMedida(quedo, df1(inferior))) {
+            Toast.makeText(
+                this,
+                "La mocheta inferior queda en $quedo: con ${df1(inferior)} el sistema no cabe entero en su rectángulo",
+                Toast.LENGTH_LONG
+            ).show()
         }
         val quedaron = modulosDesiguales.size
         if (pedidas > 0 && quedaron != pedidas) {
