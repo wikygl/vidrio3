@@ -16,7 +16,8 @@
 .cxx
 hs_err_pid*.log
 replay_pid*.log
-.claude/
+.claude/*
+!.claude/skills/
 
 # Firma de release: NUNCA versionar el keystore ni sus contraseñas.
 /keystore.properties
