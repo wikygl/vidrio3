@@ -470,6 +470,9 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etPuente3.backgroundTintList = tintList
         binding.etFlecha.backgroundTintList = tintList
         binding.etCuerda.backgroundTintList = tintList
+        binding.etDesarrollo.backgroundTintList = tintList
+        binding.etAltoCurva.backgroundTintList = tintList
+        binding.etPuenteCurva.backgroundTintList = tintList
         binding.etNmochetas.backgroundTintList = tintList
         binding.etMochetaInf.backgroundTintList = tintList
 
@@ -1681,6 +1684,8 @@ class NovaCorrediza : AppCompatActivity() {
                 binding.lyFlecha.visibility = View.VISIBLE
                 binding.lyCuerda.visibility = View.VISIBLE
                 binding.lyDesarrollo.visibility = View.VISIBLE
+                binding.lyAltoCurva.visibility = View.VISIBLE
+                binding.lyPuenteCurva.visibility = View.VISIBLE
                 maxLados = 2; contadorLado = 1
                 mostrarLadoActual()
                 binding.btAgregar.visibility = View.VISIBLE
@@ -2964,6 +2969,7 @@ class NovaCorrediza : AppCompatActivity() {
     private fun limpiarEstadoNl() {
         esquinaDeLaMedida = null
         esquinaEscrita = false
+        curvaCargada = null
         siluetasDeLaMedida = emptyList()
         parantesDeLaMedida = emptyList()
         materialesNlArchivables = null
@@ -2997,6 +3003,10 @@ class NovaCorrediza : AppCompatActivity() {
         binding.tvEsquinaCurva.visibility = View.GONE
         binding.lyDesarrollo.visibility = View.GONE
         binding.etDesarrollo.setText("")
+        binding.lyAltoCurva.visibility = View.GONE
+        binding.lyPuenteCurva.visibility = View.GONE
+        binding.etAltoCurva.setText("")
+        binding.etPuenteCurva.setText("")
     }
 
     /**
@@ -3020,11 +3030,26 @@ class NovaCorrediza : AppCompatActivity() {
      * ángulo; con algún valor, curva. Se arma como la esquina curva que llega de Medidas (una arista
      * `c<desarrollo>|<cuerda>|<alto>|<puente>` en [esquinaDeLaMedida]), y desde ahí el motor la
      * calcula como un lado más (N-84) y el diseño la dibuja con su arco: es el mismo camino.
-     * Si la esquina vino de Medidas y las casillas están vacías, se queda la de Medidas.
+     * Si la esquina vino de Medidas, sus casillas ya la muestran (ver [mostrarCurvaDeMedidas]) y lo
+     * que digan al calcular manda: se cambia solo la esquina y los lados de Medidas se quedan.
      */
     private fun aplicarEsquinaEscrita() {
         val lado1 = obtenerPrimeraMedidaNlEditable() ?: return
-        val curva = curvaEscrita(lado1.alto, lado1.hoja)
+        val escrita = curvaEscrita(lado1.alto, lado1.hoja)
+        // Casillas sin tocar desde que las llenó Medidas: la curva tal cual vino, sin el redondeo
+        // a un decimal de lo que se muestra.
+        val curva = curvaCargada?.takeIf { escrita != null && it.first == textosDeLaCurva() }
+            ?.let { (_, c) ->
+                escrita?.let { e -> c.copy(alto = if (c.alto > 1f) c.alto else e.alto, puente = if (c.puente > 0.5f) c.puente else e.puente) }
+            } ?: escrita
+        val deMedidas = esquinaDeLaMedida?.takeIf { !esquinaEscrita && it.lados.size == 2 }
+        if (deMedidas != null) {
+            // Vacías, en ángulo: el que trajo Medidas si era un ángulo, en escuadra si era la curva.
+            val arista = curva?.let { EsquinaMedida.textoDeCurva(it) }
+                ?: deMedidas.angulos.firstOrNull()?.takeIf { deMedidas.curvaDe(0) == null } ?: "90"
+            esquinaDeLaMedida = deMedidas.copy(angulos = listOf(arista) + deMedidas.angulos.drop(1))
+            return
+        }
         if (curva == null) {
             if (esquinaEscrita) {
                 esquinaDeLaMedida = null
@@ -3071,7 +3096,31 @@ class NovaCorrediza : AppCompatActivity() {
             }
             (radio * (Math.PI / 2).toFloat()) to (radio * raiz2)
         }
-        return CurvaEsquina(desarrollo, cuerda, alto, puente)
+        // El paño curvo con su propio alto y puente; vacíos, los del lado 1.
+        return CurvaEsquina(desarrollo, cuerda, valor(binding.etAltoCurva) ?: alto, valor(binding.etPuenteCurva) ?: puente)
+    }
+
+    /** Lo que mostraban las casillas de la curva al cargarla de Medidas, y la curva tal cual vino. */
+    private var curvaCargada: Pair<List<String>, CurvaEsquina>? = null
+
+    private fun textosDeLaCurva(): List<String> =
+        listOf(binding.etFlecha, binding.etCuerda, binding.etDesarrollo, binding.etAltoCurva, binding.etPuenteCurva)
+            .map { it.text?.toString()?.trim().orEmpty() }
+
+    /**
+     * La esquina de la L que trae Medidas, en sus casillas (2026-10-02): flecha, cuerda, desarrollo,
+     * y el alto y el puente del paño curvo. Antes la curva entraba al cálculo sin verse en Nova.
+     * Una esquina en ángulo deja las casillas vacías.
+     */
+    private fun mostrarCurvaDeMedidas(medida: EsquinaMedida) {
+        val c = medida.curvaDe(0)
+        val arco = c?.let { crystal.crystal.taller.ArcoEsquina.deDesarrolloYCuerda(it.desarrollo, it.cuerda) }
+        binding.etFlecha.setText(arco?.let { df1(it.flecha) }.orEmpty())
+        binding.etCuerda.setText(c?.let { df1(it.cuerda) }.orEmpty())
+        binding.etDesarrollo.setText(c?.let { df1(it.desarrollo) }.orEmpty())
+        binding.etAltoCurva.setText(c?.alto?.takeIf { it > 1f }?.let { df1(it) }.orEmpty())
+        binding.etPuenteCurva.setText(c?.puente?.takeIf { it > 0.5f }?.let { df1(it) }.orEmpty())
+        curvaCargada = c?.let { textosDeLaCurva() to it }
     }
 
     /**
@@ -3691,6 +3740,7 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etAlto.setText(df1(ultimo.alto))
         binding.etHoja.setText(df1(ultimo.puente))
         binding.etPartes.setText("0")
+        if (geo == "nl") mostrarCurvaDeMedidas(medida)
         avisarDeLaEsquina(medida)
         return true
     }

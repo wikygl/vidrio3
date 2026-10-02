@@ -939,6 +939,59 @@
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
                         </LinearLayout>
 
+                        <!-- El alto y el puente del paño curvo; vacíos, los del lado 1 (2026-10-02). -->
+                        <LinearLayout
+                            android:id="@+id/lyAltoCurva"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Alto curva"
+                                tools:ignore="HardcodedText,RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etAltoCurva"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/lyPuenteCurva"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="h.Puente curva"
+                                tools:ignore="HardcodedText,RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etPuenteCurva"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
                         <LinearLayout
                             android:id="@+id/lyMochetas"
                             android:layout_width="match_parent"
