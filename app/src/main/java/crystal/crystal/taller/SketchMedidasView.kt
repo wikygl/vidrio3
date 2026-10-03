@@ -3144,9 +3144,49 @@ class SketchMedidasView @JvmOverloads constructor(
      * derecha añade otra. Los signos van a la vista porque quitar estaba solo en la pulsación
      * larga y así no lo encuentra nadie.
      */
-    private fun textoAltos(cuantas: Int): String = "−  $cuantas ${if (cuantas == 1) "alto" else "altos"}  +"
+    // El contador de altos de cada lado, chico para que quepa en su lado: "↕ 1". Se toca y se abre
+    // con botones grandes (pedirAltos); el − y el + sobre el dibujo se montaban en una ventana larga.
+    private fun textoAltos(cuantas: Int): String = "↕ $cuantas"
 
     /** Los contadores de cotas de alto: uno por tramo, en el orden de los tramos. */
+    /**
+     * Las cotas de alto de un lado, con botones grandes: el contador sobre el dibujo es chico para
+     * caber en su lado, y al tocarlo se abre esto (2026-10-03).
+     */
+    private fun pedirAltos(etiquetaIndex: Int) {
+        val etiqueta = elementos.getOrNull(etiquetaIndex) as? Element.TextLabel ?: return
+        fun cuantas() = etiqueta.text.filter { it.isDigit() }.toIntOrNull() ?: 0
+        val dp = resources.displayMetrics.density
+        val numero = TextView(context).apply {
+            textSize = 26f
+            gravity = android.view.Gravity.CENTER
+            text = cuantas().toString()
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        fun boton(signo: String, delta: Int) = android.widget.Button(context).apply {
+            text = signo
+            textSize = 26f
+            layoutParams = LinearLayout.LayoutParams((72 * dp).toInt(), (72 * dp).toInt())
+            setOnClickListener {
+                val i = elementos.indexOfFirst { it === etiqueta }
+                if (i >= 0) cambiarAltos(i, delta)
+                numero.text = cuantas().toString()
+            }
+        }
+        val fila = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding((20 * dp).toInt(), (16 * dp).toInt(), (20 * dp).toInt(), (8 * dp).toInt())
+            addView(boton("−", -1)); addView(numero); addView(boton("+", 1))
+        }
+        AlertDialog.Builder(context)
+            .setTitle("Cotas de alto en este lado")
+            .setMessage("Una por cada punto donde se mide el alto dentro del lado.")
+            .setView(fila)
+            .setPositiveButton("Listo", null)
+            .show()
+    }
+
     private fun contadoresAltos(marcoIndex: Int): List<Int> {
         val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return emptyList()
         val zona = zonaDelMarco(marco)
@@ -4236,8 +4276,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 // La curva de un tramo se escribe como la de una esquina: desarrollo y cuerda.
                 ROL_CURVA -> editarCurvaDeTramo(index)
                 ROL_TRAMOS -> cambiarTramos(index, if (punto.x < boundsForText(el).centerX()) -1 else 1)
-                // Mitad izquierda (donde está el −) quita; mitad derecha (el +) añade.
-                ROL_ALTOS -> cambiarAltos(index, if (punto.x < boundsForText(el).centerX()) -1 else 1)
+                ROL_ALTOS -> pedirAltos(index)
                 else -> Unit
             }
             else -> Unit
@@ -7801,6 +7840,12 @@ class SketchMedidasView @JvmOverloads constructor(
                 }
                 sketchTextPaint.textSize = tamanoTexto(element)
                 if (element.rol == ROL_ALFEIZAR) dibujarIconoAlfeizar(canvas, element)
+                // Ángulos y curvas, con su fondo como las cotas: se leen aunque caigan sobre una línea.
+                if (element.rol == ROL_ESQUINA || element.rol == ROL_CURVA) {
+                    val caja = boundsForText(element).apply { inset(-ce(3f), -ce(2f)) }
+                    canvas.drawRoundRect(caja, ce(4f), ce(4f), cotaBgPaint)
+                    sketchTextPaint.textSize = tamanoTexto(element)
+                }
                 canvas.drawText(element.text, element.x, element.y, sketchTextPaint)
             }
             is Element.InfoBox -> drawInfoBox(canvas, element)
@@ -8405,6 +8450,11 @@ class SketchMedidasView @JvmOverloads constructor(
     private var exportando = false
 
     private fun tamanoTexto(element: Element.TextLabel): Float = when {
+        // Los rótulos que van sobre el dibujo (ángulos, curvas, el contador de altos de cada lado):
+        // del tamaño de las cotas y nunca más grandes de lo que deja el dibujo. Con la letra fija de
+        // pantalla, una ventana de 9 lados vista entera los montaba unos sobre otros (2026-10-03).
+        element.rol in setOf(ROL_ESQUINA, ROL_ALTOS, ROL_ALFEIZAR, ROL_CURVA) ->
+            minOf(ce(spToPx(12f)), techoDeRotulo())
         // Las pastillas (cuántas puertas, cuántos lados), un poco menores que el identificador.
         element.rol in ROLES_PASTILLA -> ce(14f * resources.displayMetrics.density)
         // El identificador, como un título mediano junto al dibujo (2026-10-03: grande sobre el
@@ -8415,8 +8465,6 @@ class SketchMedidasView @JvmOverloads constructor(
         // no se descuadre al ampliar ni al reducir, pero con un techo en medidas del dibujo. Sin él,
         // al alejar la letra crecía tanto respecto al apunte que ninguna fila cabía y todos los
         // rótulos acababan unos sobre otros.
-        element.rol in setOf(ROL_ESQUINA, ROL_ALTOS, ROL_ALFEIZAR, ROL_CURVA) ->
-            minOf(ce(maxOf(element.textSize, 44f)), techoDeRotulo())
         element.rol != null -> maxOf(element.textSize, 44f)
         else -> element.textSize
     }
@@ -8512,6 +8560,8 @@ class SketchMedidasView @JvmOverloads constructor(
             when (t.rol) {
                 ROL_HOJAS -> marcoDePieza(i)?.let { t.text = textoHojas(hojasDePuerta(it)) }
                 ROL_TRAMOS -> marcoDePieza(i)?.let { m -> t.text = textoTramos(ladosDelMarco(m)) }
+                // Los contadores de altos de los apuntes de antes ("−  1  +") pasan al formato chico.
+                ROL_ALTOS -> t.text = textoAltos(t.text.filter { it.isDigit() }.toIntOrNull() ?: 0)
                 // El título de una plantilla de producto, con la medida y las hojas de ahora.
                 null -> if (t.titulo) rectanguloDeProducto(i)?.let { r ->
                     t.text = tituloDeProducto(t.text, elementos[r] as Element.Shape, hojasDeProducto(r))
