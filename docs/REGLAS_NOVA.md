@@ -333,7 +333,18 @@ vidrios, U y tees son otra cosa (G-05).
   | Lado al vacío | resta el parante por cada lado | 0 |
   | Sin pared arriba o abajo | resta el falso puente | 0 |
   | Esquina en ángulo (L, C, serie) | resta el **esquinero** | **suma** el ancho de la U |
-  | Esquina curva | 0 | 0 |
+  | Esquina curva | cada pared resta **entero** el parante de su punta de curva (N-104); la curva, 0 | 0 |
+
+- N-104 ✅ **APA en L con esquina curva: el ancho útil de cada lado** (dictado el 2026-10-02). Cada
+  pared descuenta el parante de la esquina (el del esquinero, su medida normal: 2.5 con el tubo 2⅜,
+  3.8 con el paflón 1½)
+  en la punta donde empieza la curva, y todo el cálculo de ese lado (hojas, U, puente, riel, vidrios)
+  se hace con ese ancho útil. La curva se queda con su desarrollo. Sin esquinero ("ninguno") no hay
+  parante ni descuento. En Ele (150 + curva de 90 + 120): las paredes calculan con 147.5 y 117.5
+  (`MedidasDeObraTest`); con paflón 1½, 146.2 y 116.2. INA sigue sin descontar (N-37).
+  - **La curva**: su U de desarrollo no descuenta nada; el vidrio sí descuenta 0.5 por lado contra el
+    parante, así que el vidrio curvo tiene un poco menos de desarrollo, flecha y cuerda que el
+    aluminio (casi no se siente).
 
 - N-38 ✅ **Esquina en APA**: el perfil lo define el esquinero. Reparto invertido: la ventana más
   ancha recibe la parte menor del aluminio.
@@ -563,8 +574,8 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
 - En esquinero **cada lado es otro tramo**, unido por un parante de esquina `P<90>` (N-84).
 - En una esquina curva, al empezar y al terminar el arco van parantes: el arco es otro tramo (N-84).
   **En el motor desde el 2026-09-29**: la curva que trae la medida entra como un lado más, con su
-  desarrollo de ancho, sus hojas por la regla de los 60 y un parante en cada punta; ni ella ni las
-  paredes de al lado descuentan nada (G-09). Antes la curva no entraba en el cálculo: en Ele (150 +
+  desarrollo de ancho, sus hojas por la regla de los 60 y un parante en cada punta. La curva no
+  descuenta nada; en APA cada pared descuenta entero el parante de su punta (N-104, 2026-10-02). Antes la curva no entraba en el cálculo: en Ele (150 +
   curva de 90 + 120) faltaban sus dos hojas, su puente de 90 y sus vidrios, y salía un solo parante.
 - **N-75 en L, C y serie inaparente** (aplicado el 2026-09-29): la estructura de cada lado (puente,
   riel, U felpero) llega hasta el parante de esquina, con el reparto de N-38; el vidrio y sus U no

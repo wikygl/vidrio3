@@ -172,21 +172,18 @@ class MedidasDeObraTest {
 
     /**
      * Ele, L con la esquina resuelta en curva: 150 + curva de 90 (desarrollo) + 120, alto 160, hoja
-     * 90, aparente con Múltiple. La curva es otro trozo, con su desarrollo, entre dos parantes (N-84),
-     * y en la esquina curva no se descuenta nada (G-09). Antes la curva no entraba: faltaban sus dos
-     * hojas, su puente de 90 y sus vidrios, y la L salía con un solo parante.
+     * 90, aparente con Múltiple. La curva es otro trozo, con su desarrollo, entre dos parantes (N-84).
+     * Antes la curva no entraba: faltaban sus dos hojas, su puente de 90 y sus vidrios, y la L salía
+     * con un solo parante. N-104 (2026-10-02): cada pared descuenta entero el parante de su punta de
+     * curva (2.5 con el tubo 2⅜) y calcula con 147.5 y 117.5; la curva se queda con sus 90.
      */
     @Test
     fun ele_la_curva_de_la_esquina_entra_en_el_calculo() {
-        val v = VentanaAutomatica.ventana(VentanaAutomatica.Entrada(
-            Acabado.APA, ModeloMocheta.NORMAL, "nn",
-            listOf(VentanaAutomatica.LadoMedido(150f, 160f, 90f), VentanaAutomatica.LadoMedido(120f, 160f, 90f)),
-            u38, multiple, esquinero = tubo238,
-            curvas = listOf(VentanaAutomatica.LadoMedido(90f, 160f, 90f))
-        ))
-        val m = MotorNova.calcular(v)
+        val m = MotorNova.calcular(eleConCurva(tubo238))
         val puente = lineas(MaterialesNova.texto(m.puente))
-        assertTrue(puente.toString(), listOf("150 = 1", "90 = 1", "120 = 1").all { it in puente })
+        assertTrue(puente.toString(), listOf("147.5 = 1", "90 = 1", "117.5 = 1").all { it in puente })
+        assertTrue(lineas(MaterialesNova.texto(m.riel)).toString(),
+            listOf("147.4 = 1", "89.9 = 1", "117.4 = 1").all { it in lineas(MaterialesNova.texto(m.riel)) })
         assertTrue(lineas(MaterialesNova.texto(m.parante)).toString(), "160 = 2" in lineas(MaterialesNova.texto(m.parante)))
         // El fijo de la curva: (90 + 0.7) / 2 = 45.35 − 0.5 de pared (el parante) = 44.8 x (90 − 1.2).
         val vidrios = lineas(MaterialesNova.textoVidrios(m.vidrios))
@@ -194,6 +191,21 @@ class MedidasDeObraTest {
         // Las hojas: 3 en la pared de 150, 2 en la curva, 2 en la de 120.
         assertTrue(lineas(MaterialesNova.texto(m.hache)).toString(), m.hache.sumOf { it.cantidad } == 3)
     }
+
+    /** N-104 con paflón 1½ de esquinero: cada pared pierde 3.8 → 146.2 y 116.2; la curva, nada. */
+    @Test
+    fun ele_curva_con_paflon_descuenta_3_8_por_pared() {
+        val m = MotorNova.calcular(eleConCurva(Puente("paflon 1½", 3.8f, 8.25f)))
+        val puente = lineas(MaterialesNova.texto(m.puente))
+        assertTrue(puente.toString(), listOf("146.2 = 1", "90 = 1", "116.2 = 1").all { it in puente })
+    }
+
+    private fun eleConCurva(esquinero: Puente) = VentanaAutomatica.ventana(VentanaAutomatica.Entrada(
+        Acabado.APA, ModeloMocheta.NORMAL, "nn",
+        listOf(VentanaAutomatica.LadoMedido(150f, 160f, 90f), VentanaAutomatica.LadoMedido(120f, 160f, 90f)),
+        u38, multiple, esquinero = esquinero,
+        curvas = listOf(VentanaAutomatica.LadoMedido(90f, 160f, 90f))
+    ))
 
     /**
      * La L inaparente de 120 + 40 (N-42, N-52b): el vidrio y sus U no descuentan la esquina (la U

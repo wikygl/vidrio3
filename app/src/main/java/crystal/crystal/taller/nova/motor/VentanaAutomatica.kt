@@ -63,7 +63,11 @@ object VentanaAutomatica {
             val der = if (i == n - 1) e.derecha else if (curvaEn[i]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
             val libresLaterales = listOf(izq, der).count { it == Borde.LIBRE }
             val esquina = anchosEsquina[i]
-            val anchoCalculo = l.ancho - (if (apa) esquina.first + esquina.second + libresLaterales * e.perfilLibre else 0f)
+            // APA en esquina curva (dictado el 2026-10-02): cada pared descuenta entero el parante de
+            // su punta de curva y el cálculo se hace con ese ancho útil; la curva conserva su desarrollo.
+            val paranteCurva = e.esquinero?.altura ?: 0f
+            val curvaLado = listOf(izq, der).count { it == Borde.ESQUINA_CURVA } * paranteCurva
+            val anchoCalculo = l.ancho - (if (apa) esquina.first + esquina.second + curvaLado + libresLaterales * e.perfilLibre else 0f)
             val altoCalculo = l.alto - (if (apa) e.libresVerticales * e.perfilLibre else 0f)
             val lado = DisenoAutomatico.lado(DisenoAutomatico.Entrada(
                 anchoMedido = l.ancho, anchoCalculo = anchoCalculo.coerceAtLeast(0f),
