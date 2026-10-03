@@ -53,7 +53,11 @@ data class UnionDeLados(
  */
 data class VentanaMedida(
     val lados: List<LadoDeVentana>,
-    val uniones: List<UnionDeLados> = List((lados.size - 1).coerceAtLeast(0)) { UnionDeLados() }
+    val uniones: List<UnionDeLados> = List((lados.size - 1).coerceAtLeast(0)) { UnionDeLados() },
+    /** Del piso al vano (0 = sin dato). */
+    val alfeizar: Float = 0f,
+    /** Del vano al techo (0 = sin dato). */
+    val dintel: Float = 0f
 ) {
     init {
         require(uniones.size == (lados.size - 1).coerceAtLeast(0)) {
@@ -62,6 +66,50 @@ data class VentanaMedida(
     }
 
     val hayCurva: Boolean get() = lados.any { it.esCurvo }
+
+    /** Lo que mide estirada: la suma de los lados, las curvas por su desarrollo. */
+    val desarrollo: Float get() = lados.sumOf { it.ancho.toDouble() }.toFloat()
+
+    /** El alto mayor de sus lados. */
+    val altoMayor: Float get() = lados.maxOfOrNull { maxOf(it.alto, it.altoDer) } ?: 0f
+
+    /**
+     * La ventana vista desde arriba, en cm: un trazo por lado (la curva en [trozosDeCurva] rectas).
+     * Arranca en el origen hacia la derecha (+x) y +y viene hacia quien mira, como la planta del
+     * diseño: en cada unión gira lo que le falta a su ángulo para seguir recto (90 dobla en escuadra
+     * hacia quien mira; en menos, hacia afuera) y cada curva gira su arco.
+     */
+    fun planta(trozosDeCurva: Int = 12): List<List<Pair<Float, Float>>> {
+        var x = 0.0
+        var y = 0.0
+        var rumbo = 0.0
+        return lados.mapIndexed { i, lado ->
+            if (i > 0) {
+                val g = uniones[i - 1].grados
+                val giro = 180.0 - abs(g)
+                rumbo += Math.toRadians(if (g < 0f) -giro else giro)
+            }
+            val trazo = mutableListOf(x.toFloat() to y.toFloat())
+            if (lado.esCurvo) {
+                val arco = ArcoEsquina.deDesarrolloYFlecha(lado.ancho, abs(lado.flecha))
+                val angulo = Math.toRadians(((arco?.anguloGrados ?: 0f) * (if (lado.flecha < 0f) -1f else 1f)).toDouble())
+                val paso = lado.ancho.toDouble() / trozosDeCurva
+                repeat(trozosDeCurva) {
+                    // Cada trozo avanza su parte del desarrollo girando a mitad de camino.
+                    rumbo += angulo / trozosDeCurva / 2
+                    x += kotlin.math.cos(rumbo) * paso
+                    y += kotlin.math.sin(rumbo) * paso
+                    rumbo += angulo / trozosDeCurva / 2
+                    trazo.add(x.toFloat() to y.toFloat())
+                }
+            } else {
+                x += kotlin.math.cos(rumbo) * lado.ancho
+                y += kotlin.math.sin(rumbo) * lado.ancho
+                trazo.add(x.toFloat() to y.toFloat())
+            }
+            trazo
+        }
+    }
 
     /**
      * El pliegue del diseño delante de cada lado, en grados (`A<grados>`); null = ninguno.
@@ -166,12 +214,13 @@ data class VentanaMedida(
                     listOf(l.ancho, l.alto, l.puente, l.divisiones.toFloat(), l.flecha, l.anchoArriba, l.altoDer)
                         .joinToString(",") { num(it) }
                 } + ";" +
-                v.uniones.joinToString("/") { u -> num(u.grados) + (if (u.parante) "" else "s") }
+                v.uniones.joinToString("/") { u -> num(u.grados) + (if (u.parante) "" else "s") } +
+                (if (v.alfeizar > 0f || v.dintel > 0f) ";" + num(v.alfeizar) + "," + num(v.dintel) else "")
 
         /** Null si el texto no es de este formato o no se puede leer. */
         fun desdeTexto(texto: String): VentanaMedida? {
             val partes = texto.trim().split(";")
-            if (partes.size != 3 || partes[0] != VERSION || partes[1].isBlank()) return null
+            if (partes.size !in 3..4 || partes[0] != VERSION || partes[1].isBlank()) return null
             val lados = partes[1].split("/").map { t ->
                 val n = t.split(",").map { it.trim().toFloatOrNull() ?: return null }
                 if (n.size < 2) return null
@@ -185,7 +234,8 @@ data class VentanaMedida(
                 UnionDeLados(t.trim().removeSuffix("s").toFloatOrNull() ?: return null, parante = !sinParante)
             }
             if (uniones.size != lados.size - 1) return null
-            return VentanaMedida(lados, uniones)
+            val extremos = partes.getOrNull(3)?.split(",")?.map { it.trim().toFloatOrNull() ?: 0f }.orEmpty()
+            return VentanaMedida(lados, uniones, alfeizar = extremos.getOrElse(0) { 0f }, dintel = extremos.getOrElse(1) { 0f })
         }
 
         /** La medida en cualquiera de los dos formatos: el nuevo, o el de [EsquinaMedida]. */

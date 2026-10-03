@@ -166,7 +166,7 @@ class NovaCorrediza : AppCompatActivity() {
      * única fuente de sus medidas; al calcular se lee en [listaActual].
      */
     private val listaLados by lazy {
-        ListaDeLadosNova(
+        crystal.crystal.taller.EditorDeLados(
             binding.lyListaLados,
             tinte = { binding.etAncho.backgroundTintList },
             colorTitulo = { binding.tvMedidas.currentTextColor }
@@ -3832,7 +3832,28 @@ class NovaCorrediza : AppCompatActivity() {
 
     private fun cargarEsquinaDeMedida(texto: String, contornosLados: String = "", parantesLados: String = ""): Boolean {
 
-        val medida = EsquinaMedida.desdeTexto(texto) ?: return false
+        // La ventana por lados de Medidas (formato v2, 2026-10-03): con paredes va a la lista tal
+        // cual; toda curva, por el camino de la ventana curva.
+        val v2 = crystal.crystal.taller.VentanaMedida.desdeTexto(texto)
+        if (v2 != null && v2.paredes.isNotEmpty()) {
+            val geo = when (v2.paredes.size) { 3 -> "nu"; 1, 2 -> "nl"; else -> "ns" }
+            val dibujo = when (geo) { "nl" -> R.drawable.venl; "nu" -> R.drawable.venc; else -> R.drawable.vserie }
+            seleccionarDesdePanel(dibujo, geo)
+            // Las paredes, para que cada una cuelgue con su alto (conLoQueTrajoLaMedida).
+            esquinaDeLaMedida = EsquinaMedida(
+                v2.paredes.map { crystal.crystal.taller.LadoEsquina(it.ancho, it.anchoArriba, it.alto, it.altoDer, it.puente) },
+                List(v2.paredes.size - 1) { "90" }
+            )
+            NovaCalculos.repartoManual = null
+            listaLados.cargar(v2)
+            return true
+        }
+        val medida = v2?.let { v ->
+            EsquinaMedida(
+                v.lados.map { crystal.crystal.taller.LadoEsquina(it.ancho, it.anchoArriba, it.alto, it.altoDer, it.puente, it.flecha) },
+                v.uniones.map { "180" }
+            )
+        } ?: EsquinaMedida.desdeTexto(texto) ?: return false
         val geo = medida.geometria ?: return false
         val dibujo = when (geo) {
             "nl" -> R.drawable.venl

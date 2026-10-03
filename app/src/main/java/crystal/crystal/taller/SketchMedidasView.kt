@@ -85,6 +85,13 @@ class SketchMedidasView @JvmOverloads constructor(
         const val ROPERO_MARCO = "ROPERO_MARCO"
 
         /**
+         * La ventana por lados (2026-10-03): un marco que lleva la ventana entera en su paquete, como
+         * lista de lados rectos o curvos con sus uniones ([crystal.crystal.taller.VentanaMedida]). Se
+         * dibuja desde esa lista (alzada en desarrollo y planta) y se edita en su lista de lados.
+         */
+        const val VENTANA_LADOS_MARCO = "VENTANA_LADOS_MARCO"
+
+        /**
          * Cota de alto tomada por dentro del vano. En un vano ancho el alto del centro no es el de
          * los cantos, y es esa diferencia la que hay que anotar.
          */
@@ -248,7 +255,9 @@ class SketchMedidasView @JvmOverloads constructor(
         /** El rótulo de lo que lleva un cuerpo (sideIndex = cuerpo): abre su diálogo. */
         ROPERO_TIPO,
         /** El rótulo de las puertas: cada toque pasa a la siguiente opción, y las enseña o las quita. */
-        ROPERO_PUERTAS
+        ROPERO_PUERTAS,
+        /** La ventana por lados (2026-10-03): cualquier toque en ella abre su lista de lados. */
+        VENTANA_LADOS
     }
 
     /**
@@ -3086,6 +3095,7 @@ class SketchMedidasView @JvmOverloads constructor(
         VENTANA_MARCO -> "Ventana"
         MAMPARA_MARCO -> "Mampara"
         ROPERO_MARCO -> "Ropero"
+        VENTANA_LADOS_MARCO -> "V. lados"
         ESQUINA_MARCO -> "V. esquina"
         PUERTA_PUENTE -> "Puente"
         PUERTA_DIVISION -> "Division"
@@ -3108,6 +3118,7 @@ class SketchMedidasView @JvmOverloads constructor(
             MAMPARA_MARCO in hints -> "Mampara"
             ESQUINA_MARCO in hints -> "Ventana"
             ROPERO_MARCO in hints -> "Ropero"
+            VENTANA_LADOS_MARCO in hints -> "Ventana"
             else -> null
         }
     }
@@ -7404,6 +7415,10 @@ class SketchMedidasView @JvmOverloads constructor(
             }
             is Element.Shape -> {
                 // El ropero se pinta entero desde su diseño, y sus cotas escriben en él.
+                if (element.cotaHint == VENTANA_LADOS_MARCO) {
+                    dibujarVentanaLados(canvas, index, element, collectHits)
+                    return
+                }
                 if (element.cotaHint == ROPERO_MARCO) {
                     dibujarRopero(canvas, index, element, collectHits)
                     return
@@ -10354,6 +10369,10 @@ class SketchMedidasView @JvmOverloads constructor(
             pedirCuerpoDeRopero(hit.elementIndex, hit.sideIndex ?: return)
             return
         }
+        if (hit.type == CotaType.VENTANA_LADOS) {
+            abrirEditorDeLados(hit.elementIndex)
+            return
+        }
         if (hit.type == CotaType.ROPERO_PUERTAS) {
             ciclarPuertasDeRopero(hit.elementIndex)
             return
@@ -10448,7 +10467,7 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.ROPERO_MALETERO -> roperoDe(element as? Element.Shape ?: return).maleteroCm
             CotaType.ROPERO_CUERPO -> roperoDe(element as? Element.Shape ?: return).cuerpos.getOrNull(hit.sideIndex ?: return)?.anchoCm ?: return
             CotaType.ROPERO_CUERPOS -> roperoDe(element as? Element.Shape ?: return).cuerpos.size.toFloat()
-            CotaType.ROPERO_TIPO, CotaType.ROPERO_PUERTAS -> return
+            CotaType.ROPERO_TIPO, CotaType.ROPERO_PUERTAS, CotaType.VENTANA_LADOS -> return
             CotaType.PUERTA_HOJA_IZQ, CotaType.PUERTA_HOJA_DER -> {
                 val division = element as? Element.Shape ?: return
                 val marco = (elementos.getOrNull(marcoDePieza(hit.elementIndex) ?: -1) as? Element.Shape) ?: return
@@ -10881,6 +10900,212 @@ class SketchMedidasView @JvmOverloads constructor(
             linea.start.set(p.x, p.y)
             linea.end.set(a.x + vx * t, a.y + vy * t)
         }
+    }
+
+    // ===================== Ventana por lados (2026-10-03) =====================
+    // La ventana de esquina y la curva, como lista de lados rectos o curvos con sus uniones. El marco
+    // lleva la lista en su paquete y se dibuja desde ella: la alzada en desarrollo (cada lado con su
+    // alto y su puente, las curvas a trazos, el ángulo de cada unión) y la planta debajo. Todo se
+    // edita en su lista de lados, que se abre tocando cualquiera de sus rótulos. Reemplaza al truco de
+    // la pared de cero para que una curva empiece o termine la ventana.
+
+    /** La de la plantilla V. esquina: 150 y 120 en escuadra, alto 120, puente a 90, alféizar 90. */
+    private val ventanaEsquinaDeFabrica = crystal.crystal.taller.VentanaMedida(
+        listOf(crystal.crystal.taller.LadoDeVentana(150f, 120f, 90f), crystal.crystal.taller.LadoDeVentana(120f, 120f, 90f)),
+        alfeizar = 90f
+    )
+
+    /** La de la plantilla V. curva: un arco de 180 con 30 de flecha. */
+    private val ventanaCurvaDeFabrica = crystal.crystal.taller.VentanaMedida(
+        listOf(crystal.crystal.taller.LadoDeVentana(180f, 120f, 90f, flecha = 30f)),
+        alfeizar = 90f
+    )
+
+    private fun ventanaDe(shape: Element.Shape): crystal.crystal.taller.VentanaMedida =
+        crystal.crystal.taller.VentanaMedida.desdeTexto(shape.paquete.orEmpty()) ?: ventanaEsquinaDeFabrica
+
+    /** Guarda la lista en su marco y ajusta el rectángulo a la alzada: el desarrollo por el alto mayor. */
+    private fun guardarVentanaLados(shape: Element.Shape, v: crystal.crystal.taller.VentanaMedida) {
+        shape.paquete = crystal.crystal.taller.VentanaMedida.aTexto(v)
+        val ancho = v.desarrollo.coerceAtLeast(1f)
+        val alto = v.altoMayor.coerceAtLeast(1f)
+        val left = shape.rect.left
+        val bottom = shape.rect.bottom
+        val right = left + cmToPx(ancho)
+        val top = bottom - cmToPx(alto)
+        shape.rect.set(left, top, right, bottom)
+        shape.start.set(left, top)
+        shape.end.set(right, bottom)
+        shape.topLeft.set(left, top); shape.topRight.set(right, top)
+        shape.bottomRight.set(right, bottom); shape.bottomLeft.set(left, bottom)
+        shape.widthCm = ancho; shape.heightCm = alto
+        shape.topCm = ancho; shape.bottomCm = ancho
+        shape.leftCm = alto; shape.rightCm = alto
+    }
+
+    /**
+     * Pone la ventana por lados en medio del lienzo y abre su lista para escribirla: V. esquina
+     * empieza con dos lados rectos en escuadra; V. curva, con un arco ([curva]).
+     */
+    fun insertarPlantillaVentanaLados(curva: Boolean = false, abrirLista: Boolean = true) {
+        val v = if (curva) ventanaCurvaDeFabrica else ventanaEsquinaDeFabrica
+        val center = screenToWorld(width * 0.5f, height * 0.5f)
+        val left = center.x - cmToPx(v.desarrollo) / 2f
+        val bottom = center.y + cmToPx(v.altoMayor) / 2f
+        val marco = crearShape(Tool.RECTANGLE, PointF(left, bottom - cmToPx(v.altoMayor)), PointF(left + cmToPx(v.desarrollo), bottom), VENTANA_LADOS_MARCO)
+        guardarVentanaLados(marco, v)
+        elementos.add(marco)
+        val index = elementos.lastIndex
+        selectedIndices.clear()
+        registrarAccion()
+        fitContentInView()
+        invalidate()
+        if (abrirLista) post { abrirEditorDeLados(index) }
+    }
+
+    /** La ventana por lados del apunte (la de la frontal), o null si no hay. */
+    fun ventanaPorLadosDelDibujo(): crystal.crystal.taller.VentanaMedida? =
+        elementosDeVista(Vista.FRONTAL).filterIsInstance<Element.Shape>()
+            .firstOrNull { it.cotaHint == VENTANA_LADOS_MARCO }?.let { ventanaDe(it) }
+
+    private val trazoCurvaPaint by lazy {
+        Paint(paint).apply { pathEffect = android.graphics.DashPathEffect(floatArrayOf(18f, 10f), 0f) }
+    }
+    private val trazoPuentePaint by lazy { Paint(paint).apply { strokeWidth = paint.strokeWidth * 0.6f } }
+    private val trazoParantePaint by lazy { Paint(paint).apply { strokeWidth = paint.strokeWidth * 2.2f } }
+
+    private fun dibujarVentanaLados(canvas: Canvas, index: Int, shape: Element.Shape, collectHits: Boolean) {
+        val v = ventanaDe(shape)
+        val r = shape.rect
+        val escala = r.width() / v.desarrollo.coerceAtLeast(1f)
+        // La alzada en desarrollo: cada lado con su alto (el de la izquierda y el de la derecha), su
+        // puente y, debajo, su ancho o su desarrollo. Las curvas a trazos.
+        var x = r.left
+        v.lados.forEachIndexed { i, lado ->
+            val w = lado.ancho * escala
+            val ruta = Path().apply {
+                moveTo(x, r.bottom)
+                lineTo(x, r.bottom - lado.alto * escala)
+                lineTo(x + w, r.bottom - lado.altoDer * escala)
+                lineTo(x + w, r.bottom)
+                close()
+            }
+            canvas.drawPath(ruta, if (lado.esCurvo) trazoCurvaPaint else paint)
+            if (lado.puente > 0f) {
+                val y = r.bottom - lado.puente * escala
+                canvas.drawLine(x, y, x + w, y, trazoPuentePaint)
+            }
+            val ancho = if (lado.esCurvo) "◠ ${formatCm(lado.ancho)} f${formatCm(kotlin.math.abs(lado.flecha))}" else formatCm(lado.ancho)
+            drawCotaTextFija(canvas, index, CotaType.VENTANA_LADOS, x + w / 2f, r.bottom + ce(34f), 0f, collectHits, texto = ancho, sideIndex = i)
+            val altoTxt = if (kotlin.math.abs(lado.alto - lado.altoDer) > 0.05f) "${formatCm(lado.alto)}|${formatCm(lado.altoDer)}" else formatCm(lado.alto)
+            drawCotaTextFija(canvas, index, CotaType.VENTANA_LADOS, x + w / 2f, r.bottom - lado.alto * escala / 2f, 0f, collectHits, texto = altoTxt, sideIndex = i)
+            if (i > 0) {
+                val u = v.uniones[i - 1]
+                if (u.parante) canvas.drawLine(x, r.bottom, x, r.bottom - minOf(lado.alto, v.lados[i - 1].altoDer) * escala, trazoParantePaint)
+                val union = formatCm(u.grados) + "°" + if (u.parante) "" else " sin parante"
+                drawCotaTextFija(canvas, index, CotaType.VENTANA_LADOS, x, r.top - ce(30f), 0f, collectHits, texto = union, sideIndex = i)
+            }
+            x += w
+        }
+        val titulo = "✎ VENTANA  ${formatCm(v.desarrollo)} x ${formatCm(v.altoMayor)}  ·  ${v.lados.size} lados"
+        drawCotaTextFija(canvas, index, CotaType.VENTANA_LADOS, r.centerX(), r.top - ce(80f), 0f, collectHits, texto = titulo)
+        if (v.alfeizar > 0f) {
+            drawCotaTextFija(canvas, index, CotaType.VENTANA_LADOS, r.left, r.bottom + ce(80f), 0f, collectHits, texto = "alféizar ${formatCm(v.alfeizar)}")
+        }
+        if (v.dintel > 0f) {
+            drawCotaTextFija(canvas, index, CotaType.VENTANA_LADOS, r.right, r.bottom + ce(80f), 0f, collectHits, texto = "dintel ${formatCm(v.dintel)}")
+        }
+        // La planta debajo, del ancho de la alzada como mucho.
+        val planta = v.planta()
+        val puntos = planta.flatten()
+        val minX = puntos.minOf { it.first }; val maxX = puntos.maxOf { it.first }
+        val minY = puntos.minOf { it.second }; val maxY = puntos.maxOf { it.second }
+        val ep = minOf(escala, r.width() / (maxX - minX).coerceAtLeast(1f))
+        val ox = r.centerX() - (minX + maxX) / 2f * ep
+        val oy = r.bottom + ce(130f) - minY * ep
+        planta.forEachIndexed { i, trazo ->
+            val ruta = Path()
+            trazo.forEachIndexed { k, (px, py) ->
+                if (k == 0) ruta.moveTo(ox + px * ep, oy + py * ep) else ruta.lineTo(ox + px * ep, oy + py * ep)
+            }
+            canvas.drawPath(ruta, if (v.lados[i].esCurvo) trazoCurvaPaint else paint)
+        }
+        if (index in selectedIndices) canvas.drawRect(r, selectionPaint)
+    }
+
+    /**
+     * La lista de lados de la ventana, a pantalla completa: el alféizar y el dintel, y cada lado
+     * recto o curvo con su unión ([crystal.crystal.taller.EditorDeLados], el mismo de Nova).
+     */
+    private fun abrirEditorDeLados(index: Int) {
+        val shape = elementos.getOrNull(index) as? Element.Shape ?: return
+        if (shape.cotaHint != VENTANA_LADOS_MARCO) return
+        val v = ventanaDe(shape)
+        val dp = resources.displayMetrics.density
+        val azul = Color.rgb(21, 101, 192)
+        val cont = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((12 * dp).toInt(), (8 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt())
+        }
+        fun renglon(rotulo: String, valor: Float): EditText {
+            val et = EditText(context).apply {
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                setText(if (valor > 0f) formatCm(valor) else "")
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            cont.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(TextView(context).apply {
+                    text = rotulo
+                    setPadding((6 * dp).toInt(), 0, 0, 0)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.81f)
+                })
+                addView(et)
+            })
+            return et
+        }
+        val etAlfeizar = renglon("Alféizar", v.alfeizar)
+        val etDintel = renglon("Dintel", v.dintel)
+        val lista = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        cont.addView(lista)
+        val editor = crystal.crystal.taller.EditorDeLados(lista, tinte = { null }, colorTitulo = { azul })
+        editor.cargar(v)
+        cont.addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(android.widget.Button(context).apply {
+                text = "+ Recto"
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setOnClickListener { editor.agregar() }
+            })
+            addView(android.widget.Button(context).apply {
+                text = "+ Curva"
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setOnClickListener { editor.agregar(curvo = true) }
+            })
+        })
+        val dialogo = AlertDialog.Builder(context)
+            .setTitle("Lados de la ventana")
+            .setView(android.widget.ScrollView(context).apply { addView(cont) })
+            .setPositiveButton("Aceptar", null)
+            .setNegativeButton("Cancelar", null)
+            .create()
+        dialogo.setOnShowListener {
+            dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val lectura = editor.leer()
+                val medida = lectura.medida ?: run {
+                    Toast.makeText(context, lectura.error ?: "Revise los lados", Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                fun num(et: EditText) = et.text?.toString()?.trim()?.replace(",", ".")?.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
+                guardarVentanaLados(shape, medida.copy(alfeizar = num(etAlfeizar), dintel = num(etDintel)))
+                registrarAccion()
+                invalidate()
+                dialogo.dismiss()
+            }
+        }
+        dialogo.show()
+        dialogo.window?.setLayout(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
     }
 
     // ===================== Ropero de melamina (plantilla) =====================
@@ -11359,7 +11584,7 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.ARCO -> Unit
             CotaType.ROPERO_ANCHO, CotaType.ROPERO_ALTO, CotaType.ROPERO_FONDO, CotaType.ROPERO_ZOCALO,
             CotaType.ROPERO_MALETERO, CotaType.ROPERO_CUERPO, CotaType.ROPERO_CUERPOS,
-            CotaType.ROPERO_TIPO, CotaType.ROPERO_PUERTAS -> Unit
+            CotaType.ROPERO_TIPO, CotaType.ROPERO_PUERTAS, CotaType.VENTANA_LADOS -> Unit
             CotaType.COMPOSITE_SIDE,
             CotaType.F5_DESARROLLO,
             CotaType.F5_FLECHA,
@@ -11796,7 +12021,7 @@ class SketchMedidasView @JvmOverloads constructor(
             CotaType.A_ESCUADRA, CotaType.ARCO,
             CotaType.ROPERO_ANCHO, CotaType.ROPERO_ALTO, CotaType.ROPERO_FONDO, CotaType.ROPERO_ZOCALO,
             CotaType.ROPERO_MALETERO, CotaType.ROPERO_CUERPO, CotaType.ROPERO_CUERPOS,
-            CotaType.ROPERO_TIPO, CotaType.ROPERO_PUERTAS -> Unit
+            CotaType.ROPERO_TIPO, CotaType.ROPERO_PUERTAS, CotaType.VENTANA_LADOS -> Unit
         }
     }
 

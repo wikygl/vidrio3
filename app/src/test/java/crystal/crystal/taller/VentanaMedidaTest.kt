@@ -95,6 +95,25 @@ class VentanaMedidaTest {
         assertEquals(90f, VentanaMedida(listOf(LadoDeVentana(150f, 120f), LadoDeVentana(120f, 120f))).plieguesDelDiseno()[1]!!, 0.01f)
     }
 
+    /** La planta: la L de 150 + 120 dobla en escuadra hacia quien mira; el alféizar y el dintel viajan. */
+    @Test
+    fun la_planta_y_los_extremos() {
+        val ele = VentanaMedida(listOf(LadoDeVentana(150f, 120f), LadoDeVentana(120f, 120f)), alfeizar = 90f, dintel = 15f)
+        val p = ele.planta()
+        assertEquals(150f, p[0].last().first, 0.01f)
+        assertEquals(0f, p[0].last().second, 0.01f)
+        assertEquals(150f, p[1].last().first, 0.01f)
+        assertEquals(120f, p[1].last().second, 0.01f)
+        val vuelta = VentanaMedida.desdeTexto(VentanaMedida.aTexto(ele))!!
+        assertEquals(90f, vuelta.alfeizar)
+        assertEquals(15f, vuelta.dintel)
+        // Un cuarto de círculo de 157.1 tangente cierra la escuadra: acaba a 100 y 100 del principio.
+        val cuarto = ArcoEsquina.deDesarrolloYCuerda(157.1f, 141.4f)!!.flecha
+        val curva = VentanaMedida(listOf(LadoDeVentana(157.1f, 120f, flecha = cuarto))).planta().single().last()
+        assertEquals(100f, curva.first, 0.5f)
+        assertEquals(100f, curva.second, 0.5f)
+    }
+
     /** Lo guardado con el formato de antes se sigue leyendo. */
     @Test
     fun lo_guardado_antes_se_sigue_leyendo() {

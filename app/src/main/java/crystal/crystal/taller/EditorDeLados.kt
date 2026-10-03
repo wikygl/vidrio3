@@ -1,4 +1,4 @@
-package crystal.crystal.taller.nova
+package crystal.crystal.taller
 
 import android.content.res.ColorStateList
 import android.graphics.Typeface
@@ -8,20 +8,20 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
-import crystal.crystal.taller.ArcoEsquina
-import crystal.crystal.taller.LadoDeVentana
-import crystal.crystal.taller.UnionDeLados
-import crystal.crystal.taller.VentanaMedida
+
+
+
+
 
 /**
- * Los lados de la L, la C o la serie en Nova, en lista (2026-10-03): cada lado recto o curvo, y
+ * Los lados de una ventana en lista (2026-10-03), para Medidas y para Nova: cada lado recto o curvo, y
  * entre cada dos su unión. Reemplaza a los campos fijos de cada geometría (lado 1, lado 2, la
  * esquina curva 1 y 2, la curva final): una curva es un lado más, con su casilla "Curvo".
  *
  * Las filas se arman con el mismo estilo que las de la pantalla (rótulo a la izquierda, casilla a la
  * derecha). Lo que se lee es una [VentanaMedida], la misma que llega de Medidas.
  */
-class ListaDeLadosNova(
+class EditorDeLados(
     private val contenedor: LinearLayout,
     private val tinte: () -> ColorStateList?,
     private val colorTitulo: () -> Int,
@@ -250,5 +250,5 @@ class ListaDeLadosNova(
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
 
-    private fun num(v: Float): String = NovaCalculos.df1(v)
+    private fun num(v: Float): String = crystal.crystal.taller.nova.NovaCalculos.df1(v)
 }
