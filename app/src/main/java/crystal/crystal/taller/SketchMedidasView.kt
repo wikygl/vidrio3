@@ -65,7 +65,7 @@ class SketchMedidasView @JvmOverloads constructor(
         /** La línea que parte el vano en dos hojas. */
         const val PUERTA_DIVISION = "PUERTA_DIVISION"
 
-        /** "N° de puertas 1": se toca para pasar de una hoja a dos y volver. */
+        /** La pastilla "1 puerta": se toca para pasar de una hoja a dos y volver. */
         const val ROL_HOJAS = "HOJAS_PUERTA"
 
         val SIMBOLOS_APERTURA = setOf("adentro", "afuera")
@@ -161,13 +161,16 @@ class SketchMedidasView @JvmOverloads constructor(
         /** "Esquina 90°": el ángulo de una arista, se toca para escribirlo. */
         const val ROL_ESQUINA = "ESQUINA_ANGULO"
 
-        /** "N° de tramos 2": se toca para añadir o quitar un tramo de la ventana. */
+        /** La pastilla "− 2 lados +": se toca a la izquierda para quitar un lado y a la derecha para añadirlo. */
         const val ROL_TRAMOS = "TRAMOS_ESQUINA"
 
         val MARCOS_PLANTILLA = setOf(PUERTA_MARCO, VENTANA_MARCO, MAMPARA_MARCO, ESQUINA_MARCO)
 
         /** Orden de los rótulos anclados arriba: el identificador manda y los contadores le siguen. */
         val ORDEN_ROTULOS = listOf(ROL_TITULO_PUERTA, ROL_TRAMOS, ROL_HOJAS, ROL_ALTOS)
+
+        /** Los contadores que se ven como pastilla junto al identificador: se tocan para cambiarlos. */
+        val ROLES_PASTILLA = setOf(ROL_HOJAS, ROL_TRAMOS)
 
         /** Rótulos que se colocan al pie del marco, centrados. */
         val ROLES_AL_PIE = setOf(ROL_MICHI, ROL_ALFEIZAR)
@@ -2174,7 +2177,9 @@ class SketchMedidasView @JvmOverloads constructor(
     // tramo.
     private fun textoEsquina(grados: Float): String = "${formatCm(grados)}°"
 
-    private fun textoTramos(cuantos: Int): String = "−     N° de tramos  $cuantos     +"
+    // "Lados" y no "tramos" (2026-10-03): los tramos los reparte la calculadora; aquí se cuentan las
+    // paredes y las curvas que se midieron.
+    private fun textoTramos(cuantos: Int): String = "−   $cuantos ${if (cuantos == 1) "lado" else "lados"}   +"
 
     /** Las aristas de un marco de esquina, de izquierda a derecha. */
     private fun quiebresDelMarco(marcoIndex: Int): List<Int> {
@@ -3176,7 +3181,7 @@ class SketchMedidasView @JvmOverloads constructor(
             }
     }
 
-    private fun textoHojas(hojas: Int): String = "N° de puertas  $hojas"
+    private fun textoHojas(hojas: Int): String = if (hojas == 1) "1 puerta" else "$hojas puertas"
 
     /** La línea que parte el vano: si está, la puerta es de dos hojas. */
     private fun divisionDePuerta(marcoIndex: Int): Int? {
@@ -4280,8 +4285,8 @@ class SketchMedidasView @JvmOverloads constructor(
         if (destino == tramos) {
             Toast.makeText(
                 context,
-                if (minimo == 1) "Una ventana curva lleva al menos un tramo"
-                else "Una esquina lleva al menos dos tramos",
+                if (minimo == 1) "Una ventana curva lleva al menos un lado"
+                else "Una esquina lleva al menos dos lados",
                 Toast.LENGTH_SHORT
             ).show()
             return
@@ -4917,7 +4922,7 @@ class SketchMedidasView @JvmOverloads constructor(
         return pxToCm(bordes[tramo + 1] - bordes[tramo]) to pxToCm(arriba[tramo + 1].x - arriba[tramo].x)
     }
 
-    /** Añade o quita un tramo, como el contador "N° de tramos" de la pantalla. */
+    /** Añade o quita un lado, como la pastilla de lados de la pantalla. */
     @androidx.annotation.VisibleForTesting
     fun cambiarTramosParaPruebas(delta: Int) {
         val marco = elementos.indices.firstOrNull { esMarcoEsquina(it) } ?: return
@@ -7392,6 +7397,10 @@ class SketchMedidasView @JvmOverloads constructor(
         when (element) {
             is Element.Freehand -> canvas.drawPath(element.path, paint)
             is Element.TextLabel -> {
+                if (element.rol in ROLES_PASTILLA) {
+                    dibujarPastilla(canvas, element)
+                    return
+                }
                 sketchTextPaint.textSize = tamanoTexto(element)
                 if (element.rol == ROL_ALFEIZAR) dibujarIconoAlfeizar(canvas, element)
                 canvas.drawText(element.text, element.x, element.y, sketchTextPaint)
@@ -7996,9 +8005,12 @@ class SketchMedidasView @JvmOverloads constructor(
     private var exportando = false
 
     private fun tamanoTexto(element: Element.TextLabel): Float = when {
-        // El identificador se recorta a lo que hay de ancho: con la letra medida en pantalla, en un
-        // apunte reducido acababa más largo que el papel y se salía por los lados.
-        element.titulo -> tamanoQueQuepa(element, ce(maxOf(element.textSize, 50f)))
+        // Las pastillas (cuántas puertas, cuántos lados), un poco menores que el identificador.
+        element.rol in ROLES_PASTILLA -> ce(14f * resources.displayMetrics.density)
+        // El identificador, como un título mediano junto al dibujo (2026-10-03: grande sobre el
+        // diseño estorbaba). Se recorta a lo que hay de ancho: con la letra medida en pantalla, en
+        // un apunte reducido acababa más largo que el papel y se salía por los lados.
+        element.titulo -> tamanoQueQuepa(element, ce(17f * resources.displayMetrics.density))
         // Van fuera del dibujo, en su banda: se miden en pantalla como las cotas, para que la banda
         // no se descuadre al ampliar ni al reducir, pero con un techo en medidas del dibujo. Sin él,
         // al alejar la letra crecía tanto respecto al apunte que ninguna fila cabía y todos los
@@ -8015,7 +8027,53 @@ class SketchMedidasView @JvmOverloads constructor(
         val width = sketchTextPaint.measureText(element.text).coerceAtLeast(1f)
         val top = element.y - tamano
         val bottom = element.y + tamano * 0.28f
+        // La pastilla abraza el texto con su relleno: es lo que se ve y lo que se toca.
+        if (element.rol in ROLES_PASTILLA) {
+            val pad = tamano * 0.6f
+            return RectF(element.x, top - pad * 0.45f, element.x + width + 2 * pad, bottom + pad * 0.45f)
+        }
         return RectF(element.x, top, element.x + width, bottom)
+    }
+
+    private val pastillaFondoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(227, 242, 253)
+        style = Paint.Style.FILL
+    }
+    private val pastillaBordePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(21, 101, 192)
+        style = Paint.Style.STROKE
+    }
+    private val pastillaTextoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(13, 71, 161)
+        style = Paint.Style.FILL
+    }
+
+    /** Un contador como pastilla: fondo claro, borde y el texto dentro. Se toca para cambiarlo. */
+    private fun dibujarPastilla(canvas: Canvas, element: Element.TextLabel) {
+        val caja = boundsForText(element)
+        val radio = caja.height() / 2f
+        pastillaBordePaint.strokeWidth = ce(1.5f * resources.displayMetrics.density)
+        canvas.drawRoundRect(caja, radio, radio, pastillaFondoPaint)
+        canvas.drawRoundRect(caja, radio, radio, pastillaBordePaint)
+        pastillaTextoPaint.textSize = tamanoTexto(element)
+        canvas.drawText(element.text, element.x + tamanoTexto(element) * 0.6f, element.y, pastillaTextoPaint)
+    }
+
+    /**
+     * Pone al día lo que dicen las pastillas con lo que hay en el dibujo: cuántas puertas (una o dos
+     * hojas) y cuántos lados (paredes y curvas). Así, si se edita desde la pantalla, el número sigue
+     * siendo el de verdad y no el del último toque en la pastilla.
+     */
+    private fun refrescarContadores() {
+        elementos.forEachIndexed { i, e ->
+            val t = e as? Element.TextLabel ?: return@forEachIndexed
+            when (t.rol) {
+                ROL_HOJAS -> marcoDePieza(i)?.let { t.text = textoHojas(hojasDePuerta(it)) }
+                ROL_TRAMOS -> marcoDePieza(i)?.let { m ->
+                    t.text = textoTramos(quiebresDelMarco(m).size + 1 + bandasDeCurva(m).size)
+                }
+            }
+        }
     }
 
     private fun boundsForElement(element: Element): RectF {
@@ -8040,17 +8098,27 @@ class SketchMedidasView @JvmOverloads constructor(
         // siempre la misma, sin alejarse del dibujo al reducir ni montársele al ampliar. Por encima
         // del dibujo pasa la cota de arriba, y la banda le deja sitio.
         val separacion = maxOf(ce(76f), cmToPx(3f))
-        // Se apilan de abajo hacia arriba: los contadores pegados al dibujo y el identificador
-        // arriba del todo, cada uno en su renglón.
+        // En un renglón (2026-10-03): el identificador como título y, a su lado, las pastillas de
+        // sus contadores. Si no caben en el ancho del dibujo, siguen en otro renglón más arriba.
+        refrescarContadores()
+        val ordenados = titulos.sortedBy { ORDEN_ROTULOS.indexOf(it.rol).takeIf { pos -> pos >= 0 } ?: ORDEN_ROTULOS.size }
+        val hueco = ce(10f * resources.displayMetrics.density)
+        val renglon = ordenados.maxOf { boundsForText(it).height() } * 1.35f
+        var x = bounds.left
         var y = bounds.top - separacion
-        titulos
-            .sortedBy { ORDEN_ROTULOS.indexOf(it.rol).takeIf { pos -> pos >= 0 } ?: ORDEN_ROTULOS.size }
-            .reversed()
-            .forEach { titulo ->
-                titulo.x = bounds.left
-                titulo.y = y
-                y -= tamanoTexto(titulo) * 1.45f
+        // Hasta el borde de la pantalla: una puerta es angosta y la pastilla no cabía al lado del título.
+        val tope = if (exportando || width <= 0) bounds.right + bounds.width()
+        else pantallaAMundoX(width.toFloat()) - ce(8f)
+        ordenados.forEachIndexed { k, titulo ->
+            val ancho = boundsForText(titulo).width()
+            if (k > 0 && x + ancho > maxOf(tope, bounds.left + ancho)) {
+                x = bounds.left
+                y -= renglon
             }
+            titulo.x = x
+            titulo.y = y
+            x += ancho + hueco
+        }
     }
 
     /** Lo que ocupa el dibujo sin contar los textos: es a lo que se ancla el título. */
