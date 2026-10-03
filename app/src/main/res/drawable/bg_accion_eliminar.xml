@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Eliminar: el mismo botón, con el borde y el texto en rojo para que no se toque sin querer. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFE5EE" />
+            <corners android:radius="12dp" />
+            <stroke android:width="1dp" android:color="@color/fucsia" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/blanco" />
+            <corners android:radius="12dp" />
+            <stroke android:width="1dp" android:color="#F7B3CB" />
+        </shape>
+    </item>
+</selector>

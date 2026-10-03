@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La cabecera del ítem: lo que es, cuánto mide y cuánto cuesta. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#EEF7FF" />
+    <corners android:radius="12dp" />
+</shape>

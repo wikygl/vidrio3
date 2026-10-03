@@ -1586,205 +1586,284 @@ class MainActivity : AppCompatActivity() {
     // ─── ELIMINACIÓN Y EDICIÓN DE ITEMS ───
     // eliminar, filtrarLista
     // ═══════════════════════════════════════════════════
+    /**
+     * Al tocar un ítem de la lista se abre su diálogo (dialogo.xml): arriba el ítem —qué es, cuánto
+     * mide y cuánto cuesta— y debajo sus acciones, en dos grupos: las de ESTE ítem y las de TODA la
+     * lista. Editar cambia el diálogo al formulario, con la cuenta al día mientras se escribe.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
-    @SuppressLint("SetTextI18n", "WrongViewCast", "MissingInflatedId")
     private fun eliminar() {
-        binding.list.setOnItemClickListener { parent, view, position, id ->
+        binding.list.setOnItemClickListener { _, _, position, _ ->
             try {
-                val dialogo = AlertDialog.Builder(this)
-                val modelo = layoutInflater.inflate(R.layout.dialogo, null)
-                val eliminar = modelo.findViewById<Button>(R.id.btn_dialogo_eliminar)
-                val editar = modelo.findViewById<Button>(R.id.btn_dialogo_editar)
-                val irlista = modelo.findViewById<Button>(R.id.btnGuardar)
-                val anexar = modelo.findViewById<Button>(R.id.btAbrir)
-                val contrato = modelo.findViewById<Button>(R.id.btnContrato)
-                val enviar = modelo.findViewById<Button>(R.id.btnEnviarJson)
-                val medir = modelo.findViewById<Button>(R.id.btnMedir)
-                val datos = modelo.findViewById<TextView>(R.id.tvEscala)
-                val pro = modelo.findViewById<TextView>(R.id.etdProducto)
-                datos.text = "${lista[position].producto} ${lista[position].escala} en ${lista[position].uni}"
-
-                enviar.setOnClickListener {
-                    enviarPresupuestoPorChat()
-                }
-                dialogo.setView(modelo)
-                val dialogoPer = dialogo.create()
-                dialogoPer.show()
-
-                medir?.setOnClickListener {
-                    enviarItemAMedida(position)
-                    dialogoPer.dismiss()
-                }
-
-                modelo.findViewById<Button>(R.id.btnCortes)?.setOnClickListener {
-                    enviarACortes()
-                    dialogoPer.dismiss()
-                }
-
-                // Las opciones de ESTE ítem: el mismo producto medido, ofrecido en otros
-                // materiales y a otro precio. De ahí sale la proforma de elección.
-                modelo.findViewById<Button>(R.id.btnOpciones)?.setOnClickListener {
-                    dialogoPer.dismiss()
-                    opcionesManager.mostrar(position)
-                }
-
-                // El ambiente donde va el ítem: la sala, el consultorio, el piso. Es lo que agrupa
-                // la proforma de una obra entera.
-                modelo.findViewById<Button>(R.id.btnAmbiente)?.setOnClickListener {
-                    dialogoPer.dismiss()
-                    ambienteManager.mostrar(position)
-                }
-
-                eliminar.setOnClickListener {
-                    lista.removeAt(position)
-                    actualizar()
-                    dialogoPer.dismiss()
-                }
-
-                editar.setOnClickListener {
-                    val otro = modelo.findViewById<View>(R.id.lyEdit)
-                    val btnDiaOk = modelo.findViewById<View>(R.id.btnDiaOk)
-                    val m1 = modelo.findViewById<TextView>(R.id.etdMed1)
-                    val m2 = modelo.findViewById<TextView>(R.id.etdMed2)
-                    val m3 = modelo.findViewById<TextView>(R.id.etdMed3)
-                    val ca = modelo.findViewById<TextView>(R.id.etdCant)
-                    val pre = modelo.findViewById<TextView>(R.id.etdPrecio)
-
-                    otro.visibility = View.VISIBLE
-                    // En edición solo quedan "Enviar" y "OK"; el resto se oculta (GONE para no comprimir).
-                    irlista.visibility = View.GONE
-                    eliminar.visibility = View.GONE
-                    editar.visibility = View.GONE
-                    contrato.visibility = View.GONE
-                    anexar.visibility = View.GONE
-                    medir?.visibility = View.GONE
-                    modelo.findViewById<Button>(R.id.btnCortes)?.visibility = View.GONE
-                    // La info de m2/p2 va en el título, no en un botón.
-                    datos.text = "${lista[position].producto} ${lista[position].escala} en ${lista[position].uni}\n${resumenPiesMetrosItem(lista[position])}"
-                    btnDiaOk.visibility = View.VISIBLE
-                    enviar.setOnClickListener {
-                        enviarElementoPorChat(position)
-                    }
-
-                    m1.text = formatoMedidaSegunUnidad(lista[position].medi1, lista[position].uni)
-                    m2.text = formatoMedidaSegunUnidad(lista[position].medi2, lista[position].uni)
-                    m3.text = formatoMedidaSegunUnidad(lista[position].medi3, lista[position].uni)
-                    ca.text = df1(lista[position].canti)
-                    pre.text = df1(lista[position].precio)
-                    pro.text = lista[position].producto
-
-                    val lyMed1 = modelo.findViewById<View>(R.id.lyMed1)
-                    val lyMed2 = modelo.findViewById<View>(R.id.lyMed2)
-                    val lyMed3 = modelo.findViewById<View>(R.id.lyMed3)
-
-                    val escala = lista[position].escala
-
-                    when (escala) {
-                        "p2" -> {
-                            lyMed3.visibility = View.GONE
-                            lyMed1.visibility = View.VISIBLE
-                            lyMed2.visibility = View.VISIBLE
-                        }
-                        "m2" -> {
-                            lyMed3.visibility = View.GONE
-                            lyMed1.visibility = View.VISIBLE
-                            lyMed2.visibility = View.VISIBLE
-                        }
-                        "ml" -> {
-                            lyMed1.visibility = View.VISIBLE
-                            lyMed2.visibility = View.GONE
-                            lyMed3.visibility = View.GONE
-                        }
-                        "m3" -> {
-                            lyMed1.visibility = View.VISIBLE
-                            lyMed2.visibility = View.VISIBLE
-                            lyMed3.visibility = View.VISIBLE
-                        }
-                        "uni" -> {
-                            lyMed1.visibility = View.GONE
-                            lyMed2.visibility = View.GONE
-                            lyMed3.visibility = View.GONE
-                            eliminar.visibility=View.GONE
-                        }
-                    }
-
-                    btnDiaOk.setOnClickListener {
-                        try {
-                            val medi1 = parseMedidaIngresada(m1.text.toString()) ?: 1f
-                            val medi2 = parseMedidaIngresada(m2.text.toString()) ?: 1f
-                            val medi3 = parseMedidaIngresada(m3.text.toString()) ?: 1f
-                            val cantidad = ca.text.toString().toFloat()
-                            val precio = pre.text.toString().toFloat()
-                            val piesTotal = pies(medi1, medi2) * cantidad
-                            val metrosTotal = metroCua(medi1, medi2) * cantidad
-                            val mlTotal = mLineales(medi1, medi2) * cantidad
-                            val cubTotal = mCubicos(medi1, medi2, medi3) * cantidad
-                            var co = 0f
-
-                            when (escala) {
-                                "p2" -> {
-                                    co = piesTotal * precio
-                                }
-                                "m2" -> {
-                                    co = metrosTotal * precio
-                                }
-                                "ml" -> {
-                                    co = mlTotal * precio
-                                }
-                                "m3" -> {
-                                    co = cubTotal * precio
-                                }
-                                "uni" -> {
-                                    co = cantidad * precio
-                                }
-                            }
-
-                            lista[position].medi1 = medi1
-                            lista[position].medi2 = medi2
-                            lista[position].medi3 = medi3
-                            lista[position].canti = cantidad
-                            lista[position].precio = precio
-                            lista[position].producto = pro.text.toString()
-                            lista[position].piescua = piesTotal
-                            lista[position].metcua = metrosTotal
-                            lista[position].metli = mlTotal
-                            lista[position].metcub = cubTotal
-                            lista[position].costo = co
-
-                            actualizar()
-                            dialogoPer.dismiss()
-                            Toast.makeText(this, "Se editó correctamente", Toast.LENGTH_SHORT).show()
-                        } catch (e: NumberFormatException) {
-                            Toast.makeText(this, "Error: Ingresa valores numéricos válidos", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-
-                    // Cuando ya se tiene un URI seleccionado:
-                    val uriCompleto = lista[position].uri
-                    val uriAcortado = if (uriCompleto.length > 20) "...${uriCompleto.takeLast(20)}" else uriCompleto
-                    usoImagenUri(uriAcortado)
-                }
-
-                irlista.setOnClickListener {
-                    guardar()
-                    dialogoPer.dismiss()
-                }
-                anexar.setOnClickListener {
-                    selectedPosition = position
-                    mostrarOpcionesAnexar(position)
-                    dialogoPer.dismiss()
-                }
-                contrato.setOnClickListener {
-                    abrirContrato()
-                    dialogoPer.dismiss()
-                }
+                mostrarDialogoItem(position)
             } catch (e: Exception) {
+                Log.e("MainActivity", "No se pudo abrir el diálogo del ítem", e)
                 Toast.makeText(this, "Error al mostrar el diálogo", Toast.LENGTH_SHORT).show()
             }
         }
     }
-    private fun resumenPiesMetrosItem(item: Listado): String {
-        return "m2: ${df1(metrosCuadradosConsistentes(item))}\np2: ${df1(item.piescua)}"
+
+    private fun mostrarDialogoItem(position: Int) {
+        val item = lista.getOrNull(position) ?: return
+        val modelo = layoutInflater.inflate(R.layout.dialogo, null)
+        val dialogoPer = AlertDialog.Builder(this).setView(modelo).create()
+        fun boton(id: Int) = modelo.findViewById<Button>(id)
+
+        modelo.findViewById<TextView>(R.id.tvTituloItem).text =
+            item.producto.trim().ifEmpty { "Ítem ${position + 1}" }
+        modelo.findViewById<TextView>(R.id.tvEscala).text = medidasDelItem(item)
+        modelo.findViewById<TextView>(R.id.tvResumenItem).text =
+            cuentaDelItem(item.escala, item.costo, item.piescua, metrosCuadradosConsistentes(item), item.metli, item.metcub)
+        val marcas = marcasDelItem(item)
+        modelo.findViewById<TextView>(R.id.tvMarcasItem).apply {
+            text = marcas
+            visibility = if (marcas.isEmpty()) View.GONE else View.VISIBLE
+        }
+
+        // ── Este ítem ──
+        boton(R.id.btn_dialogo_editar).setOnClickListener { editarEnDialogo(modelo, dialogoPer, position) }
+        // Las opciones: el mismo producto medido, ofrecido en otros materiales y a otro precio.
+        boton(R.id.btnOpciones).setOnClickListener {
+            dialogoPer.dismiss()
+            opcionesManager.mostrar(position)
+        }
+        // El ambiente: la sala, el consultorio, el piso. Es lo que agrupa la proforma de una obra.
+        boton(R.id.btnAmbiente).setOnClickListener {
+            dialogoPer.dismiss()
+            ambienteManager.mostrar(position)
+        }
+        boton(R.id.btAbrir).setOnClickListener {
+            selectedPosition = position
+            mostrarOpcionesAnexar(position)
+            dialogoPer.dismiss()
+        }
+        boton(R.id.btnMedir).setOnClickListener {
+            enviarItemAMedida(position)
+            dialogoPer.dismiss()
+        }
+        boton(R.id.btn_dialogo_eliminar).setOnClickListener {
+            dialogoPer.dismiss()
+            eliminarItem(position)
+        }
+
+        // ── Toda la lista ──
+        boton(R.id.btnGuardar).setOnClickListener {
+            guardar()
+            dialogoPer.dismiss()
+        }
+        boton(R.id.btnEnviarJson).setOnClickListener {
+            dialogoPer.dismiss()
+            enviarPresupuestoPorChat()
+        }
+        boton(R.id.btnContrato).setOnClickListener {
+            abrirContrato()
+            dialogoPer.dismiss()
+        }
+        boton(R.id.btnCortes).setOnClickListener {
+            enviarACortes()
+            dialogoPer.dismiss()
+        }
+
+        dialogoPer.show()
+    }
+
+    /**
+     * Quita el ítem, con unos segundos para deshacerlo: antes se borraba al primer toque y, si el
+     * dedo caía en Eliminar sin querer, la medida se perdía.
+     */
+    private fun eliminarItem(position: Int) {
+        val quitado = lista.getOrNull(position) ?: return
+        lista.removeAt(position)
+        actualizar()
+        com.google.android.material.snackbar.Snackbar
+            .make(binding.root, "Se eliminó: ${quitado.producto}", com.google.android.material.snackbar.Snackbar.LENGTH_LONG)
+            .setAction("Deshacer") {
+                lista.add(position.coerceAtMost(lista.size), quitado)
+                actualizar()
+            }
+            .show()
+    }
+
+    /**
+     * El formulario de edición, en el mismo diálogo: cada medida con su rótulo y su unidad, y la
+     * cuenta rehecha mientras se escribe.
+     *
+     * Las cuentas van en la unidad DEL ÍTEM, no en la que esté elegida en la pantalla: un ítem medido
+     * en centímetros, editado con la pantalla en metros, se recalculaba como si midiera metros.
+     */
+    @SuppressLint("SetTextI18n")
+    private fun editarEnDialogo(modelo: View, dialogoPer: AlertDialog, position: Int) {
+        val item = lista.getOrNull(position) ?: return
+        val escala = item.escala
+        val unidad = unidadDelItem(item)
+
+        modelo.findViewById<View>(R.id.lyAcciones).visibility = View.GONE
+        modelo.findViewById<View>(R.id.lyEdit).visibility = View.VISIBLE
+        modelo.findViewById<TextView>(R.id.tvTituloItem).text = "Editar ítem ${position + 1}"
+
+        val m1 = modelo.findViewById<EditText>(R.id.etdMed1)
+        val m2 = modelo.findViewById<EditText>(R.id.etdMed2)
+        val m3 = modelo.findViewById<EditText>(R.id.etdMed3)
+        val ca = modelo.findViewById<EditText>(R.id.etdCant)
+        val pre = modelo.findViewById<EditText>(R.id.etdPrecio)
+        val pro = modelo.findViewById<EditText>(R.id.etdProducto)
+        val vista = modelo.findViewById<TextView>(R.id.tvVistaPrevia)
+
+        // Qué medidas lleva según su escala; las demás no se tocan y se guardan como estaban.
+        val (con1, con2, con3) = when (escala) {
+            "p2", "m2" -> Triple(true, true, false)
+            "ml" -> Triple(true, false, false)
+            "m3" -> Triple(true, true, true)
+            else -> Triple(false, false, false)
+        }
+        modelo.findViewById<View>(R.id.lyMed1).visibility = if (con1) View.VISIBLE else View.GONE
+        modelo.findViewById<View>(R.id.lyMed2).visibility = if (con2) View.VISIBLE else View.GONE
+        modelo.findViewById<View>(R.id.lyMed3).visibility = if (con3) View.VISIBLE else View.GONE
+        if (escala == "ml") modelo.findViewById<TextView>(R.id.tvRotuloMed1).text = "Largo"
+        val abrev = abreviaturaUnidad(unidad)
+        listOf(R.id.tvUnidadMed1, R.id.tvUnidadMed2, R.id.tvUnidadMed3)
+            .forEach { modelo.findViewById<TextView>(it).text = abrev }
+        modelo.findViewById<TextView>(R.id.tvUnidadPrecio).text =
+            if (escala == "uni") "c/u" else "x $escala"
+
+        m1.setText(formatoMedidaSegunUnidad(item.medi1, unidad))
+        m2.setText(formatoMedidaSegunUnidad(item.medi2, unidad))
+        m3.setText(formatoMedidaSegunUnidad(item.medi3, unidad))
+        ca.setText(df1(item.canti))
+        // El precio con sus céntimos: con un decimal, 7.45 volvía guardado como 7.5.
+        pre.setText(precioEditable(item.precio))
+        pro.setText(item.producto)
+
+        class Cuenta(
+            val medi1: Float, val medi2: Float, val medi3: Float, val cantidad: Float,
+            val precio: Float, val pies: Float, val metros: Float, val ml: Float, val cub: Float,
+            val costo: Float
+        )
+
+        fun leer(): Cuenta? {
+            val medi1 = parseMedidaIngresada(m1.text.toString()) ?: 1f
+            val medi2 = parseMedidaIngresada(m2.text.toString()) ?: 1f
+            val medi3 = parseMedidaIngresada(m3.text.toString()) ?: 1f
+            val cantidad = ca.text.toString().trim().replace(",", ".").toFloatOrNull() ?: return null
+            val precio = pre.text.toString().trim().replace(",", ".").toFloatOrNull() ?: return null
+            val piesTotal = pies(medi1, medi2, unidad) * cantidad
+            val metrosTotal = metroCua(medi1, medi2, unidad) * cantidad
+            val mlTotal = mLineales(medi1, medi2, unidad) * cantidad
+            val cubTotal = mCubicos(medi1, medi2, medi3, unidad) * cantidad
+            val costo = when (escala) {
+                "p2" -> piesTotal * precio
+                "m2" -> metrosTotal * precio
+                "ml" -> mlTotal * precio
+                "m3" -> cubTotal * precio
+                "uni" -> cantidad * precio
+                else -> 0f
+            }
+            return Cuenta(medi1, medi2, medi3, cantidad, precio, piesTotal, metrosTotal, mlTotal, cubTotal, costo)
+        }
+
+        fun mostrarCuenta() {
+            val c = leer()
+            vista.text = if (c == null) "Revise la cantidad y el precio"
+            else "Quedaría: " + cuentaDelItem(escala, c.costo, c.pies, c.metros, c.ml, c.cub)
+        }
+        val alEscribir = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) = mostrarCuenta()
+        }
+        listOf(m1, m2, m3, ca, pre).forEach { it.addTextChangedListener(alEscribir) }
+        mostrarCuenta()
+
+        modelo.findViewById<Button>(R.id.btnEnviarItem).setOnClickListener {
+            enviarElementoPorChat(position)
+        }
+        modelo.findViewById<Button>(R.id.btnCancelarEdicion).setOnClickListener {
+            dialogoPer.dismiss()
+        }
+        modelo.findViewById<Button>(R.id.btnDiaOk).setOnClickListener {
+            val c = leer()
+            if (c == null) {
+                Toast.makeText(this, "Error: ingrese valores numéricos válidos", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val destino = lista.getOrNull(position) ?: return@setOnClickListener
+            destino.medi1 = c.medi1
+            destino.medi2 = c.medi2
+            destino.medi3 = c.medi3
+            destino.canti = c.cantidad
+            destino.precio = c.precio
+            destino.producto = pro.text.toString().trim()
+            destino.piescua = c.pies
+            destino.metcua = c.metros
+            destino.metli = c.ml
+            destino.metcub = c.cub
+            destino.costo = c.costo
+            actualizar()
+            dialogoPer.dismiss()
+            Toast.makeText(this, "Se editó correctamente", Toast.LENGTH_SHORT).show()
+        }
+        // El teclado sobre el primer campo que se ve: se abre para escribir, no para leer.
+        (listOf(m1 to con1, m2 to con2, ca to true).first { it.second }.first).requestFocus()
+        dialogoPer.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+    }
+
+    /** La unidad en que se midió el ítem; si no se reconoce, la de la pantalla, como antes. */
+    private fun unidadDelItem(item: Listado): String =
+        item.uni.takeIf { it in listOf("Centímetros", "Metros", "Milímetros", "Pulgadas") }
+            ?: binding.prTxt.text.toString()
+
+    private fun abreviaturaUnidad(unidad: String): String = when (unidad) {
+        "Centímetros" -> "cm"
+        "Metros" -> "m"
+        "Milímetros" -> "mm"
+        "Pulgadas" -> "pulg"
+        else -> unidad
+    }
+
+    /** Un precio para editarlo: con sus céntimos y sin ceros de más (7.4, 7.45, 12). */
+    private fun precioEditable(precio: Float): String =
+        java.math.BigDecimal(precio.toString()).setScale(2, java.math.RoundingMode.HALF_UP)
+            .stripTrailingZeros().toPlainString()
+
+    /** Las medidas del ítem como se leen en obra: `124.5 × 89.5 cm  ·  cant. 1`. */
+    private fun medidasDelItem(item: Listado): String {
+        val u = unidadDelItem(item)
+        val a = abreviaturaUnidad(u)
+        fun m(v: Float) = formatoMedidaSegunUnidad(v, u)
+        val medidas = when (item.escala) {
+            "p2", "m2" -> "${m(item.medi1)} × ${m(item.medi2)} $a"
+            "ml" -> "${m(item.medi1)} $a"
+            "m3" -> "${m(item.medi1)} × ${m(item.medi2)} × ${m(item.medi3)} $a"
+            else -> "Por unidad"
+        }
+        return "$medidas  ·  cant. ${df1(item.canti)}"
+    }
+
+    /** Lo que cuesta y lo que suma en su escala: `S/ 7.40  ·  12.8 p2  ·  1.2 m²`. */
+    private fun cuentaDelItem(escala: String, costo: Float, pies: Float, metros: Float, ml: Float, cub: Float): String {
+        val dinero = "S/ ${"%.2f".format(java.util.Locale.US, costo)}"
+        val area = "${df1(pies)} p2  ·  ${df1(metros)} m²"
+        return when (escala) {
+            "p2", "m2" -> "$dinero  ·  $area"
+            "ml" -> "$dinero  ·  ${df1(ml)} ml"
+            "m3" -> "$dinero  ·  ${df1(cub)} m³"
+            else -> dinero
+        }
+    }
+
+    /** El ambiente y las opciones del ítem, si los tiene: lo que no se ve en la línea de la lista. */
+    private fun marcasDelItem(item: Listado): String {
+        val partes = mutableListOf<String>()
+        crystal.crystal.pos.AmbientesDeProforma.de(item).takeIf { it.isNotEmpty() }?.let { partes += it }
+        val opciones = crystal.crystal.pos.OpcionesDeProforma.de(item).size
+        if (opciones > 0) {
+            val elegida = crystal.crystal.pos.OpcionesDeProforma.elegida(item)
+            partes += "${opciones + 1} opciones" + (elegida?.let {
+                " (elegida la ${crystal.crystal.pos.OpcionesDeProforma.letra(it)})"
+            } ?: " (sin elegir)")
+        }
+        if (item.uri.isNotBlank()) partes += "con imagen"
+        return partes.joinToString("  ·  ")
     }
 
     private fun enviarItemAMedida(position: Int) {
@@ -3398,11 +3477,11 @@ class MainActivity : AppCompatActivity() {
                 binding.prTxt.text = listaUnidades[0] }
         }
     }
-    private fun conver(med: Float?): Float {
+    private fun conver(med: Float?, unidad: CharSequence = binding.prTxt.text): Float {
         if (med == null || med.isNaN()) {
             return 1f
         }
-        return when (binding.prTxt.text) {
+        return when (unidad.toString()) {
             "Centímetros" -> med / 100
             "Metros" -> med
             "Milímetros" -> med / 1000
@@ -3440,8 +3519,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    private fun retasoEnUnidad(): Float {
-        return when (binding.prTxt.text) {
+    private fun retasoEnUnidad(unidad: CharSequence = binding.prTxt.text): Float {
+        return when (unidad.toString()) {
             "Centímetros" -> retaso
             "Metros" -> retaso / 100f
             "Milímetros" -> retaso * 10f
@@ -3454,26 +3533,26 @@ class MainActivity : AppCompatActivity() {
     // pies, metroCua, mCubicos, mLineales, perim,
     // med1, med2, med3, mostrarDialogoRetaso
     // ═══════════════════════════════════════════════════
-    private fun pies(medida1: Float, medida2: Float): Float {
+    private fun pies(medida1: Float, medida2: Float, unidad: CharSequence = binding.prTxt.text): Float {
         // El retaso siempre se guarda en cm y se convierte a la unidad actual antes de sumarse.
-        val r = retasoEnUnidad()
+        val r = retasoEnUnidad(unidad)
         val med1ConRetaso = medida1 + r
         val med2ConRetaso = medida2 + r
-        return (conver(med1ConRetaso)) * (conver(med2ConRetaso)) * 11.1f
+        return (conver(med1ConRetaso, unidad)) * (conver(med2ConRetaso, unidad)) * 11.1f
     }
-    private fun metroCua(medida1: Float, medida2: Float): Float {
+    private fun metroCua(medida1: Float, medida2: Float, unidad: CharSequence = binding.prTxt.text): Float {
         // El retaso siempre se guarda en cm y se convierte a la unidad actual antes de sumarse.
-        val r = retasoEnUnidad()
-        val med1ConRetaso = conver(medida1 + r)
-        val med2ConRetaso = conver(medida2 + r)
+        val r = retasoEnUnidad(unidad)
+        val med1ConRetaso = conver(medida1 + r, unidad)
+        val med2ConRetaso = conver(medida2 + r, unidad)
         return med1ConRetaso * med2ConRetaso
     }
-    private fun mCubicos(medida1: Float, medida2: Float, medida3: Float): Float {
+    private fun mCubicos(medida1: Float, medida2: Float, medida3: Float, unidad: CharSequence = binding.prTxt.text): Float {
 
-        return conver(medida1) * conver(medida2) * conver(medida3)
+        return conver(medida1, unidad) * conver(medida2, unidad) * conver(medida3, unidad)
     }
-    private fun mLineales(medida1: Float, medida2: Float): Float {
-        return conver(medida1) * medida2
+    private fun mLineales(medida1: Float, medida2: Float, unidad: CharSequence = binding.prTxt.text): Float {
+        return conver(medida1, unidad) * medida2
     }
     private fun perim(): Float {
         val medida1 = med1()

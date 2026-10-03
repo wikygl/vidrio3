@@ -1,448 +1,333 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  El diálogo que se abre al tocar un ítem de la lista de medidas (MainActivity.eliminar()).
+
+  Arriba, el ítem: qué es, cuánto mide y cuánto cuesta. Debajo, las acciones en dos grupos —las de
+  ESTE ítem y las de TODA la lista—, todas del mismo tamaño. Al tocar Editar, las acciones se
+  esconden y aparece el formulario a lo ancho, con la cuenta al día mientras se escribe.
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/layout_dialogo"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_margin="9dp"
-    android:orientation="horizontal">
+    android:layout_height="wrap_content">
 
     <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/textView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:layout_marginTop="9dp"
-            android:layout_marginBottom="3dp"
-            android:text="@string/ojito_ojito"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tvRespuesta"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:layout_marginBottom="9dp"
-            android:text="@string/qu_desea_hacer"
-            android:textSize="12sp"
-            tools:ignore="SmallSp" />
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnEnviarJson"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/marron"
-                    android:minWidth="96dp"
-                    android:text="enviar"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
-
-                <Button
-                    android:id="@+id/btnMedir"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/celeste"
-                    android:minWidth="96dp"
-                    android:text="medir"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnGuardar"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/verde"
-                    android:minWidth="96dp"
-                    android:text="@string/guardar"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
-
-                <Button
-                    android:id="@+id/btn_dialogo_editar"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/color"
-                    android:minWidth="96dp"
-                    android:text="@string/editar"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btn_dialogo_eliminar"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/fucsia"
-                    android:minWidth="96dp"
-                    android:text="@string/eliminar"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
-
-                <Button
-                    android:id="@+id/btAbrir"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/gris"
-                    android:minWidth="96dp"
-                    android:text="@string/anexar"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="TouchTargetSizeCheck" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnContrato"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/violeta"
-                    android:minWidth="96dp"
-                    android:text="contrato"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
-
-                <Button
-                    android:id="@+id/btnCortes"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/naranja"
-                    android:minWidth="96dp"
-                    android:text="cortes"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
-
-                <Button
-                    android:id="@+id/btnOpciones"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/azul"
-                    android:minWidth="96dp"
-                    android:text="opciones"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="TextContrastCheck,TouchTargetSizeCheck" />
-
-                <Button
-                    android:id="@+id/btnDiaOk"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/naranja"
-                    android:minWidth="96dp"
-                    android:text="@string/ok"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    android:visibility="gone"
-                    tools:ignore="ButtonStyle,TextContrastCheck" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnAmbiente"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:backgroundTint="@color/azul"
-                    android:minWidth="96dp"
-                    android:text="ambiente"
-                    android:textColor="@color/blanco"
-                    android:textSize="13sp"
-                    tools:ignore="ButtonStyle,TextContrastCheck,TouchTargetSizeCheck" />
-            </LinearLayout>
-
-        </LinearLayout>
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/lyTxt"
+        android:id="@+id/layout_dialogo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="9dp"
         android:orientation="vertical"
-        android:visibility="visible">
+        android:paddingStart="16dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp">
 
+        <!-- El ítem -->
         <LinearLayout
-            android:id="@+id/lyDatos"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:background="@drawable/bg_resumen_item"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <TextView
+                android:id="@+id/tvTituloItem"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="@color/azul"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                tools:text="Ventana nova" />
 
             <TextView
                 android:id="@+id/tvEscala"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="" />
+                android:layout_marginTop="2dp"
+                android:textColor="#4A4A4A"
+                android:textSize="14sp"
+                tools:text="124.5 × 89.5 cm  ·  cant. 1" />
+
+            <TextView
+                android:id="@+id/tvResumenItem"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/negro"
+                android:textSize="15sp"
+                tools:text="S/ 7.40   ·   12.8 p2   ·   1.2 m²" />
+
+            <TextView
+                android:id="@+id/tvMarcasItem"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/color"
+                android:textSize="13sp"
+                android:visibility="gone"
+                tools:text="Sala de partos  ·  3 opciones (elegida la B)"
+                tools:visibility="visible" />
         </LinearLayout>
 
+        <!-- Las acciones -->
+        <LinearLayout
+            android:id="@+id/lyAcciones"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/SeccionItem"
+                android:text="ESTE ÍTEM" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_dialogo_editar"
+                    style="@style/AccionItem.Principal"
+                    android:text="Editar" />
+
+                <Button
+                    android:id="@+id/btnOpciones"
+                    style="@style/AccionItem"
+                    android:text="Opciones" />
+
+                <Button
+                    android:id="@+id/btnAmbiente"
+                    style="@style/AccionItem"
+                    android:text="Ambiente" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btAbrir"
+                    style="@style/AccionItem"
+                    android:text="Anexar" />
+
+                <Button
+                    android:id="@+id/btnMedir"
+                    style="@style/AccionItem"
+                    android:text="Medir" />
+
+                <Button
+                    android:id="@+id/btn_dialogo_eliminar"
+                    style="@style/AccionItem.Eliminar"
+                    android:text="Eliminar" />
+            </LinearLayout>
+
+            <TextView
+                style="@style/SeccionItem"
+                android:text="TODA LA LISTA" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnGuardar"
+                    style="@style/AccionItem"
+                    android:text="Guardar" />
+
+                <Button
+                    android:id="@+id/btnEnviarJson"
+                    style="@style/AccionItem"
+                    android:text="Enviar" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnContrato"
+                    style="@style/AccionItem"
+                    android:text="Contrato" />
+
+                <Button
+                    android:id="@+id/btnCortes"
+                    style="@style/AccionItem"
+                    android:text="Cortes" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- La edición: a lo ancho, cada campo con su rótulo y su unidad -->
         <LinearLayout
             android:id="@+id/lyEdit"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:orientation="vertical"
-            android:visibility="invisible">
+            android:visibility="gone"
+            tools:visibility="visible">
 
             <LinearLayout
                 android:id="@+id/lyMed1"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="horizontal">
+                style="@style/FilaCampoItem">
 
                 <TextView
-                    android:id="@+id/textView13"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="3dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:paddingStart="6dp"
-                    android:text="@string/medida"
-                    tools:ignore="RtlSymmetry" />
+                    android:id="@+id/tvRotuloMed1"
+                    style="@style/RotuloCampoItem"
+                    android:text="Ancho" />
 
                 <EditText
                     android:id="@+id/etdMed1"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:autofillHints="@string/todo"
-                    android:backgroundTint="@color/color"
-                    android:ems="10"
+                    style="@style/CampoItem"
+                    android:hint="0"
                     android:inputType="numberDecimal"
-                    android:textColorHint="@color/sombra2"
-                    android:textColorLink="@color/color"
-                    tools:ignore="LabelFor,TouchTargetSizeCheck,
-                                    TouchTargetSizeCheck,TouchTargetSizeCheck,
-                                    SpeakableTextPresentCheck" />
+                    tools:ignore="LabelFor" />
+
+                <TextView
+                    android:id="@+id/tvUnidadMed1"
+                    style="@style/UnidadCampoItem"
+                    tools:text="cm" />
             </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/lyMed2"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="horizontal">
+                style="@style/FilaCampoItem">
 
                 <TextView
-                    android:id="@+id/textView12"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="3dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:paddingStart="6dp"
-                    android:text="@string/medida"
-                    tools:ignore="RtlSymmetry" />
+                    android:id="@+id/tvRotuloMed2"
+                    style="@style/RotuloCampoItem"
+                    android:text="Alto" />
 
                 <EditText
                     android:id="@+id/etdMed2"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:autofillHints="@string/todo"
-                    android:backgroundTint="@color/color"
-                    android:ems="10"
+                    style="@style/CampoItem"
+                    android:hint="0"
                     android:inputType="numberDecimal"
-                    android:textColorHint="@color/sombra2"
-                    android:textColorLink="@color/color"
-                    tools:ignore="LabelFor,lado1,TouchTargetSizeCheck,
-                                    TouchTargetSizeCheck,SpeakableTextPresentCheck,
-                                    SpeakableTextPresentCheck" />
+                    tools:ignore="LabelFor" />
+
+                <TextView
+                    android:id="@+id/tvUnidadMed2"
+                    style="@style/UnidadCampoItem"
+                    tools:text="cm" />
             </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/lyMed3"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="horizontal">
+                style="@style/FilaCampoItem">
 
                 <TextView
-                    android:id="@+id/textView23"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="3dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:paddingStart="6dp"
-                    android:text="@string/medida"
-                    tools:ignore="RtlSymmetry" />
+                    style="@style/RotuloCampoItem"
+                    android:text="Fondo" />
 
                 <EditText
                     android:id="@+id/etdMed3"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:autofillHints="@string/todo"
-                    android:backgroundTint="@color/color"
-                    android:ems="10"
+                    style="@style/CampoItem"
+                    android:hint="0"
                     android:inputType="numberDecimal"
-                    android:textColorHint="@color/sombra2"
-                    android:textColorLink="@color/color"
-                    tools:ignore="LabelFor,lado1,TouchTargetSizeCheck,
-                                    TouchTargetSizeCheck,SpeakableTextPresentCheck,
-                                    SpeakableTextPresentCheck" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="horizontal">
+                    tools:ignore="LabelFor" />
 
                 <TextView
-                    android:id="@+id/ca"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="3dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:paddingStart="6dp"
-                    android:text="@string/cantidad"
-                    tools:ignore="RtlSymmetry" />
+                    android:id="@+id/tvUnidadMed3"
+                    style="@style/UnidadCampoItem"
+                    tools:text="cm" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/FilaCampoItem">
+
+                <TextView
+                    style="@style/RotuloCampoItem"
+                    android:text="Cantidad" />
 
                 <EditText
                     android:id="@+id/etdCant"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:autofillHints="@string/todo"
-                    android:backgroundTint="@color/color"
-                    android:ems="10"
-                    android:inputType="number|numberDecimal"
-                    android:textColorHint="@color/sombra2"
-                    tools:ignore="LabelFor,TouchTargetSizeCheck,
-                                    SpeakableTextPresentCheck,
-                                    SpeakableTextPresentCheck" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                    style="@style/CampoItem"
+                    android:hint="1"
+                    android:inputType="numberDecimal"
+                    tools:ignore="LabelFor" />
 
                 <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="3dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:paddingStart="6dp"
-                    android:text="@string/precio"
-                    tools:ignore="RtlSymmetry,TooDeepLayout" />
+                    style="@style/UnidadCampoItem"
+                    android:text="und." />
+            </LinearLayout>
+
+            <LinearLayout style="@style/FilaCampoItem">
+
+                <TextView
+                    style="@style/RotuloCampoItem"
+                    android:text="Precio S/" />
 
                 <EditText
                     android:id="@+id/etdPrecio"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:autofillHints="@string/todo"
-                    android:backgroundTint="@color/color"
-                    android:ems="10"
-                    android:inputType="number|numberDecimal"
-                    tools:ignore="LabelFor,TouchTargetSizeCheck,
-                                    SpeakableTextPresentCheck" />
+                    style="@style/CampoItem"
+                    android:hint="0.00"
+                    android:inputType="numberDecimal"
+                    tools:ignore="LabelFor" />
+
+                <TextView
+                    android:id="@+id/tvUnidadPrecio"
+                    style="@style/UnidadCampoItem"
+                    tools:text="x p2" />
             </LinearLayout>
+
+            <LinearLayout style="@style/FilaCampoItem">
+
+                <TextView
+                    style="@style/RotuloCampoItem"
+                    android:text="Producto" />
+
+                <EditText
+                    android:id="@+id/etdProducto"
+                    style="@style/CampoItem"
+                    android:layout_height="wrap_content"
+                    android:inputType="textCapSentences|textMultiLine"
+                    android:maxLines="3"
+                    android:minHeight="48dp"
+                    android:paddingTop="10dp"
+                    android:paddingBottom="10dp"
+                    android:textSize="16sp"
+                    tools:ignore="LabelFor" />
+
+                <Space
+                    android:layout_width="52dp"
+                    android:layout_height="1dp" />
+            </LinearLayout>
+
+            <!-- La cuenta con lo que se va escribiendo: así se ve el costo antes de guardar -->
+            <TextView
+                android:id="@+id/tvVistaPrevia"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_resumen_item"
+                android:padding="10dp"
+                android:textColor="@color/negro"
+                android:textSize="15sp"
+                tools:text="Nuevo costo: S/ 7.40   ·   12.8 p2   ·   1.2 m²" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="3dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/botoncircular"
-                    android:paddingStart="6dp"
-                    android:text="@string/producto"
-                    tools:ignore="RtlSymmetry,TooDeepLayout" />
+                <Button
+                    android:id="@+id/btnEnviarItem"
+                    style="@style/AccionItem"
+                    android:text="Enviar ítem" />
 
-                <EditText
-                    android:id="@+id/etdProducto"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:autofillHints="@string/todo"
-                    android:backgroundTint="@color/color"
-                    android:ems="10"
-                    android:inputType="textAutoComplete"
-                    tools:ignore="LabelFor,TouchTargetSizeCheck,
-                                    SpeakableTextPresentCheck" />
+                <Button
+                    android:id="@+id/btnCancelarEdicion"
+                    style="@style/AccionItem"
+                    android:text="Cancelar" />
+
+                <Button
+                    android:id="@+id/btnDiaOk"
+                    style="@style/AccionItem.Principal"
+                    android:text="Guardar" />
             </LinearLayout>
-
         </LinearLayout>
-
     </LinearLayout>
-
-</LinearLayout>
+</ScrollView>
