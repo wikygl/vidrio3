@@ -276,6 +276,36 @@ class MedidasDeObraTest {
         assertTrue(puenteIna.toString(), listOf("148.7 = 1", "71.5 = 1", "177.5 = 1", "133.7 = 1").all { it in puenteIna })
     }
 
+    /**
+     * La lista de lados en el motor (2026-10-03): la curva es un lado más. La que empieza en curva
+     * (curva de 90 y pared de 150, alto 120, hoja 90, tubo 2⅜): APA la pared pierde su parante,
+     * 147.5; INA media parante a cada lado, 148.7 y la curva 88.7. Y la que termina en curva, dicha
+     * como lista, da lo mismo que con la curva del final.
+     */
+    @Test
+    fun la_lista_de_lados_con_la_curva_como_un_lado() {
+        fun l(ancho: Float, curvo: Boolean = false) = VentanaAutomatica.LadoDeLista(VentanaAutomatica.LadoMedido(ancho, 120f, 90f), curvo)
+        fun calcular(acabado: Acabado, u: PerfilU, puente: Puente, lista: List<VentanaAutomatica.LadoDeLista>) =
+            MotorNova.calcular(VentanaAutomatica.ventana(VentanaAutomatica.conLados(
+                VentanaAutomatica.Entrada(acabado, ModeloMocheta.NORMAL, "nn", emptyList(), u, puente, esquinero = tubo238), lista
+            )!!))
+        val empieza = listOf(l(90f, curvo = true), l(150f))
+        val apa = calcular(Acabado.APA, u38, multiple, empieza)
+        assertTrue(lineas(MaterialesNova.texto(apa.puente)).toString(), listOf("90 = 1", "147.5 = 1").all { it in lineas(MaterialesNova.texto(apa.puente)) })
+        assertTrue(lineas(MaterialesNova.texto(apa.parante)).toString(), "120 = 1" in lineas(MaterialesNova.texto(apa.parante)))
+        val ina = lineas(MaterialesNova.texto(calcular(Acabado.INA, PerfilU(1f, 1.5f), tubo238, empieza).puente))
+        assertTrue(ina.toString(), listOf("88.7 = 1", "148.7 = 1").all { it in ina })
+
+        val termina = calcular(Acabado.APA, u38, multiple, listOf(l(150f), l(74f, true), l(180f), l(135f, true)))
+        val puente = lineas(MaterialesNova.texto(termina.puente))
+        assertTrue(puente.toString(), listOf("147.5 = 1", "74 = 1", "175 = 1", "135 = 1").all { it in puente })
+
+        // Dos curvas seguidas todavía no tienen regla, y la ventana toda curva va por su camino.
+        val base = VentanaAutomatica.Entrada(Acabado.APA, ModeloMocheta.NORMAL, "nn", emptyList(), u38, multiple)
+        assertTrue(VentanaAutomatica.conLados(base, listOf(l(150f), l(80f, true), l(80f, true))) == null)
+        assertTrue(VentanaAutomatica.conLados(base, listOf(l(80f, true))) == null)
+    }
+
     private fun eleConCurva(
         esquinero: Puente, divisionesCurva: Int = 0,
         acabado: Acabado = Acabado.APA, u: PerfilU = u38, puente: Puente = multiple

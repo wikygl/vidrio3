@@ -51,9 +51,37 @@ object VentanaAutomatica {
          * derecho de la ventana. Null = ninguna.
          */
         val curvaFinal: LadoMedido? = null,
+        /** La curva con la que EMPIEZA la ventana, antes del primer lado: la misma regla al revés. */
+        val curvaInicial: LadoMedido? = null,
         val repartoManual: List<Int>? = null,
         val corredizasPorTramoNfc: Int = 0
     )
+
+    /** Un lado de la lista de la ventana (2026-10-03): recto o curvo, en orden. */
+    data class LadoDeLista(val medida: LadoMedido, val curvo: Boolean)
+
+    /**
+     * La entrada desde la lista de lados, donde la curva es un lado más: las paredes son los rectos,
+     * la curva entre dos de ellas es la de su esquina y la de una punta es la del principio o la del
+     * final. Las reglas no cambian (N-104, N-105): en cada punta de curva va un parante. Null si la
+     * lista no tiene paredes (la ventana curva va por su camino) o lleva dos curvas seguidas, que
+     * todavía no tienen regla.
+     */
+    fun conLados(base: Entrada, lista: List<LadoDeLista>): Entrada? {
+        if (lista.none { !it.curvo }) return null
+        if (lista.zipWithNext().any { (a, b) -> a.curvo && b.curvo }) return null
+        val paredes = lista.indices.filter { !lista[it].curvo }
+        val primera = paredes.first()
+        val ultima = paredes.last()
+        // Entre dos paredes seguidas, la curva que haya entre ellas.
+        val curvas = (0 until paredes.size - 1).map { k -> lista.getOrNull(paredes[k] + 1)?.takeIf { it.curvo }?.medida }
+        return base.copy(
+            lados = paredes.map { lista[it].medida },
+            curvas = curvas,
+            curvaInicial = lista.getOrNull(primera - 1)?.takeIf { it.curvo }?.medida,
+            curvaFinal = lista.getOrNull(ultima + 1)?.takeIf { it.curvo }?.medida
+        )
+    }
 
     fun ventana(e: Entrada): VentanaNova {
         val apa = e.acabado == Acabado.APA
@@ -65,8 +93,11 @@ object VentanaAutomatica {
         val anchosEsquina = descuentoEsquinas(e.lados.map { it.ancho }, e.esquinero, curvaEn)
 
         val lados = mutableListOf<LadoNova>()
+        // La curva del principio: arranca en el borde izquierdo de la ventana y entra en la primera pared.
+        e.curvaInicial?.let { lados.add(trozoCurvo(e, it, e.esquinero?.altura ?: 0f, Borde.ESQUINA_CURVA, izquierda = e.izquierda)) }
         e.lados.forEachIndexed { i, l ->
-            val izq = if (i == 0) e.izquierda else if (curvaEn[i - 1]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
+            val izq = if (i == 0) (if (e.curvaInicial != null) Borde.ESQUINA_CURVA else e.izquierda)
+                else if (curvaEn[i - 1]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
             val der = if (i == n - 1) (if (e.curvaFinal != null) Borde.ESQUINA_CURVA else e.derecha)
                 else if (curvaEn[i]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
             val libresLaterales = listOf(izq, der).count { it == Borde.LIBRE }
@@ -100,30 +131,31 @@ object VentanaAutomatica {
         return VentanaNova(
             e.acabado, e.modelo, lados, e.u, e.puente, e.cruce, e.mochetaInferior,
             libresVerticales = e.libresVerticales, perfilLibre = e.perfilLibre,
-            esquinero = if (n > 1 || e.curvaFinal != null) e.esquinero else null
+            esquinero = if (n > 1 || e.curvaFinal != null || e.curvaInicial != null) e.esquinero else null
         )
     }
 
     /**
-     * El trozo de una curva de esquina (N-84): su desarrollo, entre la pared de antes (a su izquierda,
-     * siempre una esquina curva) y [derecha] (otra esquina curva, o el borde de la ventana si es la
-     * curva del final). La curva no descuenta nada en APA (N-104); en INA su estructura pierde media
+     * El trozo de una curva de esquina (N-84): su desarrollo, entre [izquierda] y [derecha]. Cada
+     * punta es una esquina curva (da a una pared) o el borde de la ventana (la curva del principio o
+     * la del final). La curva no descuenta nada en APA (N-104); en INA su estructura pierde media
      * parante en cada punta que da a una pared (N-105). Contra el vacío, como cualquier lado libre.
      */
-    private fun trozoCurvo(e: Entrada, c: LadoMedido, parante: Float, derecha: Borde): LadoNova {
+    private fun trozoCurvo(e: Entrada, c: LadoMedido, parante: Float, derecha: Borde, izquierda: Borde = Borde.ESQUINA_CURVA): LadoNova {
         val apa = e.acabado == Acabado.APA
         val mediaParante = if (apa) 0f else parante / 2f
+        val mediaIzq = if (izquierda == Borde.ESQUINA_CURVA) mediaParante else 0f
         val mediaDer = if (derecha == Borde.ESQUINA_CURVA) mediaParante else 0f
-        val libre = if (apa && derecha == Borde.LIBRE) e.perfilLibre else 0f
+        val libre = if (apa) listOf(izquierda, derecha).count { it == Borde.LIBRE } * e.perfilLibre else 0f
         val anchoCalculo = (c.ancho - libre).coerceAtLeast(0f)
         return DisenoAutomatico.lado(DisenoAutomatico.Entrada(
             anchoMedido = c.ancho, anchoCalculo = anchoCalculo,
-            anchoEstructura = if (apa) null else (anchoCalculo - mediaParante - mediaDer).coerceAtLeast(0f),
+            anchoEstructura = if (apa) null else (anchoCalculo - mediaIzq - mediaDer).coerceAtLeast(0f),
             alto = c.alto - (if (apa) e.libresVerticales * e.perfilLibre else 0f), altoMedido = c.alto,
             hoja = c.hoja, acabado = e.acabado, puente = e.puente, divisManual = c.divisManual,
             modulacion = e.modulacion, corredizasPorTramoNfc = e.corredizasPorTramoNfc,
-            izquierda = Borde.ESQUINA_CURVA, derecha = derecha
-        )).copy(curvaDeEsquina = true, estructuraIzq = mediaParante, estructuraDer = mediaDer)
+            izquierda = izquierda, derecha = derecha
+        )).copy(curvaDeEsquina = true, estructuraIzq = mediaIzq, estructuraDer = mediaDer)
     }
 
     /**
