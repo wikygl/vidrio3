@@ -63,6 +63,41 @@ data class VentanaMedida(
 
     val hayCurva: Boolean get() = lados.any { it.esCurvo }
 
+    /**
+     * El pliegue del diseño delante de cada lado, en grados (`A<grados>`); null = ninguno.
+     *
+     * - Entre dos paredes, el ángulo de su esquina.
+     * - Delante de una curva tangente no hay pliegue: se pega a la pared de antes. Si no sale
+     *   tangente, lleva el ángulo de su unión.
+     * - Detrás de una curva el pliegue es la esquina ENTERA desde antes de la curva, que es como lo
+     *   lee la planta: lo que giró la unión de entrada, lo que gira el arco y lo que gira la unión de
+     *   salida. Un cuarto de círculo tangente da `A<90>`, como la esquina curva de siempre.
+     */
+    fun plieguesDelDiseno(): List<Float?> {
+        fun giro(grados: Float) = 180f - abs(grados)
+        fun giroDelArco(l: LadoDeVentana): Float {
+            val a = ArcoEsquina.deDesarrolloYFlecha(l.ancho, abs(l.flecha))?.anguloGrados ?: 0f
+            return if (l.flecha < 0f) -a else a
+        }
+        var giroDeEntrada = 0f
+        return lados.mapIndexed { i, lado ->
+            val pliegue = if (i == 0) null else {
+                val union = uniones[i - 1]
+                val anterior = lados[i - 1]
+                when {
+                    anterior.esCurvo -> {
+                        val total = giroDeEntrada + giroDelArco(anterior) + giro(union.grados)
+                        if (abs(total) < 0.05f) 180f else (180f - abs(total)) * (if (total < 0f) -1f else 1f)
+                    }
+                    lado.esCurvo -> abs(union.grados).takeIf { abs(giro(it)) > 0.05f }
+                    else -> abs(union.grados)
+                }
+            }
+            if (lado.esCurvo) giroDeEntrada = if (i > 0) giro(uniones[i - 1].grados) else 0f
+            pliegue
+        }
+    }
+
     /** Los lados rectos: las paredes. */
     val paredes: List<LadoDeVentana> get() = lados.filter { !it.esCurvo }
 

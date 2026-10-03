@@ -393,6 +393,45 @@
                             android:visibility="gone"
                             tools:ignore="RtlSymmetry" />
 
+                        <!-- L, C y serie: los lados en lista, rectos o curvos, y entre cada dos su
+                             unión (2026-10-03). Las filas se arman en NovaCorrediza (filaDeLado). -->
+                        <LinearLayout
+                            android:id="@+id/lyListaLados"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/lyBotonesLados"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <Button
+                                android:id="@+id/btLadoRecto"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="2dp"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/verde"
+                                android:text="+ Recto"
+                                android:textColor="@color/blanco"
+                                tools:ignore="HardcodedText" />
+
+                            <Button
+                                android:id="@+id/btLadoCurva"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="2dp"
+                                android:layout_weight="1"
+                                android:backgroundTint="@color/verde"
+                                android:text="+ Curva"
+                                android:textColor="@color/blanco"
+                                tools:ignore="HardcodedText" />
+                        </LinearLayout>
+
                         <LinearLayout
                             android:id="@+id/ancho"
                             android:layout_width="match_parent"

@@ -69,6 +69,32 @@ class VentanaMedidaTest {
         assertFalse(VentanaMedida.desdeTexto(texto)!!.uniones[1].parante)
     }
 
+    /**
+     * Los pliegues del diseño: la L con un cuarto de círculo tangente da `A<90>` detrás de la curva,
+     * como siempre; la curva que no sale tangente lleva su pliegue delante, y el de detrás suma lo
+     * que giró esa unión.
+     */
+    @Test
+    fun los_pliegues_del_diseno() {
+        val cuarto = ArcoEsquina.deDesarrolloYCuerda(157.1f, 141.4f)!!.flecha
+        val tangente = VentanaMedida(
+            listOf(LadoDeVentana(150f, 120f), LadoDeVentana(157.1f, 120f, flecha = cuarto), LadoDeVentana(120f, 120f)),
+            listOf(UnionDeLados(180f), UnionDeLados(180f))
+        )
+        val p = tangente.plieguesDelDiseno()
+        assertNull(p[0]); assertNull("la curva tangente no lleva pliegue", p[1])
+        assertEquals(90f, p[2]!!, 0.5f)
+
+        // La curva entra a 135° (gira 45) y sale tangente: detrás, la esquina entera gira 45 + 90 = 135.
+        val conAngulo = tangente.copy(uniones = listOf(UnionDeLados(135f), UnionDeLados(180f)))
+        val q = conAngulo.plieguesDelDiseno()
+        assertEquals(135f, q[1]!!, 0.01f)
+        assertEquals(45f, q[2]!!, 0.5f)
+
+        // Entre dos paredes, su esquina.
+        assertEquals(90f, VentanaMedida(listOf(LadoDeVentana(150f, 120f), LadoDeVentana(120f, 120f))).plieguesDelDiseno()[1]!!, 0.01f)
+    }
+
     /** Lo guardado con el formato de antes se sigue leyendo. */
     @Test
     fun lo_guardado_antes_se_sigue_leyendo() {
