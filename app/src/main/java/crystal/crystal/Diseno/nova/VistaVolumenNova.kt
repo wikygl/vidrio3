@@ -146,6 +146,31 @@ class VistaVolumenNova @JvmOverloads constructor(
         val giroDeLado = if (desdeAfuera) 20f else 35f
         fun hondo(p: PuntoPlanta, g: Float) = VolumenDelDiseno.profundidad(Punto3D(p.x, p.y, 0f), g, elevacionGrados)
         fun enPapel(p: PuntoPlanta, g: Float) = VolumenDelDiseno.proyectar(Punto3D(p.x, p.y, 0f), g, elevacionGrados).x
+        // En C (la última pared vuelve contraria a la primera; pedido del usuario, 2026-10-03): el lado
+        // del medio de frente, sin girar, y los lados 1 y 3 a los costados. El lado del medio son las
+        // paredes rectas que cruzan a la primera; si los lados 1 y 3 no miden igual, la línea de punta
+        // a punta sale torcida y no sirve. Desde adentro las puntas vienen hacia quien mira; desde
+        // afuera, se van al fondo.
+        plantaActual?.takeIf { it.paredes.size >= 2 }?.let { p ->
+            fun rumboDe(pared: ParedEnPlanta) = kotlin.math.atan2((pared.hasta.y - pared.desde.y).toDouble(), (pared.hasta.x - pared.desde.x).toDouble())
+            val primero = rumboDe(p.paredes.first())
+            val vuelve = kotlin.math.cos(rumboDe(p.paredes.last()) - primero) < -0.5
+            if (!vuelve) return@let
+            val medio = p.paredes.filter { !it.esCurva && kotlin.math.abs(kotlin.math.cos(rumboDe(it) - primero)) < 0.5 }
+                .maxByOrNull { it.cuerdaCm } ?: return@let
+            val rumboMedio = Math.toDegrees(rumboDe(medio)).toFloat()
+            val ini = recorrido.first()
+            val fin = recorrido.last()
+            val centro = PuntoPlanta((medio.desde.x + medio.hasta.x) / 2f, (medio.desde.y + medio.hasta.y) / 2f)
+            val puntas = PuntoPlanta((ini.x + fin.x) / 2f, (ini.y + fin.y) / 2f)
+            val elegida = listOf(false, true).firstOrNull { dadaVuelta ->
+                val g = -45f - rumboMedio + (if (dadaVuelta) 180f else 0f)
+                (hondo(puntas, g) > hondo(centro, g)) == desdeAfuera
+            } ?: return@let
+            invertirCaras = elegida
+            giroGrados = -45f - rumboMedio + (if (elegida) 180f else 0f)
+            return
+        }
         // Hacia qué lado girar depende de hacia dónde dobla: se prueban los cuatro (de un lado o del
         // otro de la ventana, girada a un lado o al otro) y se queda la que mira desde donde se pidió
         // —desde afuera el resto se va al fondo; desde adentro viene hacia quien mira— y deja la
