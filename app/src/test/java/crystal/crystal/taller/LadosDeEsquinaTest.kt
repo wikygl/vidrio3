@@ -80,6 +80,14 @@ class LadosDeEsquinaTest {
         assertTrue(!punta.hayCurva)
     }
 
+    /** Las divisiones de la curva escritas en Nova viajan con ella; sin ellas, el texto de siempre. */
+    @Test
+    fun la_curva_lleva_sus_divisiones() {
+        val curva = CurvaEsquina(90f, 81f, 160f, 90f, divisiones = 3)
+        assertEquals(curva, EsquinaMedida(List(2) { lado(150f, 160f) }, listOf(EsquinaMedida.textoDeCurva(curva))).curvaDe(0))
+        assertEquals("c90|81|160|90", EsquinaMedida.textoDeCurva(curva.copy(divisiones = 0)))
+    }
+
     /** Mixta: una esquina en punta y la otra en curva, que es lo que sale en obra. */
     @Test
     fun una_c_puede_llevar_una_esquina_de_cada_clase() {

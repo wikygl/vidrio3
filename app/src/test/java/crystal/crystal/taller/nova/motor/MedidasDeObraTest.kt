@@ -200,11 +200,20 @@ class MedidasDeObraTest {
         assertTrue(puente.toString(), listOf("146.2 = 1", "90 = 1", "116.2 = 1").all { it in puente })
     }
 
-    private fun eleConCurva(esquinero: Puente) = VentanaAutomatica.ventana(VentanaAutomatica.Entrada(
+    /** Las divisiones de la curva escritas en Nova (2026-10-02): con 3, la curva de 90 lleva 3 hojas. */
+    @Test
+    fun ele_curva_con_sus_divisiones_escritas() {
+        val curva = eleConCurva(tubo238, divisionesCurva = 3).lados.single { it.curvaDeEsquina }
+        assertEquals(3, curva.tramos.sumOf { it.modulos.size })
+        val automatica = eleConCurva(tubo238).lados.single { it.curvaDeEsquina }
+        assertEquals(2, automatica.tramos.sumOf { it.modulos.size })
+    }
+
+    private fun eleConCurva(esquinero: Puente, divisionesCurva: Int = 0) = VentanaAutomatica.ventana(VentanaAutomatica.Entrada(
         Acabado.APA, ModeloMocheta.NORMAL, "nn",
         listOf(VentanaAutomatica.LadoMedido(150f, 160f, 90f), VentanaAutomatica.LadoMedido(120f, 160f, 90f)),
         u38, multiple, esquinero = esquinero,
-        curvas = listOf(VentanaAutomatica.LadoMedido(90f, 160f, 90f))
+        curvas = listOf(VentanaAutomatica.LadoMedido(90f, 160f, 90f, divisionesCurva))
     ))
 
     /**

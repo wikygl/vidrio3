@@ -992,6 +992,34 @@
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
                         </LinearLayout>
 
+                        <!-- Las divisiones del paño curvo; 0, las de la regla (2026-10-02). -->
+                        <LinearLayout
+                            android:id="@+id/lyDiviCurva"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Divisiones curva"
+                                tools:ignore="HardcodedText,RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etDiviCurva"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="number"
+                                android:text="@string/_0"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                        </LinearLayout>
+
                         <LinearLayout
                             android:id="@+id/lyMochetas"
                             android:layout_width="match_parent"

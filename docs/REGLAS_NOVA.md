@@ -555,6 +555,11 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   tres medidas el arco queda dicho; con una sola se toma un cuarto de círculo (la L dobla 90°). El
   lado que se escribe se nombra junto a sus casillas ("Lado 2"), ya no en el título; "Otros datos"
   se quitó. Prueba `EsquinaCurvaEscritaTest`.
+- **La curva de la L se trabaja desde Nova** (2026-10-02): lo que trae Medidas (flecha, cuerda,
+  desarrollo, alto y puente del paño curvo) se muestra en sus casillas y lo que digan al calcular
+  manda. Se agregaron "Alto curva", "h.Puente curva" (vacías, las del lado 1) y "Divisiones curva"
+  (0 = la regla de los 60), para no tener que entrar a novaDiseño. La arista viaja como
+  `c<desarrollo>|<cuerda>|<alto>|<puente>[|<divisiones>]`.
 - **La imagen de Nova de una ventana que dobla** (L, C, serie, esquina curva; pedido del usuario el
   mismo día) sale de la vista 3D en perspectiva, no del dibujo plano, que la finge doblada y se ve
   deforme. La vista 3D dibuja ahora las piezas con su medida sobre cada pared: el puente como banda

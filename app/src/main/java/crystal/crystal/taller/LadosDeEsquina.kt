@@ -48,7 +48,9 @@ data class CurvaEsquina(
     val desarrollo: Float,
     val cuerda: Float,
     val alto: Float,
-    val puente: Float
+    val puente: Float,
+    /** Las divisiones del paño curvo escritas en Nova; 0 = las de la regla (2026-10-02). */
+    val divisiones: Int = 0
 )
 
 /**
@@ -75,7 +77,7 @@ data class EsquinaMedida(
         val t = angulos.getOrNull(arista)?.takeIf { it.startsWith(CURVA) } ?: return null
         val n = t.removePrefix(CURVA).split("|").map { it.trim().toFloatOrNull() ?: return null }
         if (n.size < 4 || n[0] <= 0f || n[1] <= 0f) return null
-        return CurvaEsquina(n[0], n[1], n[2], n[3])
+        return CurvaEsquina(n[0], n[1], n[2], n[3], n.getOrNull(4)?.toInt() ?: 0)
     }
 
     /** Los grados de esa arista, si dobla en punta. */
@@ -136,9 +138,10 @@ data class EsquinaMedida(
         /** Hasta aquí dos medidas de la misma cara son descuadre, no forma (N-06). */
         const val DESCUADRE = 2.5f
 
-        /** El texto de una arista curva: `c<desarrollo>|<cuerda>|<alto>|<puente>`. */
+        /** El texto de una arista curva: `c<desarrollo>|<cuerda>|<alto>|<puente>[|<divisiones>]`. */
         fun textoDeCurva(c: CurvaEsquina): String =
-            CURVA + listOf(c.desarrollo, c.cuerda, c.alto, c.puente).joinToString("|") { num(it) }
+            CURVA + listOf(c.desarrollo, c.cuerda, c.alto, c.puente).joinToString("|") { num(it) } +
+                (if (c.divisiones > 0) "|${c.divisiones}" else "")
 
 
         /**

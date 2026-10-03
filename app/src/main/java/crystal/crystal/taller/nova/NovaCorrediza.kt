@@ -473,6 +473,7 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etDesarrollo.backgroundTintList = tintList
         binding.etAltoCurva.backgroundTintList = tintList
         binding.etPuenteCurva.backgroundTintList = tintList
+        binding.etDiviCurva.backgroundTintList = tintList
         binding.etNmochetas.backgroundTintList = tintList
         binding.etMochetaInf.backgroundTintList = tintList
 
@@ -737,7 +738,7 @@ class NovaCorrediza : AppCompatActivity() {
         val medidaEsquina = esquinaDeLaMedida?.takeIf { it.lados.size == lados.size && lados.size > 1 }
         val curvas = medidaEsquina?.let { m ->
             (0 until lados.size - 1).map { arista ->
-                m.curvaDe(arista)?.let { c -> crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(c.desarrollo, c.alto, c.puente) }
+                m.curvaDe(arista)?.let { c -> crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(c.desarrollo, c.alto, c.puente, c.divisiones) }
             }
         }.orEmpty()
         return crystal.crystal.taller.nova.motor.VentanaAutomatica.ventana(crystal.crystal.taller.nova.motor.VentanaAutomatica.Entrada(
@@ -1686,6 +1687,7 @@ class NovaCorrediza : AppCompatActivity() {
                 binding.lyDesarrollo.visibility = View.VISIBLE
                 binding.lyAltoCurva.visibility = View.VISIBLE
                 binding.lyPuenteCurva.visibility = View.VISIBLE
+                binding.lyDiviCurva.visibility = View.VISIBLE
                 maxLados = 2; contadorLado = 1
                 mostrarLadoActual()
                 binding.btAgregar.visibility = View.VISIBLE
@@ -3007,6 +3009,8 @@ class NovaCorrediza : AppCompatActivity() {
         binding.lyPuenteCurva.visibility = View.GONE
         binding.etAltoCurva.setText("")
         binding.etPuenteCurva.setText("")
+        binding.lyDiviCurva.visibility = View.GONE
+        binding.etDiviCurva.setText("0")
     }
 
     /**
@@ -3040,7 +3044,9 @@ class NovaCorrediza : AppCompatActivity() {
         // a un decimal de lo que se muestra.
         val curva = curvaCargada?.takeIf { escrita != null && it.first == textosDeLaCurva() }
             ?.let { (_, c) ->
-                escrita?.let { e -> c.copy(alto = if (c.alto > 1f) c.alto else e.alto, puente = if (c.puente > 0.5f) c.puente else e.puente) }
+                escrita?.let { e ->
+                    c.copy(alto = if (c.alto > 1f) c.alto else e.alto, puente = if (c.puente > 0.5f) c.puente else e.puente, divisiones = e.divisiones)
+                }
             } ?: escrita
         val deMedidas = esquinaDeLaMedida?.takeIf { !esquinaEscrita && it.lados.size == 2 }
         if (deMedidas != null) {
@@ -3096,13 +3102,15 @@ class NovaCorrediza : AppCompatActivity() {
             }
             (radio * (Math.PI / 2).toFloat()) to (radio * raiz2)
         }
-        // El paño curvo con su propio alto y puente; vacíos, los del lado 1.
-        return CurvaEsquina(desarrollo, cuerda, valor(binding.etAltoCurva) ?: alto, valor(binding.etPuenteCurva) ?: puente)
+        // El paño curvo con su propio alto y puente; vacíos, los del lado 1. Sus divisiones, 0 = la regla.
+        val divisiones = binding.etDiviCurva.text?.toString()?.trim()?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        return CurvaEsquina(desarrollo, cuerda, valor(binding.etAltoCurva) ?: alto, valor(binding.etPuenteCurva) ?: puente, divisiones)
     }
 
     /** Lo que mostraban las casillas de la curva al cargarla de Medidas, y la curva tal cual vino. */
     private var curvaCargada: Pair<List<String>, CurvaEsquina>? = null
 
+    /** Las medidas del arco y del paño; las divisiones no, que no cambian el arco. */
     private fun textosDeLaCurva(): List<String> =
         listOf(binding.etFlecha, binding.etCuerda, binding.etDesarrollo, binding.etAltoCurva, binding.etPuenteCurva)
             .map { it.text?.toString()?.trim().orEmpty() }
@@ -3120,6 +3128,7 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etDesarrollo.setText(c?.let { df1(it.desarrollo) }.orEmpty())
         binding.etAltoCurva.setText(c?.alto?.takeIf { it > 1f }?.let { df1(it) }.orEmpty())
         binding.etPuenteCurva.setText(c?.puente?.takeIf { it > 0.5f }?.let { df1(it) }.orEmpty())
+        binding.etDiviCurva.setText((c?.divisiones ?: 0).toString())
         curvaCargada = c?.let { textosDeLaCurva() to it }
     }
 
