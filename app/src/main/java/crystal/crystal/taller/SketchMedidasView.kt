@@ -3118,7 +3118,8 @@ class SketchMedidasView @JvmOverloads constructor(
             MAMPARA_MARCO in hints -> "Mampara"
             ESQUINA_MARCO in hints -> "Ventana"
             ROPERO_MARCO in hints -> "Ropero"
-            VENTANA_LADOS_MARCO in hints -> "Ventana"
+            // Solo Nova calcula esquinas y curvas (2026-10-03).
+            VENTANA_LADOS_MARCO in hints -> "Ventana Nova"
             else -> null
         }
     }
@@ -11090,6 +11091,8 @@ class SketchMedidasView @JvmOverloads constructor(
             .setPositiveButton("Aceptar", null)
             .setNegativeButton("Cancelar", null)
             .create()
+        // Un toque fuera (con el teclado abierto es fácil) cerraba la lista y se perdía lo escrito.
+        dialogo.setCanceledOnTouchOutside(false)
         dialogo.setOnShowListener {
             dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val lectura = editor.leer()
@@ -11099,6 +11102,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 }
                 fun num(et: EditText) = et.text?.toString()?.trim()?.replace(",", ".")?.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
                 guardarVentanaLados(shape, medida.copy(alfeizar = num(etAlfeizar), dintel = num(etDintel)))
+                fitContentInView()
                 registrarAccion()
                 invalidate()
                 dialogo.dismiss()

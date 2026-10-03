@@ -1082,7 +1082,8 @@ class MedidaActivity : AppCompatActivity() {
         ocultarPanelesFlotantes()
         // Por lados desde el 2026-10-03: la lista se abre sola para escribir cada lado, recto o curvo.
         binding.sketchMedidas.insertarPlantillaVentanaLados()
-        productoActual = "Ventana"
+        // Solo Nova calcula esquinas y curvas: "Ventana" sola iba a la Clásica serie 84 (2026-10-03).
+        productoActual = "Ventana Nova"
         actualizarPanelInformacion()
     }
 
@@ -1096,7 +1097,7 @@ class MedidaActivity : AppCompatActivity() {
     private fun insertarVentanaCurvaEstandar() {
         ocultarPanelesFlotantes()
         binding.sketchMedidas.insertarPlantillaVentanaLados(curva = true)
-        productoActual = "Ventana"
+        productoActual = "Ventana Nova"
         actualizarPanelInformacion()
     }
 
