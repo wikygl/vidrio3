@@ -231,6 +231,27 @@ class MedidasDeObraTest {
         assertTrue(u.toString(), listOf("150 = 1", "90 = 1", "120 = 1").all { it in u })
     }
 
+    /**
+     * La C con sus dos esquinas curvas (2026-10-03): la misma lógica que la L en cada esquina. C de
+     * 150 + curva 90 + 240 + curva 90 + 150, tubo 2⅜. APA (N-104): las paredes de las puntas pierden
+     * un parante (147.5) y la del medio dos (240 − 5 = 235); las curvas, nada. INA (N-105): media
+     * parante por punta de curva en la estructura: 148.7, 237.5 y las curvas 87.5.
+     */
+    @Test
+    fun ce_con_dos_esquinas_curvas_cada_una_como_la_l() {
+        fun ce(acabado: Acabado, u: PerfilU, puente: Puente) = MotorNova.calcular(VentanaAutomatica.ventana(VentanaAutomatica.Entrada(
+            acabado, ModeloMocheta.NORMAL, "nn",
+            listOf(VentanaAutomatica.LadoMedido(150f, 160f, 90f), VentanaAutomatica.LadoMedido(240f, 160f, 90f),
+                VentanaAutomatica.LadoMedido(150f, 160f, 90f)),
+            u, puente, esquinero = tubo238,
+            curvas = listOf(VentanaAutomatica.LadoMedido(90f, 160f, 90f), VentanaAutomatica.LadoMedido(90f, 160f, 90f))
+        )))
+        val apa = lineas(MaterialesNova.texto(ce(Acabado.APA, u38, multiple).puente))
+        assertTrue(apa.toString(), listOf("147.5 = 2", "235 = 1", "90 = 2").all { it in apa })
+        val ina = lineas(MaterialesNova.texto(ce(Acabado.INA, PerfilU(1f, 1.5f), tubo238).puente))
+        assertTrue(ina.toString(), listOf("148.7 = 2", "237.5 = 1", "87.5 = 2").all { it in ina })
+    }
+
     private fun eleConCurva(
         esquinero: Puente, divisionesCurva: Int = 0,
         acabado: Acabado = Acabado.APA, u: PerfilU = u38, puente: Puente = multiple

@@ -567,6 +567,13 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   manda. Se agregaron "Alto curva", "h.Puente curva" (vacías, las del lado 1) y "Divisiones curva"
   (0 = la regla de los 60), para no tener que entrar a novaDiseño. La arista viaja como
   `c<desarrollo>|<cuerda>|<alto>|<puente>[|<divisiones>]`.
+- **La C con esquinas curvas** (2026-10-03): la misma lógica que la L en cada esquina. Dos bloques,
+  "Esquina curva 1" (debajo del lado 1) y "Esquina curva 2" (debajo del lado 2); vacíos, el alto
+  y el puente del lado de antes. N-104 y N-105 valen por esquina: en APA la pared del medio pierde
+  dos parantes (240 → 235), en INA media parante en cada punta de curva
+  (`MedidasDeObraTest.ce_con_dos_esquinas_curvas_cada_una_como_la_l`).
+- **La imagen de la C** (2026-10-03): el lado del medio de frente, sin girar, y los lados 1 y 3 a
+  los costados viniendo hacia quien mira (desde adentro; desde afuera se van al fondo).
 - **La imagen de Nova de una ventana que dobla** (L, C, serie, esquina curva; pedido del usuario el
   mismo día) sale de la vista 3D en perspectiva, no del dibujo plano, que la finge doblada y se ve
   deforme. La vista 3D dibuja ahora las piezas con su medida sobre cada pared: el puente como banda
