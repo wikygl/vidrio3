@@ -584,6 +584,122 @@ class SketchMedidasView @JvmOverloads constructor(
         }
         canvas.restore()
         dibujarAvisoEscuadra(canvas)
+        dibujarPestana(canvas)
+    }
+
+    // ===================== La pestaña de identificadores (2026-10-03) =====================
+    // El identificador de cada plantilla ("PUERTA 90 x 240") y sus pastillas ("2 puertas",
+    // "− 3 lados +") van en una pestaña fija arriba a la izquierda del lienzo, en píxeles de
+    // pantalla: no se mueven con el zoom ni con el dibujo. Antes iban junto al dibujo y estorbaban.
+    // En lo que se exporta (la imagen que ven las calculadoras) siguen junto al dibujo.
+
+    /** ¿Este rótulo se ve en la pestaña y no sobre el dibujo? Solo en pantalla. */
+    private fun vaEnLaPestana(element: Element): Boolean {
+        if (exportando) return false
+        val t = element as? Element.TextLabel ?: return false
+        return t.titulo || t.rol in ROLES_PASTILLA
+    }
+
+    /** Lo que se toca en la pestaña: el rótulo y, en la de lados, la mitad (−1 quita, +1 añade, 0 todo). */
+    private data class ToquePestana(val rect: RectF, val etiqueta: Int, val delta: Int)
+
+    private val toquesPestana = mutableListOf<ToquePestana>()
+    private var toquePestanaPendiente: ToquePestana? = null
+
+    private val pestanaFondoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(240, 255, 255, 255); style = Paint.Style.FILL
+    }
+    private val pestanaBordePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(21, 101, 192); style = Paint.Style.STROKE
+    }
+    private val pestanaTituloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(30, 30, 30); typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+
+    private fun dibujarPestana(canvas: Canvas) {
+        toquesPestana.clear()
+        if (exportando) return
+        val identificadores = elementos.indices.filter {
+            val t = elementos[it] as? Element.TextLabel
+            t != null && t.titulo && t.rol !in ROLES_PASTILLA
+        }
+        if (identificadores.isEmpty()) return
+        val pastillas = elementos.indices.filter { (elementos[it] as? Element.TextLabel)?.rol in ROLES_PASTILLA }
+        val m = spToPx(8f)
+        pestanaTituloPaint.textSize = spToPx(15f)
+        pastillaTextoPaint.textSize = spToPx(13f)
+        pestanaBordePaint.strokeWidth = spToPx(1.2f)
+        pastillaBordePaint.strokeWidth = spToPx(1.2f)
+        val alto = pestanaTituloPaint.fontSpacing + m * 1.2f
+        // Debajo del cartel de la cota a escuadra, si está a la vista.
+        var y = if (eligiendoEscuadra || modoEdicion != null) m * 2 + avisoTextoPaint.fontSpacing + m else m
+        identificadores.forEach { ti ->
+            val titulo = elementos[ti] as Element.TextLabel
+            val marco = marcoDePieza(ti)
+            val suyas = pastillas.filter { marcoDePieza(it) == marco }
+            val anchoTitulo = pestanaTituloPaint.measureText(titulo.text)
+            val anchosPastilla = suyas.map { pastillaTextoPaint.measureText((elementos[it] as Element.TextLabel).text) + m * 2 }
+            val ancho = m + anchoTitulo + anchosPastilla.sumOf { (it + m).toDouble() }.toFloat() + m
+            val caja = RectF(m, y, (m + ancho).coerceAtMost(width - m), y + alto)
+            canvas.drawRoundRect(caja, m, m, pestanaFondoPaint)
+            canvas.drawRoundRect(caja, m, m, pestanaBordePaint)
+            val base = caja.centerY() - (pestanaTituloPaint.descent() + pestanaTituloPaint.ascent()) / 2f
+            canvas.drawText(titulo.text, caja.left + m, base, pestanaTituloPaint)
+            toquesPestana.add(ToquePestana(RectF(caja.left, caja.top, caja.left + m + anchoTitulo, caja.bottom), ti, 0))
+            var x = caja.left + m + anchoTitulo + m
+            suyas.forEachIndexed { k, pi ->
+                val p = elementos[pi] as Element.TextLabel
+                val r = RectF(x, caja.top + m * 0.35f, x + anchosPastilla[k], caja.bottom - m * 0.35f)
+                val radio = r.height() / 2f
+                canvas.drawRoundRect(r, radio, radio, pastillaFondoPaint)
+                canvas.drawRoundRect(r, radio, radio, pastillaBordePaint)
+                val bp = r.centerY() - (pastillaTextoPaint.descent() + pastillaTextoPaint.ascent()) / 2f
+                canvas.drawText(p.text, r.left + m, bp, pastillaTextoPaint)
+                if (p.rol == ROL_TRAMOS) {
+                    // La de lados: la mitad del − quita y la del + añade.
+                    toquesPestana.add(ToquePestana(RectF(r.left, r.top, r.centerX(), r.bottom), pi, -1))
+                    toquesPestana.add(ToquePestana(RectF(r.centerX(), r.top, r.right, r.bottom), pi, 1))
+                } else {
+                    toquesPestana.add(ToquePestana(RectF(r), pi, 0))
+                }
+                x = r.right + m
+            }
+            y = caja.bottom + m * 0.6f
+        }
+    }
+
+    /**
+     * Los toques en la pestaña, antes que nada del lienzo: un toque (bajar y levantar sobre lo
+     * mismo) cambia la pastilla. Devuelve true si el toque era de la pestaña.
+     */
+    private fun manejarToquePestana(event: MotionEvent): Boolean {
+        fun en(x: Float, y: Float) = toquesPestana.lastOrNull { it.rect.contains(x, y) }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val t = en(event.x, event.y) ?: return false
+                toquePestanaPendiente = t
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> return toquePestanaPendiente != null
+            MotionEvent.ACTION_UP -> {
+                val pendiente = toquePestanaPendiente ?: return false
+                toquePestanaPendiente = null
+                if (en(event.x, event.y) == pendiente) {
+                    when ((elementos.getOrNull(pendiente.etiqueta) as? Element.TextLabel)?.rol) {
+                        ROL_HOJAS -> alternarHojas(pendiente.etiqueta)
+                        ROL_TRAMOS -> if (pendiente.delta != 0) cambiarTramos(pendiente.etiqueta, pendiente.delta)
+                    }
+                    invalidate()
+                }
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                val era = toquePestanaPendiente != null
+                toquePestanaPendiente = null
+                return era
+            }
+        }
+        return false
     }
 
     /**
@@ -652,6 +768,8 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun pantallaAMundoY(y: Float) = (y - viewOffsetY) / viewScale
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // La pestaña fija va por delante de todo lo del lienzo.
+        if (event.pointerCount == 1 && !viewportGesture && manejarToquePestana(event)) return true
         if (event.pointerCount >= 2 || viewportGesture) {
             removeCallbacks(longPressRunnable); cotaPendiente = null
             removeCallbacks(piezaLongPressRunnable); piezaPendiente = null
@@ -3836,7 +3954,8 @@ class SketchMedidasView @JvmOverloads constructor(
             is Element.Symbol -> element.drawableName in SIMBOLOS_PUERTA &&
                 RectF(element.rect).apply { inset(-pad, -pad) }.contains(x, y)
             is Element.TextLabel -> element.rol in setOf(
-                ROL_MICHI, ROL_HOJAS, ROL_ALFEIZAR, ROL_ALTOS, ROL_ESQUINA, ROL_TRAMOS, ROL_CURVA
+                // Las pastillas de puertas y lados se tocan en la pestaña fija, no sobre el dibujo.
+                ROL_MICHI, ROL_ALFEIZAR, ROL_ALTOS, ROL_ESQUINA, ROL_CURVA
             ) &&
                 boundsForText(element).apply { inset(-pad * 1.5f, -pad * 1.5f) }.contains(x, y)
             is Element.Shape -> element.cotaHint == PUERTA_PUENTE &&
@@ -7397,6 +7516,9 @@ class SketchMedidasView @JvmOverloads constructor(
         when (element) {
             is Element.Freehand -> canvas.drawPath(element.path, paint)
             is Element.TextLabel -> {
+                // En pantalla el identificador y sus pastillas van en la pestaña fija; junto al
+                // dibujo solo salen en lo que se exporta.
+                if (vaEnLaPestana(element)) return
                 if (element.rol in ROLES_PASTILLA) {
                     dibujarPastilla(canvas, element)
                     return
@@ -7537,6 +7659,7 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun drawSelection(canvas: Canvas) {
         for (index in selectedIndices) {
             val element = elementos.getOrNull(index) ?: continue
+            if (vaEnLaPestana(element)) continue
             val bounds = boundsForElement(element)
             bounds.inset(-10f, -10f)
             canvas.drawRect(bounds, selectionPaint)
@@ -7592,6 +7715,7 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun hitElement(x: Float, y: Float): Int? {
         val touchPad = 24f * resources.displayMetrics.density
         for (i in elementos.indices.reversed()) {
+            if (vaEnLaPestana(elementos[i])) continue
             val bounds = boundsForElement(elementos[i])
             bounds.inset(-touchPad, -touchPad)
             if (bounds.contains(x, y)) return i
