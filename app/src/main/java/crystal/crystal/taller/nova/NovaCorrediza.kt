@@ -743,7 +743,8 @@ class NovaCorrediza : AppCompatActivity() {
                 m.curvaDe(arista)?.let { c -> crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(c.desarrollo, c.alto, c.puente, c.divisiones) }
             }
         }.orEmpty()
-        return crystal.crystal.taller.nova.motor.VentanaAutomatica.ventana(crystal.crystal.taller.nova.motor.VentanaAutomatica.Entrada(
+        // Un lado en cero con la curva en su esquina: la ventana empieza o acaba en la curva (2026-10-03).
+        return crystal.crystal.taller.nova.motor.VentanaAutomatica.ventana(crystal.crystal.taller.nova.motor.VentanaAutomatica.conCurvasEnLasPuntas(crystal.crystal.taller.nova.motor.VentanaAutomatica.Entrada(
             acabado = if (tipoNova == TipoNova.APA) crystal.crystal.taller.nova.motor.Acabado.APA else crystal.crystal.taller.nova.motor.Acabado.INA,
             // Circular (sección 11): en automático el modelo pasa a bandera.
             modelo = if (textoModelo == "nci") crystal.crystal.taller.nova.motor.ModeloMocheta.BANDERA else modeloMotor(),
@@ -759,7 +760,7 @@ class NovaCorrediza : AppCompatActivity() {
                 crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(c.desarrollo, c.alto, c.puente, c.divisiones)
             },
             repartoManual = NovaCalculos.repartoManual, corredizasPorTramoNfc = corredizasPorTramo
-        )).copy(circular = textoModelo == "nci")
+        ))).copy(circular = textoModelo == "nci")
     }
 
     private fun modeloMotor() = when (modeloRemate) {
@@ -2708,6 +2709,16 @@ class NovaCorrediza : AppCompatActivity() {
 
         if (texto == "nl") {
             val primera = obtenerPrimeraMedidaNlEditable()
+            // La L que empieza en la curva (2026-10-03): el lado 1 en cero y la curva en su esquina.
+            // La pared en cero no existe: el diseño arranca con la curva y sigue con el lado 2.
+            if (primera != null && primera.ancho <= 0.5f && esquinaDeLaMedida?.curvaDe(0) != null && paredes.size == 1) {
+                val tramosAleta = escritor.tramos(vMotor, paredes[0], consolidado = true)
+                val cabecera = "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:"
+                val curva = esquinaEnElDiseno(0, alto, hoja)
+                val aleta = conPanzaDelLado(1, tramosAleta)
+                val final = curvaFinalEnElDiseno(1, alto, hoja)
+                return conLoQueTrajoLaMedida("{nova,${tipoPaquete()},[$cabecera$curva $aleta$final]}")
+            }
             if (primera != null) {
                 // Aplicar el descuento de esquina (mismo que materiales) para que el dibujo use
                 // el ancho ÚTIL: divisiones y paños de mocheta coinciden con la lista de corte.
@@ -3737,9 +3748,24 @@ class NovaCorrediza : AppCompatActivity() {
         runCatching { crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(paquete) }
             .getOrNull()?.doblaEnEsquina == true
 
+    /**
+     * La ventana que empieza en curva (2026-10-03): Medidas la manda con la curva en el sitio del
+     * lado de cero, y Nova la ponía en el lado 1 con las casillas de la curva vacías. Se acomoda
+     * como se escribe en Nova: el lado 1 en cero y la curva en su esquina.
+     */
+    private fun conCurvaInicialEnSuEsquina(m: EsquinaMedida): EsquinaMedida {
+        val primera = m.lados.firstOrNull() ?: return m
+        if (!primera.esCurva || m.lados.size < 2 || m.lados[1].esCurva) return m
+        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(primera.ancho, kotlin.math.abs(primera.flecha)) ?: return m
+        val curva = CurvaEsquina(primera.ancho, arco.cuerda, primera.alto, primera.puente)
+        val siguiente = m.lados[1]
+        val cero = crystal.crystal.taller.LadoEsquina(0f, 0f, siguiente.alto, siguiente.alto, siguiente.puente)
+        return EsquinaMedida(listOf(cero) + m.lados.drop(1), listOf(EsquinaMedida.textoDeCurva(curva)) + m.angulos.drop(1))
+    }
+
     private fun cargarEsquinaDeMedida(texto: String, contornosLados: String = "", parantesLados: String = ""): Boolean {
 
-        val medida = EsquinaMedida.desdeTexto(texto) ?: return false
+        val medida = conCurvaInicialEnSuEsquina(EsquinaMedida.desdeTexto(texto) ?: return false)
         val geo = medida.geometria ?: return false
         val dibujo = when (geo) {
             "nl" -> R.drawable.venl

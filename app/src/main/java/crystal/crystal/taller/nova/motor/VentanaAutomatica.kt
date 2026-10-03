@@ -83,6 +83,25 @@ object VentanaAutomatica {
         )
     }
 
+    /**
+     * Un lado en cero con la curva en su esquina es la ventana que empieza (o acaba) en la curva
+     * (2026-10-03): así se escribe en Nova y así llega de Medidas. La pared en cero no existe; la
+     * curva pasa a ser la del principio (o la del final), con su parante y N-104/N-105.
+     */
+    fun conCurvasEnLasPuntas(entrada: Entrada): Entrada {
+        var e = entrada
+        if (e.lados.size >= 2 && e.lados.first().ancho <= 0.5f && e.curvaInicial == null) {
+            e.curvas.firstOrNull()?.let { c -> e = e.copy(lados = e.lados.drop(1), curvas = e.curvas.drop(1), curvaInicial = c) }
+        }
+        val n = e.lados.size
+        if (n >= 2 && e.lados.last().ancho <= 0.5f && e.curvaFinal == null) {
+            e.curvas.getOrNull(n - 2)?.let { c ->
+                e = e.copy(lados = e.lados.dropLast(1), curvas = e.curvas.take(n - 2), curvaFinal = c)
+            }
+        }
+        return e
+    }
+
     fun ventana(e: Entrada): VentanaNova {
         val apa = e.acabado == Acabado.APA
         val n = e.lados.size

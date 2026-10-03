@@ -306,6 +306,28 @@ class MedidasDeObraTest {
         assertTrue(VentanaAutomatica.conLados(base, listOf(l(80f, true))) == null)
     }
 
+    /**
+     * Como se escribe en Nova la ventana que empieza en curva (2026-10-03): el lado 1 en cero y la
+     * curva en su esquina. La pared en cero no existe: calcula igual que la curva del principio
+     * (curva de 90 y pared de 150, APA): puente 90 y 147.5, un parante. Y el cero al final, igual.
+     */
+    @Test
+    fun lado_en_cero_con_su_curva_es_la_curva_de_la_punta() {
+        fun calcular(lados: List<Float>, curvas: List<VentanaAutomatica.LadoMedido?>) = MotorNova.calcular(VentanaAutomatica.ventana(
+            VentanaAutomatica.conCurvasEnLasPuntas(VentanaAutomatica.Entrada(
+                Acabado.APA, ModeloMocheta.NORMAL, "nn", lados.map { VentanaAutomatica.LadoMedido(it, 120f, 90f) },
+                u38, multiple, esquinero = tubo238, curvas = curvas
+            ))
+        ))
+        val curva = VentanaAutomatica.LadoMedido(90f, 120f, 90f)
+        val inicio = calcular(listOf(0f, 150f), listOf(curva))
+        val puente = lineas(MaterialesNova.texto(inicio.puente))
+        assertTrue(puente.toString(), listOf("90 = 1", "147.5 = 1").all { it in puente } && puente.size == 2)
+        assertTrue(lineas(MaterialesNova.texto(inicio.parante)).toString(), "120 = 1" in lineas(MaterialesNova.texto(inicio.parante)))
+        val fin = lineas(MaterialesNova.texto(calcular(listOf(150f, 0f), listOf(curva)).puente))
+        assertTrue(fin.toString(), listOf("90 = 1", "147.5 = 1").all { it in fin } && fin.size == 2)
+    }
+
     private fun eleConCurva(
         esquinero: Puente, divisionesCurva: Int = 0,
         acabado: Acabado = Acabado.APA, u: PerfilU = u38, puente: Puente = multiple

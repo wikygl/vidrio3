@@ -634,6 +634,13 @@ class SketchMedidasView @JvmOverloads constructor(
                         }
                         etiquetaDelMarco(i, ROL_TRAMOS)?.let { t ->
                             pastillas.add(PastillaFicha(textoTramos(ladosDelMarco(i)), true) { d -> cambiarTramos(t, d) })
+                            // La ventana de esquina puede empezar o acabar en curva sin pared antes.
+                            if (e.cotaHint == ESQUINA_MARCO && !esMarcoCurvo(i)) {
+                                val inicio = curvaEnPunta(i, alFinal = false)
+                                val fin = curvaEnPunta(i, alFinal = true)
+                                pastillas.add(PastillaFicha("◠ inicio" + (inicio?.let { " ${formatCm(it.desarrollo)}" } ?: ""), false) { pedirCurvaEnPunta(i, false) })
+                                pastillas.add(PastillaFicha("◠ final" + (fin?.let { " ${formatCm(it.desarrollo)}" } ?: ""), false) { pedirCurvaEnPunta(i, true) })
+                            }
                         }
                         etiquetaDelMarco(i, ROL_MICHI)?.let { m ->
                             pastillas.add(PastillaFicha("michi ${(elementos[m] as Element.TextLabel).text}", false) { editarMichi(m) })
@@ -673,8 +680,120 @@ class SketchMedidasView @JvmOverloads constructor(
         return out
     }
 
-    /** Lados de una ventana de esquina o curva: sus paredes y las curvas de sus esquinas. */
-    private fun ladosDelMarco(marcoIndex: Int): Int = quiebresDelMarco(marcoIndex).size + 1 + bandasDeCurva(marcoIndex).size
+    /** Lados de una ventana de esquina o curva: sus paredes y sus curvas (una pared en cero no cuenta). */
+    private fun ladosDelMarco(marcoIndex: Int): Int =
+        bordesDeTramos(marcoIndex).zipWithNext().count { (a, b) -> pxToCm(b - a) > 0.5f }.coerceAtLeast(1)
+
+    // ---- La curva con la que empieza o acaba la ventana de esquina (2026-10-03) ----
+    // Es la esquina curva de la punta con el lado de ese lado en cero: lo mismo que se hacía a mano
+    // (curvar la primera esquina y poner el primer lado en 0), ahora de un toque en la ficha. Así
+    // viaja como siempre y la calculadora la recibe como la curva del principio o del final.
+
+    /** La curva de esa punta (desarrollo y cuerda), o null si la ventana no empieza o acaba en curva. */
+    private fun curvaEnPunta(marcoIndex: Int, alFinal: Boolean): ArcoEsquina? {
+        val esquinas = etiquetasEsquina(marcoIndex)
+        val bordes = bordesDeTramos(marcoIndex)
+        if (esquinas.isEmpty() || bordes.size < 3) return null
+        val etiqueta = esquinas[if (alFinal) esquinas.lastIndex else 0]
+        val tramo = if (alFinal) bordes.size - 2 else 0
+        if (pxToCm(bordes[tramo + 1] - bordes[tramo]) > 0.5f) return null
+        return esquinaDesdeTexto((elementos[etiqueta] as Element.TextLabel).text).arco
+    }
+
+    private fun pedirCurvaEnPunta(marcoIndex: Int, alFinal: Boolean) {
+        val marco = elementos.getOrNull(marcoIndex) as? Element.Shape ?: return
+        val actual = curvaEnPunta(marcoIndex, alFinal)
+        val dp = resources.displayMetrics.density
+        val cont = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * dp).toInt(), (12 * dp).toInt(), (20 * dp).toInt(), 0)
+        }
+        val etDesarrollo = EditText(context).apply {
+            hint = "Desarrollo (lo que se corta)"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(actual?.let { formatCm(it.desarrollo) }.orEmpty())
+        }
+        val etCuerda = EditText(context).apply {
+            hint = "Cuerda: de punta a punta, en recto"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(actual?.let { formatCm(it.cuerda) }.orEmpty())
+        }
+        val aviso = TextView(context).apply { textSize = 12f; setPadding(0, (4 * dp).toInt(), 0, 0) }
+        listOf(etDesarrollo, etCuerda, aviso).forEach { cont.addView(it) }
+        fun leer(et: EditText) = et.text?.toString()?.replace(",", ".")?.toFloatOrNull()
+        val vigilante = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val d = leer(etDesarrollo); val c = leer(etCuerda)
+                if (d == null || c == null) { aviso.text = ""; return }
+                val arco = ArcoEsquina.deDesarrolloYCuerda(d, c)
+                aviso.text = if (arco == null) "La cuerda siempre es más corta que el desarrollo."
+                else "Dobla ${formatCm(arco.anguloGrados)}° · flecha ${formatCm(arco.flecha)}"
+            }
+        }
+        etDesarrollo.addTextChangedListener(vigilante)
+        etCuerda.addTextChangedListener(vigilante)
+        val dialogo = AlertDialog.Builder(context)
+            .setTitle(if (alFinal) "Curva al final" else "Curva al inicio")
+            .setView(cont)
+            .setPositiveButton("Aceptar", null)
+            .setNegativeButton("Cancelar", null)
+            .apply { if (actual != null) setNeutralButton("Quitar curva") { _, _ -> quitarCurvaEnPunta(marco, alFinal) } }
+            .create()
+        dialogo.setOnShowListener {
+            dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val d = leer(etDesarrollo); val c = leer(etCuerda)
+                if (d == null || c == null || ArcoEsquina.deDesarrolloYCuerda(d, c) == null) {
+                    Toast.makeText(context, "La curva necesita su desarrollo y su cuerda, y la cuerda más corta.", Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                ponerCurvaEnPunta(marco, alFinal, d, c)
+                dialogo.dismiss()
+            }
+        }
+        dialogo.show()
+    }
+
+    private fun ponerCurvaEnPunta(marco: Element.Shape, alFinal: Boolean, desarrollo: Float, cuerda: Float) {
+        fun indice() = elementos.indexOfFirst { it === marco }
+        if (indice() < 0) return
+        val nueva = curvaEnPunta(indice(), alFinal) == null
+        // Al final hace falta un lado más, que es el que queda en cero detrás de la curva.
+        if (alFinal && nueva) etiquetaDelMarco(indice(), ROL_TRAMOS)?.let { cambiarTramos(it, 1) }
+        val m = indice().takeIf { it >= 0 } ?: return
+        val esquinas = etiquetasEsquina(m)
+        val arista = if (alFinal) esquinas.lastIndex else 0
+        val etiqueta = esquinas.getOrNull(arista) ?: return
+        (elementos[etiqueta] as Element.TextLabel).text = textoCurva(desarrollo, cuerda)
+        ajustarBandaDeCurva(m, arista, desarrollo)
+        if (nueva) {
+            val bordes = bordesDeTramos(indice())
+            aplicarAnchoTramo(indice(), if (alFinal) bordes.size - 2 else 0, 0f)
+        }
+        sincronizarMarco(indice(), reinterpolarAltos = false)
+        registrarAccion()
+        invalidate()
+    }
+
+    /** Se quita la curva de la punta: vuelve la esquina en escuadra y el lado de esa punta, del largo de la curva. */
+    private fun quitarCurvaEnPunta(marco: Element.Shape, alFinal: Boolean) {
+        fun indice() = elementos.indexOfFirst { it === marco }
+        val arco = curvaEnPunta(indice().takeIf { it >= 0 } ?: return, alFinal) ?: return
+        val esquinas = etiquetasEsquina(indice())
+        val arista = if (alFinal) esquinas.lastIndex else 0
+        (elementos[esquinas[arista]] as Element.TextLabel).text = textoEsquina(90f)
+        ajustarBandaDeCurva(indice(), arista, 0f)
+        if (alFinal) {
+            // El lado en cero del final sobra: se va con su esquina.
+            etiquetaDelMarco(indice(), ROL_TRAMOS)?.let { cambiarTramos(it, -1) }
+        } else {
+            aplicarAnchoTramo(indice(), 0, arco.desarrollo)
+        }
+        sincronizarMarco(indice(), reinterpolarAltos = false)
+        registrarAccion()
+        invalidate()
+    }
 
     // ---- Las plantillas de producto (corrediza, ducha, baranda, reja, muro cortina) ----
     // Son un rectángulo con sus líneas de hoja y un título ("CORREDIZA  200 x 120  (2 hojas)").
@@ -756,14 +875,18 @@ class SketchMedidasView @JvmOverloads constructor(
         pastillaTextoPaint.textSize = spToPx(13f)
         pestanaBordePaint.strokeWidth = spToPx(1.2f)
         pastillaBordePaint.strokeWidth = spToPx(1.2f)
-        val alto = pestanaTituloPaint.fontSpacing + m * 1.2f
+        // Renglones altos: las pastillas se tocan con el dedo y el − y el + tienen que dar en el blanco.
+        val alto = maxOf(pestanaTituloPaint.fontSpacing + m * 1.2f, spToPx(44f))
         val limite = width - m
         // Debajo del cartel de la cota a escuadra, si está a la vista.
         var y = if (eligiendoEscuadra || modoEdicion != null) m * 2 + avisoTextoPaint.fontSpacing + m else m
         lista.forEach { ficha ->
             // El título y sus pastillas en un renglón; si no caben, las pastillas siguen debajo.
             val anchoTitulo = pestanaTituloPaint.measureText(ficha.titulo)
-            val anchos = ficha.pastillas.map { pastillaTextoPaint.measureText(it.texto) + m * 2 }
+            val boton = alto - m * 0.7f
+            val anchos = ficha.pastillas.map { p ->
+                interiorDividido(p.texto)?.let { pastillaTextoPaint.measureText(it) + boton * 2 + m } ?: (pastillaTextoPaint.measureText(p.texto) + m * 2)
+            }
             val posiciones = mutableListOf<PointF>()
             var x = m + m + anchoTitulo + m
             var fila = 0
@@ -785,7 +908,13 @@ class SketchMedidasView @JvmOverloads constructor(
                 canvas.drawRoundRect(r, radio, radio, pastillaFondoPaint)
                 canvas.drawRoundRect(r, radio, radio, pastillaBordePaint)
                 val bp = r.centerY() - (pastillaTextoPaint.descent() + pastillaTextoPaint.ascent()) / 2f
-                canvas.drawText(p.texto, r.left + m, bp, pastillaTextoPaint)
+                val interior = interiorDividido(p.texto)
+                if (interior != null) {
+                    dibujarBotonesMasMenos(canvas, r, spToPx(22f))
+                    canvas.drawText(interior, r.left + r.height() + m / 2f, bp, pastillaTextoPaint)
+                } else {
+                    canvas.drawText(p.texto, r.left + m, bp, pastillaTextoPaint)
+                }
                 if (p.dividida) {
                     toquesPestana.add(ToquePestana(RectF(r.left, r.top, r.centerX(), r.bottom), p.accion, -1))
                     toquesPestana.add(ToquePestana(RectF(r.centerX(), r.top, r.right, r.bottom), p.accion, 1))
@@ -4397,12 +4526,14 @@ class SketchMedidasView @JvmOverloads constructor(
         etDesarrollo.addTextChangedListener(watcherCurva)
         etCuerda.addTextChangedListener(watcherCurva)
         // En obra nadie lleva goniómetro: se marca lo mismo a cada lado de la esquina y se mide de
-        // marca a marca. Con los dos lados y esa distancia sale el ángulo, y sale bien.
-        cont.addView(TextView(context).apply {
-            text = "O por medida: marca lo mismo a cada lado de la esquina y mide entre las marcas."
-            textSize = 12f
-            setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
-        })
+        // marca a marca. Con los dos lados y esa distancia sale el ángulo, y sale bien. Por eso va
+        // primero y los grados salen de ahí (2026-10-03: escribir grados no es factible al medir).
+        val porMedida = TextView(context).apply {
+            text = "Marca lo mismo a cada lado de la esquina y mide entre las marcas: el ángulo sale solo."
+            textSize = 13f
+            setPadding(0, 0, 0, (4 * dp).toInt())
+        }
+        cont.addView(porMedida)
         val etLado = EditText(context).apply {
             hint = "A cada lado (cm)"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
@@ -4419,6 +4550,23 @@ class SketchMedidasView @JvmOverloads constructor(
             setPadding(0, (6 * dp).toInt(), 0, 0)
         }
         cont.addView(aviso)
+        // El orden en el diálogo: la medida con marcas, el ángulo que sale (se puede escribir si se
+        // sabe), hacia dónde dobla y, si la esquina no es en punta, su curva.
+        val gradosRotulo = TextView(context).apply {
+            text = "Grados (salen de la medida; escríbelos solo si los sabes)"
+            textSize = 12f
+            setPadding(0, (12 * dp).toInt(), 0, 0)
+        }
+        listOf(input, afuera, curva, etDesarrollo, etCuerda, avisoCurva).forEach { cont.removeView(it) }
+        cont.addView(gradosRotulo)
+        listOf(input, afuera, curva, etDesarrollo, etCuerda, avisoCurva).forEach { cont.addView(it) }
+        // Si es curva, los grados los da la curva y la medida con marcas no aplica.
+        fun verMedida(activa: Boolean) {
+            val v = if (activa) View.GONE else View.VISIBLE
+            listOf(porMedida, etLado, etEntre, aviso, gradosRotulo, input).forEach { it.visibility = v }
+        }
+        verMedida(curva.isChecked)
+        curva.setOnCheckedChangeListener { _, activa -> mostrarCurva(activa); verMedida(activa) }
 
         // Lo que se escribe en las marcas manda: el ángulo se recalcula y se ve al momento.
         val watcher = object : android.text.TextWatcher {
@@ -8279,9 +8427,17 @@ class SketchMedidasView @JvmOverloads constructor(
         val width = sketchTextPaint.measureText(element.text).coerceAtLeast(1f)
         val top = element.y - tamano
         val bottom = element.y + tamano * 0.28f
-        // La pastilla abraza el texto con su relleno: es lo que se ve y lo que se toca.
+        // La pastilla abraza el texto con su relleno: es lo que se ve y lo que se toca. La que suma
+        // y resta lleva además un botón redondo en cada punta, del alto de la pastilla.
         if (element.rol in ROLES_PASTILLA) {
             val pad = tamano * 0.6f
+            val interior = interiorDividido(element.text)
+            if (interior != null) {
+                val alto = tamano * 1.9f
+                val centro = element.y - tamano * 0.36f
+                val ancho = sketchTextPaint.measureText(interior) + alto * 2 + pad
+                return RectF(element.x, centro - alto / 2f, element.x + ancho, centro + alto / 2f)
+            }
             return RectF(element.x, top - pad * 0.45f, element.x + width + 2 * pad, bottom + pad * 0.45f)
         }
         return RectF(element.x, top, element.x + width, bottom)
@@ -8308,7 +8464,41 @@ class SketchMedidasView @JvmOverloads constructor(
         canvas.drawRoundRect(caja, radio, radio, pastillaFondoPaint)
         canvas.drawRoundRect(caja, radio, radio, pastillaBordePaint)
         pastillaTextoPaint.textSize = tamanoTexto(element)
+        val interior = interiorDividido(element.text)
+        if (interior != null) {
+            dibujarBotonesMasMenos(canvas, caja, tamanoTexto(element) * 1.35f)
+            canvas.drawText(interior, caja.left + caja.height() + tamanoTexto(element) * 0.3f, element.y, pastillaTextoPaint)
+            return
+        }
         canvas.drawText(element.text, element.x + tamanoTexto(element) * 0.6f, element.y, pastillaTextoPaint)
+    }
+
+    /** Lo de dentro de una pastilla que suma y resta ("−  2 lados  +" → "2 lados"); null si no es de esas. */
+    private fun interiorDividido(texto: String): String? {
+        val t = texto.trim()
+        if (!t.startsWith("−") || !t.endsWith("+")) return null
+        return t.removePrefix("−").removeSuffix("+").trim()
+    }
+
+    private val botonMasMenosPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(21, 101, 192); style = Paint.Style.FILL
+    }
+    private val signoMasMenosPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; textAlign = Paint.Align.CENTER; typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+
+    /**
+     * El − y el + de una pastilla, como botones: un círculo lleno en cada punta con el signo grande
+     * (2026-10-03: los signos dentro del texto eran muy pequeños para el dedo).
+     */
+    private fun dibujarBotonesMasMenos(canvas: Canvas, r: RectF, tamanoSigno: Float) {
+        val radio = r.height() / 2f * 0.9f
+        signoMasMenosPaint.textSize = tamanoSigno
+        val baseSigno = r.centerY() - (signoMasMenosPaint.descent() + signoMasMenosPaint.ascent()) / 2f
+        listOf(r.left + r.height() / 2f to "−", r.right - r.height() / 2f to "+").forEach { (cx, signo) ->
+            canvas.drawCircle(cx, r.centerY(), radio, botonMasMenosPaint)
+            canvas.drawText(signo, cx, baseSigno, signoMasMenosPaint)
+        }
     }
 
     /**
