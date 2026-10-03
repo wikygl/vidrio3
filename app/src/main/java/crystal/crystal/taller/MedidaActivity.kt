@@ -1080,10 +1080,8 @@ class MedidaActivity : AppCompatActivity() {
      */
     private fun insertarVentanaEsquinaEstandar() {
         ocultarPanelesFlotantes()
-        // Por lados desde el 2026-10-03: la lista se abre sola para escribir cada lado, recto o curvo.
-        binding.sketchMedidas.insertarPlantillaVentanaLados()
-        // Solo Nova calcula esquinas y curvas: "Ventana" sola iba a la Clásica serie 84 (2026-10-03).
-        productoActual = "Ventana Nova"
+        binding.sketchMedidas.insertarPlantillaVentanaEsquina()
+        productoActual = "Ventana"
         actualizarPanelInformacion()
     }
 
@@ -1096,8 +1094,8 @@ class MedidaActivity : AppCompatActivity() {
      */
     private fun insertarVentanaCurvaEstandar() {
         ocultarPanelesFlotantes()
-        binding.sketchMedidas.insertarPlantillaVentanaLados(curva = true)
-        productoActual = "Ventana Nova"
+        binding.sketchMedidas.insertarPlantillaVentanaCurva()
+        productoActual = "Ventana"
         actualizarPanelInformacion()
     }
 
@@ -2817,9 +2815,7 @@ class MedidaActivity : AppCompatActivity() {
                         contorno = contorno,
                         // Y si es una ventana de esquina, sus lados: la calculadora los necesita
                         // para armarla en L, en C o en serie, que con el ancho total no se sabe.
-                        // La ventana por lados viaja como su lista (formato v2, 2026-10-03).
-                        esquina = binding.sketchMedidas.ventanaPorLadosDelDibujo()?.let { crystal.crystal.taller.VentanaMedida.aTexto(it) }
-                            ?: binding.sketchMedidas.esquinaPrincipalEnCm()
+                        esquina = binding.sketchMedidas.esquinaPrincipalEnCm()
                             ?.let { EsquinaMedida.aTexto(it) }
                             .orEmpty(),
                         // Y si esa esquina se armó sobre figuras dibujadas a mano, la forma de cada
