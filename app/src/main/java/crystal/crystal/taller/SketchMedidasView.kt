@@ -170,7 +170,7 @@ class SketchMedidasView @JvmOverloads constructor(
         val ORDEN_ROTULOS = listOf(ROL_TITULO_PUERTA, ROL_TRAMOS, ROL_HOJAS, ROL_ALTOS)
 
         /** Los contadores que se ven como pastilla junto al identificador: se tocan para cambiarlos. */
-        val ROLES_PASTILLA = setOf(ROL_HOJAS, ROL_TRAMOS)
+        val ROLES_PASTILLA = setOf(ROL_HOJAS, ROL_TRAMOS, ROL_ALTOS)
 
         /** Rótulos que se colocan al pie del marco, centrados. */
         val ROLES_AL_PIE = setOf(ROL_MICHI, ROL_ALFEIZAR)
@@ -587,21 +587,151 @@ class SketchMedidasView @JvmOverloads constructor(
         dibujarPestana(canvas)
     }
 
-    // ===================== La pestaña de identificadores (2026-10-03) =====================
-    // El identificador de cada plantilla ("PUERTA 90 x 240") y sus pastillas ("2 puertas",
-    // "− 3 lados +") van en una pestaña fija arriba a la izquierda del lienzo, en píxeles de
-    // pantalla: no se mueven con el zoom ni con el dibujo. Antes iban junto al dibujo y estorbaban.
-    // En lo que se exporta (la imagen que ven las calculadoras) siguen junto al dibujo.
+    // ===================== La pestaña de fichas (2026-10-03) =====================
+    // Cada plantilla tiene su ficha en una pestaña fija arriba a la izquierda del lienzo, en píxeles
+    // de pantalla (no se mueve con el zoom ni con el dibujo): su identificador, siempre con la medida
+    // de ahora, y en pastillas los datos que no tienen un sitio en el dibujo y se tocan para cambiarlos.
+    //   Puerta: puertas y michi · Ventana: alféizar · V. esquina y curva: lados y alféizar ·
+    //   Mampara: su identificador · Corrediza, ducha, baranda, reja, muro: hojas ·
+    //   Ropero: cuerpos, fondo y puertas.
+    // En el dibujo se queda lo que tiene sitio: cotas, ángulos, curvas, bisagras, apertura y los
+    // contadores de altos de cada lado. En lo que se exporta (la imagen que ven las calculadoras)
+    // todo sigue junto al dibujo, que ahí no hay pestaña.
 
-    /** ¿Este rótulo se ve en la pestaña y no sobre el dibujo? Solo en pantalla. */
+    /** Los rótulos que en pantalla se ven en la pestaña y no sobre el dibujo. */
+    private val ROLES_EN_PESTANA = setOf(ROL_HOJAS, ROL_TRAMOS, ROL_MICHI, ROL_ALFEIZAR)
+
+    /** ¿Esto se ve en la pestaña y no sobre el dibujo? Solo en pantalla. */
     private fun vaEnLaPestana(element: Element): Boolean {
         if (exportando) return false
-        val t = element as? Element.TextLabel ?: return false
-        return t.titulo || t.rol in ROLES_PASTILLA
+        return when (element) {
+            is Element.TextLabel -> element.titulo || element.rol in ROLES_EN_PESTANA
+            // El "#" del michi acompaña a su medida, que va en la pestaña.
+            is Element.Symbol -> element.drawableName == "michi"
+            else -> false
+        }
     }
 
-    /** Lo que se toca en la pestaña: el rótulo y, en la de lados, la mitad (−1 quita, +1 añade, 0 todo). */
-    private data class ToquePestana(val rect: RectF, val etiqueta: Int, val delta: Int)
+    /** Una pastilla de la ficha: su texto y qué hace al tocarla ([dividida]: la mitad izquierda resta y la derecha suma). */
+    private class PastillaFicha(val texto: String, val dividida: Boolean, val accion: (Int) -> Unit)
+
+    private class Ficha(val titulo: String, val pastillas: List<PastillaFicha>)
+
+    /** Las fichas de lo que hay en el lienzo, en el orden en que se pusieron. */
+    private fun fichas(): List<Ficha> {
+        val out = mutableListOf<Ficha>()
+        val titulosUsados = mutableSetOf<Int>()
+        elementos.forEachIndexed { i, e ->
+            when (e) {
+                is Element.Shape -> when (e.cotaHint) {
+                    PUERTA_MARCO, VENTANA_MARCO, MAMPARA_MARCO, ESQUINA_MARCO -> {
+                        val ti = etiquetaDelMarco(i, ROL_TITULO_PUERTA)?.also { titulosUsados.add(it) }
+                        val titulo = ti?.let { (elementos[it] as Element.TextLabel).text }
+                            ?: rotuloMarco(e.cotaHint, e.widthCm, e.heightCm, esMarcoCurvo(i))
+                        val pastillas = mutableListOf<PastillaFicha>()
+                        etiquetaDelMarco(i, ROL_HOJAS)?.let { h ->
+                            pastillas.add(PastillaFicha(textoHojas(hojasDePuerta(i)), false) { alternarHojas(h) })
+                        }
+                        etiquetaDelMarco(i, ROL_TRAMOS)?.let { t ->
+                            pastillas.add(PastillaFicha(textoTramos(ladosDelMarco(i)), true) { d -> cambiarTramos(t, d) })
+                        }
+                        etiquetaDelMarco(i, ROL_MICHI)?.let { m ->
+                            pastillas.add(PastillaFicha("michi ${(elementos[m] as Element.TextLabel).text}", false) { editarMichi(m) })
+                        }
+                        etiquetaDelMarco(i, ROL_ALFEIZAR)?.let { a ->
+                            pastillas.add(PastillaFicha("alféizar ${soloMedida((elementos[a] as Element.TextLabel).text)}", false) { editarAlfeizar(a) })
+                        }
+                        out.add(Ficha(titulo, pastillas))
+                    }
+                    ROPERO_MARCO -> {
+                        val r = roperoDe(e)
+                        out.add(Ficha(tituloRopero(r), listOf(
+                            PastillaFicha("${r.cuerpos.size} cuerpos", false) { editarCota(CotaHit(i, CotaType.ROPERO_CUERPOS, RectF())) },
+                            PastillaFicha("fondo ${formatCm(r.fondoCm)}", false) { editarCota(CotaHit(i, CotaType.ROPERO_FONDO, RectF())) },
+                            PastillaFicha(textoPuertasRopero(r), false) { ciclarPuertasDeRopero(i) }
+                        )))
+                    }
+                }
+                is Element.TextLabel -> {
+                    if (!e.titulo || e.rol != null || i in titulosUsados) return@forEachIndexed
+                    // El título de una plantilla de producto (corrediza, ducha, baranda, reja,
+                    // muro): con la medida de su rectángulo y sus hojas, que se cambian aquí.
+                    val rect = rectanguloDeProducto(i)
+                    if (rect == null) {
+                        out.add(Ficha(e.text, emptyList()))
+                    } else {
+                        val s = elementos[rect] as Element.Shape
+                        out.add(Ficha(
+                            "${nombreDeProducto(e.text)}  ${formatCm(s.widthCm)} x ${formatCm(s.heightCm)}",
+                            listOf(PastillaFicha(textoHojasProducto(hojasDeProducto(rect)), true) { d -> cambiarHojasProducto(i, d) })
+                        ))
+                    }
+                }
+                else -> Unit
+            }
+        }
+        return out
+    }
+
+    /** Lados de una ventana de esquina o curva: sus paredes y las curvas de sus esquinas. */
+    private fun ladosDelMarco(marcoIndex: Int): Int = quiebresDelMarco(marcoIndex).size + 1 + bandasDeCurva(marcoIndex).size
+
+    // ---- Las plantillas de producto (corrediza, ducha, baranda, reja, muro cortina) ----
+    // Son un rectángulo con sus líneas de hoja y un título ("CORREDIZA  200 x 120  (2 hojas)").
+    // El rectángulo es el que se puso justo antes que su título.
+
+    private fun rectanguloDeProducto(tituloIndex: Int): Int? {
+        for (k in tituloIndex - 1 downTo 0) {
+            val s = elementos[k] as? Element.Shape ?: continue
+            if (s.tool == Tool.RECTANGLE && s.cotaHint == null) return k
+            if (s.cotaHint != null && s.cotaHint in MARCOS_PLANTILLA) return null
+        }
+        return null
+    }
+
+    private fun nombreDeProducto(titulo: String): String = titulo.substringBefore("  ").trim()
+
+    /** Las líneas de hoja: verticales, dentro del rectángulo y de arriba abajo. */
+    private fun lineasDeHoja(rectIndex: Int): List<Int> {
+        val r = (elementos.getOrNull(rectIndex) as? Element.Shape)?.rect ?: return emptyList()
+        return elementos.indices.filter { k ->
+            val s = elementos[k] as? Element.Shape ?: return@filter false
+            s.tool == Tool.LINE && s.cotaHint == null && abs(s.start.x - s.end.x) < 1f &&
+                s.start.x > r.left + 1f && s.start.x < r.right - 1f &&
+                abs(s.start.y - s.end.y) >= r.height() * 0.9f
+        }
+    }
+
+    private fun hojasDeProducto(rectIndex: Int): Int = lineasDeHoja(rectIndex).size + 1
+
+    private fun textoHojasProducto(hojas: Int): String = "−   ${if (hojas == 1) "1 hoja" else "$hojas hojas"}   +"
+
+    /** Una hoja más o una menos: las líneas de hoja se vuelven a repartir iguales. */
+    private fun cambiarHojasProducto(tituloIndex: Int, delta: Int) {
+        val titulo = elementos.getOrNull(tituloIndex) as? Element.TextLabel ?: return
+        val rectIndex = rectanguloDeProducto(tituloIndex) ?: return
+        val marco = elementos[rectIndex] as Element.Shape
+        val hojas = (hojasDeProducto(rectIndex) + delta).coerceIn(1, 8)
+        lineasDeHoja(rectIndex).sortedDescending().forEach { elementos.removeAt(it) }
+        val r = RectF(marco.rect)
+        val nuevas = (1 until hojas).map { k ->
+            val x = r.left + r.width() * k / hojas
+            crearShape(Tool.LINE, PointF(x, r.top), PointF(x, r.bottom))
+        }
+        val dondeVa = elementos.indexOfFirst { it === marco } + 1
+        elementos.addAll(dondeVa, nuevas)
+        titulo.text = tituloDeProducto(titulo.text, marco, hojas)
+        selectedIndices.clear()
+        registrarAccion()
+        invalidate()
+    }
+
+    private fun tituloDeProducto(actual: String, marco: Element.Shape, hojas: Int): String =
+        "${nombreDeProducto(actual)}  ${formatCm(marco.widthCm)} x ${formatCm(marco.heightCm)}" +
+            if (hojas > 1) "  ($hojas hojas)" else ""
+
+    /** Lo que se toca en la pestaña: la pastilla y la mitad (−1 resta, +1 suma, 0 toda). */
+    private data class ToquePestana(val rect: RectF, val accion: (Int) -> Unit, val delta: Int)
 
     private val toquesPestana = mutableListOf<ToquePestana>()
     private var toquePestanaPendiente: ToquePestana? = null
@@ -619,76 +749,72 @@ class SketchMedidasView @JvmOverloads constructor(
     private fun dibujarPestana(canvas: Canvas) {
         toquesPestana.clear()
         if (exportando) return
-        val identificadores = elementos.indices.filter {
-            val t = elementos[it] as? Element.TextLabel
-            t != null && t.titulo && t.rol !in ROLES_PASTILLA
-        }
-        if (identificadores.isEmpty()) return
-        val pastillas = elementos.indices.filter { (elementos[it] as? Element.TextLabel)?.rol in ROLES_PASTILLA }
+        val lista = fichas()
+        if (lista.isEmpty()) return
         val m = spToPx(8f)
         pestanaTituloPaint.textSize = spToPx(15f)
         pastillaTextoPaint.textSize = spToPx(13f)
         pestanaBordePaint.strokeWidth = spToPx(1.2f)
         pastillaBordePaint.strokeWidth = spToPx(1.2f)
         val alto = pestanaTituloPaint.fontSpacing + m * 1.2f
+        val limite = width - m
         // Debajo del cartel de la cota a escuadra, si está a la vista.
         var y = if (eligiendoEscuadra || modoEdicion != null) m * 2 + avisoTextoPaint.fontSpacing + m else m
-        identificadores.forEach { ti ->
-            val titulo = elementos[ti] as Element.TextLabel
-            val marco = marcoDePieza(ti)
-            val suyas = pastillas.filter { marcoDePieza(it) == marco }
-            val anchoTitulo = pestanaTituloPaint.measureText(titulo.text)
-            val anchosPastilla = suyas.map { pastillaTextoPaint.measureText((elementos[it] as Element.TextLabel).text) + m * 2 }
-            val ancho = m + anchoTitulo + anchosPastilla.sumOf { (it + m).toDouble() }.toFloat() + m
-            val caja = RectF(m, y, (m + ancho).coerceAtMost(width - m), y + alto)
+        lista.forEach { ficha ->
+            // El título y sus pastillas en un renglón; si no caben, las pastillas siguen debajo.
+            val anchoTitulo = pestanaTituloPaint.measureText(ficha.titulo)
+            val anchos = ficha.pastillas.map { pastillaTextoPaint.measureText(it.texto) + m * 2 }
+            val posiciones = mutableListOf<PointF>()
+            var x = m + m + anchoTitulo + m
+            var fila = 0
+            anchos.forEach { a ->
+                if (x + a > limite - m && x > m * 3) { fila++; x = m + m }
+                posiciones.add(PointF(x, y + fila * alto))
+                x += a + m
+            }
+            val derecha = maxOf(m + m + anchoTitulo + m, posiciones.zip(anchos).maxOfOrNull { (p, a) -> p.x + a + m } ?: 0f)
+            val caja = RectF(m, y, derecha.coerceAtMost(limite), y + alto * (fila + 1))
             canvas.drawRoundRect(caja, m, m, pestanaFondoPaint)
             canvas.drawRoundRect(caja, m, m, pestanaBordePaint)
-            val base = caja.centerY() - (pestanaTituloPaint.descent() + pestanaTituloPaint.ascent()) / 2f
-            canvas.drawText(titulo.text, caja.left + m, base, pestanaTituloPaint)
-            toquesPestana.add(ToquePestana(RectF(caja.left, caja.top, caja.left + m + anchoTitulo, caja.bottom), ti, 0))
-            var x = caja.left + m + anchoTitulo + m
-            suyas.forEachIndexed { k, pi ->
-                val p = elementos[pi] as Element.TextLabel
-                val r = RectF(x, caja.top + m * 0.35f, x + anchosPastilla[k], caja.bottom - m * 0.35f)
+            val base = y + alto / 2f - (pestanaTituloPaint.descent() + pestanaTituloPaint.ascent()) / 2f
+            canvas.drawText(ficha.titulo, m + m, base, pestanaTituloPaint)
+            ficha.pastillas.forEachIndexed { k, p ->
+                val o = posiciones[k]
+                val r = RectF(o.x, o.y + m * 0.35f, o.x + anchos[k], o.y + alto - m * 0.35f)
                 val radio = r.height() / 2f
                 canvas.drawRoundRect(r, radio, radio, pastillaFondoPaint)
                 canvas.drawRoundRect(r, radio, radio, pastillaBordePaint)
                 val bp = r.centerY() - (pastillaTextoPaint.descent() + pastillaTextoPaint.ascent()) / 2f
-                canvas.drawText(p.text, r.left + m, bp, pastillaTextoPaint)
-                if (p.rol == ROL_TRAMOS) {
-                    // La de lados: la mitad del − quita y la del + añade.
-                    toquesPestana.add(ToquePestana(RectF(r.left, r.top, r.centerX(), r.bottom), pi, -1))
-                    toquesPestana.add(ToquePestana(RectF(r.centerX(), r.top, r.right, r.bottom), pi, 1))
+                canvas.drawText(p.texto, r.left + m, bp, pastillaTextoPaint)
+                if (p.dividida) {
+                    toquesPestana.add(ToquePestana(RectF(r.left, r.top, r.centerX(), r.bottom), p.accion, -1))
+                    toquesPestana.add(ToquePestana(RectF(r.centerX(), r.top, r.right, r.bottom), p.accion, 1))
                 } else {
-                    toquesPestana.add(ToquePestana(RectF(r), pi, 0))
+                    toquesPestana.add(ToquePestana(RectF(r), p.accion, 0))
                 }
-                x = r.right + m
             }
             y = caja.bottom + m * 0.6f
         }
     }
 
     /**
-     * Los toques en la pestaña, antes que nada del lienzo: un toque (bajar y levantar sobre lo
-     * mismo) cambia la pastilla. Devuelve true si el toque era de la pestaña.
+     * Los toques en la pestaña, antes que nada del lienzo: bajar y levantar sobre la misma pastilla
+     * la cambia. Devuelve true si el toque era de la pestaña.
      */
     private fun manejarToquePestana(event: MotionEvent): Boolean {
         fun en(x: Float, y: Float) = toquesPestana.lastOrNull { it.rect.contains(x, y) }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val t = en(event.x, event.y) ?: return false
-                toquePestanaPendiente = t
+                toquePestanaPendiente = en(event.x, event.y) ?: return false
                 return true
             }
             MotionEvent.ACTION_MOVE -> return toquePestanaPendiente != null
             MotionEvent.ACTION_UP -> {
                 val pendiente = toquePestanaPendiente ?: return false
                 toquePestanaPendiente = null
-                if (en(event.x, event.y) == pendiente) {
-                    when ((elementos.getOrNull(pendiente.etiqueta) as? Element.TextLabel)?.rol) {
-                        ROL_HOJAS -> alternarHojas(pendiente.etiqueta)
-                        ROL_TRAMOS -> if (pendiente.delta != 0) cambiarTramos(pendiente.etiqueta, pendiente.delta)
-                    }
+                val ahora = en(event.x, event.y)
+                if (ahora != null && ahora.rect == pendiente.rect) {
+                    pendiente.accion(pendiente.delta)
                     invalidate()
                 }
                 return true
@@ -2889,7 +3015,7 @@ class SketchMedidasView @JvmOverloads constructor(
      * derecha añade otra. Los signos van a la vista porque quitar estaba solo en la pulsación
      * larga y así no lo encuentra nadie.
      */
-    private fun textoAltos(cuantas: Int): String = "−  $cuantas  +"
+    private fun textoAltos(cuantas: Int): String = "−  $cuantas ${if (cuantas == 1) "alto" else "altos"}  +"
 
     /** Los contadores de cotas de alto: uno por tramo, en el orden de los tramos. */
     private fun contadoresAltos(marcoIndex: Int): List<Int> {
@@ -2984,7 +3110,8 @@ class SketchMedidasView @JvmOverloads constructor(
             val etiqueta = elementos.getOrNull(i) as? Element.TextLabel ?: return@forEachIndexed
             val tamano = tamanoTexto(etiqueta)
             sketchTextPaint.textSize = tamano
-            val ancho = sketchTextPaint.measureText(etiqueta.text)
+            // Lo que ocupa de verdad: en una pastilla, con su relleno.
+            val ancho = boundsForText(etiqueta).width()
             val x = (centros.getOrNull(orden) ?: return@forEachIndexed) - ancho / 2f
             val hueco = ce(10f)
             val renglon = when {
@@ -3949,6 +4076,7 @@ class SketchMedidasView @JvmOverloads constructor(
         elementos.indices.lastOrNull { piezaTocada(elementos[it], x, y) }
 
     private fun piezaTocada(element: Element, x: Float, y: Float): Boolean {
+        if (vaEnLaPestana(element)) return false
         val pad = 8f * resources.displayMetrics.density
         return when (element) {
             is Element.Symbol -> element.drawableName in SIMBOLOS_PUERTA &&
@@ -7528,7 +7656,7 @@ class SketchMedidasView @JvmOverloads constructor(
                 canvas.drawText(element.text, element.x, element.y, sketchTextPaint)
             }
             is Element.InfoBox -> drawInfoBox(canvas, element)
-            is Element.Symbol -> drawSymbol(canvas, element)
+            is Element.Symbol -> if (!vaEnLaPestana(element)) drawSymbol(canvas, element)
             is Element.Composite -> {
                 canvas.drawPath(element.path, paint)
                 drawCompositeCotas(canvas, index, element, collectHits)
@@ -8193,8 +8321,10 @@ class SketchMedidasView @JvmOverloads constructor(
             val t = e as? Element.TextLabel ?: return@forEachIndexed
             when (t.rol) {
                 ROL_HOJAS -> marcoDePieza(i)?.let { t.text = textoHojas(hojasDePuerta(it)) }
-                ROL_TRAMOS -> marcoDePieza(i)?.let { m ->
-                    t.text = textoTramos(quiebresDelMarco(m).size + 1 + bandasDeCurva(m).size)
+                ROL_TRAMOS -> marcoDePieza(i)?.let { m -> t.text = textoTramos(ladosDelMarco(m)) }
+                // El título de una plantilla de producto, con la medida y las hojas de ahora.
+                null -> if (t.titulo) rectanguloDeProducto(i)?.let { r ->
+                    t.text = tituloDeProducto(t.text, elementos[r] as Element.Shape, hojasDeProducto(r))
                 }
             }
         }
@@ -11169,14 +11299,21 @@ class SketchMedidasView @JvmOverloads constructor(
             drawCotaTextFija(canvas, index, CotaType.ROPERO_TIPO, (a + b) / 2f, y(r.zocaloCm / 2f), 0f, collectHits, texto = c.tipo.etiqueta, sideIndex = i)
             cx += c.anchoCm + r.espesorCm
         }
-        // Encima del marco: el título con el hueco, cuántos cuerpos, el fondo y las puertas.
+        // Encima del marco: el título con el hueco, cuántos cuerpos, el fondo y las puertas. En
+        // pantalla van en la pestaña fija (2026-10-03); aquí solo en lo que se exporta.
+        if (!exportando) return
         val yArriba = rect.top - ce(70f)
         drawCotaTextFija(canvas, index, CotaType.ROPERO_CUERPOS, rect.left + rect.width() * 0.2f, yArriba, 0f, collectHits, texto = "${r.cuerpos.size} cuerpos")
         drawCotaTextFija(canvas, index, CotaType.ROPERO_FONDO, rect.centerX(), yArriba, 0f, collectHits, texto = "fondo ${formatCm(r.fondoCm)}")
-        val puertas = r.puertas.etiqueta.lowercase() + if (r.puertas != crystal.crystal.taller.melamina.TipoPuertas.SIN) (if (r.verPuertas) " ●" else " ○") else ""
-        drawCotaTextFija(canvas, index, CotaType.ROPERO_PUERTAS, rect.left + rect.width() * 0.8f, yArriba, 0f, collectHits, texto = puertas)
-        canvas.drawText("ROPERO MELAMINA  ${formatCm(r.anchoCm)} x ${formatCm(r.altoCm)} x ${formatCm(r.fondoCm)}", rect.centerX(), rect.top - ce(110f), tituloPaintCentrado)
+        drawCotaTextFija(canvas, index, CotaType.ROPERO_PUERTAS, rect.left + rect.width() * 0.8f, yArriba, 0f, collectHits, texto = textoPuertasRopero(r))
+        canvas.drawText(tituloRopero(r), rect.centerX(), rect.top - ce(110f), tituloPaintCentrado)
     }
+
+    private fun tituloRopero(r: crystal.crystal.taller.melamina.Ropero) =
+        "ROPERO MELAMINA  ${formatCm(r.anchoCm)} x ${formatCm(r.altoCm)} x ${formatCm(r.fondoCm)}"
+
+    private fun textoPuertasRopero(r: crystal.crystal.taller.melamina.Ropero) =
+        r.puertas.etiqueta.lowercase() + if (r.puertas != crystal.crystal.taller.melamina.TipoPuertas.SIN) (if (r.verPuertas) " ●" else " ○") else ""
 
     private val tituloPaintCentrado by lazy { Paint(cotaTextPaint).apply { textAlign = Paint.Align.CENTER; textSize = cotaTextPaint.textSize * 1.1f } }
 
