@@ -176,9 +176,12 @@ object MotorNova {
      * Lo que descuenta el vidrio fijo del lado [i] en la punta que da al lado [otro], en INA (dictado
      * el 2026-10-02). En una esquina en ángulo los dos fijos se encuentran: el del lado más ancho
      * descuenta lo de una pared (0.5) y el otro lo de vidrio con vidrio (0.2). Con los dos lados del
-     * mismo ancho, el 0.5 va al primero. Contra muro, acople o libre, y en APA, lo de siempre: 0.5.
+     * mismo ancho, el 0.5 va al primero. En una esquina curva (N-105) el vidrio pasa por delante del
+     * parante y se encuentra con el de la curva: la pared y la curva descuentan 0.2 cada una en esa
+     * punta. Contra muro, acople o libre, y en APA, lo de siempre: 0.5.
      */
     private fun colindanciaDeEsquina(v: VentanaNova, i: Int, otro: Int, borde: Borde): Float {
+        if (v.acabado == Acabado.INA && borde == Borde.ESQUINA_CURVA) return NovaCalculos.COLINDANCIA_FIJO
         if (v.acabado != Acabado.INA || borde != Borde.ESQUINA_ANGULO) return NovaCalculos.COLINDANCIA_PARED
         val este = v.lados[i]
         val vecino = v.lados.getOrNull(otro) ?: return NovaCalculos.COLINDANCIA_PARED

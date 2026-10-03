@@ -209,10 +209,35 @@ class MedidasDeObraTest {
         assertEquals(2, automatica.tramos.sumOf { it.modulos.size })
     }
 
-    private fun eleConCurva(esquinero: Puente, divisionesCurva: Int = 0) = VentanaAutomatica.ventana(VentanaAutomatica.Entrada(
-        Acabado.APA, ModeloMocheta.NORMAL, "nn",
+    /**
+     * N-105, la Ele en INA (dictado el 2026-10-02): el parante de cada punta de la curva (2.5) se
+     * reparte, media a la pared y media a la curva, solo en la estructura: puente 150 − 1.25 = 148.7,
+     * 90 − 2.5 = 87.5, 120 − 1.25 = 118.7. Los vidrios no lo pierden; el fijo que da a la curva
+     * descuenta 0.2 (vidrio con vidrio): 50.4 − 0.2 = 50.2, en la curva 45.3 − 0.2 = 45.1, y en la
+     * pared de 120, 60.3 − 0.2 = 60.1. El fijo contra el muro sigue con 0.5: 49.9.
+     */
+    @Test
+    fun ele_curva_inaparente_media_parante_y_vidrio_con_vidrio() {
+        val m = MotorNova.calcular(eleConCurva(tubo238, acabado = Acabado.INA, u = PerfilU(1f, 1.5f), puente = tubo238))
+        val puente = lineas(MaterialesNova.texto(m.puente))
+        assertTrue(puente.toString(), listOf("148.7 = 1", "87.5 = 1", "118.7 = 1").all { it in puente })
+        val riel = lineas(MaterialesNova.texto(m.riel))
+        assertTrue(riel.toString(), listOf("148.6 = 1", "87.4 = 1", "118.6 = 1").all { it in riel })
+        val vidrios = lineas(MaterialesNova.textoVidrios(m.vidrios))
+        assertTrue(vidrios.toString(),
+            listOf("49.9 x 158.3 = 1", "50.2 x 158.3 = 1", "45.1 x 158.3 = 1", "60.1 x 158.3 = 1").all { it in vidrios })
+        // La U sigue al vidrio: entera.
+        val u = lineas(MaterialesNova.texto(m.u))
+        assertTrue(u.toString(), listOf("150 = 1", "90 = 1", "120 = 1").all { it in u })
+    }
+
+    private fun eleConCurva(
+        esquinero: Puente, divisionesCurva: Int = 0,
+        acabado: Acabado = Acabado.APA, u: PerfilU = u38, puente: Puente = multiple
+    ) = VentanaAutomatica.ventana(VentanaAutomatica.Entrada(
+        acabado, ModeloMocheta.NORMAL, "nn",
         listOf(VentanaAutomatica.LadoMedido(150f, 160f, 90f), VentanaAutomatica.LadoMedido(120f, 160f, 90f)),
-        u38, multiple, esquinero = esquinero,
+        u, puente, esquinero = esquinero,
         curvas = listOf(VentanaAutomatica.LadoMedido(90f, 160f, 90f, divisionesCurva))
     ))
 

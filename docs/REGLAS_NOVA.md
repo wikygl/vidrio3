@@ -326,14 +326,14 @@ vidrios, U y tees son otra cosa (G-05).
 
 - N-37 ✅ **INA no descuenta** parante, puentes ni esquina. En esquinas **en ángulo** INA
   **aumenta** el ancho de la U (G-09). Sería bueno indicar el ángulo de corte de esas U (sin
-  urgencia). En esquina curva, ni aumento ni descuento.
+  urgencia). En esquina curva, ni aumento en la U; la estructura y el vidrio, N-105.
 
   | Descuento | APA | INA |
   |---|---|---|
   | Lado al vacío | resta el parante por cada lado | 0 |
   | Sin pared arriba o abajo | resta el falso puente | 0 |
   | Esquina en ángulo (L, C, serie) | resta el **esquinero** | **suma** el ancho de la U |
-  | Esquina curva | cada pared resta **entero** el parante de su punta de curva (N-104); la curva, 0 | 0 |
+  | Esquina curva | cada pared resta **entero** el parante de su punta de curva (N-104); la curva, 0 | estructura: media parante a la pared y media a la curva; vidrio 0.2 (N-105) |
 
 - N-104 ✅ **APA en L con esquina curva: el ancho útil de cada lado** (dictado el 2026-10-02). Cada
   pared descuenta el parante de la esquina (el del esquinero, su medida normal: 2.5 con el tubo 2⅜,
@@ -345,6 +345,13 @@ vidrios, U y tees son otra cosa (G-05).
   - **La curva**: su U de desarrollo no descuenta nada; el vidrio sí descuenta 0.5 por lado contra el
     parante, así que el vidrio curvo tiene un poco menos de desarrollo, flecha y cuerda que el
     aluminio (casi no se siente).
+- N-105 ✅ **INA en L con esquina curva** (dictado el 2026-10-02). El parante de cada punta de la
+  curva (el del esquinero, como en N-104) se reparte: **media a la pared y media a la curva**, solo
+  para la estructura (puente, riel, riel superior y todo lo que sale del puente). El vidrio y sus U
+  pasan por delante y no lo pierden (N-75). **Vidrio**: el fijo de la pared que da a la curva
+  descuenta **0.2** (vidrio con vidrio), y la curva también, 0.2 por lado. En Ele INA (150 + curva de
+  90 + 120, tubo 2⅜): puente 148.7 · 87.5 · 118.7; fijos 49.9 (muro) y 50.2 (curva), 45.1 en la
+  curva, 60.1 en la pared de 120 (`MedidasDeObraTest`).
 
 - N-38 ✅ **Esquina en APA**: el perfil lo define el esquinero. Reparto invertido: la ventana más
   ancha recibe la parte menor del aluminio.
