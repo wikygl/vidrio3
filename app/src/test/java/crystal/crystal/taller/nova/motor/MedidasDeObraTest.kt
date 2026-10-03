@@ -252,6 +252,30 @@ class MedidasDeObraTest {
         assertTrue(ina.toString(), listOf("148.7 = 2", "237.5 = 1", "87.5 = 2").all { it in ina })
     }
 
+    /**
+     * La L que termina en curva (2026-10-03, medida del usuario): 150, esquina curva de 74, 180 y la
+     * curva de 135 que cierra la ventana, alto 120, hoja 90, tubo 2⅜. La curva del final es una
+     * esquina curva más (no un tercer lado): APA (N-104) la pared de 180 pierde un parante por cada
+     * punta de curva, 175; la de 150, uno, 147.5; las curvas, nada. INA (N-105): media parante por
+     * punta: 148.7, 71.5, 177.5 y 133.7. Tres parantes de 120: uno en cada punta de curva.
+     */
+    @Test
+    fun ele_que_termina_en_curva() {
+        fun ele(acabado: Acabado, u: PerfilU, puente: Puente) = MotorNova.calcular(VentanaAutomatica.ventana(VentanaAutomatica.Entrada(
+            acabado, ModeloMocheta.NORMAL, "nn",
+            listOf(VentanaAutomatica.LadoMedido(150f, 120f, 90f), VentanaAutomatica.LadoMedido(180f, 120f, 90f)),
+            u, puente, esquinero = tubo238,
+            curvas = listOf(VentanaAutomatica.LadoMedido(74f, 120f, 90f)),
+            curvaFinal = VentanaAutomatica.LadoMedido(135f, 120f, 90f)
+        )))
+        val apa = ele(Acabado.APA, u38, multiple)
+        val puenteApa = lineas(MaterialesNova.texto(apa.puente))
+        assertTrue(puenteApa.toString(), listOf("147.5 = 1", "74 = 1", "175 = 1", "135 = 1").all { it in puenteApa })
+        assertTrue(lineas(MaterialesNova.texto(apa.parante)).toString(), "120 = 3" in lineas(MaterialesNova.texto(apa.parante)))
+        val puenteIna = lineas(MaterialesNova.texto(ele(Acabado.INA, PerfilU(1f, 1.5f), tubo238).puente))
+        assertTrue(puenteIna.toString(), listOf("148.7 = 1", "71.5 = 1", "177.5 = 1", "133.7 = 1").all { it in puenteIna })
+    }
+
     private fun eleConCurva(
         esquinero: Puente, divisionesCurva: Int = 0,
         acabado: Acabado = Acabado.APA, u: PerfilU = u38, puente: Puente = multiple

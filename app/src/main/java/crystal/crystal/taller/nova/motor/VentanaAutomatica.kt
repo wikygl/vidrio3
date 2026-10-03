@@ -44,6 +44,13 @@ object VentanaAutomatica {
          * ancho, entre dos parantes (N-84). Vacío = ninguna.
          */
         val curvas: List<LadoMedido?> = emptyList(),
+        /**
+         * La curva con la que TERMINA la ventana, después del último lado (2026-10-03: pared, esquina
+         * curva, pared y la curva del final). Es una esquina curva sin pared detrás: la pared descuenta
+         * su parante como en cualquier esquina curva (N-104, N-105) y la curva acaba contra el borde
+         * derecho de la ventana. Null = ninguna.
+         */
+        val curvaFinal: LadoMedido? = null,
         val repartoManual: List<Int>? = null,
         val corredizasPorTramoNfc: Int = 0
     )
@@ -60,7 +67,8 @@ object VentanaAutomatica {
         val lados = mutableListOf<LadoNova>()
         e.lados.forEachIndexed { i, l ->
             val izq = if (i == 0) e.izquierda else if (curvaEn[i - 1]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
-            val der = if (i == n - 1) e.derecha else if (curvaEn[i]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
+            val der = if (i == n - 1) (if (e.curvaFinal != null) Borde.ESQUINA_CURVA else e.derecha)
+                else if (curvaEn[i]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
             val libresLaterales = listOf(izq, der).count { it == Borde.LIBRE }
             val esquina = anchosEsquina[i]
             // Esquina curva (dictado el 2026-10-02). APA (N-104): cada pared descuenta entero el
@@ -85,23 +93,37 @@ object VentanaAutomatica {
             ))
             lados.add(if (apa) lado else lado.copy(estructuraIzq = pierdeIzq, estructuraDer = pierdeDer))
             // La curva de la arista que sigue: su propio trozo, con su desarrollo (N-08, N-84).
-            if (i < n - 1) e.curvas.getOrNull(i)?.let { c ->
-                val mediaParante = if (apa) 0f else paranteCurva / 2f
-                lados.add(DisenoAutomatico.lado(DisenoAutomatico.Entrada(
-                    anchoMedido = c.ancho, anchoCalculo = c.ancho,
-                    anchoEstructura = if (apa) null else (c.ancho - 2 * mediaParante).coerceAtLeast(0f),
-                    alto = c.alto - (if (apa) e.libresVerticales * e.perfilLibre else 0f), altoMedido = c.alto,
-                    hoja = c.hoja, acabado = e.acabado, puente = e.puente, divisManual = c.divisManual,
-                    modulacion = e.modulacion, corredizasPorTramoNfc = e.corredizasPorTramoNfc,
-                    izquierda = Borde.ESQUINA_CURVA, derecha = Borde.ESQUINA_CURVA
-                )).copy(curvaDeEsquina = true, estructuraIzq = mediaParante, estructuraDer = mediaParante))
-            }
+            if (i < n - 1) e.curvas.getOrNull(i)?.let { lados.add(trozoCurvo(e, it, paranteCurva, Borde.ESQUINA_CURVA)) }
         }
+        // La curva del final: entra desde la última pared y acaba en el borde derecho de la ventana.
+        e.curvaFinal?.let { lados.add(trozoCurvo(e, it, e.esquinero?.altura ?: 0f, e.derecha)) }
         return VentanaNova(
             e.acabado, e.modelo, lados, e.u, e.puente, e.cruce, e.mochetaInferior,
             libresVerticales = e.libresVerticales, perfilLibre = e.perfilLibre,
-            esquinero = if (n > 1) e.esquinero else null
+            esquinero = if (n > 1 || e.curvaFinal != null) e.esquinero else null
         )
+    }
+
+    /**
+     * El trozo de una curva de esquina (N-84): su desarrollo, entre la pared de antes (a su izquierda,
+     * siempre una esquina curva) y [derecha] (otra esquina curva, o el borde de la ventana si es la
+     * curva del final). La curva no descuenta nada en APA (N-104); en INA su estructura pierde media
+     * parante en cada punta que da a una pared (N-105). Contra el vacío, como cualquier lado libre.
+     */
+    private fun trozoCurvo(e: Entrada, c: LadoMedido, parante: Float, derecha: Borde): LadoNova {
+        val apa = e.acabado == Acabado.APA
+        val mediaParante = if (apa) 0f else parante / 2f
+        val mediaDer = if (derecha == Borde.ESQUINA_CURVA) mediaParante else 0f
+        val libre = if (apa && derecha == Borde.LIBRE) e.perfilLibre else 0f
+        val anchoCalculo = (c.ancho - libre).coerceAtLeast(0f)
+        return DisenoAutomatico.lado(DisenoAutomatico.Entrada(
+            anchoMedido = c.ancho, anchoCalculo = anchoCalculo,
+            anchoEstructura = if (apa) null else (anchoCalculo - mediaParante - mediaDer).coerceAtLeast(0f),
+            alto = c.alto - (if (apa) e.libresVerticales * e.perfilLibre else 0f), altoMedido = c.alto,
+            hoja = c.hoja, acabado = e.acabado, puente = e.puente, divisManual = c.divisManual,
+            modulacion = e.modulacion, corredizasPorTramoNfc = e.corredizasPorTramoNfc,
+            izquierda = Borde.ESQUINA_CURVA, derecha = derecha
+        )).copy(curvaDeEsquina = true, estructuraIzq = mediaParante, estructuraDer = mediaDer)
     }
 
     /**

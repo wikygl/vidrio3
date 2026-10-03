@@ -572,6 +572,15 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   y el puente del lado de antes. N-104 y N-105 valen por esquina: en APA la pared del medio pierde
   dos parantes (240 → 235), en INA media parante en cada punta de curva
   (`MedidasDeObraTest.ce_con_dos_esquinas_curvas_cada_una_como_la_l`).
+- **La ventana que termina en curva** (2026-10-03, medida del usuario: 150, esquina curva de 74,
+  180 y la curva de 135 que cierra la ventana). La curva del final, detrás de una pared recta, **no
+  es otro lado**: es la esquina curva del final de esa pared, y viaja como una arista más, la de
+  después del último lado. Antes llegaba como una C de 150, 180 y 135. Valen N-104 y N-105 (la pared
+  de 180 pierde su parante en cada punta de curva: APA 175, INA 177.5) y lleva un parante en su punta.
+  En Nova, en la L, el segundo bloque se llama "Curva final". Un rótulo de curva en una arista sin
+  su banda en la alzada no es ninguna curva (Medidas armaba una curva de 74 que no existe).
+  `MedidasDeObraTest.ele_que_termina_en_curva`. La ventana que **empieza** en curva sigue entrando
+  como un lado (pendiente de unificar).
 - **La imagen de la C** (2026-10-03): el lado del medio de frente, sin girar, y los lados 1 y 3 a
   los costados viniendo hacia quien mira (desde adentro; desde afuera se van al fondo).
 - **La imagen de Nova de una ventana que dobla** (L, C, serie, esquina curva; pedido del usuario el

@@ -5739,13 +5739,20 @@ class SketchMedidasView @JvmOverloads constructor(
             if (!esBanda && tramo < bordes.size - 2) {
                 val esquina = esquinas.getOrNull(arista)
                 arista++
-                val arco = esquina?.arco
+                // Una curva en la esquina ocupa su banda en la alzada. Un rótulo de curva sin banda
+                // detrás no es ninguna curva (2026-10-03: entre 180 y la curva del final quedó un
+                // "⌒ 74|66.5" sin banda, y Nova armaba una curva de 74 que no existe): si lo que sigue
+                // es una pared curva, se sigue de largo; si no, dobla lo que dice su arco.
+                val siguienteEsBanda = tramo + 2 < bordes.size && bandas.any { abs(it - bordes[tramo + 2]) < 0.5f }
+                val arco = esquina?.arco?.takeIf { siguienteEsBanda }
+                val curvaSinBanda = esquina?.arco != null && arco == null
                 angulos.add(
                     // Sin rótulo de ángulo: si este tramo es un arco, el siguiente se encuentra
                     // con él sin doblar —180°, seguir de largo—; si es una pared recta sin
                     // ángulo escrito, la escuadra de siempre.
                     if (arco == null) formatCm(
-                        esquina?.grados ?: if (curvasPropias[tramo] != null) 180f else 90f
+                        if (curvaSinBanda && curvasPropias[tramo + 1] != null) 180f
+                        else esquina?.grados ?: if (curvasPropias[tramo] != null) 180f else 90f
                     )
                     else {
                         // La curva va con su paño: el alto y el puente los lleva su propia banda,
@@ -5764,6 +5771,22 @@ class SketchMedidasView @JvmOverloads constructor(
                             CurvaEsquina(arco.desarrollo, arco.cuerda, altoCurva, puenteCurva)
                         )
                     }
+                )
+            }
+        }
+        // La pared curva con la que TERMINA la ventana, detrás de una pared recta, no es otro lado:
+        // es la esquina curva del final de esa pared (2026-10-03: 150, curva 74, 180 y la curva de
+        // 135 que cierra la ventana llegaba como una C de 150, 180 y 135). Viaja como una arista
+        // más, la de después del último lado, con su desarrollo, su cuerda, su alto y su puente.
+        val ultimo = lados.lastOrNull()
+        if (ultimo != null && ultimo.esCurva && lados.size >= 3 && !lados[lados.size - 2].esCurva &&
+            angulos.size == lados.size - 1
+        ) {
+            val arcoFinal = ArcoEsquina.deDesarrolloYFlecha(ultimo.ancho, abs(ultimo.flecha))
+            if (arcoFinal != null) {
+                lados.removeAt(lados.lastIndex)
+                angulos[angulos.lastIndex] = EsquinaMedida.textoDeCurva(
+                    CurvaEsquina(ultimo.ancho, arcoFinal.cuerda, ultimo.alto, ultimo.puente)
                 )
             }
         }

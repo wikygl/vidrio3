@@ -754,6 +754,10 @@ class NovaCorrediza : AppCompatActivity() {
             izquierda = bordeMotor(e[3] == '0'), derecha = bordeMotor(e[1] == '0'),
             libresVerticales = ladosVaciosVerticales(), perfilLibre = valorParanteVacio(),
             esquinero = esquinero, curvas = curvas,
+            // La curva con la que termina la ventana: la arista de después del último lado (2026-10-03).
+            curvaFinal = medidaEsquina?.curvaDe(lados.size - 1)?.let { c ->
+                crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(c.desarrollo, c.alto, c.puente, c.divisiones)
+            },
             repartoManual = NovaCalculos.repartoManual, corredizasPorTramoNfc = corredizasPorTramo
         )).copy(circular = textoModelo == "nci")
     }
@@ -2721,7 +2725,8 @@ class NovaCorrediza : AppCompatActivity() {
                 val esquina = esquinaEnElDiseno(0, primeraC.alto, primeraC.hoja)
                 val base = conPanzaDelLado(0, tramosBase)
                 val aleta = conPanzaDelLado(1, tramosAleta)
-                return conLoQueTrajoLaMedida("{nova,${tipoPaquete()},[$cabecera$base $esquina $aleta]}")
+                val final = curvaFinalEnElDiseno(1, aletaC.alto, aletaC.hoja)
+                return conLoQueTrajoLaMedida("{nova,${tipoPaquete()},[$cabecera$base $esquina $aleta$final]}")
             }
         }
         if (texto == "nu") {
@@ -2755,7 +2760,8 @@ class NovaCorrediza : AppCompatActivity() {
                 val centroP = conPanzaDelLado(1, tramosCentro)
                 val derP = conPanzaDelLado(2, tramosDer)
                 val esq2 = esquinaEnElDiseno(1, centroC.alto, centroC.hoja)
-                return conLoQueTrajoLaMedida("{nova,${tipoPaquete()},[$cabecera$izqP $esq1 $centroP $esq2 $derP]}")
+                val final = curvaFinalEnElDiseno(2, derC.alto, derC.hoja)
+                return conLoQueTrajoLaMedida("{nova,${tipoPaquete()},[$cabecera$izqP $esq1 $centroP $esq2 $derP$final]}")
             }
         }
         if (texto == "ns") {
@@ -3054,10 +3060,12 @@ class NovaCorrediza : AppCompatActivity() {
     private fun mostrarBloquesDeEsquina(cuantos: Int) {
         listOf(binding.tvEsquinaCurva, binding.lyFlecha, binding.lyCuerda, binding.lyDesarrollo,
             binding.lyAltoCurva, binding.lyPuenteCurva, binding.lyDiviCurva).forEach { it.visibility = View.VISIBLE }
-        val dos = if (cuantos >= 2) View.VISIBLE else View.GONE
+        // El segundo bloque: en la C, su segunda esquina; en la L, la curva con la que termina la
+        // ventana después del lado 2 (2026-10-03).
         listOf(binding.tvEsquinaCurvaE2, binding.lyFlechaE2, binding.lyCuerdaE2, binding.lyDesarrolloE2,
-            binding.lyAltoCurvaE2, binding.lyPuenteCurvaE2, binding.lyDiviCurvaE2).forEach { it.visibility = dos }
+            binding.lyAltoCurvaE2, binding.lyPuenteCurvaE2, binding.lyDiviCurvaE2).forEach { it.visibility = View.VISIBLE }
         binding.tvEsquinaCurva.text = if (cuantos >= 2) "Esquina curva 1" else "Esquina curva"
+        binding.tvEsquinaCurvaE2.text = if (cuantos >= 2) "Esquina curva 2" else "Curva final"
     }
 
     /** Por esquina: lo que mostraban sus casillas al cargarla de Medidas, y la curva tal cual vino. */
@@ -3081,8 +3089,13 @@ class NovaCorrediza : AppCompatActivity() {
      */
     private fun aplicarEsquinaEscrita() {
         val previos = ladosAgregados() ?: return
+        fun num(et: EditText) = et.text?.toString()?.trim()?.replace(",", ".")?.toFloatOrNull() ?: 0f
         // Vacías, el alto y el puente del lado de antes de la esquina.
         val curvas = previos.mapIndexed { i, l -> curvaDeLaEsquina(i, l.alto, l.hoja) }
+        // En la L el segundo bloque es la curva con la que termina la ventana, después del lado 2
+        // (2026-10-03); vacía, el alto y el puente del lado 2. En la C su curva del final no tiene
+        // casillas todavía: la que traiga Medidas se queda.
+        val final = if (texto == "nl") curvaDeLaEsquina(1, num(binding.etAlto), num(binding.etHoja)) else null
         val deMedidas = esquinaDeLaMedida?.takeIf { !esquinaEscrita && it.lados.size == previos.size + 1 }
         if (deMedidas != null) {
             // Vacías, en ángulo: el que trajo Medidas si era un ángulo, en escuadra si era la curva.
@@ -3090,21 +3103,22 @@ class NovaCorrediza : AppCompatActivity() {
                 curva?.let { EsquinaMedida.textoDeCurva(it) }
                     ?: deMedidas.angulos.getOrNull(i)?.takeIf { deMedidas.curvaDe(i) == null } ?: "90"
             }
-            esquinaDeLaMedida = deMedidas.copy(angulos = angulos + deMedidas.angulos.drop(angulos.size))
+            val despues = if (texto == "nl") listOfNotNull(final?.let { EsquinaMedida.textoDeCurva(it) })
+            else deMedidas.angulos.drop(angulos.size)
+            esquinaDeLaMedida = deMedidas.copy(angulos = angulos + despues)
             return
         }
-        if (curvas.all { it == null }) {
+        if (curvas.all { it == null } && final == null) {
             if (esquinaEscrita) {
                 esquinaDeLaMedida = null
                 esquinaEscrita = false
             }
             return
         }
-        fun num(et: EditText) = et.text?.toString()?.trim()?.replace(",", ".")?.toFloatOrNull() ?: 0f
         fun lado(ancho: Float, alto: Float, puente: Float) = crystal.crystal.taller.LadoEsquina(ancho, ancho, alto, alto, puente)
         esquinaDeLaMedida = EsquinaMedida(
             previos.map { lado(it.ancho, it.alto, it.hoja) } + lado(num(binding.etAncho), num(binding.etAlto), num(binding.etHoja)),
-            curvas.map { c -> c?.let { EsquinaMedida.textoDeCurva(it) } ?: "90" }
+            curvas.map { c -> c?.let { EsquinaMedida.textoDeCurva(it) } ?: "90" } + listOfNotNull(final?.let { EsquinaMedida.textoDeCurva(it) })
         )
         esquinaEscrita = true
     }
@@ -3804,6 +3818,17 @@ class NovaCorrediza : AppCompatActivity() {
      * hay pliegue: la pared no dobla CONTRA la curva, entra en ella. Lo que va es un paño más, el
      * del desarrollo —que es el aluminio que se corta— con su tag de arco.
      */
+    /**
+     * La curva con la que termina la ventana, detrás del último lado (2026-10-03): su paño con su
+     * panza, sin pliegue detrás porque no viene otra pared. Vacío si no hay.
+     */
+    private fun curvaFinalEnElDiseno(arista: Int, altoRef: Float, puenteRef: Float): String {
+        val medida = esquinaDeLaMedida ?: return ""
+        val curva = medida.curvaDe(arista) ?: return ""
+        val orden = (0 until arista).count { k -> medida.curvaDe(k) != null }
+        return " " + tramoDeCurva(curva, orden, altoRef, puenteRef)
+    }
+
     private fun esquinaEnElDiseno(arista: Int, altoRef: Float, puenteRef: Float): String {
         val medida = esquinaDeLaMedida ?: return "A<90>"
         // La curva es un paño más Y un pliegue: la pared entra en ella de frente y sale girada,
