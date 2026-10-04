@@ -878,6 +878,9 @@ class MedidaActivity : AppCompatActivity() {
                 "◰ perspectiva generada · arrastra para girar · toca una pared lateral para cambiarla de lado · pellizca para acercar · toca aquí para dibujar a mano"
             vista == SketchMedidasView.Vista.SUPERIOR && binding.sketchMedidas.enseniaAlgoGenerado() ->
                 "planta generada de las alzadas · toca aquí para editarla a mano"
+            // Lo dibujado en la planta, visto desde aquí (2026-10-04).
+            vista != SketchMedidasView.Vista.PERSPECTIVA && binding.sketchMedidas.enseniaProyeccion() ->
+                "paredes de la planta vistas desde aquí · toca aquí para editarlas en esta vista"
             (vista == SketchMedidasView.Vista.IZQUIERDA || vista == SketchMedidasView.Vista.DERECHA) &&
                 binding.sketchMedidas.enseniaAlgoGenerado() ->
                 "dibuja esta pared de frente: arranca en el canto con la frontal, en el cero"
@@ -914,13 +917,14 @@ class MedidaActivity : AppCompatActivity() {
                     perspectivaAMano = true
                     refrescarTiraDeVistas()
                 }
-                SketchMedidasView.Vista.SUPERIOR -> {
-                    if (binding.sketchMedidas.materializarPlantaGenerada()) {
+                else -> {
+                    // La planta generada (superior) o las paredes de la planta proyectadas (frontal y
+                    // laterales), convertidas en dibujo para editarlas en esta vista.
+                    if (binding.sketchMedidas.materializarLoGenerado()) {
                         binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
                         refrescarTiraDeVistas()
                     }
                 }
-                else -> Unit
             }
         }
     }

@@ -7159,8 +7159,16 @@ class SketchMedidasView @JvmOverloads constructor(
                     canvas.drawText(formatCm(pxToCm(distancia(a, b))), mx, my - ce(10f), cotaTextPaint)
                 }
             }
+            Vista.FRONTAL -> {
+                if (elementos.isEmpty()) dibujarProyeccion(canvas, proyeccionDeLaPlanta(Vista.FRONTAL))
+            }
             Vista.IZQUIERDA, Vista.DERECHA -> {
                 if (elementos.isNotEmpty()) return
+                // Con planta dibujada, las paredes que le tocan a esta vista, proyectadas.
+                proyeccionDeLaPlanta(vistaActiva).takeIf { it.isNotEmpty() }?.let {
+                    dibujarProyeccion(canvas, it)
+                    return
+                }
                 val frontal = figurasDeVista(Vista.FRONTAL).let { figs ->
                     if (vistaActiva == Vista.DERECHA) figs.lastOrNull() else figs.firstOrNull()
                 } ?: return
@@ -7175,6 +7183,87 @@ class SketchMedidasView @JvmOverloads constructor(
             else -> Unit
         }
     }
+
+    // ---- Lo dibujado en la planta, visto desde la frontal y las laterales (2026-10-04) ----
+    // Una línea de la vista superior es una pared vista desde arriba. Antes solo se veía en la
+    // perspectiva; ahora la frontal y las laterales vacías la enseñan proyectada, a trazos, con su
+    // ancho y su alto, y un toque la convierte en figuras de esa vista para editarla desde ahí.
+    //   Frontal: las paredes que miran al frente (más anchas que hondas en la planta), cada una en
+    //   su sitio de izquierda a derecha.
+    //   Izquierda y derecha: las que van hacia el fondo en ese extremo, con el cero en el canto que
+    //   comparten con la frontal y creciendo hacia el fondo, como ya se dibujaban las laterales.
+
+    /** Una pared de la planta vista desde otra vista: de dónde a dónde (px de esa vista) y su alto. */
+    private data class ParedProyectada(val desde: Float, val hasta: Float, val altoCm: Float)
+
+    private fun proyeccionDeLaPlanta(v: Vista): List<ParedProyectada> {
+        if (v != Vista.FRONTAL && v != Vista.IZQUIERDA && v != Vista.DERECHA) return emptyList()
+        val trozos = elementosDeVista(Vista.SUPERIOR).mapNotNull { e ->
+            val s = e as? Element.Shape ?: return@mapNotNull null
+            s.takeIf { (it.tool == Tool.LINE || it.tool == Tool.ORTHO_LINE || it.tool == Tool.ARCO) && !esCotaAEscuadra(it.cotaHint) }
+        }
+        if (trozos.isEmpty()) return emptyList()
+        val xs = trozos.flatMap { listOf(it.start.x, it.end.x) }
+        val ys = trozos.flatMap { listOf(it.start.y, it.end.y) }
+        val izquierda = xs.min()
+        val centro = (xs.min() + xs.max()) / 2f
+        // El frente es lo de abajo de la planta: ahí está quien mira.
+        val frente = ys.max()
+        val altoComun = altoDeReferencia()
+        return trozos.mapNotNull { s ->
+            val deFrente = abs(s.end.x - s.start.x) >= abs(s.end.y - s.start.y)
+            val alto = if (s.tool == Tool.ARCO && s.alturaCm > 0f) s.alturaCm else altoComun
+            when (v) {
+                Vista.FRONTAL -> if (deFrente) ParedProyectada(
+                    minOf(s.start.x, s.end.x) - izquierda, maxOf(s.start.x, s.end.x) - izquierda, alto
+                ) else null
+                else -> {
+                    val delLado = ((s.start.x + s.end.x) / 2f < centro) == (v == Vista.IZQUIERDA)
+                    if (!deFrente && delLado) ParedProyectada(
+                        frente - maxOf(s.start.y, s.end.y), frente - minOf(s.start.y, s.end.y), alto
+                    ) else null
+                }
+            }
+        }.sortedBy { it.desde }
+    }
+
+    /** El alto con que se proyecta una pared sin alto propio: el de las figuras de las alzadas, o 120. */
+    private fun altoDeReferencia(): Float =
+        listOf(Vista.FRONTAL, Vista.IZQUIERDA, Vista.DERECHA)
+            .flatMap { figurasDeVista(it) }
+            .maxOfOrNull { pxToCm(boundsForElement(it.first).height()) }
+            ?.takeIf { it > 1f } ?: 120f
+
+    /** Las paredes proyectadas, a trazos como la planta generada, con su ancho y su alto. */
+    private fun dibujarProyeccion(canvas: Canvas, paredes: List<ParedProyectada>) {
+        paredes.forEach { p ->
+            val alto = cmToPx(p.altoCm)
+            canvas.drawRect(p.desde, -alto, p.hasta, 0f, sombraProlongacion)
+            canvas.drawText(formatCm(pxToCm(p.hasta - p.desde)), (p.desde + p.hasta) / 2f, ce(18f), cotaTextPaint)
+            canvas.drawText(formatCm(p.altoCm), p.desde + ce(6f), -alto / 2f, cotaTextPaint)
+        }
+    }
+
+    /**
+     * Lo generado de la vista de ahora, convertido en dibujo de verdad para editarlo: en la superior,
+     * la planta que sale de las alzadas; en la frontal y las laterales, las paredes de la planta
+     * proyectadas. Desde entonces manda lo dibujado. False si no había nada que convertir.
+     */
+    fun materializarLoGenerado(): Boolean {
+        if (vistaActiva == Vista.SUPERIOR) return materializarPlantaGenerada()
+        if (elementos.isNotEmpty()) return false
+        val paredes = proyeccionDeLaPlanta(vistaActiva)
+        if (paredes.isEmpty()) return false
+        paredes.forEach { p ->
+            elementos.add(crearShape(Tool.RECTANGLE, PointF(p.desde, -cmToPx(p.altoCm)), PointF(p.hasta, 0f)))
+        }
+        registrarAccion()
+        invalidate()
+        return true
+    }
+
+    /** ¿La vista de ahora enseña paredes proyectadas de la planta? */
+    fun enseniaProyeccion(): Boolean = elementos.isEmpty() && proyeccionDeLaPlanta(vistaActiva).isNotEmpty()
 
     /**
      * Convierte la planta generada en líneas de verdad de la vista superior, para poder editarla
@@ -7195,7 +7284,9 @@ class SketchMedidasView @JvmOverloads constructor(
     /** ¿En la vista de ahora hay algo generado que se está enseñando en vez de dibujo? */
     fun enseniaAlgoGenerado(): Boolean = when (vistaActiva) {
         Vista.SUPERIOR -> elementos.isEmpty() && recorridoDePlantaGenerada().size >= 2
-        Vista.IZQUIERDA, Vista.DERECHA -> elementos.isEmpty() && figurasDeVista(Vista.FRONTAL).isNotEmpty()
+        Vista.FRONTAL -> enseniaProyeccion()
+        Vista.IZQUIERDA, Vista.DERECHA -> elementos.isEmpty() &&
+            (enseniaProyeccion() || figurasDeVista(Vista.FRONTAL).isNotEmpty())
         else -> false
     }
 
