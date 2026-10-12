@@ -195,6 +195,19 @@
                         app:srcCompat="@drawable/ic_catalogo"
                         tools:ignore="TouchTargetSizeCheck" />
 
+                    <!-- Tienda de anuncios del rubro (docs/TIENDA_ANUNCIOS_PLAN.md) -->
+                    <ImageButton
+                        android:id="@+id/btnTienda"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@color/color"
+                        android:contentDescription="Tienda"
+                        android:padding="8dp"
+                        android:scaleType="fitCenter"
+                        app:srcCompat="@drawable/ic_tienda"
+                        tools:ignore="TouchTargetSizeCheck" />
+
                     <ImageButton
                         android:id="@+id/btAyuda"
                         android:layout_width="match_parent"

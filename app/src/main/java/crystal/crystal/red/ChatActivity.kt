@@ -105,6 +105,12 @@ class ChatActivity : AppCompatActivity() {
         nombreArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME)
         mimeArchivoCompartido = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME)
         textoCompartidoParaEnviar = intent.getStringExtra(ChatInteropIntents.EXTRA_SEND_SHARED_TEXT)
+        // Un mensaje ya escrito (p. ej. "Hola, me interesa su anuncio…" desde la Tienda): va a la
+        // caja de texto, no se envía solo, para que el usuario lo corrija o lo borre.
+        ChatInteropIntents.consumeStringExtra(intent, ChatInteropIntents.EXTRA_PREFILL_TEXT)?.let {
+            binding.messageTextField.setText(it)
+            binding.messageTextField.setSelection(it.length)
+        }
 
         if (chatId.isNotEmpty() && usuario.isNotEmpty()) {
             inicializarCabecera()

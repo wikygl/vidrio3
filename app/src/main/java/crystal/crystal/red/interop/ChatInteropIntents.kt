@@ -14,6 +14,8 @@ object ChatInteropIntents {
     const val EXTRA_LOAD_BUDGET_URI = "cargar_presupuesto_uri"
     const val EXTRA_LOAD_BUDGET_NAME = "cargar_presupuesto_nombre"
     const val EXTRA_IMPORT_MEASURES_TEXT = "importar_medidas_texto"
+    /** Texto que se deja escrito en la caja del chat al abrirlo, sin enviarlo. */
+    const val EXTRA_PREFILL_TEXT = "texto_inicial"
 
     fun consumeStringExtra(intent: Intent, key: String): String? {
         return intent.getStringExtra(key)?.also {

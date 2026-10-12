@@ -477,6 +477,76 @@ rules_version = '2';
         }
       }
 
+      // ===== TIENDA DE ANUNCIOS (docs/TIENDA_ANUNCIOS_PLAN.md) =====
+      match /anuncios/{anuncioId} {
+        // Una foto del anuncio, si la hay en la posición i, tiene que estar en la carpeta del
+        // propio vendedor en nuestro Storage: así una edición no cuela imágenes de otro sitio.
+        function fotoPropia(lista, i) {
+          return lista.size() <= i
+            || lista[i].matches('https://firebasestorage[.]googleapis[.]com/v0/b/[^/]+/o/anuncios%2F'
+                + request.auth.uid + '%2F' + anuncioId + '%2F.*');
+        }
+
+        function fotosPropias(lista) {
+          return lista is list && lista.size() <= 5
+            && fotoPropia(lista, 0) && fotoPropia(lista, 1) && fotoPropia(lista, 2)
+            && fotoPropia(lista, 3) && fotoPropia(lista, 4);
+        }
+
+        // El dueño edita lo que escribió y pasa entre activo, pausado y retirado. El vencimiento,
+        // lo pagado, las denuncias y salir de revisión o de vencido son del servidor y del panel.
+        function esElDuenoEditando() {
+          return isSignedIn()
+            && resource.data.uid == request.auth.uid
+            && resource.data.estado in ['activo', 'pausado', 'retirado']
+            && request.resource.data.estado in ['activo', 'pausado', 'retirado']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'titulo', 'descripcion', 'precioCent', 'unidad', 'condicion', 'ciudad',
+              'categoria', 'tipo', 'fotos', 'miniaturas', 'palabras', 'estado', 'editadoEn'
+            ])
+            && request.resource.data.titulo is string
+            && request.resource.data.titulo.size() >= 4
+            && request.resource.data.titulo.size() <= 80
+            && request.resource.data.descripcion is string
+            && request.resource.data.descripcion.size() <= 1500
+            && request.resource.data.precioCent is int
+            && request.resource.data.precioCent >= 0
+            && fotosPropias(request.resource.data.fotos)
+            && fotosPropias(request.resource.data.miniaturas)
+            && request.resource.data.miniaturas.size() == request.resource.data.fotos.size()
+            && request.resource.data.palabras is list
+            && request.resource.data.palabras.size() <= 40;
+        }
+
+        // Quien abre un anuncio suma una vista, y nada más.
+        function esUnaVistaMas() {
+          return isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['vistas'])
+            && request.resource.data.vistas == resource.data.vistas + 1;
+        }
+
+        // Por ahora la tienda se ve solo desde Crystal, con sesión.
+        allow read: if isSignedIn();
+        // Publicar cobra del wallet: solo la función publicarAnuncio (admin SDK) crea anuncios.
+        allow create: if false;
+        allow update: if isAdmin() || esElDuenoEditando() || esUnaVistaMas();
+        allow delete: if isAdmin();
+
+        // Una denuncia por usuario (crear sobre una que ya existe es actualizar, y no se permite).
+        // Las cuenta la función contarDenunciaAnuncio.
+        match /denuncias/{uid} {
+          allow create: if isOwner(uid)
+            && get(/databases/$(database)/documents/anuncios/$(anuncioId)).data.uid != uid
+            && request.resource.data.keys().hasOnly(['motivo', 'detalle', 'creadoEn'])
+            && request.resource.data.motivo is string
+            && request.resource.data.motivo.size() <= 60
+            && request.resource.data.detalle is string
+            && request.resource.data.detalle.size() <= 500;
+          allow read: if isOwner(uid) || isPanelRole();
+          allow update, delete: if isAdmin();
+        }
+      }
+
       // ===== Regla catch-all (dev) =====
       match /{document=**} {
         allow read: if isDevMode() && isSignedIn();

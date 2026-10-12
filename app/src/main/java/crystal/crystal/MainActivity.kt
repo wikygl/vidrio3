@@ -388,6 +388,11 @@ class MainActivity : AppCompatActivity() {
         binding.btnCatalogo.setOnClickListener {
             startActivity(Intent(this, CatalogoActivity::class.java))}
 
+        // La Tienda de anuncios del rubro: comprar, vender y ofrecer servicios entre usuarios.
+        binding.btnTienda.setOnClickListener {
+            startActivity(crystal.crystal.tienda.TiendaActivity.intent(this))
+        }
+
         // Agregar OnLongClickListener al textView prodtxt
         // MODIFICAR el listener existente de prodtxt:
         binding.prodtxt.setOnLongClickListener {

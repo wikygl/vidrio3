@@ -1319,3 +1319,73 @@ exports.cerrarConsolidadoDiario = functions.pubsub
     functions.logger.info(Object.assign({ message: "cerrarConsolidadoDiario", fecha }, r));
     return null;
   });
+
+// ===================================================================================
+//  TIENDA DE ANUNCIOS DEL RUBRO (docs/TIENDA_ANUNCIOS_PLAN.md)
+//  El circuito vive en ./tienda. Cada anuncio se paga con el saldo del wallet, como un plan.
+// ===================================================================================
+
+const tienda = require("./tienda");
+
+function errorDeTienda(e) {
+  if (e instanceof tienda.ErrorTienda) return new functions.https.HttpsError(e.codigo, e.message);
+  functions.logger.error("Tienda", { error: String(e && e.stack || e) });
+  return new functions.https.HttpsError("internal", "No se pudo completar. Intente de nuevo.");
+}
+
+/** Cobra el anuncio del saldo y lo publica con su vencimiento. Idempotente por `anuncioId`. */
+exports.publicarAnuncio = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Inicia sesión.");
+  try {
+    const r = await tienda.publicar(admin.firestore(), {
+      uid: context.auth.uid,
+      patronUid: context.auth.token && context.auth.token.patronUid,
+      data,
+      ahoraMs: Date.now(),
+    });
+    functions.logger.info({ message: "publicarAnuncio", uid: context.auth.uid, anuncioId: r.anuncioId });
+    return r;
+  } catch (e) {
+    throw errorDeTienda(e);
+  }
+});
+
+/** Cobra otro período del anuncio y lo vuelve a poner arriba. */
+exports.renovarAnuncio = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Inicia sesión.");
+  try {
+    return await tienda.renovar(admin.firestore(), {
+      uid: context.auth.uid,
+      anuncioId: String((data && data.anuncioId) || ""),
+      ahoraMs: Date.now(),
+    });
+  } catch (e) {
+    throw errorDeTienda(e);
+  }
+});
+
+// Una pasada diaria a las 03:00 de Lima: lo vencido deja de verse como activo en "Mis anuncios".
+// La lista ya lo esconde por su fecha; esto deja el estado al día.
+exports.expirarAnuncios = functions.pubsub
+  .schedule("0 3 * * *")
+  .timeZone("America/Lima")
+  .onRun(async () => {
+    const r = await tienda.expirar(admin.firestore(), Date.now());
+    functions.logger.info(Object.assign({ message: "expirarAnuncios" }, r));
+    return null;
+  });
+
+// Cada denuncia se cuenta en el anuncio; a la tercera sale de la lista y se avisa al panel.
+exports.contarDenunciaAnuncio = functions.firestore
+  .document("anuncios/{anuncioId}/denuncias/{uid}")
+  .onCreate(async (snap, context) => {
+    const r = await tienda.contarDenuncia(admin.firestore(), context.params.anuncioId);
+    if (r.ok && r.pasaARevision) {
+      await avisarAdmins("🚩 Anuncio en revisión", `${r.titulo} — ${r.denuncias} denuncias`, {
+        tipo: "anuncio_revision",
+        anuncioId: context.params.anuncioId,
+        ownerUid: r.uid || "",
+      });
+    }
+    return null;
+  });

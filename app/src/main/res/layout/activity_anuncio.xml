@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Un anuncio de la Tienda: sus fotos, lo que es, cuánto cuesta, dónde está y quién lo vende.
+  Abajo, las acciones del comprador (contactar, denunciar) o las del dueño (editar, pausar,
+  renovar, retirar).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/sombra"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/color"
+        android:elevation="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingEnd="12dp">
+
+        <ImageButton
+            android:id="@+id/btnAtras"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:background="@null"
+            android:contentDescription="Atrás"
+            android:padding="10dp"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="@color/blanco" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingStart="8dp"
+            android:text="Anuncio"
+            android:textColor="@color/blanco"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:id="@+id/marcoFotos"
+                android:layout_width="match_parent"
+                android:layout_height="280dp"
+                android:background="@color/sombra2">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvFotos"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <TextView
+                    android:id="@+id/tvContadorFotos"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="10dp"
+                    android:background="@drawable/bg_marca_anuncio"
+                    android:paddingStart="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="2dp"
+                    android:textColor="@color/azul"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    tools:text="1 / 3" />
+
+                <TextView
+                    android:id="@+id/tvSinFotos"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="Sin fotos"
+                    android:textColor="#7A7A7A"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/tvEstado"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    android:background="@drawable/bg_resumen_item"
+                    android:padding="10dp"
+                    android:textColor="@color/azul"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:text="Activo · Vence en 12 días · 34 vistas"
+                    tools:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/tvPrecio"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/azul"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    tools:text="S/ 150.00 m²" />
+
+                <TextView
+                    android:id="@+id/tvTitulo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textColor="@color/negro"
+                    android:textSize="19sp"
+                    android:textStyle="bold"
+                    tools:text="Vidrio templado 8 mm incoloro" />
+
+                <TextView
+                    android:id="@+id/tvDatos"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="#4A4A4A"
+                    android:textSize="14sp"
+                    tools:text="Producto · Nuevo · Vidrio y espejos" />
+
+                <TextView
+                    android:id="@+id/tvLugar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textColor="#4A4A4A"
+                    android:textSize="14sp"
+                    tools:text="Huancayo · Hace 2 días" />
+
+                <TextView
+                    style="@style/SeccionItem"
+                    android:text="DESCRIPCIÓN" />
+
+                <TextView
+                    android:id="@+id/tvDescripcion"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:lineSpacingMultiplier="1.15"
+                    android:textColor="@color/negro"
+                    android:textIsSelectable="true"
+                    android:textSize="15sp"
+                    tools:text="Planchas de 2.14 x 3.30. Entrega en obra." />
+
+                <TextView
+                    style="@style/SeccionItem"
+                    android:text="VENDEDOR" />
+
+                <TextView
+                    android:id="@+id/tvVendedor"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:textColor="@color/negro"
+                    android:textSize="15sp"
+                    tools:text="Vidriería Uno" />
+
+                <TextView
+                    android:id="@+id/tvAvisoTrato"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="El trato, el pago y la entrega son entre usted y el vendedor. Desconfíe de adelantos sin haber visto el producto."
+                    android:textColor="#7A7A7A"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Comprador -->
+    <LinearLayout
+        android:id="@+id/barraComprador"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/blanco"
+        android:elevation="6dp"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <Button
+            android:id="@+id/btnContactar"
+            style="@style/AccionItem.Principal"
+            android:layout_weight="2"
+            android:text="Contactar por chat" />
+
+        <Button
+            android:id="@+id/btnDenunciar"
+            style="@style/AccionItem.Eliminar"
+            android:text="Denunciar" />
+    </LinearLayout>
+
+    <!-- Dueño -->
+    <LinearLayout
+        android:id="@+id/barraDueno"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/blanco"
+        android:elevation="6dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnEditar"
+                style="@style/AccionItem"
+                android:text="Editar" />
+
+            <Button
+                android:id="@+id/btnPausar"
+                style="@style/AccionItem"
+                android:text="Pausar" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnRenovar"
+                style="@style/AccionItem.Principal"
+                android:text="Renovar" />
+
+            <Button
+                android:id="@+id/btnRetirar"
+                style="@style/AccionItem.Eliminar"
+                android:text="Retirar" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
