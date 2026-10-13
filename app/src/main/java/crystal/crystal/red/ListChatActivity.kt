@@ -177,6 +177,7 @@ class ListChatActivity : AppCompatActivity() {
         configurarMigracionManual()
         ejecutarMigracionAutomatica()
         binding.btnEnviar.setOnClickListener { buscarUsuario() }
+        mostrarProveedoresSiEnvia()
         verificarPermisoNotificaciones()
         CrystalFcmTokenManager.registerCurrentDevice(this, currentUserId)
         CrystalFcmTokenManager.flushPendingToken(this, currentUserId)
@@ -691,14 +692,63 @@ class ListChatActivity : AppCompatActivity() {
         val intent = Intent(this, ChatActivity::class.java).apply {
             putExtra("chatId", chatId)
             putExtra("usuario", currentUserId)
-            presupuestoParaEnviar?.let { putExtra(ChatInteropIntents.EXTRA_SEND_BUDGET_URI, it) }
-            nombrePresupuesto?.let { putExtra(ChatInteropIntents.EXTRA_BUDGET_NAME, it) }
-            archivoCompartidoParaEnviar?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_URI, it) }
-            nombreArchivoCompartido?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_NAME, it) }
-            mimeArchivoCompartido?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_MIME, it) }
-            textoCompartidoParaEnviar?.let { putExtra(ChatInteropIntents.EXTRA_SEND_SHARED_TEXT, it) }
+            putExtras(extrasDeEnvio())
         }
         startActivity(intent)
+    }
+
+    /** Lo que se abrió para enviar (presupuesto, archivo o medidas), tal como lo espera ChatActivity. */
+    private fun extrasDeEnvio(): Bundle = Bundle().apply {
+        presupuestoParaEnviar?.let { putString(ChatInteropIntents.EXTRA_SEND_BUDGET_URI, it) }
+        nombrePresupuesto?.let { putString(ChatInteropIntents.EXTRA_BUDGET_NAME, it) }
+        archivoCompartidoParaEnviar?.let { putString(ChatInteropIntents.EXTRA_SEND_SHARED_URI, it) }
+        nombreArchivoCompartido?.let { putString(ChatInteropIntents.EXTRA_SEND_SHARED_NAME, it) }
+        mimeArchivoCompartido?.let { putString(ChatInteropIntents.EXTRA_SEND_SHARED_MIME, it) }
+        textoCompartidoParaEnviar?.let { putString(ChatInteropIntents.EXTRA_SEND_SHARED_TEXT, it) }
+    }
+
+    /**
+     * Vitrina de proveedores (Tienda, fase 2): si se abrió el chat para enviar medidas, cortes,
+     * planchas o un presupuesto, arriba salen los proveedores que atienden la ciudad del taller —los
+     * del rubro de lo enviado, primero—. Un toque abre el chat con él y le pasa lo que se iba a enviar.
+     * Si algo falla, la lista de chats sigue igual: es un atajo, no un paso.
+     */
+    private fun mostrarProveedoresSiEnvia() {
+        val enviando = presupuestoParaEnviar != null || archivoCompartidoParaEnviar != null || textoCompartidoParaEnviar != null
+        if (!enviando) return
+        val ciudad = crystal.crystal.tienda.MiCiudad.get(this)
+        lifecycleScope.launch {
+            val (lista, locales) = runCatching { crystal.crystal.tienda.TiendaRepositorio().proveedoresPara(ciudad) }
+                .getOrNull() ?: return@launch
+            val otros = lista.filter { it.uid != currentUserId }
+            if (otros.isEmpty()) return@launch
+            val rubros = crystal.crystal.tienda.TiendaReglas.rubrosDeLoEnviado(
+                mimeArchivoCompartido, nombreArchivoCompartido ?: nombrePresupuesto, textoCompartidoParaEnviar != null
+            )
+            binding.tvBandaProveedores.text = if (locales) "PROVEEDORES EN ${ciudad.uppercase()}" else "PROVEEDORES DE LA TIENDA"
+            val cont = binding.contenedorProveedores
+            cont.removeAllViews()
+            val d = resources.displayMetrics.density
+            crystal.crystal.tienda.Proveedor.ordenarPara(otros, rubros).take(12).forEach { p ->
+                cont.addView(android.widget.TextView(this@ListChatActivity).apply {
+                    text = p.nombre
+                    textSize = 14f
+                    setTextColor(ContextCompat.getColor(context, crystal.crystal.R.color.azul))
+                    background = ContextCompat.getDrawable(context, crystal.crystal.R.drawable.bg_chip_filtro)
+                    setPadding((14 * d).toInt(), (7 * d).toInt(), (14 * d).toInt(), (7 * d).toInt())
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { setMargins((4 * d).toInt(), 0, (4 * d).toInt(), (4 * d).toInt()) }
+                    setOnClickListener {
+                        lifecycleScope.launch {
+                            runCatching { crystal.crystal.tienda.ChatDeTienda.abrir(this@ListChatActivity, p.uid, null, extrasDeEnvio()) }
+                                .onFailure { Toast.makeText(this@ListChatActivity, "No se pudo abrir el chat: ${it.message}", Toast.LENGTH_SHORT).show() }
+                        }
+                    }
+                })
+            }
+            binding.bandaProveedores.visibility = android.view.View.VISIBLE
+        }
     }
 
     private fun mostrarDialogoMigracionManual() {

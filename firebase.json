@@ -8,6 +8,18 @@
     ],
     "rewrites": [
       {
+        "source": "/api/tienda/**",
+        "function": "tiendaWeb"
+      },
+      {
+        "source": "/tienda",
+        "destination": "/tienda/index.html"
+      },
+      {
+        "source": "/tienda/**",
+        "destination": "/tienda/index.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

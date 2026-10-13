@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Precios de referencia (plan FULL): qué se busca y en qué ciudad; abajo, mínimo, mediana y máximo por
+  unidad en la ciudad y en todo el país.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/sombra"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/color"
+        android:elevation="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingEnd="12dp">
+
+        <ImageButton
+            android:id="@+id/btnAtras"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:background="@null"
+            android:contentDescription="Atrás"
+            android:padding="10dp"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="@color/blanco" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingStart="8dp"
+            android:text="Precios de referencia"
+            android:textColor="@color/blanco"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Lo que se pide en la Tienda por un producto o servicio, con los anuncios de los últimos 6 meses. Para cuidar a cada vendedor, solo se muestra con 3 vendedores distintos o más."
+                android:textColor="#5A5A5A"
+                android:textSize="14sp" />
+
+            <TextView
+                style="@style/SeccionItem"
+                android:text="QUÉ BUSCA" />
+
+            <EditText
+                android:id="@+id/etTexto"
+                style="@style/CampoItem"
+                android:layout_width="match_parent"
+                android:layout_weight="0"
+                android:hint="Ej.: templado 8, perfil corrediza, melamina 18"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:maxLength="80" />
+
+            <TextView
+                style="@style/SeccionItem"
+                android:text="CIUDAD" />
+
+            <EditText
+                android:id="@+id/etCiudad"
+                style="@style/CampoItem"
+                android:layout_width="match_parent"
+                android:layout_weight="0"
+                android:hint="Ej.: Huancayo"
+                android:inputType="textCapWords"
+                android:maxLength="60" />
+
+            <Button
+                android:id="@+id/btnConsultar"
+                style="@style/AccionItem.Principal"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_weight="0"
+                android:layout_marginTop="12dp"
+                android:text="Consultar" />
+
+            <ProgressBar
+                android:id="@+id/pbCargando"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center"
+                android:layout_marginTop="16dp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/contenedorResultados"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical"
+                tools:visibility="visible" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

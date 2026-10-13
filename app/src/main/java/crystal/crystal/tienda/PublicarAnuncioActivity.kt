@@ -56,6 +56,9 @@ class PublicarAnuncioActivity : AppCompatActivity() {
     private var precioCent = TiendaReglas.PRECIO_POR_DEFECTO_CENT
     private var dias = TiendaReglas.DIAS_POR_DEFECTO
     private var saldoCent = 0L
+    /** Todas las tarifas: un servicio puede costar distinto que un producto. */
+    private var tarifas = TiendaReglas.Tarifas()
+    private var tarifasCargadas = false
 
     private val elegirFotos = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         val caben = TiendaReglas.MAX_FOTOS - fotos.size
@@ -115,15 +118,24 @@ class PublicarAnuncioActivity : AppCompatActivity() {
 
     private fun ponerTipo(nuevo: String) {
         tipo = nuevo
-        elegir(b.btnProducto, nuevo == TiendaReglas.PRODUCTO)
-        elegir(b.btnServicio, nuevo == TiendaReglas.SERVICIO)
+        val servicio = nuevo == TiendaReglas.SERVICIO
+        elegir(b.btnProducto, !servicio)
+        elegir(b.btnServicio, servicio)
         // Un servicio no es nuevo ni usado, y se ofrece en una zona, no "está" en un lugar.
-        b.lyCondicion.visibility = if (nuevo == TiendaReglas.SERVICIO) View.GONE else View.VISIBLE
-        b.tvRotuloCiudad.text = if (nuevo == TiendaReglas.SERVICIO) "ZONA DONDE ATIENDE" else "UBICACIÓN"
-        if (nuevo == TiendaReglas.SERVICIO && b.spUnidad.selectedItem == "c/u") {
-            b.spUnidad.setSelection(TiendaReglas.UNIDADES.indexOf("servicio"))
-        }
+        b.lyCondicion.visibility = if (servicio) View.GONE else View.VISIBLE
+        b.lyZonas.visibility = if (servicio) View.VISIBLE else View.GONE
+        b.tvRotuloCiudad.text = if (servicio) "CIUDAD DONDE ATIENDE" else "UBICACIÓN"
+        // Un servicio se cobra por trabajo, por tiempo o por medida: el desplegable solo ofrece eso.
+        val unidades = unidades()
+        val antes = b.spUnidad.selectedItem as? String
+        b.spUnidad.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, unidades)
+        b.spUnidad.setSelection(
+            unidades.indexOf(antes).takeIf { it >= 0 } ?: unidades.indexOf(if (servicio) "servicio" else "c/u").coerceAtLeast(0)
+        )
+        pintarCosto()
     }
+
+    private fun unidades() = if (tipo == TiendaReglas.SERVICIO) TiendaReglas.UNIDADES_SERVICIO else TiendaReglas.UNIDADES
 
     private fun ponerCondicion(nueva: String) {
         condicion = nueva
@@ -201,23 +213,31 @@ class PublicarAnuncioActivity : AppCompatActivity() {
 
     private fun cargarPrecio() {
         lifecycleScope.launch {
-            runCatching { repo.precioYSaldo() }.onSuccess { (p, d, s) ->
-                precioCent = p; dias = d; saldoCent = s
-                b.tvCosto.text = if (p > 0) {
-                    "Publicar cuesta ${soles(p)} y el anuncio dura $d días. Se descuenta de su saldo: ${soles(s)}."
-                } else {
-                    "Publicar es gratis por ahora. El anuncio dura $d días."
-                }
-                b.btnPublicar.text = if (p > 0) "Publicar · ${soles(p)}" else "Publicar"
+            runCatching { repo.tarifasYSaldo() }.onSuccess { (t, s) ->
+                tarifas = t; saldoCent = s; tarifasCargadas = true
+                pintarCosto()
             }
         }
+    }
+
+    /** El costo del tipo elegido: al cambiar de producto a servicio puede cambiar. */
+    private fun pintarCosto() {
+        if (!tarifasCargadas || editando != null || intent.hasExtra(EXTRA_ID)) return
+        val (p, d) = tarifas.publicar(tipo)
+        precioCent = p; dias = d
+        b.tvCosto.text = if (p > 0) {
+            "Publicar cuesta ${soles(p)} y el anuncio dura $d días. Se descuenta de su saldo: ${soles(saldoCent)}."
+        } else {
+            "Publicar es gratis por ahora. El anuncio dura $d días."
+        }
+        b.btnPublicar.text = if (p > 0) "Publicar · ${soles(p)}" else "Publicar"
     }
 
     // ───────────── Leer el formulario ─────────────
 
     private data class Formulario(
         val categoria: String, val titulo: String, val descripcion: String, val precioCent: Long,
-        val unidad: String, val condicion: String, val ciudad: String
+        val unidad: String, val condicion: String, val ciudad: String, val zonas: List<String>
     )
 
     /** Lo escrito, revisado con las mismas reglas que el servidor. Muestra el error y devuelve null. */
@@ -231,14 +251,18 @@ class PublicarAnuncioActivity : AppCompatActivity() {
         else (b.spUnidad.selectedItem as? String).orEmpty()
         val cond = if (tipo == TiendaReglas.SERVICIO) "" else condicion
         val ciudad = b.etCiudad.text.toString().replace(Regex("\\s+"), " ").trim()
+        val zonas = if (tipo == TiendaReglas.SERVICIO) TiendaReglas.zonas(b.etZonas.text.toString(), ciudad) else emptyList()
 
-        val error = if (!aTratar && (precio == null || precio <= 0L)) "Escriba el precio o marque «Precio a tratar»."
-        else TiendaReglas.error(tipo, categoria, titulo, descripcion, precio, unidad, cond, ciudad, fotos.size)
+        val error = when {
+            !aTratar && (precio == null || precio <= 0L) -> "Escriba el precio o marque «Precio a tratar»."
+            zonas == null -> "Son ${TiendaReglas.MAX_ZONAS} zonas como máximo, de hasta ${TiendaReglas.MAX_ZONA} letras cada una."
+            else -> TiendaReglas.error(tipo, categoria, titulo, descripcion, precio, unidad, cond, ciudad, fotos.size)
+        }
         if (error != null) {
             Toast.makeText(this, error, Toast.LENGTH_LONG).show()
             return null
         }
-        return Formulario(categoria, titulo, descripcion, precio ?: 0L, unidad, cond, ciudad)
+        return Formulario(categoria, titulo, descripcion, precio ?: 0L, unidad, cond, ciudad, zonas.orEmpty())
     }
 
     // ───────────── Publicar ─────────────
@@ -278,7 +302,7 @@ class PublicarAnuncioActivity : AppCompatActivity() {
     /** Con el precio y el saldo al día: si alcanza, confirma; si no, lleva a recargar. */
     private fun confirmarCobro(f: Formulario) {
         lifecycleScope.launch {
-            runCatching { repo.precioYSaldo() }
+            runCatching { repo.precioYSaldo(tipo) }
                 .onSuccess { (p, d, s) -> precioCent = p; dias = d; saldoCent = s }
                 .onFailure {
                     Toast.makeText(this@PublicarAnuncioActivity, "Sin conexión: ${TiendaRepositorio.mensaje(it)}", Toast.LENGTH_LONG).show()
@@ -319,6 +343,7 @@ class PublicarAnuncioActivity : AppCompatActivity() {
                     "unidad" to f.unidad,
                     "condicion" to f.condicion,
                     "ciudad" to f.ciudad,
+                    "zonas" to f.zonas,
                     "fotos" to grandes,
                     "miniaturas" to minis,
                     "reglasVersion" to TiendaReglas.REGLAS_VERSION
@@ -378,8 +403,9 @@ class PublicarAnuncioActivity : AppCompatActivity() {
             b.etDescripcion.setText(a.descripcion)
             if (a.precioCent <= 0L) b.cbATratar.isChecked = true
             else b.etPrecio.setText(java.math.BigDecimal(a.precioCent).movePointLeft(2).toPlainString())
-            TiendaReglas.UNIDADES.indexOf(a.unidad).takeIf { it >= 0 }?.let { b.spUnidad.setSelection(it) }
+            unidades().indexOf(a.unidad).takeIf { it >= 0 }?.let { b.spUnidad.setSelection(it) }
             b.etCiudad.setText(a.ciudad)
+            b.etZonas.setText(a.zonas.joinToString(", "))
             fotos.clear()
             a.fotos.forEachIndexed { i, g -> fotos += Foto.Subida(g, a.miniaturas.getOrElse(i) { g }) }
             pintarFotos()
@@ -406,9 +432,10 @@ class PublicarAnuncioActivity : AppCompatActivity() {
                         "unidad" to f.unidad,
                         "condicion" to f.condicion,
                         "ciudad" to f.ciudad,
+                        "zonas" to f.zonas,
                         "fotos" to grandes,
                         "miniaturas" to minis,
-                        "palabras" to TiendaReglas.palabrasDe(f.titulo, f.categoria, f.ciudad, tipo)
+                        "palabras" to TiendaReglas.palabrasDe(f.titulo, f.categoria, f.ciudad, tipo, f.zonas)
                     )
                 )
                 // Las fotos que se quitaron ya no las usa nadie: se borran para no pagar por guardarlas.

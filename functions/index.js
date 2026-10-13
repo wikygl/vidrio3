@@ -590,21 +590,39 @@ exports.expirarReservas = functions.pubsub.schedule("every 5 minutes").onRun(asy
   return null;
 });
 
+/** El rol del panel (admin u operador) de quien llama, o null si no tiene. */
+async function rolDelPanel(db, uid) {
+  const roleDoc = await db.collection("admin_roles").doc(uid).get();
+  const role = roleDoc.data() && roleDoc.data().role;
+  return role && ["admin", "operador"].includes(role) ? role : null;
+}
+
 // Envía un mensaje de TEXTO (gratis) al chat de Crystal de un usuario, desde el panel (admin).
 // Reusa el chat existente (participantsKey) o crea uno, en el formato interop de Crystal.
 exports.enviarMensajeAdmin = functions.https.onCall(async (data, context) => {
   const callerUid = context.auth && context.auth.uid;
   if (!callerUid) throw new functions.https.HttpsError("unauthenticated", "No autenticado");
   const db = admin.firestore();
-  const roleDoc = await db.collection("admin_roles").doc(callerUid).get();
-  const role = roleDoc.data() && roleDoc.data().role;
-  if (!role || !["admin", "operador"].includes(role)) {
+  if (!(await rolDelPanel(db, callerUid))) {
     throw new functions.https.HttpsError("permission-denied", "No autorizado");
   }
   const destino = String((data && data.uid) || "");
   const texto = String((data && data.texto) || "").trim();
   if (!destino || !texto) throw new functions.https.HttpsError("invalid-argument", "Faltan datos.");
+  const chatId = await mensajeDeSoporte(db, callerUid, destino, texto);
+  return { ok: true, chatId };
+});
 
+// Del módulo de Firestore y no de `admin.firestore.*`: en el emulador (y según la versión, en el
+// entorno de funciones) `admin.firestore` viene envuelto sin Timestamp ni FieldValue.
+const { Timestamp: FirestoreTimestamp, FieldValue: FirestoreFieldValue } = require("firebase-admin/firestore");
+
+/**
+ * Escribe [texto] del panel al usuario [destino] por el chat de Soporte Crystal (lo crea si no
+ * existe) y devuelve su id. Lo usan el panel a mano y la moderación de la tienda, que le cuenta al
+ * vendedor qué se decidió sobre su anuncio.
+ */
+async function mensajeDeSoporte(db, callerUid, destino, texto) {
   // Canal de SOPORTE dedicado (separado del chat normal) para que el usuario vea "Soporte Crystal".
   const participantsKey = "soporte_" + [callerUid, destino].sort().join("_");
   let chatId;
@@ -620,7 +638,7 @@ exports.enviarMensajeAdmin = functions.https.onCall(async (data, context) => {
       participantsKey,
       esSoporte: true,
       soporteUid: destino,
-      lastMsgDate: admin.firestore.Timestamp.now(),
+      lastMsgDate: FirestoreTimestamp.now(),
       lastMessagePreview: "",
       lastMessageType: "text",
       peerPlatform: "crystal",
@@ -631,7 +649,7 @@ exports.enviarMensajeAdmin = functions.https.onCall(async (data, context) => {
     });
   }
 
-  const now = admin.firestore.Timestamp.now();
+  const now = FirestoreTimestamp.now();
   const msgRef = db.collection("chats").doc(chatId).collection("messages").doc();
   await msgRef.set({
     id: msgRef.id,
@@ -659,11 +677,11 @@ exports.enviarMensajeAdmin = functions.https.onCall(async (data, context) => {
     lastMessageType: "text",
   };
   if (destino !== callerUid) {
-    chatUpdate[`unreadBy.${destino}`] = admin.firestore.FieldValue.increment(1);
+    chatUpdate[`unreadBy.${destino}`] = FirestoreFieldValue.increment(1);
   }
   await db.collection("chats").doc(chatId).update(chatUpdate);
-  return { ok: true, chatId };
-});
+  return chatId;
+}
 
 // ===================================================================================
 //  AVISO DE RECLAMOS — la mitad que faltaba.
@@ -1389,3 +1407,210 @@ exports.contarDenunciaAnuncio = functions.firestore
     }
     return null;
   });
+
+// ───────────── Fase 2: destacar, vitrina de proveedores y moderación ─────────────
+
+const tiendaComun = require("./tienda/comun");
+
+/** Llamada con sesión de la app: corre [fn] con el uid y traduce los errores de la tienda. */
+function llamadaDeTienda(nombre, fn) {
+  return functions.https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Inicia sesión.");
+    try {
+      const r = await fn(data || {}, context, admin.firestore());
+      functions.logger.info({ message: nombre, uid: context.auth.uid });
+      return r;
+    } catch (e) {
+      throw errorDeTienda(e);
+    }
+  });
+}
+
+/** Igual, pero solo para el panel (admin u operador). */
+function llamadaDelPanel(nombre, fn) {
+  return llamadaDeTienda(nombre, async (data, context, db) => {
+    if (!(await rolDelPanel(db, context.auth.uid))) {
+      throw new tienda.ErrorTienda("permission-denied", "No autorizado.");
+    }
+    return fn(data, context, db);
+  });
+}
+
+/** Cobra unos días de "Destacado" para un anuncio propio. */
+exports.destacarAnuncio = llamadaDeTienda("destacarAnuncio", (data, context, db) =>
+  tienda.destacar(db, { uid: context.auth.uid, anuncioId: String(data.anuncioId || ""), ahoraMs: Date.now() }));
+
+/** Cobra un período de la vitrina de proveedores y guarda la ficha. */
+exports.suscribirProveedor = llamadaDeTienda("suscribirProveedor", (data, context, db) =>
+  tienda.suscribirProveedor(db, {
+    uid: context.auth.uid,
+    patronUid: context.auth.token && context.auth.token.patronUid,
+    data,
+    ahoraMs: Date.now(),
+  }));
+
+/** Cambia la ficha de la vitrina sin cobrar. */
+exports.guardarProveedor = llamadaDeTienda("guardarProveedor", (data, context, db) =>
+  tienda.guardarProveedor(db, { uid: context.auth.uid, data, ahoraMs: Date.now() }));
+
+const TEXTO_MODERACION = {
+  reactivar: (t) => `Revisamos su anuncio «${t}» de la Tienda y está bien: ya se ve de nuevo. Gracias por su paciencia.`,
+  bloquear: (t) => `Su anuncio «${t}» de la Tienda fue retirado porque no cumple las reglas de la tienda.`,
+};
+
+/** El panel reactiva o bloquea un anuncio denunciado, y se lo cuenta al vendedor por Soporte. */
+exports.moderarAnuncio = llamadaDelPanel("moderarAnuncio", async (data, context, db) => {
+  const accion = String(data.accion || "");
+  const nota = String(data.nota || "").trim();
+  const r = await tienda.moderarAnuncio(db, {
+    anuncioId: String(data.anuncioId || ""), accion, nota, porUid: context.auth.uid, ahoraMs: Date.now(),
+  });
+  if (r.uid && data.avisar !== false) {
+    const texto = TEXTO_MODERACION[accion](r.titulo) + (nota ? `\n\nMotivo: ${nota}` : "");
+    await mensajeDeSoporte(db, context.auth.uid, r.uid, texto)
+      .catch((e) => functions.logger.error("moderarAnuncio: no se pudo avisar", { error: String(e) }));
+  }
+  return { ok: true, estado: r.estado };
+});
+
+/** El panel bloquea o reactiva una ficha de la vitrina. */
+exports.moderarProveedor = llamadaDelPanel("moderarProveedor", async (data, context, db) => {
+  const accion = String(data.accion || "");
+  const nota = String(data.nota || "").trim();
+  const r = await tienda.moderarProveedor(db, {
+    uid: String(data.uid || ""), accion, nota, porUid: context.auth.uid, ahoraMs: Date.now(),
+  });
+  if (data.avisar !== false) {
+    const texto = accion === "bloquear"
+      ? `Su vitrina de proveedor «${r.nombre}» fue bloqueada porque no cumple las reglas de la tienda.`
+      : `Su vitrina de proveedor «${r.nombre}» ya se ve de nuevo.`;
+    await mensajeDeSoporte(db, context.auth.uid, r.uid, texto + (nota ? `\n\nMotivo: ${nota}` : ""))
+      .catch((e) => functions.logger.error("moderarProveedor: no se pudo avisar", { error: String(e) }));
+  }
+  return { ok: true, estado: r.estado };
+});
+
+// ───────────── Fase 3: pedidos de clientes, precios de referencia y web pública ─────────────
+
+/** Un taller toma un pedido de un cliente de la web: paga y recibe el contacto. */
+exports.tomarPedidoCliente = llamadaDeTienda("tomarPedidoCliente", (data, context, db) =>
+  tienda.tomarPedidoCliente(db, {
+    uid: context.auth.uid,
+    patronUid: context.auth.token && context.auth.token.patronUid,
+    pedidoId: String(data.pedidoId || ""),
+    ahoraMs: Date.now(),
+  }));
+
+/** Quien tomó un pedido lo reporta como falso; se avisa al panel. */
+exports.reportarPedidoCliente = llamadaDeTienda("reportarPedidoCliente", async (data, context, db) => {
+  const pedidoId = String(data.pedidoId || "");
+  const r = await tienda.reportarPedidoCliente(db, {
+    uid: context.auth.uid, pedidoId, motivo: String(data.motivo || ""), ahoraMs: Date.now(),
+  });
+  if (r.ok && !r.yaReportado) {
+    await avisarAdmins("🚩 Pedido de cliente reportado", `${r.que || "Pedido"} · ${r.ciudad} — ${r.reportes} reporte(s)`, {
+      tipo: "pedido_reportado",
+      pedidoId,
+    });
+  }
+  return { ok: true };
+});
+
+/** El panel devuelve lo cobrado por un pedido falso (y lo bloquea) o desestima los reportes. */
+exports.resolverPedidoCliente = llamadaDelPanel("resolverPedidoCliente", (data, context, db) =>
+  tienda.resolverPedidoCliente(db, {
+    pedidoId: String(data.pedidoId || ""), accion: String(data.accion || ""), porUid: context.auth.uid, ahoraMs: Date.now(),
+  }));
+
+/** Precios de referencia por ciudad, para el plan FULL. */
+exports.preciosReferencia = llamadaDeTienda("preciosReferencia", (data, context, db) =>
+  tienda.preciosReferencia(db, {
+    uid: context.auth.uid, texto: String(data.texto || ""), ciudad: String(data.ciudad || ""), ahoraMs: Date.now(),
+  }));
+
+/**
+ * Avisa de un pedido nuevo: al vendedor, si va dirigido a su anuncio; si no, a los talleres de la
+ * ciudad por su tema. Solo datos, como los demás avisos de Crystal, para que lo pinte la app.
+ */
+async function avisarPedidoCliente(db, r) {
+  const data = {
+    tipo: "pedido_cliente",
+    pedidoId: r.pedidoId,
+    title: r.paraUid ? "🛎️ Un cliente quiere su producto" : `🛎️ Pedido de cliente en ${r.ciudad}`,
+    body: r.paraUid ? `«${r.anuncioTitulo}» — desde la web de la Tienda` : `${r.que || "Pedido"}: un cliente busca taller`,
+  };
+  try {
+    if (r.paraUid) {
+      const { tokens } = await collectRecipientTokens(db, r.paraUid);
+      if (tokens.length) await admin.messaging().sendEachForMulticast({ tokens, data, android: { priority: "high" } });
+    } else {
+      const tema = tiendaComun.temaPedidos(r.ciudad);
+      if (tema) await admin.messaging().send({ topic: tema, data, android: { priority: "high" } });
+    }
+  } catch (e) {
+    // El pedido ya está guardado y se ve en la Tienda: un aviso perdido no lo pierde.
+    functions.logger.error("avisarPedidoCliente", { error: String(e) });
+  }
+}
+
+/**
+ * La web pública de la tienda (`/api/tienda/**`, por la reescritura de Hosting). Las lecturas se
+ * guardan en la CDN de Hosting unos minutos: así mil visitas cuestan como unas pocas.
+ *   GET  /api/tienda/anuncios?q=&categoria=&tipo=&despues=
+ *   GET  /api/tienda/anuncio/{id}
+ *   POST /api/tienda/pedido   (pedido de un cliente final)
+ */
+exports.tiendaWeb = functions.https.onRequest(async (req, res) => {
+  const ruta = String(req.path || "").replace(/^\/api\/tienda/, "").replace(/\/+$/, "") || "/";
+  const db = admin.firestore();
+  const ahoraMs = Date.now();
+  res.set("X-Content-Type-Options", "nosniff");
+  try {
+    if (req.method === "GET" && ruta === "/anuncios") {
+      const r = await tienda.listarWeb(db, {
+        q: String(req.query.q || ""),
+        categoria: String(req.query.categoria || ""),
+        tipo: String(req.query.tipo || ""),
+        despuesMs: Number(req.query.despues || 0),
+        ahoraMs,
+      });
+      res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+      res.json(r);
+      return;
+    }
+    const m = ruta.match(/^\/anuncio\/([A-Za-z0-9]{20})$/);
+    if (req.method === "GET" && m) {
+      const a = await tienda.detalleWeb(db, { id: m[1], ahoraMs });
+      if (!a) {
+        res.set("Cache-Control", "public, max-age=60, s-maxage=120");
+        res.status(404).json({ error: "Este anuncio ya no está disponible." });
+        return;
+      }
+      res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+      res.json(a);
+      return;
+    }
+    if (req.method === "POST" && ruta === "/pedido") {
+      res.set("Cache-Control", "no-store");
+      // Detrás de Hosting la IP real del visitante llega en fastly-client-ip / x-forwarded-for.
+      const ip = req.get("fastly-client-ip") || String(req.get("x-forwarded-for") || "").split(",")[0].trim() || req.ip;
+      const body = typeof req.body === "object" && req.body ? req.body : {};
+      const r = await tienda.crearPedidoCliente(db, { data: body, ip, ahoraMs });
+      functions.logger.info({ message: "pedidoCliente", pedidoId: r.pedidoId, ciudad: r.ciudad, dirigido: !!r.paraUid });
+      await avisarPedidoCliente(db, r);
+      res.json({ ok: true, ciudad: r.ciudad, dirigido: !!r.paraUid });
+      return;
+    }
+    res.set("Cache-Control", "no-store");
+    res.status(404).json({ error: "No encontrado." });
+  } catch (e) {
+    res.set("Cache-Control", "no-store");
+    if (e instanceof tienda.ErrorTienda) {
+      const estado = { "invalid-argument": 400, "not-found": 404, "resource-exhausted": 429, unavailable: 503 }[e.codigo] || 400;
+      res.status(estado).json({ error: e.message });
+      return;
+    }
+    functions.logger.error("tiendaWeb", { error: String(e && e.stack || e) });
+    res.status(500).json({ error: "No se pudo completar. Intente de nuevo." });
+  }
+});

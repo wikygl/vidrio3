@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Un pedido de un cliente de la web: qué necesita, medidas y detalle. Antes de tomarlo, el precio;
+  después, el nombre y el teléfono con Llamar, WhatsApp y Reportar.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/sombra"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/color"
+        android:elevation="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingEnd="12dp">
+
+        <ImageButton
+            android:id="@+id/btnAtras"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:background="@null"
+            android:contentDescription="Atrás"
+            android:padding="10dp"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="@color/blanco" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingStart="8dp"
+            android:text="Pedido de cliente"
+            android:textColor="@color/blanco"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/tvQue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/negro"
+                android:textSize="21sp"
+                android:textStyle="bold"
+                tools:text="Mampara de baño" />
+
+            <TextView
+                android:id="@+id/tvLugar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#7A7A7A"
+                android:textSize="14sp"
+                tools:text="Huancayo · Hoy · 1 de 3 talleres" />
+
+            <TextView
+                style="@style/SeccionItem"
+                android:text="MEDIDAS" />
+
+            <TextView
+                android:id="@+id/tvMedidas"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/negro"
+                android:textSize="16sp"
+                tools:text="120 x 190 cm" />
+
+            <TextView
+                style="@style/SeccionItem"
+                android:text="LO QUE NECESITA" />
+
+            <TextView
+                android:id="@+id/tvDetalle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/negro"
+                android:textIsSelectable="true"
+                android:textSize="16sp"
+                tools:text="Para ducha, vidrio templado incoloro." />
+
+            <!-- Después de tomarlo: con quién hablar. -->
+            <LinearLayout
+                android:id="@+id/lyContacto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/bg_resumen_item"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <TextView
+                    android:id="@+id/tvContacto"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/negro"
+                    android:textIsSelectable="true"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    tools:text="Rosa María Quispe\n+51 987 654 321" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnLlamar"
+                        style="@style/AccionItem.Principal"
+                        android:text="Llamar" />
+
+                    <Button
+                        android:id="@+id/btnWhatsapp"
+                        style="@style/AccionItem"
+                        android:text="WhatsApp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvReportar"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:padding="6dp"
+                    android:text="¿Número equivocado o pedido falso? Reportar"
+                    android:textColor="@color/fucsia"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvCosto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/bg_resumen_item"
+                android:padding="12dp"
+                android:textColor="@color/negro"
+                android:textSize="14sp"
+                tools:text="Tomar el pedido cuesta S/ 1.00: recibe el nombre y el teléfono del cliente. Lo pueden tomar hasta 3 talleres." />
+        </LinearLayout>
+    </ScrollView>
+
+    <Button
+        android:id="@+id/btnTomar"
+        style="@style/AccionItem.Principal"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_weight="0"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="12dp"
+        android:text="Tomar pedido"
+        android:textSize="16sp" />
+</LinearLayout>

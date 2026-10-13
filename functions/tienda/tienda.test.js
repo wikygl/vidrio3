@@ -101,3 +101,159 @@ test("el id del anuncio es el de Firestore: 20 letras y números", () => {
   assert.ok(!idValido("corto"));
   assert.ok(!idValido("../../usuarios/xxxxxxxx"));
 });
+
+// ─────────────────────────────── Fases 2 y 3 ───────────────────────────────
+
+const {
+  tarifas,
+  tarifaDe,
+  nuevoDestacado,
+  claveCiudad,
+  temaPedidos,
+  validarProveedor,
+  telefonoLimpio,
+  validarPedidoCliente,
+  estadisticaPrecios,
+  planAvanzado,
+  anuncioPublico,
+  casaTexto,
+  palabraDeConsulta,
+} = require("./comun");
+
+const DIA = 24 * 60 * 60 * 1000;
+const HOY = 1_700_000_000_000;
+
+test("las tarifas nuevas tienen su valor por defecto y su tope", () => {
+  const t = tarifas(null);
+  assert.deepStrictEqual(t.destacar, { precioCent: 200, dias: 7 });
+  assert.deepStrictEqual(t.proveedor, { precioCent: 1000, dias: 30 });
+  assert.deepStrictEqual(t.pedido, { precioCent: 100, maxTalleres: 3 });
+  assert.deepStrictEqual(t.servicio, t.anuncio, "sin tarifa propia, el servicio paga como un producto");
+  assert.strictEqual(t.webPublica, true);
+  const p = tarifas({ precio_cent: 400, servicio_precio_cent: 600, destacar_precio_cent: 999999, web_publica: false });
+  assert.strictEqual(tarifaDe(p, "servicio").precioCent, 600);
+  assert.strictEqual(tarifaDe(p, "producto").precioCent, 400);
+  assert.strictEqual(p.destacar.precioCent, 200, "un tipeo no cobra de más");
+  assert.strictEqual(p.webPublica, false);
+});
+
+test("destacar suma desde el destacado vigente y no pasa del vencimiento", () => {
+  const base = { estado: "activo", venceMs: HOY + 20 * DIA, destacadoMs: 0, ahoraMs: HOY, dias: 7 };
+  assert.deepStrictEqual(nuevoDestacado(base), { ok: true, hastaMs: HOY + 7 * DIA });
+  assert.strictEqual(nuevoDestacado(Object.assign({}, base, { destacadoMs: HOY + 3 * DIA })).hastaMs, HOY + 10 * DIA);
+  const corto = nuevoDestacado(Object.assign({}, base, { venceMs: HOY + 2 * DIA }));
+  assert.ok(!corto.ok);
+  assert.match(corto.error, /vence en 2 días: renuévelo/);
+  assert.ok(!nuevoDestacado(Object.assign({}, base, { estado: "pausado" })).ok);
+  assert.ok(!nuevoDestacado(Object.assign({}, base, { venceMs: HOY - 1 })).ok);
+});
+
+test("un servicio lleva zonas que también se buscan, y sus propias unidades", () => {
+  const r = validarAnuncio(valido({
+    tipo: "servicio", unidad: "hora", zonas: ["El Tambo", "Chilca", "huancayo", " chilca "],
+  }), UID, ID);
+  assert.ok(r.ok, r.error);
+  assert.deepStrictEqual(r.anuncio.zonas, ["El Tambo", "Chilca"], "sin repetir ni repetir la ciudad");
+  assert.ok(r.anuncio.palabras.includes("chilca") && r.anuncio.palabras.includes("tambo"));
+  assert.match(validarAnuncio(valido({ tipo: "servicio", unidad: "plancha" }), UID, ID).error, /servicio se cobra/);
+  assert.match(validarAnuncio(valido({ tipo: "servicio", unidad: "hora", zonas: ["a", "b", "c", "d", "e", "f"] }), UID, ID).error, /5 zonas/);
+  assert.deepStrictEqual(validarAnuncio(valido({ zonas: ["Chilca"] }), UID, ID).anuncio.zonas, [], "un producto no tiene zonas");
+});
+
+test("las apps que aceptaron las reglas 1 todavía publican", () => {
+  assert.ok(validarAnuncio(valido({ reglasVersion: 1 }), UID, ID).ok);
+  assert.ok(validarAnuncio(valido({ reglasVersion: 2 }), UID, ID).ok);
+  assert.ok(!validarAnuncio(valido({ reglasVersion: 3 }), UID, ID).ok);
+});
+
+test("la clave de ciudad sirve para comparar y como tema FCM", () => {
+  assert.strictEqual(claveCiudad("  Huancayo "), "huancayo");
+  assert.strictEqual(claveCiudad("Cerro de Pasco"), "cerro_de_pasco");
+  assert.strictEqual(claveCiudad("Ñaña"), "nana");
+  assert.strictEqual(temaPedidos("San Juan de Lurigancho"), "pedidos_san_juan_de_lurigancho");
+  assert.match(temaPedidos("Áncash, Perú!"), /^pedidos_[a-zA-Z0-9_]+$/);
+  assert.strictEqual(temaPedidos("  "), "");
+});
+
+test("la ficha del proveedor sale limpia, con su ciudad y zonas como claves", () => {
+  const logo = `https://firebasestorage.googleapis.com/v0/b/x/o/proveedores%2F${UID}%2Flogo.jpg?alt=media`;
+  const r = validarProveedor({
+    nombre: "Vidriería Los Andes", ciudad: "Huancayo", zonas: ["El Tambo"],
+    rubros: ["Vidrio y espejos", "Autos", "Vidrio y espejos"], descripcion: "Corte al toque", logo,
+  }, UID);
+  assert.ok(r.ok, r.error);
+  assert.deepStrictEqual(r.ficha.rubros, ["Vidrio y espejos"]);
+  assert.deepStrictEqual(r.ficha.zonasClave, ["huancayo", "el_tambo"]);
+  assert.strictEqual(validarProveedor({ nombre: "AB", ciudad: "Lima", rubros: ["Otros"] }, UID).error, "Escriba el nombre del negocio.");
+  assert.strictEqual(validarProveedor({ nombre: "ABC", ciudad: "Lima", rubros: [] }, UID).error, "Elija al menos un rubro.");
+  assert.match(validarProveedor({ nombre: "ABC", ciudad: "Lima", rubros: ["Otros"], logo: logo.replace(UID, "otro") }, UID).error, /logo/);
+});
+
+test("el teléfono queda en dígitos y un celular peruano gana el 51", () => {
+  assert.strictEqual(telefonoLimpio("987 654 321"), "51987654321");
+  assert.strictEqual(telefonoLimpio("+51 987-654-321"), "51987654321");
+  assert.strictEqual(telefonoLimpio("064 123456"), "064123456");
+  assert.strictEqual(telefonoLimpio("123"), "");
+});
+
+test("el pedido de la web separa lo público del contacto y para a los robots", () => {
+  const p = { que: "Mampara de baño", ciudad: "Huancayo", detalle: "Para ducha de 1.20", medidas: "120 x 190",
+    nombre: "Rosa María Quispe", telefono: "987654321" };
+  const r = validarPedidoCliente(p);
+  assert.ok(r.ok, r.error);
+  assert.strictEqual(r.publico.nombreCorto, "Rosa");
+  assert.strictEqual(r.publico.ciudadClave, "huancayo");
+  assert.ok(!("telefono" in r.publico));
+  assert.deepStrictEqual(r.contacto, { nombre: "Rosa María Quispe", telefono: "51987654321" });
+  assert.ok(!validarPedidoCliente(Object.assign({}, p, { web: "http://spam" })).ok, "la trampa");
+  assert.strictEqual(validarPedidoCliente(Object.assign({}, p, { que: "Auto" })).error, "Elija qué necesita.");
+  assert.strictEqual(validarPedidoCliente(Object.assign({}, p, { telefono: "12" })).error, "Revise su número de teléfono.");
+  const dirigido = validarPedidoCliente({ anuncioId: ID, nombre: "Luis", telefono: "987654321" });
+  assert.ok(dirigido.ok, "un pedido a un anuncio no necesita decir qué es ni la ciudad");
+});
+
+test("los precios de referencia solo salen con 3 vendedores distintos", () => {
+  const a = (uid, precioCent, extra) => Object.assign({
+    uid, precioCent, unidad: "m²", ciudad: "Huancayo", titulo: "Vidrio templado 8mm", categoria: "Vidrio y espejos",
+    tipo: "producto", estado: "activo", publicadoMs: HOY,
+  }, extra || {});
+  const lista = [a("u1", 9000), a("u2", 10000), a("u2", 99999, { publicadoMs: HOY - DIA }), a("u3", 12000),
+    a("u4", 8000, { ciudad: "Lima" }), a("u5", 1, { estado: "bloqueado" }), a("u6", 0)];
+  const hyo = estadisticaPrecios(lista, { texto: "templado 8", ciudad: "huancayo" });
+  assert.deepStrictEqual(hyo, [{ unidad: "m²", vendedores: 3, minCent: 9000, medianaCent: 10000, maxCent: 12000 }],
+    "u2 cuenta una vez con su precio más reciente; los bloqueados y sin precio no cuentan");
+  assert.strictEqual(estadisticaPrecios(lista, { texto: "templado", ciudad: "Lima" }).length, 0, "un vendedor solo no se muestra");
+  assert.strictEqual(estadisticaPrecios(lista, { texto: "templado", ciudad: "" })[0].vendedores, 4);
+  assert.strictEqual(estadisticaPrecios(lista, { texto: "laminado", ciudad: "" }).length, 0);
+});
+
+test("buscar casa todas las palabras, en singular, y un número suelto por su comienzo", () => {
+  const a = { titulo: "Vidrios templados 8mm", categoria: "Vidrio y espejos", ciudad: "Huancayo", tipo: "producto", descripcion: "incoloro" };
+  assert.ok(casaTexto(a, "templado 8"));
+  assert.ok(casaTexto(a, "vidrio incoloro"));
+  assert.ok(!casaTexto(a, "templado bronce"));
+  assert.strictEqual(palabraDeConsulta("Vidrios de 8"), "vidrio");
+});
+
+test("el plan de pago se lee como en la app", () => {
+  const ts = (m) => ({ toMillis: () => m });
+  assert.ok(planAvanzado({ mode: "FULL", full_until: ts(HOY + DIA) }, HOY));
+  assert.ok(!planAvanzado({ mode: "FULL", full_until: ts(HOY - DIA) }, HOY));
+  assert.ok(!planAvanzado({ mode: "FULL" }, HOY));
+  assert.ok(!planAvanzado({ mode: "BASIC", full_until: ts(HOY + DIA) }, HOY));
+  assert.ok(planAvanzado({ mode: "VENTAS" }, HOY));
+  assert.ok(!planAvanzado(null, HOY));
+});
+
+test("la web no ve uid, lo pagado ni las denuncias", () => {
+  const ts = (m) => ({ toMillis: () => m });
+  const a = { uid: "secreto", pagadoCent: 300, denuncias: 2, titulo: "Perfil", precioCent: 100, miniaturas: ["m"], fotos: ["g"],
+    publicadoEn: ts(HOY), destacadoHasta: ts(HOY + DIA), vendedorNombre: "Juan", descripcion: "d" };
+  const corto = anuncioPublico("X", a, false, HOY);
+  assert.strictEqual(corto.miniatura, "m");
+  assert.strictEqual(corto.destacado, true);
+  assert.ok(!("vendedorNombre" in corto));
+  const largo = anuncioPublico("X", a, true, HOY);
+  for (const k of ["uid", "pagadoCent", "denuncias"]) assert.ok(!(k in largo), k);
+  assert.strictEqual(largo.vendedorNombre, "Juan");
+});

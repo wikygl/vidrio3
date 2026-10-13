@@ -52,6 +52,20 @@
             android:textColor="@color/azul"
             android:textSize="14sp"
             android:textStyle="bold" />
+
+        <!-- Pedidos de clientes, proveedores, mi vitrina, precios de referencia y mi ciudad. -->
+        <TextView
+            android:id="@+id/tvMas"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Más opciones de la Tienda"
+            android:gravity="center"
+            android:text="⋮"
+            android:textColor="@color/blanco"
+            android:textSize="24sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <EditText

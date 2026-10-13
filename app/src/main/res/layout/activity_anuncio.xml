@@ -236,6 +236,11 @@
                 android:id="@+id/btnPausar"
                 style="@style/AccionItem"
                 android:text="Pausar" />
+
+            <Button
+                android:id="@+id/btnDestacar"
+                style="@style/AccionItem"
+                android:text="★ Destacar" />
         </LinearLayout>
 
         <LinearLayout

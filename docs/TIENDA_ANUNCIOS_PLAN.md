@@ -61,7 +61,7 @@ reactivar lo `vencido`, `en_revision` o `bloqueado`: eso es del servidor y del p
 
 ---
 
-## Fase 1 — lo que se implementa ahora
+## Fase 1 — hecha el 2026-10-12 (commit bc3f71a)
 
 1. **Servidor** (`functions/index.js`)
    - `publicarAnuncio`: valida, cobra, crea el anuncio con su vencimiento y su movimiento de wallet.
@@ -82,21 +82,122 @@ reactivar lo `vencido`, `en_revision` o `bloqueado`: eso es del servidor y del p
 4. **Pruebas**: unitarias de la parte pura (palabras de búsqueda, formato, validación) y prueba en
    frío del cobro en el emulador de Firestore antes de desplegar.
 
-## Fase 2 — después
+## Fases 2 y 3 — plan de implementación (2026-10-12)
 
-- **Destacar** un anuncio (sale primero unos días) por un pago chico: `destacadoHasta`.
-- **Servicios con trato propio**: zonas de atención y precio por hora/m²; quizá otra tarifa.
-- **Vitrina de proveedores** (suscripción mensual): aparecen cuando un taller pide materiales
-  (`materials_request` del chat) en su ciudad.
-- **Pantalla de moderación en crystalAdmin**: denuncias, bloquear, desbloquear.
-- **Endurecer Storage**: hoy cualquier sesión puede escribir en cualquier ruta salvo `vouchers/`;
-  limitar `anuncios/{uid}/**` a su dueño (son reglas que están fuera del repositorio).
+Todo sigue el mismo patrón de la fase 1: **el servidor cobra** del wallet en una transacción, deja el
+movimiento en `wallet_movs` y no emite boleta (ya salió al recargar). Los precios viven en
+`config/anuncios` con un valor por defecto y un tope, como `precio_cent`. La build de Play ve todo,
+pero no paga nada dentro de la app (`CanalPagos.DISPONIBLE_EN_LA_APP`). Las terminales no pagan: lo
+hace la cuenta del patrón.
 
-## Fase 3 — si crece
+### Tarifas nuevas (`config/anuncios`)
 
-- Fotos a **Cloudflare R2** (sin costo de salida) cuando la salida pase de ~100 GB/mes.
-- **Web pública** de la tienda y pedidos de clientes finales a talleres cercanos.
-- Precios de referencia por ciudad (anónimos) como servicio premium.
+| Campo | Por defecto | Tope | Qué es |
+|---|---|---|---|
+| `destacar_precio_cent`, `destacar_dias` | S/ 2.00, 7 días | S/ 50, 60 días | Destacar un anuncio |
+| `servicio_precio_cent`, `servicio_dias` | las del producto | S/ 50, 365 días | Publicar/renovar un servicio, si se quiere otra tarifa |
+| `proveedor_precio_cent`, `proveedor_dias` | S/ 10.00, 30 días | S/ 200, 365 días | Vitrina de proveedores |
+| `pedido_precio_cent` | S/ 1.00 | S/ 20 | Tomar un pedido de un cliente de la web |
+| `pedido_max_talleres` | 3 | 10 | Cuántos talleres pueden tomar el mismo pedido |
+| `web_publica` | true | — | `false` apaga la web pública sin desplegar |
+
+### Fase 2
+
+**1. Destacar** (`destacarAnuncio`). Un anuncio activo y vigente sale primero, con la marca
+"Destacado", durante `destacar_dias`. Suma desde el destacado vigente, si lo hay. **No se puede
+destacar más allá del vencimiento del anuncio**: si vence antes, se pide renovar primero (cobrar 7
+días y dar 2 sería un robo). Movimiento `DESTACA_ANUNCIO`. En la lista: la primera página pide aparte
+hasta 10 destacados vigentes (`estado`, `destacadoHasta`), los filtra con lo elegido y los pone
+arriba sin repetirlos abajo.
+
+**2. Servicios con trato propio.** Un servicio lleva **zonas de atención** (`zonas`, hasta 5,
+además de la ciudad): entran en las palabras de búsqueda, así que buscar "Chilca" encuentra a quien
+atiende Chilca. Sus unidades son las de un servicio (servicio, hora, día, m², ml, pie²). El botón
+del comprador dice **Pedir cotización** y el mensaje ya escrito pide cotizar en la ciudad del
+comprador. Tarifa propia opcional (`servicio_precio_cent`).
+
+**3. Vitrina de proveedores** (`suscribirProveedor`, `guardarProveedor`). Suscripción por 30 días,
+cobrada del saldo; renovar suma desde el vencimiento. Ficha en `proveedores/{uid}`: nombre
+comercial, ciudad, zonas, rubros (las categorías de la tienda), descripción y logo. **Solo el
+servidor escribe** la ficha (valida y arma `zonasClave`), para que nadie se ponga en todas las
+ciudades. Dónde aparecen:
+- **Al pedir materiales**: cuando se abre el chat para enviar medidas, una lista de cortes, un
+  plano de planchas o un proyecto (`ListChatActivity` con algo que enviar), arriba sale
+  "Proveedores en {ciudad}"; tocar uno abre (o crea) el chat con él y le pasa lo que se iba a enviar.
+  Primero los que venden el rubro de lo enviado (cortes → aluminio; planchas → vidrio y melamina).
+- **En la Tienda**, la sección Proveedores: los de la ciudad del taller (o todos si no hay), con su
+  ficha, sus anuncios activos y "Escribir".
+- La ciudad del taller se pregunta una vez ("Mi ciudad") y se guarda en el teléfono.
+
+**4. Moderación en crystalAdmin** (`moderarAnuncio`, `moderarProveedor`, `resolverPedidoCliente`).
+Una pantalla Tienda en el panel con tres listas: anuncios **en revisión**, anuncios **con
+denuncias** aún activos y **pedidos reportados**. Cada anuncio muestra fotos, texto, vendedor y las
+denuncias con su motivo. Acciones: **Reactivar** (desestima y pone las denuncias en 0; si ya venció,
+queda vencido), **Bloquear** y **Retirar sin devolución**. Cada decisión queda en
+`anuncios/{id}/moderacion` y al vendedor le llega el motivo por el chat de **Soporte Crystal** (el
+mismo canal de `enviarMensajeAdmin`). El aviso 🚩 del panel abre ese anuncio.
+
+**5. Endurecer Storage — PENDIENTE.** Las reglas de Storage no están en el repositorio y no se
+pudieron leer las publicadas desde esta sesión (permiso denegado). Sin conocerlas, publicar otras
+podría romper los vouchers, los archivos del chat o las fotos de perfil. Para hacerlo: bajar las
+reglas vigentes de la consola de Firebase (Storage → Reglas), guardarlas en `storage.rules`,
+añadir `"storage": {"rules": "storage.rules"}` a `firebase.json`, agregar
+`match /anuncios/{uid}/{todo=**}` y `match /proveedores/{uid}/{todo=**}` con escritura solo si
+`request.auth.uid == uid`, imagen y < 2 MB, probar en el emulador y desplegar
+`firebase deploy --only storage`.
+
+### Fase 3
+
+**1. Fotos a Cloudflare R2 — NO se hace todavía.** Es "cuando la salida pase de ~100 GB/mes" y
+necesita una cuenta de Cloudflare con su tarjeta. Queda preparado: todas las subidas pasan por
+`TiendaRepositorio.subirFoto` y las URLs se validan en un solo lugar (`fotoValida` en el servidor y
+`fotoPropia` en las reglas). Para cambiar: un bucket R2 con dominio propio, una función que firme
+subidas (URL prefirmada por anuncio), aceptar ese dominio en `fotoValida`/`fotoPropia` y cambiar
+`subirFoto`. Las fotos viejas pueden quedarse en Firebase.
+
+**2. Web pública** en `crystal-4f306.web.app/tienda` (misma hosting que la web de recarga).
+- La lee una función HTTP (`tiendaWeb`, por `/api/tienda/**`), **no** las reglas: así solo salen los
+  campos públicos (nada de `uid`, lo pagado ni las denuncias) y la respuesta se guarda en la CDN de
+  Hosting 5 minutos, que es lo que la hace barata.
+- Lista con buscador y categorías, detalle con fotos. Como el visitante no tiene Crystal, el
+  contacto es **"Quiero que me contacten"**: deja nombre y teléfono, y el vendedor recibe un pedido
+  dirigido, **gratis** (ya pagó su anuncio), con aviso en el teléfono.
+- Apagable con `config/anuncios.web_publica = false`. Las reglas de la tienda pasan a la versión 2
+  con el punto 7 ("los anuncios activos también se ven en la web"); el servidor acepta la 1 y la 2,
+  para no romper las apps ya instaladas.
+
+**3. Pedidos de clientes finales a talleres cercanos.**
+- En la web, **"Pida cotización a talleres de su ciudad"**: qué necesita (ventana, puerta, mampara,
+  vidrio o espejo, ropero, reja, otro), ciudad, medidas aproximadas, detalle, nombre y teléfono.
+  Lo recibe `tiendaWeb` con trampa para robots, tope por IP (3 por hora, 10 por día) y por teléfono
+  (3 abiertos).
+- `pedidos_clientes/{id}` guarda lo público; el nombre completo y el teléfono van aparte
+  (`privado/contacto`), que ninguna app lee.
+- Los talleres de esa ciudad reciben un aviso (tema FCM `pedidos_{ciudad}`, al que la app se
+  suscribe cuando se fija "Mi ciudad") y lo ven en la Tienda → **Pedidos de clientes**.
+- **Tomar el pedido** (`tomarPedidoCliente`) cobra `pedido_precio_cent` y devuelve el contacto, que
+  queda en `pedidos_clientes/{id}/tomas/{uid}` (solo lo lee quien lo tomó). Hasta
+  `pedido_max_talleres`; el último que entra lo cierra. Movimiento `TOMA_PEDIDO`. Llamar o WhatsApp
+  desde la misma pantalla.
+- **Reportar pedido falso**: avisa al panel; el panel puede **devolver lo cobrado a todos los que lo
+  tomaron y bloquearlo** (`DEVUELVE_PEDIDO`).
+- Los pedidos vencen a los 15 días (`expirarAnuncios` también los cierra).
+
+**4. Precios de referencia por ciudad** (`preciosReferencia`). Para quien tiene **plan FULL**
+vigente: se escribe qué se busca ("templado 8") y la ciudad; el servidor junta los anuncios de los
+últimos 180 días que casan (no los bloqueados ni en revisión, solo con precio), por unidad, y
+devuelve mínimo, mediana y máximo. **Solo con 3 vendedores distintos o más** por grupo, para que
+nadie pueda deducir el precio de un competidor. Si en la ciudad no alcanza, muestra el del país.
+Sin plan FULL, la invitación de siempre (`Suscripcion.invitarFull`).
+
+### Pruebas y despliegue
+
+- Servidor: pruebas `node --test` de lo puro (precios, validaciones de ficha y pedido, destacado,
+  estadística con el mínimo de vendedores) y prueba en frío en el emulador de cada cobro antes de
+  desplegar (saldo justo, doble toque, tope de talleres a la vez).
+- App: pruebas unitarias de lo puro (palabras con zonas idénticas al servidor, clave de ciudad, tema
+  FCM) y las 646 de siempre en verde.
+- Desplegar **por nombre** cada función nueva, más reglas, índices y hosting.
 
 ---
 
@@ -110,9 +211,10 @@ reactivar lo `vencido`, `en_revision` o `bloqueado`: eso es del servidor y del p
 Por anuncio: S/ 0.02 – 0.05. Lo caro es la **salida** de las fotos (~US$ 0.12/GB pasados los
 ~100 GB gratis); por eso las miniaturas.
 
-## Reglas de la tienda (versión 1)
+## Reglas de la tienda (versión 2)
 
-Se muestran antes del primer anuncio y se aceptan una vez:
+Se muestran antes del primer anuncio y se aceptan una vez (la versión 2 suma el punto 7; quien
+aceptó la 1 la vuelve a ver al publicar otra vez):
 
 1. Solo productos y servicios del rubro: vidrio, aluminio, melamina, carpintería metálica,
    accesorios, herramientas, maquinaria, retazos e instalación.
@@ -121,3 +223,4 @@ Se muestran antes del primer anuncio y se aceptan una vez:
 4. Un anuncio por producto; no repetir el mismo anuncio.
 5. El trato, el pago y la entrega son entre comprador y vendedor; Crystal no interviene en la venta.
 6. Un anuncio que incumpla puede retirarse **sin devolución**.
+7. Los anuncios activos también se ven en la web pública de Crystal, sin datos de contacto.

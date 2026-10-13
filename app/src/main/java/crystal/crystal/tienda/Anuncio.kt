@@ -28,9 +28,15 @@ data class Anuncio(
     val estado: String,
     val publicadoEnMs: Long,
     val venceEnMs: Long,
-    val vistas: Long
+    val vistas: Long,
+    /** Solo los servicios: otras zonas donde atiende, además de [ciudad]. */
+    val zonas: List<String> = emptyList(),
+    /** Hasta cuándo sale primero en la Tienda (lo pone `destacarAnuncio`); 0 si nunca. */
+    val destacadoHastaMs: Long = 0L
 ) {
     val esServicio: Boolean get() = tipo == TiendaReglas.SERVICIO
+
+    fun destacado(ahoraMs: Long): Boolean = destacadoHastaMs > ahoraMs
 
     /** Vigente de verdad: activo y sin vencer. La lista esconde lo demás aunque el estado no se haya puesto al día. */
     fun visibleEnLaTienda(ahoraMs: Long): Boolean = estado == ESTADO_ACTIVO && venceEnMs > ahoraMs
@@ -64,7 +70,9 @@ data class Anuncio(
                 estado = doc.getString("estado").orEmpty(),
                 publicadoEnMs = ms("publicadoEn"),
                 venceEnMs = ms("venceEn"),
-                vistas = doc.getLong("vistas") ?: 0L
+                vistas = doc.getLong("vistas") ?: 0L,
+                zonas = lista("zonas"),
+                destacadoHastaMs = ms("destacadoHasta")
             )
         }
     }
@@ -95,12 +103,18 @@ object TiendaReglas {
 
     val UNIDADES = listOf("c/u", "m²", "ml", "pie²", "plancha", "kg", "juego", "servicio", "hora", "día")
 
+    /** Un servicio se cobra por trabajo, por tiempo o por medida; no por plancha ni por kilo. */
+    val UNIDADES_SERVICIO = listOf("servicio", "hora", "día", "m²", "ml", "pie²")
+
     const val MAX_TITULO = 80
     const val MAX_DESCRIPCION = 1500
     const val MAX_CIUDAD = 60
     const val MAX_FOTOS = 5
     const val MAX_PRECIO_CENT = 100_000_000L
-    const val REGLAS_VERSION = 1
+    const val MAX_ZONAS = 5
+    const val MAX_ZONA = 40
+    /** La 2 suma que los anuncios también se ven en la web pública (el servidor acepta la 1 y la 2). */
+    const val REGLAS_VERSION = 2
 
     /** Si `config/anuncios` no dice otra cosa: S/ 3.00 por 30 días. */
     const val PRECIO_POR_DEFECTO_CENT = 300L
@@ -111,6 +125,51 @@ object TiendaReglas {
         val p = precioCent?.takeIf { it in 0L..5000L } ?: PRECIO_POR_DEFECTO_CENT
         val d = dias?.takeIf { it in 1L..365L }?.toInt() ?: DIAS_POR_DEFECTO
         return p to d
+    }
+
+    /** Lo que cuesta cada cosa de la Tienda, en céntimos y días. */
+    data class Tarifas(
+        val anuncioCent: Long = PRECIO_POR_DEFECTO_CENT,
+        val anuncioDias: Int = DIAS_POR_DEFECTO,
+        val servicioCent: Long = PRECIO_POR_DEFECTO_CENT,
+        val servicioDias: Int = DIAS_POR_DEFECTO,
+        val destacarCent: Long = 200L,
+        val destacarDias: Int = 7,
+        val proveedorCent: Long = 1000L,
+        val proveedorDias: Int = 30,
+        val pedidoCent: Long = 100L,
+        val pedidoMaxTalleres: Int = 3
+    ) {
+        /** Publicar o renovar: un servicio puede tener su propia tarifa. */
+        fun publicar(tipo: String): Pair<Long, Int> =
+            if (tipo == SERVICIO) servicioCent to servicioDias else anuncioCent to anuncioDias
+    }
+
+    /**
+     * Las tarifas de `config/anuncios`, con el mismo valor por defecto y el mismo tope que
+     * `tarifas()` del servidor; si no casan, la app mostraría un precio y el servidor cobraría otro.
+     */
+    fun tarifas(cfg: Map<String, Any?>?): Tarifas {
+        fun entero(campo: String, min: Long, max: Long, porDefecto: Long): Long {
+            val n = cfg?.get(campo) as? Number ?: return porDefecto
+            if (n is Double || n is Float) if (n.toDouble() % 1.0 != 0.0) return porDefecto
+            return n.toLong().takeIf { it in min..max } ?: porDefecto
+        }
+        val (anuncio, dias) = precioVigente(
+            (cfg?.get("precio_cent") as? Number)?.toLong(), (cfg?.get("dias") as? Number)?.toLong()
+        )
+        return Tarifas(
+            anuncioCent = anuncio,
+            anuncioDias = dias,
+            servicioCent = entero("servicio_precio_cent", 0, 5000, anuncio),
+            servicioDias = entero("servicio_dias", 1, 365, dias.toLong()).toInt(),
+            destacarCent = entero("destacar_precio_cent", 0, 5000, 200),
+            destacarDias = entero("destacar_dias", 1, 60, 7).toInt(),
+            proveedorCent = entero("proveedor_precio_cent", 0, 20000, 1000),
+            proveedorDias = entero("proveedor_dias", 1, 365, 30).toInt(),
+            pedidoCent = entero("pedido_precio_cent", 0, 2000, 100),
+            pedidoMaxTalleres = entero("pedido_max_talleres", 1, 10, 3).toInt()
+        )
     }
 
     private val VACIAS = setOf(
@@ -126,9 +185,14 @@ object TiendaReglas {
             .replace(Regex("\\s+"), " ")
             .trim()
 
-    /** Las palabras con que se encuentra un anuncio; ver `palabrasDe` en el servidor. */
-    fun palabrasDe(titulo: String, categoria: String, ciudad: String, tipo: String): List<String> {
-        val fuente = listOf(titulo, categoria, ciudad, tipo).joinToString(" ") { normalizar(it) }
+    /**
+     * Las palabras con que se encuentra un anuncio; ver `palabrasDe` en el servidor. Las zonas de
+     * atención de un servicio también se buscan.
+     */
+    fun palabrasDe(
+        titulo: String, categoria: String, ciudad: String, tipo: String, zonas: List<String> = emptyList()
+    ): List<String> {
+        val fuente = (listOf(titulo, categoria, ciudad, tipo) + zonas).joinToString(" ") { normalizar(it) }
         val set = LinkedHashSet<String>()
         for (p in fuente.split(" ")) {
             if (p.length < 2 || p in VACIAS) continue
@@ -157,7 +221,7 @@ object TiendaReglas {
 
     /** ¿El anuncio tiene todas las palabras de lo buscado? (en singular, contra sus palabras). */
     fun casa(anuncio: Anuncio, texto: String): Boolean {
-        val propias = palabrasDe(anuncio.titulo, anuncio.categoria, anuncio.ciudad, anuncio.tipo).toSet() +
+        val propias = palabrasDe(anuncio.titulo, anuncio.categoria, anuncio.ciudad, anuncio.tipo, anuncio.zonas).toSet() +
             palabrasDe(anuncio.descripcion, "", "", "").toSet()
         return normalizar(texto).split(" ").filter { it.length >= 2 && it !in VACIAS }
             .all { singular(it) in propias || it in propias }
@@ -175,6 +239,7 @@ object TiendaReglas {
         descripcion.trim().length > MAX_DESCRIPCION -> "La descripción pasa de $MAX_DESCRIPCION letras."
         precioCent == null || precioCent < 0 || precioCent > MAX_PRECIO_CENT -> "El precio no es válido."
         unidad !in UNIDADES -> "Elija la unidad del precio."
+        tipo == SERVICIO && unidad !in UNIDADES_SERVICIO -> "Un servicio se cobra por servicio, por hora, por día o por medida."
         tipo == PRODUCTO && condicion != NUEVO && condicion != USADO -> "Indique si es nuevo o usado."
         ciudad.trim().length < 2 -> "Indique la ciudad."
         ciudad.trim().length > MAX_CIUDAD -> "La ciudad es muy larga."
@@ -228,5 +293,41 @@ object TiendaReglas {
         4. Un anuncio por producto; no repetir el mismo anuncio.
         5. El trato, el pago y la entrega son entre comprador y vendedor; Crystal no interviene en la venta.
         6. Un anuncio que incumpla puede retirarse sin devolución.
+        7. Los anuncios activos también se ven en la web pública de Crystal, sin datos de contacto.
     """.trimIndent()
+
+    /** Lo que un cliente final puede pedir desde la web (`QUE_PEDIDO` del servidor). */
+    val QUE_PEDIDO = listOf("Ventana", "Puerta", "Mampara de baño", "Vidrio o espejo", "Ropero o melamina", "Reja o estructura", "Otro")
+
+    /**
+     * Las zonas escritas separadas por comas, limpias y sin repetir (ni repetir la ciudad); ver
+     * `limpiarZonas` en el servidor. Null si son más de [MAX_ZONAS] o alguna pasa de [MAX_ZONA].
+     */
+    fun zonas(texto: String, ciudad: String): List<String>? {
+        val partes = texto.split(',', ';', '\n').map { it.replace(Regex("\\s+"), " ").trim() }.filter { it.isNotEmpty() }
+        if (partes.size > MAX_ZONAS || partes.any { it.length > MAX_ZONA }) return null
+        val vistas = mutableSetOf(normalizar(ciudad))
+        return partes.filter { z -> normalizar(z).let { it.length >= 2 && vistas.add(it) } }
+    }
+
+    /**
+     * La ciudad como clave: sin tildes, sin eñe y con guiones bajos ("Cerro de Pasco" → "cerro_de_pasco").
+     * Igual que `claveCiudad` del servidor: compara ciudades escritas distinto y nombra el tema FCM.
+     */
+    fun claveCiudad(texto: String): String =
+        normalizar(texto).replace('ñ', 'n').replace(Regex("[^a-z0-9 ]"), "").trim().replace(' ', '_')
+
+    /** El tema FCM donde llegan los pedidos de clientes de una ciudad; "" si no hay ciudad. */
+    fun temaPedidos(ciudad: String): String = claveCiudad(ciudad).takeIf { it.isNotEmpty() }?.let { "pedidos_" + it.take(60) }.orEmpty()
+
+    /** "Vidrio y espejos" para una lista de cortes de aluminio: los rubros que pide lo que se envía. */
+    fun rubrosDeLoEnviado(mime: String?, nombre: String?, esTexto: Boolean): List<String> {
+        val n = (nombre.orEmpty() + " " + mime.orEmpty()).lowercase(Locale.ROOT)
+        return when {
+            n.contains("corte") -> listOf("Aluminio y perfiles", "Accesorios y herrajes")
+            n.contains("plancha") -> listOf("Vidrio y espejos", "Melamina y madera")
+            esTexto -> listOf("Vidrio y espejos")
+            else -> emptyList()
+        }
+    }
 }

@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tienda Crystal</title>
+<meta name="description" content="Vidrio, aluminio, melamina, accesorios, herramientas y servicios de instalación. Pida cotización a talleres de su ciudad.">
+<link rel="icon" href="/icon-192.png">
+<meta name="theme-color" content="#1f6feb">
+<!--
+  La Tienda de Crystal en la web (docs/TIENDA_ANUNCIOS_PLAN.md, fase 3). Lee los anuncios de la
+  función tiendaWeb (/api/tienda/**), que solo entrega los campos públicos y se guarda en la CDN.
+  Quien visita no tiene Crystal: en vez del chat, deja su nombre y teléfono y el vendedor (o los
+  talleres de su ciudad) lo contactan. Todo lo que viene del servidor se pinta con textContent.
+-->
+<style>
+  :root {
+    --fondo: #f6f7f9;
+    --tarjeta: #ffffff;
+    --borde: #e3e6ea;
+    --texto: #12161c;
+    --suave: #5c6672;
+    --acento: #1f6feb;
+    --acento-txt: #ffffff;
+    --acento-suave: #e8f0fe;
+    --destacado: #b4460e;
+    --destacado-fondo: #fdf1e7;
+    --ok: #17803d;
+    --ok-fondo: #e9f7ee;
+    --error: #c0362c;
+    --error-fondo: #fdecea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fondo: #0f1216; --tarjeta: #171b21; --borde: #262c34;
+      --texto: #e8ecf1; --suave: #9aa4b1; --acento: #4d8ef7; --acento-suave: #18243a;
+      --destacado: #f0a868; --destacado-fondo: #2a1f14;
+      --ok: #4ade80; --ok-fondo: #14281c;
+      --error: #f28b82; --error-fondo: #2a1715;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fondo); color: var(--texto);
+    font: 16px/1.5 -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  a { color: var(--acento); }
+  .oculto { display: none !important; }
+  main { max-width: 1040px; margin: 0 auto; padding: 0 16px 32px; }
+
+  header.barra {
+    background: var(--acento); color: #fff; padding: 14px 16px;
+  }
+  header.barra .dentro { max-width: 1040px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+  header.barra h1 { font-size: 19px; margin: 0; flex: 1; cursor: pointer; }
+  header.barra .lema { font-size: 13px; opacity: .85; display: block; font-weight: 400; }
+  header.barra button { width: auto; margin: 0; background: #fff; color: var(--acento); padding: 9px 14px; font-size: 14px; }
+
+  .buscar { display: flex; gap: 8px; margin: 16px 0 8px; }
+  .buscar input { flex: 1; }
+  input, select, textarea {
+    width: 100%; padding: 11px 12px; font-size: 16px; border-radius: 10px;
+    border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); font-family: inherit;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  button {
+    padding: 12px 16px; font-size: 16px; font-weight: 600; border: 0; border-radius: 10px;
+    background: var(--acento); color: var(--acento-txt); cursor: pointer;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+  button.secundario { background: transparent; color: var(--acento); border: 1px solid var(--borde); }
+
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--borde);
+    background: var(--tarjeta); color: var(--acento); font-size: 14px; cursor: pointer; white-space: nowrap;
+  }
+  .chip.elegido { background: var(--acento); color: #fff; border-color: var(--acento); }
+
+  .cotizar {
+    background: var(--acento-suave); border-radius: 14px; padding: 14px 16px; margin: 6px 0 16px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .cotizar p { margin: 0; flex: 1; min-width: 200px; font-size: 15px; }
+  .cotizar button { width: auto; }
+
+  .rejilla { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  @media (min-width: 640px) { .rejilla { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 900px) { .rejilla { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .tarjeta-anuncio {
+    background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; overflow: hidden;
+    cursor: pointer; display: flex; flex-direction: column; text-decoration: none; color: inherit;
+  }
+  .tarjeta-anuncio .foto { aspect-ratio: 1 / 1; background: var(--borde); position: relative; }
+  .tarjeta-anuncio img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .marca {
+    position: absolute; top: 8px; left: 8px; font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px; background: rgba(0,0,0,.6); color: #fff;
+  }
+  .marca.destacado { background: var(--destacado); }
+  .tarjeta-anuncio .texto { padding: 8px 10px 10px; }
+  .precio { font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
+  .titulo-anuncio { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .lugar { font-size: 12px; color: var(--suave); margin-top: 4px; }
+  .vacio, .estado-carga { text-align: center; color: var(--suave); padding: 32px 8px; }
+  .mas { display: block; margin: 16px auto 0; }
+
+  /* ===== Detalle ===== */
+  .detalle { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; overflow: hidden; margin-top: 16px; }
+  @media (min-width: 820px) { .detalle { display: grid; grid-template-columns: 1.1fr 1fr; } }
+  .fotos { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; background: #000; aspect-ratio: 4 / 3; }
+  .fotos img { flex: none; width: 100%; height: 100%; object-fit: contain; scroll-snap-align: center; }
+  .fotos .sin { color: #aaa; margin: auto; }
+  .detalle .cuerpo { padding: 16px; }
+  .detalle h2 { font-size: 20px; margin: 4px 0; line-height: 1.3; }
+  .detalle .precio { font-size: 24px; }
+  .datos { color: var(--suave); font-size: 14px; }
+  .descripcion { white-space: pre-wrap; margin: 12px 0; }
+  .aviso { border-radius: 10px; padding: 12px; font-size: 14px; margin-top: 12px; }
+  .aviso.ok { background: var(--ok-fondo); color: var(--ok); }
+  .aviso.error { background: var(--error-fondo); color: var(--error); }
+  .aviso.suave { background: var(--fondo); color: var(--suave); }
+  .volver { background: none; color: var(--acento); padding: 12px 0 0; font-size: 15px; width: auto; }
+
+  form .campo { margin-bottom: 10px; }
+  form label { display: block; font-size: 13px; color: var(--suave); margin-bottom: 4px; }
+  form .doble { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  form button[type=submit] { width: 100%; margin-top: 4px; }
+  /* La trampa para robots: un campo que una persona nunca ve. */
+  .trampa { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+  .formulario { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 16px; margin-top: 16px; max-width: 560px; }
+  .formulario h2 { font-size: 19px; margin: 0 0 4px; }
+  .formulario .sub { color: var(--suave); font-size: 14px; margin: 0 0 14px; }
+  .pie { text-align: center; color: var(--suave); font-size: 13px; margin-top: 28px; }
+</style>
+</head>
+<body>
+<header class="barra">
+  <div class="dentro">
+    <h1 id="irInicio">Tienda Crystal <span class="lema">Vidrio, aluminio, melamina y servicios del rubro</span></h1>
+    <button id="btnCotizarCabecera" type="button">Pedir cotización</button>
+  </div>
+</header>
+
+<main>
+  <!-- ===== Lista ===== -->
+  <section id="vLista">
+    <form class="buscar" id="formBuscar">
+      <input id="q" type="search" placeholder="Buscar: vidrio templado, perfil, melamina…" autocomplete="off" aria-label="Buscar">
+      <button type="submit">Buscar</button>
+    </form>
+    <div class="chips" id="chips"></div>
+    <div class="cotizar">
+      <p><strong>¿Necesita una ventana, una puerta o una mampara?</strong> Cuéntenos qué necesita y talleres de su ciudad le llaman con su precio.</p>
+      <button id="btnCotizar" type="button">Pedir cotización</button>
+    </div>
+    <div class="rejilla" id="rejilla"></div>
+    <div class="estado-carga" id="cargandoLista">Cargando…</div>
+    <div class="vacio oculto" id="vacio"></div>
+    <button class="secundario mas oculto" id="btnMas" type="button">Ver más</button>
+  </section>
+
+  <!-- ===== Detalle de un anuncio ===== -->
+  <section id="vDetalle" class="oculto">
+    <button class="volver" id="volverDetalle" type="button">‹ Volver a la tienda</button>
+    <div class="estado-carga" id="cargandoDetalle">Cargando…</div>
+    <div class="detalle oculto" id="detalle">
+      <div class="fotos" id="dFotos"></div>
+      <div class="cuerpo">
+        <div class="precio" id="dPrecio"></div>
+        <h2 id="dTitulo"></h2>
+        <div class="datos" id="dDatos"></div>
+        <div class="datos" id="dLugar"></div>
+        <div class="descripcion" id="dDescripcion"></div>
+        <div class="datos" id="dVendedor"></div>
+
+        <form id="formContacto" class="formulario" style="margin-top:16px;border:0;padding:0" novalidate>
+          <h2>Quiero que me contacten</h2>
+          <p class="sub">El vendedor recibe su nombre y su teléfono y le escribe o le llama.</p>
+          <div class="campo"><label for="cNombre">Su nombre</label><input id="cNombre" name="nombre" autocomplete="name" maxlength="60" required></div>
+          <div class="campo"><label for="cTelefono">Teléfono o WhatsApp</label><input id="cTelefono" name="telefono" type="tel" autocomplete="tel" maxlength="20" placeholder="987 654 321" required></div>
+          <div class="campo"><label for="cMensaje">Mensaje (opcional)</label><textarea id="cMensaje" name="detalle" maxlength="800" placeholder="¿Sigue disponible? Necesito 3 unidades…"></textarea></div>
+          <div class="trampa" aria-hidden="true"><label>No llenar<input name="web" tabindex="-1" autocomplete="off"></label></div>
+          <button type="submit">Enviar</button>
+          <div class="aviso oculto" id="avisoContacto"></div>
+        </form>
+      </div>
+    </div>
+    <div class="vacio oculto" id="detalleNoEsta"></div>
+  </section>
+
+  <!-- ===== Pedir cotización a talleres de la ciudad ===== -->
+  <section id="vCotizar" class="oculto">
+    <button class="volver" id="volverCotizar" type="button">‹ Volver a la tienda</button>
+    <form id="formCotizar" class="formulario" novalidate>
+      <h2>Pida cotización a talleres de su ciudad</h2>
+      <p class="sub">Hasta 3 talleres reciben su pedido y le llaman con su precio. Es gratis.</p>
+      <div class="campo">
+        <label for="pQue">¿Qué necesita?</label>
+        <select id="pQue" name="que" required></select>
+      </div>
+      <div class="doble">
+        <div class="campo"><label for="pCiudad">Ciudad</label><input id="pCiudad" name="ciudad" maxlength="60" autocomplete="address-level2" required></div>
+        <div class="campo"><label for="pMedidas">Medidas aproximadas</label><input id="pMedidas" name="medidas" maxlength="200" placeholder="120 x 150 cm"></div>
+      </div>
+      <div class="campo"><label for="pDetalle">Cuéntenos un poco más</label><textarea id="pDetalle" name="detalle" maxlength="800" placeholder="Ventana corrediza de aluminio con vidrio de 6 mm para un dormitorio…"></textarea></div>
+      <div class="doble">
+        <div class="campo"><label for="pNombre">Su nombre</label><input id="pNombre" name="nombre" maxlength="60" autocomplete="name" required></div>
+        <div class="campo"><label for="pTelefono">Teléfono o WhatsApp</label><input id="pTelefono" name="telefono" type="tel" maxlength="20" autocomplete="tel" placeholder="987 654 321" required></div>
+      </div>
+      <div class="trampa" aria-hidden="true"><label>No llenar<input name="web" tabindex="-1" autocomplete="off"></label></div>
+      <button type="submit">Enviar pedido</button>
+      <div class="aviso oculto" id="avisoCotizar"></div>
+      <p class="sub" style="margin-top:12px">Su teléfono solo lo reciben los talleres que tomen su pedido. No se publica.</p>
+    </form>
+  </section>
+
+  <p class="pie">¿Tiene un taller o vende materiales del rubro? Publique sus productos desde la app <strong>Crystal</strong>.</p>
+</main>
+
+<script>
+"use strict";
+
+// Las mismas listas que la app y el servidor (functions/tienda/comun.js).
+const CATEGORIAS = [
+  "Vidrio y espejos", "Aluminio y perfiles", "Accesorios y herrajes", "Melamina y madera",
+  "Herramientas y maquinaria", "Retazos y sobrantes", "Puertas y ventanas hechas",
+  "Instalación y servicios", "Otros",
+];
+const QUE_PEDIDO = ["Ventana", "Puerta", "Mampara de baño", "Vidrio o espejo", "Ropero o melamina", "Reja o estructura", "Otro"];
+const API = "/api/tienda";
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, clase, texto) => {
+  const n = document.createElement(tag);
+  if (clase) n.className = clase;
+  if (texto != null) n.textContent = texto;
+  return n;
+};
+
+/** 15000 → "S/ 150.00"; 0 es "A tratar". */
+function precio(cent) {
+  if (!(cent > 0)) return "A tratar";
+  return "S/ " + (cent / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function precioConUnidad(a) {
+  return precio(a.precioCent) + (a.precioCent > 0 && a.unidad && a.unidad !== "c/u" ? " " + a.unidad : "");
+}
+function hace(ms) {
+  if (!ms) return "";
+  const dias = Math.floor((Date.now() - ms) / 86400000);
+  if (dias <= 0) return "Hoy";
+  if (dias === 1) return "Ayer";
+  if (dias < 30) return "Hace " + dias + " días";
+  return dias < 60 ? "Hace un mes" : "Hace " + Math.floor(dias / 30) + " meses";
+}
+
+async function pedirJson(url, opciones) {
+  const r = await fetch(url, opciones);
+  let cuerpo = {};
+  try { cuerpo = await r.json(); } catch (e) { /* sin cuerpo */ }
+  if (!r.ok) throw new Error(cuerpo.error || "No se pudo completar. Intente de nuevo.");
+  return cuerpo;
+}
+
+// ───────────── Vistas y rutas ─────────────
+// /tienda                → lista
+// /tienda/anuncio/{id}   → detalle
+// /tienda/cotizar        → pedir cotización
+
+function mostrar(vista) {
+  for (const v of ["vLista", "vDetalle", "vCotizar"]) $(v).classList.toggle("oculto", v !== vista);
+  window.scrollTo(0, 0);
+}
+
+function ir(ruta) {
+  history.pushState(null, "", ruta);
+  rutear();
+}
+
+function rutear() {
+  const p = location.pathname.replace(/\/+$/, "");
+  const m = p.match(/^\/tienda\/anuncio\/([A-Za-z0-9]{20})$/);
+  if (m) { abrirAnuncio(m[1]); return; }
+  if (p === "/tienda/cotizar") { mostrar("vCotizar"); document.title = "Pedir cotización — Tienda Crystal"; return; }
+  mostrar("vLista");
+  document.title = "Tienda Crystal";
+  if (!listaCargada) cargar(false);
+}
+window.addEventListener("popstate", rutear);
+
+// ───────────── Lista ─────────────
+
+let filtro = { categoria: "", tipo: "" };
+let texto = "";
+let siguiente = 0;
+let listaCargada = false;
+let consultaActual = 0;
+
+function construirChips() {
+  const opciones = [["Todo", {}], ["Productos", { tipo: "producto" }], ["Servicios", { tipo: "servicio" }]]
+    .concat(CATEGORIAS.map((c) => [c, { categoria: c }]));
+  const cont = $("chips");
+  opciones.forEach(([rotulo, f], i) => {
+    const c = el("button", "chip" + (i === 0 ? " elegido" : ""), rotulo);
+    c.type = "button";
+    c.addEventListener("click", () => {
+      filtro = { categoria: f.categoria || "", tipo: f.tipo || "" };
+      cont.querySelectorAll(".chip").forEach((x) => x.classList.toggle("elegido", x === c));
+      cargar(false);
+    });
+    cont.appendChild(c);
+  });
+}
+
+function tarjeta(a) {
+  const t = el("a", "tarjeta-anuncio");
+  t.href = "/tienda/anuncio/" + a.id;
+  t.addEventListener("click", (e) => { e.preventDefault(); ir(t.getAttribute("href")); });
+  const foto = el("div", "foto");
+  if (a.miniatura) {
+    const img = el("img");
+    img.loading = "lazy";
+    img.alt = a.titulo;
+    img.src = a.miniatura;
+    foto.appendChild(img);
+  }
+  const marca = a.destacado ? "Destacado" : a.tipo === "servicio" ? "Servicio" : a.condicion === "usado" ? "Usado" : "";
+  if (marca) foto.appendChild(el("span", "marca" + (a.destacado ? " destacado" : ""), marca));
+  t.appendChild(foto);
+  const tx = el("div", "texto");
+  tx.appendChild(el("div", "precio", precioConUnidad(a)));
+  tx.appendChild(el("div", "titulo-anuncio", a.titulo));
+  tx.appendChild(el("div", "lugar", [a.ciudad, hace(a.publicadoEn)].filter(Boolean).join(" · ")));
+  t.appendChild(tx);
+  return t;
+}
+
+async function cargar(mas) {
+  const n = ++consultaActual;
+  if (!mas) { siguiente = 0; $("rejilla").replaceChildren(); }
+  $("cargandoLista").classList.remove("oculto");
+  $("vacio").classList.add("oculto");
+  $("btnMas").classList.add("oculto");
+  const qs = new URLSearchParams({ q: texto, categoria: filtro.categoria, tipo: filtro.tipo });
+  if (mas && siguiente) qs.set("despues", String(siguiente));
+  try {
+    const r = await pedirJson(API + "/anuncios?" + qs.toString());
+    if (n !== consultaActual) return;
+    listaCargada = true;
+    const ya = new Set([...$("rejilla").children].map((x) => x.getAttribute("href")));
+    r.anuncios.forEach((a) => { if (!ya.has("/tienda/anuncio/" + a.id)) $("rejilla").appendChild(tarjeta(a)); });
+    siguiente = r.siguiente || 0;
+    // Una página entera filtrada puede quedar vacía aunque haya más: se pide la siguiente.
+    if (r.anuncios.length === 0 && siguiente) { cargar(true); return; }
+    $("btnMas").classList.toggle("oculto", !siguiente);
+    if ($("rejilla").children.length === 0) {
+      $("vacio").textContent = texto ? "No hay anuncios con «" + texto + "»." : "Todavía no hay anuncios en este filtro.";
+      $("vacio").classList.remove("oculto");
+    }
+  } catch (e) {
+    if (n !== consultaActual) return;
+    $("vacio").textContent = e.message;
+    $("vacio").classList.remove("oculto");
+  } finally {
+    if (n === consultaActual) $("cargandoLista").classList.add("oculto");
+  }
+}
+
+// ───────────── Detalle ─────────────
+
+let anuncioAbierto = null;
+
+async function abrirAnuncio(id) {
+  mostrar("vDetalle");
+  $("detalle").classList.add("oculto");
+  $("detalleNoEsta").classList.add("oculto");
+  $("cargandoDetalle").classList.remove("oculto");
+  $("avisoContacto").classList.add("oculto");
+  $("formContacto").reset();
+  try {
+    const a = await pedirJson(API + "/anuncio/" + id);
+    anuncioAbierto = a;
+    document.title = a.titulo + " — Tienda Crystal";
+    const fotos = $("dFotos");
+    fotos.replaceChildren();
+    if (a.fotos.length === 0) fotos.appendChild(el("span", "sin", "Sin fotos"));
+    a.fotos.forEach((u, i) => {
+      const img = el("img");
+      img.src = u;
+      img.alt = a.titulo + " — foto " + (i + 1);
+      img.loading = i === 0 ? "eager" : "lazy";
+      fotos.appendChild(img);
+    });
+    $("dPrecio").textContent = precio(a.precioCent) + (a.precioCent > 0 && a.unidad ? " " + a.unidad : "");
+    $("dTitulo").textContent = a.titulo;
+    $("dDatos").textContent = [a.tipo === "servicio" ? "Servicio" : "Producto",
+      a.condicion === "nuevo" ? "Nuevo" : a.condicion === "usado" ? "Usado" : "", a.categoria].filter(Boolean).join(" · ");
+    const lugar = [a.ciudad].concat(a.zonas.length ? ["atiende también " + a.zonas.join(", ")] : []).concat([hace(a.publicadoEn)]);
+    $("dLugar").textContent = lugar.filter(Boolean).join(" · ");
+    $("dDescripcion").textContent = a.descripcion || "Sin descripción.";
+    $("dVendedor").textContent = "Vende: " + (a.vendedorNombre || "Usuario de Crystal");
+    $("detalle").classList.remove("oculto");
+  } catch (e) {
+    $("detalleNoEsta").textContent = e.message;
+    $("detalleNoEsta").classList.remove("oculto");
+  } finally {
+    $("cargandoDetalle").classList.add("oculto");
+  }
+}
+
+// ───────────── Formularios ─────────────
+
+function aviso(id, clase, mensaje) {
+  const a = $(id);
+  a.className = "aviso " + clase;
+  a.textContent = mensaje;
+}
+
+async function enviarPedido(form, avisoId, extra) {
+  const datos = Object.fromEntries(new FormData(form).entries());
+  Object.assign(datos, extra || {});
+  const boton = form.querySelector("button[type=submit]");
+  boton.disabled = true;
+  try {
+    const r = await pedirJson(API + "/pedido", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(datos),
+    });
+    form.querySelectorAll("input, select, textarea").forEach((x) => { if (x.name !== "ciudad") x.value = ""; });
+    aviso(avisoId, "ok", r.dirigido
+      ? "¡Listo! El vendedor recibió su pedido y lo contactará."
+      : "¡Listo! Los talleres de " + r.ciudad + " recibieron su pedido y lo llamarán.");
+    try { localStorage.setItem("tienda_ciudad", datos.ciudad || ""); } catch (e) { /* sin almacenamiento */ }
+  } catch (e) {
+    aviso(avisoId, "error", e.message);
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+$("formContacto").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!anuncioAbierto) return;
+  enviarPedido(e.target, "avisoContacto", { anuncioId: anuncioAbierto.id });
+});
+
+$("formCotizar").addEventListener("submit", (e) => {
+  e.preventDefault();
+  enviarPedido(e.target, "avisoCotizar");
+});
+
+// ───────────── Arranque ─────────────
+
+(function iniciar() {
+  const sel = $("pQue");
+  sel.appendChild(el("option", "", "Elija…")).value = "";
+  QUE_PEDIDO.forEach((q) => { sel.appendChild(el("option", "", q)).value = q; });
+  try { $("pCiudad").value = localStorage.getItem("tienda_ciudad") || ""; } catch (e) { /* sin almacenamiento */ }
+  construirChips();
+  $("formBuscar").addEventListener("submit", (e) => {
+    e.preventDefault();
+    texto = $("q").value.trim();
+    $("q").blur();
+    cargar(false);
+  });
+  $("btnMas").addEventListener("click", () => cargar(true));
+  for (const id of ["btnCotizar", "btnCotizarCabecera"]) $(id).addEventListener("click", () => ir("/tienda/cotizar"));
+  for (const id of ["volverDetalle", "volverCotizar", "irInicio"]) $(id).addEventListener("click", () => ir("/tienda"));
+  rutear();
+})();
+</script>
+</body>
+</html>

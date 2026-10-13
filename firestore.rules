@@ -502,8 +502,11 @@ rules_version = '2';
             && request.resource.data.estado in ['activo', 'pausado', 'retirado']
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'titulo', 'descripcion', 'precioCent', 'unidad', 'condicion', 'ciudad',
-              'categoria', 'tipo', 'fotos', 'miniaturas', 'palabras', 'estado', 'editadoEn'
+              'categoria', 'tipo', 'fotos', 'miniaturas', 'palabras', 'estado', 'editadoEn',
+              'zonas'
             ])
+            && (!('zonas' in request.resource.data)
+              || (request.resource.data.zonas is list && request.resource.data.zonas.size() <= 5))
             && request.resource.data.titulo is string
             && request.resource.data.titulo.size() >= 4
             && request.resource.data.titulo.size() <= 80
@@ -545,6 +548,46 @@ rules_version = '2';
           allow read: if isOwner(uid) || isPanelRole();
           allow update, delete: if isAdmin();
         }
+
+        // Lo que decidió el panel sobre el anuncio (moderarAnuncio).
+        match /moderacion/{movId} {
+          allow read: if isPanelRole();
+          allow write: if false;
+        }
+      }
+
+      // ===== Vitrina de proveedores (fase 2) =====
+      // La ficha la escribe solo el servidor (suscribirProveedor cobra; guardarProveedor arma las
+      // claves de ciudad): así nadie se pone en todas las ciudades.
+      match /proveedores/{uid} {
+        allow read: if isSignedIn();
+        allow write: if false;
+      }
+
+      // ===== Pedidos de clientes de la web (fase 3) =====
+      // Los crea la función tiendaWeb. Lo público lo ve cualquier sesión; el contacto, nadie desde
+      // la app: lo entrega tomarPedidoCliente y queda en tomas/{uid}, que solo lee quien lo tomó.
+      match /pedidos_clientes/{pedidoId} {
+        allow read: if isSignedIn();
+        allow write: if false;
+
+        match /privado/{doc} {
+          allow read: if isPanelRole();
+          allow write: if false;
+        }
+        match /tomas/{uid} {
+          allow read: if isOwner(uid) || isPanelRole();
+          allow write: if false;
+        }
+        match /reportes/{uid} {
+          allow read: if isOwner(uid) || isPanelRole();
+          allow write: if false;
+        }
+      }
+
+      // Contadores de la web por IP y teléfono (en resumen, sin guardar el dato): solo el servidor.
+      match /limites_web/{doc} {
+        allow read, write: if false;
       }
 
       // ===== Regla catch-all (dev) =====

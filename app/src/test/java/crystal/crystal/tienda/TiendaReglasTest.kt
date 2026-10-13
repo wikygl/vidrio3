@@ -79,6 +79,78 @@ class TiendaReglasTest {
         assertEquals("A tratar", TiendaReglas.precio(0))
     }
 
+    // ───────────── Fases 2 y 3: los esperados salen de correr comun.js con los mismos datos ─────────────
+
+    @Test
+    fun las_zonas_de_un_servicio_entran_en_las_palabras_igual_que_en_el_servidor() {
+        assertEquals(
+            listOf("instalacion", "mamparas", "mampara", "servicios", "servicio", "huancayo", "tambo", "chilca"),
+            TiendaReglas.palabrasDe("Instalación de mamparas", "Instalación y servicios", "Huancayo", "servicio", listOf("El Tambo", "Chilca"))
+        )
+        val a = anuncio("Instalación de mamparas", "Instalación y servicios", "Huancayo").copy(tipo = "servicio", zonas = listOf("Chilca"))
+        assertTrue("quien atiende Chilca sale buscando Chilca", TiendaReglas.casa(a, "mampara chilca"))
+    }
+
+    @Test
+    fun las_zonas_se_limpian_como_en_el_servidor() {
+        assertEquals(listOf("El Tambo", "chilca", "Pilcomayo"), TiendaReglas.zonas("El Tambo,  chilca , Chilca, huancayo, Pilcomayo", "Huancayo"))
+        assertEquals(emptyList<String>(), TiendaReglas.zonas("  ", "Lima"))
+        assertNull("más de 5", TiendaReglas.zonas("a1, b2, c3, d4, e5, f6", "Lima"))
+        assertNull("una muy larga", TiendaReglas.zonas("x".repeat(41), "Lima"))
+    }
+
+    @Test
+    fun la_clave_de_ciudad_y_el_tema_de_pedidos_son_los_del_servidor() {
+        assertEquals("cerro_de_pasco", TiendaReglas.claveCiudad("Cerro de Pasco"))
+        assertEquals("nana", TiendaReglas.claveCiudad("Ñaña"))
+        assertEquals("ancash_peru", TiendaReglas.claveCiudad("  Áncash, Perú! "))
+        assertEquals("pedidos_san_juan_de_lurigancho", TiendaReglas.temaPedidos("San Juan de Lurigancho"))
+        assertEquals("", TiendaReglas.temaPedidos(" "))
+    }
+
+    @Test
+    fun las_tarifas_tienen_el_mismo_valor_por_defecto_y_tope_que_el_servidor() {
+        assertEquals(TiendaReglas.Tarifas(), TiendaReglas.tarifas(null))
+        val t = TiendaReglas.tarifas(
+            mapOf("precio_cent" to 400L, "servicio_precio_cent" to 600L, "destacar_precio_cent" to 999999L,
+                "proveedor_dias" to 15L, "pedido_max_talleres" to 5L)
+        )
+        assertEquals(400L to 30, t.publicar("producto"))
+        assertEquals(600L to 30, t.publicar("servicio"))
+        assertEquals("un tipeo no cobra de más", 200L, t.destacarCent)
+        assertEquals(1000L, t.proveedorCent)
+        assertEquals(15, t.proveedorDias)
+        assertEquals(5, t.pedidoMaxTalleres)
+        assertEquals("sin tarifa propia el servicio paga como producto", 400L, TiendaReglas.tarifas(mapOf("precio_cent" to 400L)).servicioCent)
+    }
+
+    @Test
+    fun un_servicio_solo_se_cobra_por_trabajo_tiempo_o_medida() {
+        fun error(unidad: String) = TiendaReglas.error("servicio", "Instalación y servicios", "Instalación de mamparas", "", 5000, unidad, "", "Huancayo", 0)
+        assertNull(error("hora"))
+        assertEquals("Un servicio se cobra por servicio, por hora, por día o por medida.", error("plancha"))
+    }
+
+    @Test
+    fun lo_enviado_por_el_chat_dice_que_rubro_buscar() {
+        assertEquals(listOf("Aluminio y perfiles", "Accesorios y herrajes"), TiendaReglas.rubrosDeLoEnviado("application/x-crystal-corte", "corte_1.crystal", false))
+        assertEquals(listOf("Vidrio y espejos", "Melamina y madera"), TiendaReglas.rubrosDeLoEnviado(null, "plancha_obra.crystal", false))
+        assertEquals(listOf("Vidrio y espejos"), TiendaReglas.rubrosDeLoEnviado(null, null, true))
+        val p = { uid: String, rubros: List<String> -> Proveedor(uid, uid, "Lima", emptyList(), rubros, "", "", "activo", 0) }
+        assertEquals(listOf("b", "a"), Proveedor.ordenarPara(listOf(p("a", listOf("Otros")), p("b", listOf("Vidrio y espejos"))), listOf("Vidrio y espejos")).map { it.uid })
+    }
+
+    @Test
+    fun un_pedido_se_toma_si_esta_abierto_cabe_y_es_para_uno() {
+        val base = PedidoCliente("p", "Ventana", "Huancayo", "", "", "Rosa", "abierto", 0, 10_000, 1, 3, listOf("t1"), "", "")
+        assertTrue(base.disponiblePara("t2", 5_000))
+        assertFalse("ya venció", base.disponiblePara("t2", 20_000))
+        assertFalse("ya no cabe", base.copy(tomas = 3).disponiblePara("t2", 5_000))
+        assertFalse("es para otro vendedor", base.copy(paraUid = "v").disponiblePara("t2", 5_000))
+        assertTrue(base.copy(paraUid = "v").disponiblePara("v", 5_000))
+        assertEquals("https://wa.me/51987654321", TomaPedido("Rosa", "51987654321").whatsapp)
+    }
+
     private fun anuncio(titulo: String, categoria: String, ciudad: String) = Anuncio(
         id = "x", uid = "u", vendedorNombre = "", tipo = "producto", categoria = categoria, titulo = titulo,
         descripcion = "", precioCent = 0, unidad = "c/u", condicion = "nuevo", ciudad = ciudad,

@@ -14,6 +14,13 @@ class CrystalFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
         val data = message.data
+        // Un pedido de un cliente de la web de la Tienda (tema de la ciudad o directo al vendedor).
+        if (data["tipo"] == "pedido_cliente") {
+            crystal.crystal.tienda.AvisoPedidoCliente.mostrar(
+                applicationContext, data["pedidoId"].orEmpty(), data["title"].orEmpty(), data["body"].orEmpty()
+            )
+            return
+        }
         val chatId = data["chatId"].orEmpty()
         if (chatId.isBlank()) return
 

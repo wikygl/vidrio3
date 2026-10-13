@@ -41,6 +41,8 @@ class TiendaActivity : AppCompatActivity() {
     private val adaptador = AdaptadorAnuncios { abrir(it) }
 
     private var modoMis = false
+    /** Con [EXTRA_VENDEDOR], la pantalla muestra los anuncios vigentes de ese vendedor (un proveedor). */
+    private var vendedorUid: String? = null
     private var filtroTipo: String? = null
     private var filtroCategoria: String? = null
     private var texto = ""
@@ -62,18 +64,25 @@ class TiendaActivity : AppCompatActivity() {
             return
         }
         modoMis = intent.getBooleanExtra(EXTRA_MIS, false)
+        vendedorUid = intent.getStringExtra(EXTRA_VENDEDOR)
         adaptador.modoMis = modoMis
 
         b.btnAtras.setOnClickListener { finish() }
-        if (modoMis) {
-            b.tvTituloTienda.text = "Mis anuncios"
+        b.tvMas.setOnClickListener { menuMas(it) }
+        if (modoMis || vendedorUid != null) {
+            b.tvTituloTienda.text = if (modoMis) "Mis anuncios"
+            else "Anuncios de " + intent.getStringExtra(EXTRA_VENDEDOR_NOMBRE).orEmpty().ifBlank { "este vendedor" }
             b.tvMisAnuncios.visibility = View.GONE
+            b.tvMas.visibility = View.GONE
             b.etBuscar.visibility = View.GONE
             b.scrollFiltros.visibility = View.GONE
+            if (vendedorUid != null) b.btnPublicar.visibility = View.GONE
         } else {
             b.tvMisAnuncios.setOnClickListener { startActivity(intentMis(this)) }
             construirFiltros()
             configurarBuscador()
+            // Una reinstalación o un token nuevo pierden la suscripción a los pedidos de la ciudad.
+            MiCiudad.asegurarAvisos(this)
         }
 
         b.rvAnuncios.layoutManager = GridLayoutManager(this, 2)
@@ -81,7 +90,7 @@ class TiendaActivity : AppCompatActivity() {
         b.rvAnuncios.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 val lm = rv.layoutManager as GridLayoutManager
-                if (!modoMis && hayMas && !cargando && lm.findLastVisibleItemPosition() >= adaptador.itemCount - 6) {
+                if (!modoMis && vendedorUid == null && hayMas && !cargando && lm.findLastVisibleItemPosition() >= adaptador.itemCount - 6) {
                     cargar(siguiente = true)
                 }
             }
@@ -172,8 +181,8 @@ class TiendaActivity : AppCompatActivity() {
         if (!siguiente && adaptador.itemCount == 0) b.pbCargando.visibility = View.VISIBLE
         consulta = lifecycleScope.launch {
             try {
-                if (modoMis) {
-                    adaptador.poner(repo.misAnuncios())
+                if (modoMis || vendedorUid != null) {
+                    adaptador.poner(vendedorUid?.let { repo.anunciosDe(it) } ?: repo.misAnuncios())
                     hayMas = false
                 } else {
                     val pagina = repo.buscar(filtroTipo, filtroCategoria, texto, if (siguiente) ultimo else null)
@@ -206,6 +215,7 @@ class TiendaActivity : AppCompatActivity() {
         b.tvVacio.visibility = if (vacio) View.VISIBLE else View.GONE
         b.tvVacio.text = when {
             modoMis -> "Todavía no publicó ningún anuncio.\nToque «Publicar anuncio» para empezar."
+            vendedorUid != null -> "Este vendedor no tiene anuncios a la vista ahora."
             texto.isNotBlank() -> "No hay anuncios con «$texto»."
             filtroCategoria != null || filtroTipo != null -> "No hay anuncios en este filtro todavía."
             else -> "Todavía no hay anuncios.\n¡Publique el primero!"
@@ -216,13 +226,37 @@ class TiendaActivity : AppCompatActivity() {
         startActivity(AnuncioActivity.intent(this, a.id))
     }
 
+    /** Las otras secciones de la Tienda (fases 2 y 3). */
+    private fun menuMas(ancla: View) {
+        val ciudad = MiCiudad.get(this)
+        val menu = android.widget.PopupMenu(this, ancla)
+        val opciones = listOf<Pair<String, () -> Unit>>(
+            "Pedidos de clientes" to { startActivity(PedidosClientesActivity.intent(this)) },
+            "Proveedores" to { startActivity(ProveedoresActivity.intent(this)) },
+            "Mi vitrina de proveedor" to { startActivity(MiVitrinaActivity.intent(this)) },
+            "Precios de referencia" to { startActivity(PreciosReferenciaActivity.intent(this)) },
+            (if (ciudad.isBlank()) "Mi ciudad…" else "Mi ciudad: $ciudad") to {
+                MiCiudad.pedir(this, "Con ella le mostramos los proveedores y los pedidos de clientes de su zona.") {
+                    Toast.makeText(this, "Ciudad guardada: $it", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+        opciones.forEachIndexed { i, (rotulo, _) -> menu.menu.add(0, i, i, rotulo) }
+        menu.setOnMenuItemClickListener { item -> opciones[item.itemId].second(); true }
+        menu.show()
+    }
+
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     companion object {
         const val EXTRA_MIS = "tienda_mis_anuncios"
+        const val EXTRA_VENDEDOR = "tienda_vendedor_uid"
+        const val EXTRA_VENDEDOR_NOMBRE = "tienda_vendedor_nombre"
 
         fun intent(ctx: Context) = Intent(ctx, TiendaActivity::class.java)
         fun intentMis(ctx: Context) = Intent(ctx, TiendaActivity::class.java).putExtra(EXTRA_MIS, true)
+        fun intentVendedor(ctx: Context, uid: String, nombre: String) = Intent(ctx, TiendaActivity::class.java)
+            .putExtra(EXTRA_VENDEDOR, uid).putExtra(EXTRA_VENDEDOR_NOMBRE, nombre)
     }
 }
 
@@ -269,7 +303,9 @@ class AdaptadorAnuncios(private val alTocar: (Anuncio) -> Unit) :
         else listOf(a.ciudad, TiendaReglas.hace(a.publicadoEnMs, ahora)).filter { it.isNotBlank() }.joinToString(" · ")
 
         val marca = when {
-            modoMis -> TiendaReglas.nombreEstado(if (a.estado == Anuncio.ESTADO_ACTIVO && a.venceEnMs <= ahora) Anuncio.ESTADO_VENCIDO else a.estado)
+            modoMis -> TiendaReglas.nombreEstado(if (a.estado == Anuncio.ESTADO_ACTIVO && a.venceEnMs <= ahora) Anuncio.ESTADO_VENCIDO else a.estado) +
+                if (a.destacado(ahora) && a.estado == Anuncio.ESTADO_ACTIVO) " · ★" else ""
+            a.destacado(ahora) -> "★ Destacado"
             a.esServicio -> "Servicio"
             a.condicion == TiendaReglas.USADO -> "Usado"
             else -> ""

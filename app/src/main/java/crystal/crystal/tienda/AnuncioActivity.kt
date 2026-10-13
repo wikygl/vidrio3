@@ -19,16 +19,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import crystal.crystal.databinding.ActivityAnuncioBinding
 import crystal.crystal.pagos.CanalPagos
-import crystal.crystal.red.ChatActivity
-import crystal.crystal.red.ChatIdentity
-import crystal.crystal.red.data.ChatConversationRepository
-import crystal.crystal.red.data.ChatDirectoryRepository
-import crystal.crystal.red.data.ChatListRepository
-import crystal.crystal.red.interop.ChatInteropIntents
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -69,6 +61,7 @@ class AnuncioActivity : AppCompatActivity() {
         b.btnPausar.setOnClickListener { pausarOReactivar() }
         b.btnRenovar.setOnClickListener { renovar() }
         b.btnRetirar.setOnClickListener { retirar() }
+        b.btnDestacar.setOnClickListener { destacar() }
     }
 
     // Al volver de editarlo, se ve como quedó.
@@ -106,8 +99,13 @@ class AnuncioActivity : AppCompatActivity() {
             when (a.condicion) { TiendaReglas.NUEVO -> "Nuevo"; TiendaReglas.USADO -> "Usado"; else -> "" },
             a.categoria
         ).filter { it.isNotBlank() }.joinToString("  ·  ")
-        b.tvLugar.text = listOf(a.ciudad, TiendaReglas.hace(a.publicadoEnMs, ahora))
-            .filter { it.isNotBlank() }.joinToString("  ·  ")
+        b.tvLugar.text = listOf(
+            a.ciudad,
+            if (a.zonas.isNotEmpty()) "atiende también " + a.zonas.joinToString(", ") else "",
+            TiendaReglas.hace(a.publicadoEnMs, ahora)
+        ).filter { it.isNotBlank() }.joinToString("  ·  ")
+        // Un servicio se cotiza: el trabajo depende del lugar y de la medida.
+        b.btnContactar.text = if (a.esServicio) "Pedir cotización" else "Contactar por chat"
         b.tvDescripcion.text = a.descripcion.ifBlank { "Sin descripción." }
         b.tvVendedor.text = a.vendedorNombre.ifBlank { "Usuario de Crystal" }
 
@@ -133,11 +131,14 @@ class AnuncioActivity : AppCompatActivity() {
         b.tvEstado.text = when {
             enRevision -> "$estado: el equipo de Crystal lo está revisando por denuncias. Mientras tanto no se ve en la Tienda."
             vencido -> "Vencido · ya no se ve en la Tienda. Renuévelo para que vuelva a salir."
-            else -> "$estado · ${TiendaReglas.vence(a.venceEnMs, ahora)} · ${a.vistas} vistas"
+            else -> "$estado · ${TiendaReglas.vence(a.venceEnMs, ahora)} · ${a.vistas} vistas" +
+                if (a.destacado(ahora)) "\n★ Destacado hasta el ${fecha(a.destacadoHastaMs)}" else ""
         }
         val editable = !vencido && !enRevision
         b.btnEditar.visibility = if (editable) View.VISIBLE else View.GONE
         b.btnPausar.visibility = if (editable) View.VISIBLE else View.GONE
+        // Solo se destaca lo que se está viendo en la Tienda.
+        b.btnDestacar.visibility = if (editable && a.estado == Anuncio.ESTADO_ACTIVO) View.VISIBLE else View.GONE
         b.btnRetirar.visibility = if (editable && a.estado != Anuncio.ESTADO_RETIRADO) View.VISIBLE else View.GONE
         b.btnRenovar.visibility = if (enRevision) View.GONE else View.VISIBLE
         b.btnPausar.text = if (a.estado == Anuncio.ESTADO_ACTIVO) "Pausar" else "Volver a publicar"
@@ -171,38 +172,18 @@ class AnuncioActivity : AppCompatActivity() {
     /** Abre (o crea) el chat con el vendedor y deja escrito el primer mensaje. */
     private fun contactar() {
         val a = anuncio ?: return
-        val auth = FirebaseAuth.getInstance()
-        val yo = ChatIdentity.resolveChatIdentityUid(this, auth)
-        if (yo.isBlank()) return
-        if (yo == a.uid) {
-            Toast.makeText(this, "Es su propio anuncio", Toast.LENGTH_SHORT).show()
-            return
-        }
         b.btnContactar.isEnabled = false
         lifecycleScope.launch {
             try {
-                val db = FirebaseFirestore.getInstance()
-                val vendedor = ChatDirectoryRepository(db).getUser(a.uid)
-                if (vendedor == null) {
-                    Toast.makeText(this@AnuncioActivity, "El vendedor ya no está disponible", Toast.LENGTH_LONG).show()
-                    return@launch
-                }
-                val chatId = ChatConversationRepository(db, ChatListRepository(db)).getOrCreateDirectChat(
-                    queryUserId = yo,
-                    currentUserId = yo,
-                    aliases = ChatIdentity.resolveChatIdentityAliases(this@AnuncioActivity, auth, yo),
-                    otherUser = vendedor
-                )
                 val precio = TiendaReglas.precio(a.precioCent)
-                startActivity(
-                    Intent(this@AnuncioActivity, ChatActivity::class.java)
-                        .putExtra("chatId", chatId)
-                        .putExtra("usuario", yo)
-                        .putExtra(
-                            ChatInteropIntents.EXTRA_PREFILL_TEXT,
-                            "Hola, me interesa su anuncio de la Tienda: «${a.titulo}» ($precio). ¿Sigue disponible?"
-                        )
-                )
+                val miCiudad = MiCiudad.get(this@AnuncioActivity)
+                val texto = if (a.esServicio) {
+                    "Hola, vi su servicio en la Tienda: «${a.titulo}». " +
+                        (if (miCiudad.isNotBlank()) "Estoy en $miCiudad. " else "") + "¿Me puede cotizar?"
+                } else {
+                    "Hola, me interesa su anuncio de la Tienda: «${a.titulo}» ($precio). ¿Sigue disponible?"
+                }
+                ChatDeTienda.abrir(this@AnuncioActivity, a.uid, texto)
             } catch (e: Exception) {
                 Toast.makeText(this@AnuncioActivity, "No se pudo abrir el chat: ${TiendaRepositorio.mensaje(e)}", Toast.LENGTH_LONG).show()
             } finally {
@@ -304,7 +285,7 @@ class AnuncioActivity : AppCompatActivity() {
             return
         }
         lifecycleScope.launch {
-            val (precio, dias, saldo) = runCatching { repo.precioYSaldo() }.getOrElse {
+            val (precio, dias, saldo) = runCatching { repo.precioYSaldo(a.tipo) }.getOrElse {
                 Toast.makeText(this@AnuncioActivity, TiendaRepositorio.mensaje(it), Toast.LENGTH_LONG).show()
                 return@launch
             }
@@ -337,6 +318,58 @@ class AnuncioActivity : AppCompatActivity() {
                 .show()
         }
     }
+
+    /**
+     * Cobra unos días de "Destacado": sale primero en la Tienda, con su marca. Si el anuncio vence
+     * antes de que terminen esos días, el servidor pide renovarlo primero y aquí se dice tal cual.
+     */
+    private fun destacar() {
+        val a = anuncio ?: return
+        if (!CanalPagos.DISPONIBLE_EN_LA_APP) {
+            PublicarAnuncioActivity.avisarNoDisponible(this)
+            return
+        }
+        lifecycleScope.launch {
+            val (t, saldo) = runCatching { repo.tarifasYSaldo() }.getOrElse {
+                Toast.makeText(this@AnuncioActivity, TiendaRepositorio.mensaje(it), Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val precio = t.destacarCent
+            if (saldo < precio) {
+                PublicarAnuncioActivity.pedirRecarga(this@AnuncioActivity, precio, saldo)
+                return@launch
+            }
+            val ahora = System.currentTimeMillis()
+            AlertDialog.Builder(this@AnuncioActivity)
+                .setTitle("Destacar anuncio")
+                .setMessage(
+                    (if (a.destacado(ahora)) "Ya está destacado hasta el ${fecha(a.destacadoHastaMs)}; se suman ${t.destacarDias} días más.\n\n"
+                    else "Sale primero en la Tienda, con la marca «Destacado», durante ${t.destacarDias} días.\n\n") +
+                        "Cuesta ${if (precio > 0) soles(precio) else "nada"}. Su saldo: ${soles(saldo)} → ${soles(saldo - precio)}."
+                )
+                .setPositiveButton("Destacar") { _, _ ->
+                    lifecycleScope.launch {
+                        runCatching { repo.destacar(a.id) }
+                            .onSuccess { hasta ->
+                                Toast.makeText(this@AnuncioActivity, "Destacado hasta el ${fecha(hasta)}", Toast.LENGTH_LONG).show()
+                                cargar()
+                            }
+                            .onFailure { e ->
+                                if (TiendaRepositorio.esSaldoInsuficiente(e)) PublicarAnuncioActivity.pedirRecarga(this@AnuncioActivity, precio, saldo)
+                                else AlertDialog.Builder(this@AnuncioActivity)
+                                    .setTitle("No se pudo destacar")
+                                    .setMessage(TiendaRepositorio.mensaje(e))
+                                    .setPositiveButton("Entendido", null)
+                                    .show()
+                            }
+                    }
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
+    }
+
+    private fun fecha(ms: Long) = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(ms))
 
     private fun soles(cent: Long) = "S/ " + "%,.2f".format(Locale.US, cent / 100.0)
 

@@ -199,6 +199,28 @@
                 android:inputType="textCapWords"
                 android:maxLength="60" />
 
+            <!-- Solo los servicios: también se encuentran buscando estas zonas. -->
+            <LinearLayout
+                android:id="@+id/lyZonas"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/SeccionItem"
+                    android:text="OTRAS ZONAS DONDE ATIENDE (OPCIONAL)" />
+
+                <EditText
+                    android:id="@+id/etZonas"
+                    style="@style/CampoItem"
+                    android:layout_width="match_parent"
+                    android:layout_weight="0"
+                    android:hint="Separadas por comas: El Tambo, Chilca"
+                    android:inputType="textCapWords"
+                    android:maxLength="220" />
+            </LinearLayout>
+
             <TextView
                 style="@style/SeccionItem"
                 android:text="FOTOS (HASTA 5)" />

@@ -77,6 +77,79 @@
       ]
     },
     {
+      "collectionGroup": "anuncios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "destacadoHasta", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "anuncios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "palabras", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "publicadoEn", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "anuncios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "denuncias", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "proveedores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "zonasClave", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "estado", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "proveedores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "vigenteHasta", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pedidos_clientes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "venceEn", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pedidos_clientes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ciudadClave", "order": "ASCENDING" },
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "creadoEn", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pedidos_clientes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "paraUid", "order": "ASCENDING" },
+        { "fieldPath": "creadoEn", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pedidos_clientes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tomadoPor", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "creadoEn", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "recargas_pendientes",
       "queryScope": "COLLECTION",
       "fields": [

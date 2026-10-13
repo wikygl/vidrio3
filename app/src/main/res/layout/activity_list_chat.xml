@@ -47,6 +47,45 @@
             android:text="Buscar" />
     </LinearLayout>
 
+    <!--
+      Vitrina de proveedores (Tienda, fase 2): solo cuando se abrió el chat para ENVIAR algo (medidas,
+      cortes, planchas, un presupuesto). Un toque abre el chat con ese proveedor y le pasa lo que se
+      iba a enviar.
+    -->
+    <LinearLayout
+        android:id="@+id/bandaProveedores"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="6dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/linearLayout3">
+
+        <TextView
+            android:id="@+id/tvBandaProveedores"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="4dp"
+            android:textColor="#7A7A7A"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/contenedorProveedores"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
     <!-- ORIGINAL: LinearLayout con RecyclerView -->
     <LinearLayout
         android:id="@+id/linearLayout8"
@@ -57,7 +96,7 @@
         app:layout_constraintBottom_toTopOf="@+id/linearLayout4"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/linearLayout3">
+        app:layout_constraintTop_toBottomOf="@+id/bandaProveedores">
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvChatList"

@@ -34,6 +34,8 @@ self.addEventListener("fetch", (e) => {
   // sus respuestas rompería los listeners en vivo y la autenticación.
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // La API de la tienda ya se guarda en la CDN de Hosting; aquí no se toca.
+  if (url.pathname.startsWith("/api/")) return;
 
   // "Red primero" no basta por sí solo: esa red pasa por la caché del navegador, y con una
   // cabecera de caducidad la copia vieja responde sin llegar al servidor. Para la página en sí se
