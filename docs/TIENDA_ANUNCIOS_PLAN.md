@@ -199,6 +199,16 @@ Sin plan FULL, la invitación de siempre (`Suscripcion.invitarFull`).
   FCM) y las 646 de siempre en verde.
 - Desplegar **por nombre** cada función nueva, más reglas, índices y hosting.
 
+### Pendiente: una sola web (pedido del usuario, 2026-10-14)
+
+El usuario recordaba que Crystal ya tenía otra página web y pidió unirla con la de la tienda, "todo en
+uno". Revisado: el proyecto tiene **un solo sitio** de Hosting (`crystal-4f306.web.app`, carpeta
+`web/`), y la tienda ya vive en él. En `/` está "Mi wallet — Crystal" (la web de recarga) y en
+`/tienda` la tienda. No hay otro sitio en el disco ni en Firebase. Las dos páginas ya están en el mismo
+sitio pero no se enlazan entre sí. Falta: una cabecera común con
+"Tienda" y "Mi wallet" en las dos, y decidir con el usuario qué ve primero quien entra a `/` (hoy, el
+wallet). Si él se refería a otra web fuera de Firebase, pedirle la dirección.
+
 ---
 
 ## Costos (aprox., plan Blaze, 1 US$ ≈ S/ 3.75)

@@ -81,6 +81,14 @@
             android:layout_weight="1"
             android:text="Planos"
             android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btCorte"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Corte"
+            android:textSize="11sp" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

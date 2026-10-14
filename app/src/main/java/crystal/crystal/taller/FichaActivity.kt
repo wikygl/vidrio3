@@ -195,6 +195,19 @@ class FichaActivity : AppCompatActivity() {
             }
         }
 
+        // La hoja de corte de melamina de todos los roperos de los proyectos elegidos, juntos: la
+        // melamina se pide de una vez, no ropero por ropero.
+        binding.btCorte.setOnClickListener {
+            val clave = crystal.crystal.taller.melamina.RoperoActivity.CLAVE_DISENO
+            mostrarSelectorProyectos(
+                soloLosQue = { p -> !MapStorage.cargarProyecto(this, p)?.get(clave).isNullOrEmpty() },
+                marcados = setOfNotNull(ProyectoManager.getProyectoActivo()),
+                siNoHay = "No hay roperos archivados en ningún proyecto"
+            ) { proyectosElegidos ->
+                crystal.crystal.taller.melamina.ProduccionRoperoActivity.abrirProyectos(this, proyectosElegidos)
+            }
+        }
+
     }
 
     override fun onResume() {
@@ -203,13 +216,18 @@ class FichaActivity : AppCompatActivity() {
         if (vistaActual == "Productos") binding.btAbrir.performClick()
     }
 
-    private fun mostrarSelectorProyectos(onSeleccionados: (List<String>) -> Unit) {
-        val proyectos = MapStorage.obtenerListaProyectos(this)
+    private fun mostrarSelectorProyectos(
+        soloLosQue: ((String) -> Boolean)? = null,
+        marcados: Set<String> = emptySet(),
+        siNoHay: String = "No hay proyectos disponibles",
+        onSeleccionados: (List<String>) -> Unit
+    ) {
+        val proyectos = MapStorage.obtenerListaProyectos(this).let { l -> if (soloLosQue == null) l else l.filter(soloLosQue) }
         if (proyectos.isEmpty()) {
-            Toast.makeText(this, "No hay proyectos disponibles", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, siNoHay, Toast.LENGTH_SHORT).show()
             return
         }
-        val seleccionados = BooleanArray(proyectos.size) { false }
+        val seleccionados = BooleanArray(proyectos.size) { proyectos[it] in marcados }
         AlertDialog.Builder(this)
             .setTitle("Seleccionar proyectos")
             .setMultiChoiceItems(proyectos.toTypedArray(), seleccionados) { _, i, checked ->

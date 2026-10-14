@@ -33,8 +33,9 @@ import java.io.File
  *   código simbólico; se comparte como CSV con la estructura de la hoja de Excel.
  * - MARCAS Y AGUJEROS: cada tablero con su plano de marcas (negro) y agujeros (rosado).
  *
- * Entran todos los roperos archivados en el proyecto activo y, si se abre desde la calculadora,
- * el que se está armando.
+ * Entran todos los roperos archivados en el proyecto activo (o en los proyectos elegidos desde
+ * Ficha → Corte) y, si se abre desde la calculadora, el que se está armando. La hoja sale de todos
+ * juntos, que es como se pide la melamina; con "Roperos" se deja uno solo o los que se quiera.
  */
 class ProduccionRoperoActivity : AppCompatActivity() {
 
@@ -47,7 +48,10 @@ class ProduccionRoperoActivity : AppCompatActivity() {
                 "${RoperoProduccion.fmt(t.ancho)}x${RoperoProduccion.fmt(t.alto)}").joinToString(" ").lowercase())
     }
 
+    /** Todos los roperos que entraron; [muebles] son los elegidos, de los que sale la hoja. */
+    private var todos: List<RoperoProduccion.Mueble> = emptyList()
     private var muebles: List<RoperoProduccion.Mueble> = emptyList()
+    private var proyectos: List<String> = emptyList()
     private var cortes: List<Fila> = emptyList()
     private var agujeros: List<Fila> = emptyList()
     private var verAgujeros = false
@@ -55,16 +59,18 @@ class ProduccionRoperoActivity : AppCompatActivity() {
     private lateinit var btCorte: Button
     private lateinit var btAgujeros: Button
     private lateinit var tvCuenta: TextView
+    private lateinit var btRoperos: Button
     private val adapter = Adaptador()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        muebles = cargarMuebles()
-        if (muebles.isEmpty()) {
-            Toast.makeText(this, "No hay roperos en el proyecto activo", Toast.LENGTH_LONG).show(); finish(); return
+        proyectos = intent.getStringArrayListExtra(EXTRA_PROYECTOS)?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
+            ?: listOfNotNull(ProyectoManager.getProyectoActivo())
+        todos = cargarMuebles()
+        if (todos.isEmpty()) {
+            val donde = if (proyectos.size > 1) "en los proyectos elegidos" else "en el proyecto activo"
+            Toast.makeText(this, "No hay roperos $donde", Toast.LENGTH_LONG).show(); finish(); return
         }
-        cortes = muebles.flatMap { mu -> RoperoProduccion.fichasDeCorte(mu.ropero, RoperoCalculo.calcular(mu.ropero), mu.codigo).map { Fila.Corte(mu.codigo, it) } }
-        agujeros = muebles.flatMap { mu -> RoperoProduccion.tableros(mu.ropero).map { Fila.Agujeros(mu.codigo, it) } }
 
         val dp = resources.displayMetrics.density
         fun px(v: Int) = (v * dp).toInt()
@@ -82,12 +88,14 @@ class ProduccionRoperoActivity : AppCompatActivity() {
         btCorte = boton("Corte") { verAgujeros = false; filtrar() }
         btAgujeros = boton("Marcas y agujeros") { verAgujeros = true; filtrar() }
         tvCuenta = TextView(this).apply { textSize = 12f; setTextColor(Color.DKGRAY); setPadding(px(10), 0, px(10), px(4)) }
+        btRoperos = boton("") { elegirRoperos() }.apply { visibility = if (todos.size > 1) View.VISIBLE else View.GONE }
         val lista = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@ProduccionRoperoActivity); adapter = this@ProduccionRoperoActivity.adapter }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
             setPadding(px(8), px(8), px(8), 0)
             addView(etBuscar)
+            addView(btRoperos)
             addView(LinearLayout(this@ProduccionRoperoActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 addView(btCorte, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -97,21 +105,62 @@ class ProduccionRoperoActivity : AppCompatActivity() {
             addView(tvCuenta)
             addView(lista, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         })
+        usar(todos)
+    }
+
+    /** La hoja, la lista y el título pasan a salir de [elegidos]. */
+    private fun usar(elegidos: List<RoperoProduccion.Mueble>) {
+        muebles = elegidos
+        cortes = muebles.flatMap { mu -> RoperoProduccion.fichasDeCorte(mu.ropero, RoperoCalculo.calcular(mu.ropero), mu.codigo).map { Fila.Corte(mu.codigo, it) } }
+        agujeros = muebles.flatMap { mu -> RoperoProduccion.tableros(mu.ropero).map { Fila.Agujeros(mu.codigo, it) } }
         title = "Producción: " + muebles.joinToString(", ") { it.codigo }
+        btRoperos.text = if (muebles.size == todos.size) "Roperos: todos juntos (${todos.size}) ▾"
+                         else "Roperos: ${muebles.joinToString(", ") { it.codigo }} (${muebles.size} de ${todos.size}) ▾"
         filtrar()
     }
 
-    /** El ropero que viene de la calculadora (si viene) y los archivados en el proyecto activo. */
+    /** Qué roperos entran en la hoja: todos juntos (como se pide la melamina) o los que se marquen. */
+    private fun elegirRoperos() {
+        val marcados = BooleanArray(todos.size) { todos[it] in muebles }
+        AlertDialog.Builder(this)
+            .setTitle("Roperos de la hoja de corte")
+            .setMultiChoiceItems(todos.map { it.codigo }.toTypedArray(), marcados) { _, i, si -> marcados[i] = si }
+            .setPositiveButton("Usar") { _, _ ->
+                val elegidos = todos.filterIndexed { i, _ -> marcados[i] }
+                if (elegidos.isEmpty()) Toast.makeText(this, "Marque al menos un ropero", Toast.LENGTH_SHORT).show()
+                else usar(elegidos)
+            }
+            .setNeutralButton("Todos") { _, _ -> usar(todos) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /**
+     * Los roperos archivados en [proyectos] y, delante, el que viene de la calculadora (si viene).
+     * Con varios proyectos el código lleva el proyecto delante ("Cholo Rm1"): los Rm se repiten de
+     * un proyecto a otro y la etiqueta tiene que decir de quién es la pieza.
+     */
     private fun cargarMuebles(): List<RoperoProduccion.Mueble> {
         val salen = mutableListOf<RoperoProduccion.Mueble>()
-        val codigoActual = intent.getStringExtra(EXTRA_CODIGO).orEmpty()
-        Ropero.desdeJson(intent.getStringExtra(EXTRA_ROPERO))?.let { salen.add(RoperoProduccion.Mueble(codigoActual.ifBlank { "actual" }, it)) }
-        val proyecto = ProyectoManager.getProyectoActivo() ?: return salen
-        MapStorage.cargarProyecto(this, proyecto)?.get(RoperoActivity.CLAVE_DISENO)?.forEach { fila ->
-            val id = fila.getOrNull(2)?.trim().orEmpty()
-            if (id.isBlank() || salen.any { it.codigo.equals(id, ignoreCase = true) }) return@forEach
-            Ropero.desdeJson(fila.getOrNull(0)?.trim())?.let { salen.add(RoperoProduccion.Mueble(id, it)) }
+        val varios = proyectos.size > 1
+        proyectos.forEach { proyecto ->
+            MapStorage.cargarProyecto(this, proyecto)?.get(RoperoActivity.CLAVE_DISENO)?.forEach { fila ->
+                val id = fila.getOrNull(2)?.trim().orEmpty()
+                val codigo = if (varios) "$proyecto $id" else id
+                if (id.isBlank() || salen.any { it.codigo.equals(codigo, ignoreCase = true) }) return@forEach
+                Ropero.desdeJson(fila.getOrNull(0)?.trim())?.let { salen.add(RoperoProduccion.Mueble(codigo, it)) }
+            }
         }
+        val actual = Ropero.desdeJson(intent.getStringExtra(EXTRA_ROPERO)) ?: return salen
+        val codigoActual = intent.getStringExtra(EXTRA_CODIGO).orEmpty()
+        if (codigoActual.isNotBlank()) {
+            // El que se está editando reemplaza a su versión archivada.
+            salen.removeAll { it.codigo.equals(codigoActual, ignoreCase = true) }
+        } else if (salen.any { it.ropero.aJson() == actual.aJson() }) {
+            // Recién archivado: ya está con su número; sumarlo otra vez como "actual" duplicaba sus piezas.
+            return salen
+        }
+        salen.add(0, RoperoProduccion.Mueble(codigoActual.ifBlank { "actual" }, actual))
         return salen
     }
 
@@ -137,7 +186,11 @@ class ProduccionRoperoActivity : AppCompatActivity() {
     }
 
     private fun nombreDeArchivo(): String =
-        "corte_" + ProyectoManager.getProyectoActivo().orEmpty().ifBlank { "roperos" }.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        "corte_" + proyectos.joinToString("_").ifBlank { "roperos" }.replace(Regex("[^A-Za-z0-9_-]"), "_")
+
+    /** El nombre de la hoja del Excel: los proyectos, sin los signos que Excel no acepta. */
+    private fun nombreDeHoja(): String =
+        proyectos.joinToString(", ").filterNot { it in "[]:*?/\\" }.trim().take(31).ifBlank { "Corte" }
 
     private fun compartir(file: File, tipo: String, titulo: String) {
         val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
@@ -153,7 +206,7 @@ class ProduccionRoperoActivity : AppCompatActivity() {
         runCatching {
             val dir = File(cacheDir, "pdfs").apply { mkdirs() }
             val file = File(dir, "${nombreDeArchivo()}.xlsx")
-            file.writeBytes(HojaDeCorteXlsx.generar(muebles, ProyectoManager.getProyectoActivo().orEmpty().ifBlank { "Corte" }))
+            file.writeBytes(HojaDeCorteXlsx.generar(muebles, nombreDeHoja()))
             compartir(file, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Compartir hoja de corte")
         }.onFailure { Toast.makeText(this, "No se pudo hacer el Excel: ${it.message}", Toast.LENGTH_LONG).show() }
     }
@@ -258,6 +311,13 @@ class ProduccionRoperoActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_ROPERO = "produccion_ropero_json"
         const val EXTRA_CODIGO = "produccion_ropero_codigo"
+        const val EXTRA_PROYECTOS = "produccion_ropero_proyectos"
+
+        /** La hoja de corte de todos los roperos archivados en [proyectos], juntos. */
+        fun abrirProyectos(context: Context, proyectos: List<String>) {
+            context.startActivity(Intent(context, ProduccionRoperoActivity::class.java)
+                .putStringArrayListExtra(EXTRA_PROYECTOS, ArrayList(proyectos)))
+        }
 
         fun abrir(context: Context, ropero: Ropero? = null, codigo: String = "") {
             context.startActivity(Intent(context, ProduccionRoperoActivity::class.java).apply {
