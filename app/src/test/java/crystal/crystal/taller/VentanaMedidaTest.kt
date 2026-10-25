@@ -44,11 +44,16 @@ class VentanaMedidaTest {
      */
     @Test
     fun la_que_empieza_en_curva_es_una_curva_y_una_pared() {
-        val vieja = EsquinaMedida(listOf(pared(90f, flecha = 18f), pared(150f)), listOf("90"))
+        // Detrás de la curva la plantilla escribía lo que gira el arco: esa curva sale en tangente.
+        val giro = ArcoEsquina.deDesarrolloYFlecha(90f, 18f)!!.anguloGrados
+        val vieja = EsquinaMedida(listOf(pared(90f, flecha = 18f), pared(150f)), listOf("%.1f".format(java.util.Locale.US, giro)))
         val v = VentanaMedida.desdeEsquina(vieja)
         assertEquals(listOf(true, false), v.lados.map { it.esCurvo })
         assertEquals(90f, v.lados[0].ancho)
         assertEquals("la curva entra tangente", 180f, v.uniones.single().grados)
+        // Desde el 2026-10-19 va el ángulo de la unión: 150 es un quiebre de 30.
+        val conQuiebre = VentanaMedida.desdeEsquina(EsquinaMedida(listOf(pared(90f, flecha = 18f), pared(150f)), listOf("150")))
+        assertEquals(150f, conQuiebre.uniones.single().grados)
     }
 
     /** El texto nuevo va y vuelve, con el ángulo de una curva que no es tangente y una unión sin parante. */
@@ -121,5 +126,27 @@ class VentanaMedidaTest {
         assertEquals(listOf(150f, 120f), v.lados.map { it.ancho })
         assertEquals(90f, v.uniones.single().grados)
         assertNull(VentanaMedida.desdeTexto("150,150,120,120,90;120,120,120,120,90@90"))
+    }
+
+    /**
+     * Lo guardado con una pared de cero (la ventana que empezaba o acababa en curva, antes del
+     * 2026-10-19) se lee sin ella: la curva pasa a ser un lado curvo y no queda ningún lado de 0.
+     */
+    @Test
+    fun la_pared_de_cero_de_antes_no_es_un_lado() {
+        val empieza = EsquinaMedida(
+            listOf(LadoEsquina(0f, 0f, 120f, 120f, 90f), LadoEsquina(150f, 150f, 120f, 120f, 90f)),
+            listOf(EsquinaMedida.textoDeCurva(CurvaEsquina(90f, 81f, 120f, 90f)))
+        )
+        val v1 = VentanaMedida.desdeEsquina(empieza)
+        assertEquals(listOf(true, false), v1.lados.map { it.esCurvo })
+        assertTrue(v1.lados.none { it.ancho <= 0.5f })
+        val acaba = EsquinaMedida(
+            listOf(LadoEsquina(170f, 170f, 105f, 105f, 75f), LadoEsquina(0f, 0f, 105f, 105f, 75f)),
+            listOf(EsquinaMedida.textoDeCurva(CurvaEsquina(58.6f, 58.2f, 105f, 75f)))
+        )
+        val v2 = VentanaMedida.desdeEsquina(acaba)
+        assertEquals(listOf(false, true), v2.lados.map { it.esCurvo })
+        assertEquals(1, v2.uniones.size)
     }
 }

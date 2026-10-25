@@ -19,7 +19,52 @@ import kotlin.math.abs
  */
 object FormaDeLaMedida {
 
-    enum class Tipo { RECTANGULAR, DESCUADRE, ESCALONADO, POLIGONAL, CIRCULAR, ESQUINA }
+    enum class Tipo { RECTANGULAR, DESCUADRE, ESCALONADO, POLIGONAL, CIRCULAR, ESQUINA, ARQUEADO }
+
+    /**
+     * Un arco del borde del vano (2026-10-21: un contorno de líneas y arcos unido en Medidas). No es
+     * una pared curva —eso es la ventana curva, que dobla en la planta—: es el borde del vano visto de
+     * frente, que en lugar de ser recto es un arco. [lado] es "izquierda", "derecha", "arriba" o
+     * "abajo"; [haciaAfuera], si la panza sale del vano (lo normal) o entra en él.
+     */
+    data class ArcoDelVano(
+        val lado: String, val cuerda: Float, val flecha: Float, val desarrollo: Float, val haciaAfuera: Boolean = true
+    ) {
+        /**
+         * Cómo se llama en el taller: de medio punto (semicircular) si la flecha es media cuerda,
+         * rebajado si es menos y de herradura si es más (pasa de media circunferencia).
+         */
+        val nombre: String get() {
+            val mitad = cuerda / 2f
+            return when {
+                abs(flecha - mitad) <= maxOf(1f, cuerda * 0.02f) -> "de medio punto (semicircular)"
+                flecha < mitad -> "rebajado"
+                else -> "de herradura"
+            }
+        }
+
+        val descripcion: String get() {
+            val donde = when (lado) {
+                "izquierda" -> "a la izquierda"
+                "derecha" -> "a la derecha"
+                else -> lado
+            }
+            val sentido = if (haciaAfuera) "" else ", entrando en el vano"
+            return "arco $nombre $donde (cuerda ${num(cuerda)}, flecha ${num(flecha)}, desarrollo ${num(desarrollo)}$sentido)"
+        }
+    }
+
+    fun arcosATexto(arcos: List<ArcoDelVano>): String = arcos.joinToString(";") {
+        "${it.lado}:${num(it.cuerda)}:${num(it.flecha)}:${num(it.desarrollo)}:${if (it.haciaAfuera) 1 else 0}"
+    }
+
+    fun arcosDesdeTexto(texto: String): List<ArcoDelVano> = texto.split(";").mapNotNull { a ->
+        val p = a.split(":")
+        val cuerda = p.getOrNull(1)?.toFloatOrNull() ?: return@mapNotNull null
+        val flecha = p.getOrNull(2)?.toFloatOrNull() ?: return@mapNotNull null
+        val desarrollo = p.getOrNull(3)?.toFloatOrNull() ?: return@mapNotNull null
+        ArcoDelVano(p[0], cuerda, flecha, desarrollo, p.getOrNull(4) != "0")
+    }
 
     data class Forma(
         val tipo: Tipo,
@@ -46,6 +91,10 @@ object FormaDeLaMedida {
             return Forma(Tipo.ESQUINA, "ventana $tipo: $lados$conCurva")
         }
         if (item.forma == "circular") return Forma(Tipo.CIRCULAR, "vano circular de ${num(item.ancho)} × ${num(item.alto)}")
+        // El vano con un borde en arco (2026-10-21): se dice qué arco es, no "con lados inclinados".
+        arcosDesdeTexto(item.arcos).takeIf { it.isNotEmpty() }?.let { arcos ->
+            return Forma(Tipo.ARQUEADO, "arqueado de ${num(item.ancho)} × ${num(item.alto)}, " + arcos.joinToString(" y ") { it.descripcion })
+        }
         val puntos = ContornoEnTramos.desdeTexto(item.contorno)
         if (puntos.size < 3) return Forma(Tipo.RECTANGULAR, "rectangular")
         return deContorno(puntos)

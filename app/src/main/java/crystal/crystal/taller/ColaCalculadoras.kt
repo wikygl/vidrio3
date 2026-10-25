@@ -70,6 +70,12 @@ object ColaCalculadoras {
          * alto). Vacío en las demás.
          */
         val forma: String = "",
+        /**
+         * Los arcos del vano cuando su contorno lleva alguno (2026-10-21: un contorno unido de líneas y
+         * arcos en Medidas), como [FormaDeLaMedida.arcosATexto]. El contorno trae el arco en puntos;
+         * esto dice cuál es arco, de qué lado y con qué medidas. Vacío en las demás.
+         */
+        val arcos: String = "",
         val estado: EstadoCola = EstadoCola.PENDIENTE
 
     ) : java.io.Serializable

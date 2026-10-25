@@ -302,6 +302,7 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnExtenderPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.EXTENDER) }
         binding.btnRecortarPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.RECORTAR) }
         binding.btnMoverImanPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.MOVER_IMAN) }
+        binding.btnContornoPanelMedida.setOnClickListener { alternarModoEdicion(SketchMedidasView.ModoEdicion.CONTORNO) }
         // Copiar, cortar y pegar: entre vistas también (lo dibujado por error en la frontal se
         // corta y se pega en la planta, sin volverlo a dibujar).
         binding.btnCopiarPanelMedida.setOnClickListener {
@@ -594,6 +595,11 @@ class MedidaActivity : AppCompatActivity() {
         } else if (binding.sketchMedidas.vistaActiva != SketchMedidasView.Vista.FRONTAL) {
             binding.sketchMedidas.cambiarAVista(SketchMedidasView.Vista.FRONTAL)
         }
+        // Fuera del 3D no queda nada encima del lienzo: ni el 3D, ni la ventana de Nova, ni sus avisos.
+        if (!activo) {
+            mostrarLaPerspectiva(false, null, null)
+            refrescarPerspectivaRopero(false)
+        }
     }
 
     private fun armarTiraDeVistas() {
@@ -621,6 +627,8 @@ class MedidaActivity : AppCompatActivity() {
             celda.addView(rotulo)
             celda.addView(miniatura)
             celda.setOnClickListener { irAVista(v) }
+            // Pulsando largo: volver a casar las vistas si lo de una no cae donde debe en otra.
+            celda.setOnLongClickListener { preguntarAlinearVistas(); true }
             fila.addView(celda)
             celdasDeVista[v] = celda to miniatura
         }
@@ -644,7 +652,8 @@ class MedidaActivity : AppCompatActivity() {
             minimumHeight = 0
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (44 * dp).toInt())
             setOnClickListener {
-                binding.sketchMedidas.vistaInterior = !binding.sketchMedidas.vistaInterior
+                // Cambia de qué punta de la frontal sale cada lateral y hacia dónde dobla.
+                binding.sketchMedidas.alternarInteriorExterior()
                 refrescarTiraDeVistas()
             }
         }
@@ -660,18 +669,25 @@ class MedidaActivity : AppCompatActivity() {
         ocultarPanelesFlotantes()
         binding.sketchMedidas.cambiarAVista(v)
         binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
+        entradaEnVista = System.currentTimeMillis()
         refrescarTiraDeVistas()
+        // El aviso de lo de las otras vistas se va solo a los pocos segundos.
+        binding.sketchMedidas.postDelayed({ if (modo3d) refrescarPerspectivaGenerada() }, 6100L)
     }
+
+    /** Cuándo se entró en la vista de ahora: el aviso de las otras vistas dura unos segundos. */
+    private var entradaEnVista = 0L
 
     /** Las miniaturas al día y la vista del lienzo resaltada; el aviso si es la perspectiva. */
     private fun refrescarTiraDeVistas() {
         val activa = binding.sketchMedidas.vistaActiva
         val dp = resources.displayMetrics.density
         val generada = perspectivaGenerada()
+        val escena = escenaGenerada()
         celdasDeVista.forEach { (v, celda) ->
             val (contenedor, miniatura) = celda
-            val bmp = if (v == SketchMedidasView.Vista.PERSPECTIVA && generada != null) {
-                bitmapDelVolumen(generada, (56 * dp).toInt(), (44 * dp).toInt())
+            val bmp = if (v == SketchMedidasView.Vista.PERSPECTIVA) {
+                miniaturaDePerspectiva(generada, escena, (56 * dp).toInt(), (44 * dp).toInt())
             } else {
                 binding.sketchMedidas.miniaturaDeVista(v, (56 * dp).toInt(), (44 * dp).toInt())
             }
@@ -680,10 +696,124 @@ class MedidaActivity : AppCompatActivity() {
             miniatura.setBackgroundColor(if (v == activa) Color.parseColor("#B3E5FC") else Color.parseColor("#F7F4EC"))
         }
         val enPerspectiva = activa == SketchMedidasView.Vista.PERSPECTIVA
-        binding.tvAvisoPerspectiva.visibility = if (enPerspectiva && generada == null) View.VISIBLE else View.GONE
+        binding.tvAvisoPerspectiva.visibility = if (enPerspectiva && generada == null && escena == null) View.VISIBLE else View.GONE
         botonInteriorExterior?.text = if (binding.sketchMedidas.vistaInterior) "Interior" else "Exterior"
-        mostrarPerspectivaGenerada(if (enPerspectiva) generada else null)
+        mostrarLaPerspectiva(enPerspectiva, generada, escena)
         refrescarPerspectivaRopero(enPerspectiva)
+    }
+
+    // ---- La perspectiva: el 3D de todo lo dibujado (2026-10-19) ----
+    // Antes la perspectiva solo enseñaba la ventana de esquina que sale de las vistas: lo que no
+    // era pared (un círculo, algo pegado, un plano suelto) no salía. Ahora enseña la escena 3D de
+    // todo lo dibujado en las cuatro vistas; la ventana de Nova queda a un toque.
+
+    private var escena3dVista: VistaEscena3d? = null
+
+    /** En la perspectiva, la ventana de esquina de Nova en vez del 3D de todo lo dibujado. */
+    private var verComoNova = false
+    private var chipModo3d: TextView? = null
+
+    /** El 3D de todo lo dibujado, si la perspectiva no se está dibujando a mano. */
+    private fun escenaGenerada(): Escena3d? {
+        if (perspectivaAMano) return null
+        if (binding.sketchMedidas.vistaTieneDibujo(SketchMedidasView.Vista.PERSPECTIVA)) return null
+        return binding.sketchMedidas.escena3d()
+    }
+
+    private fun miniaturaDePerspectiva(paquete: String?, escena: Escena3d?, ancho: Int, alto: Int): android.graphics.Bitmap? = when {
+        verComoNova && paquete != null -> bitmapDelVolumen(paquete, ancho, alto)
+        escena != null -> bitmapDeEscena(escena, ancho, alto)
+        paquete != null -> bitmapDelVolumen(paquete, ancho, alto)
+        else -> binding.sketchMedidas.miniaturaDeVista(SketchMedidasView.Vista.PERSPECTIVA, ancho, alto)
+    }
+
+    private fun bitmapDeEscena(escena: Escena3d, ancho: Int, alto: Int): android.graphics.Bitmap {
+        val v = VistaEscena3d(this)
+        v.conControles = false
+        v.mostrar(escena)
+        v.measure(
+            View.MeasureSpec.makeMeasureSpec(ancho * 4, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(alto * 4, View.MeasureSpec.EXACTLY)
+        )
+        v.layout(0, 0, ancho * 4, alto * 4)
+        val grande = android.graphics.Bitmap.createBitmap(ancho * 4, alto * 4, android.graphics.Bitmap.Config.ARGB_8888)
+        v.draw(android.graphics.Canvas(grande))
+        return android.graphics.Bitmap.createScaledBitmap(grande, ancho, alto, true)
+    }
+
+    /** Pone en la perspectiva el 3D de todo, o la ventana de Nova si se pidió y la hay. */
+    private fun mostrarLaPerspectiva(enPerspectiva: Boolean, paquete: String?, escena: Escena3d?) {
+        val nova = (verComoNova || escena == null) && paquete != null
+        mostrarEscena3d(if (enPerspectiva && !nova) escena else null)
+        mostrarPerspectivaGenerada(if (enPerspectiva && nova) paquete else null)
+        refrescarChipModo3d(enPerspectiva && paquete != null && escena != null)
+    }
+
+    private fun mostrarEscena3d(escena: Escena3d?) {
+        if (escena == null) {
+            escena3dVista?.visibility = View.GONE
+            return
+        }
+        val vista = escena3dVista ?: VistaEscena3d(this).also { nueva ->
+            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(0, 0).apply {
+                topToTop = binding.sketchMedidas.id
+                bottomToBottom = binding.sketchMedidas.id
+                startToStart = binding.sketchMedidas.id
+                endToEnd = binding.sketchMedidas.id
+            }
+            binding.layoutPrincipal.addView(nueva, lp)
+            nueva.elevation = 2 * resources.displayMetrics.density
+            // La columna de botones va debajo del aviso de arriba.
+            nueva.margenSuperiorDp = 64f
+            nueva.nombreDeVista = { SketchMedidasView.Vista.values().getOrNull(it)?.rotulo ?: "Vista" }
+            // "Editar": a su vista, con la pieza elegida, para cambiarla ahí.
+            nueva.alEditar = { v, indice ->
+                val destino = SketchMedidasView.Vista.values().getOrNull(v)
+                if (destino != null) {
+                    ocultarPanelesFlotantes()
+                    binding.sketchMedidas.elegirEnVista(destino, indice)
+                    binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
+                    refrescarTiraDeVistas()
+                }
+            }
+            escena3dVista = nueva
+        }
+        vista.mostrar(escena)
+        vista.visibility = View.VISIBLE
+    }
+
+    /** El botón para pasar del 3D de todo a la ventana de Nova y de vuelta. */
+    private fun refrescarChipModo3d(visible: Boolean) {
+        if (!visible) {
+            chipModo3d?.visibility = View.GONE
+            return
+        }
+        val dp = resources.displayMetrics.density
+        val chip = chipModo3d ?: TextView(this).apply {
+            textSize = 11f
+            setTextColor(Color.parseColor("#0D47A1"))
+            setBackgroundResource(R.drawable.bg_control_panel)
+            setPadding((10 * dp).toInt(), (6 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
+            elevation = 4 * dp
+            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomToBottom = binding.sketchMedidas.id
+                endToEnd = binding.sketchMedidas.id
+                bottomMargin = (52 * dp).toInt()
+                rightMargin = (8 * dp).toInt()
+            }
+            binding.layoutPrincipal.addView(this, lp)
+            setOnClickListener {
+                verComoNova = !verComoNova
+                refrescarTiraDeVistas()
+            }
+            chipModo3d = this
+        }
+        chip.text = if (verComoNova) "◰ ver todo lo dibujado en 3D" else "◰ ver como ventana de esquina (Nova)"
+        chip.visibility = View.VISIBLE
+        chip.bringToFront()
     }
 
     /**
@@ -697,13 +827,13 @@ class MedidaActivity : AppCompatActivity() {
         binding.sketchMedidas.post {
             refrescoPendiente = false
             val generada = perspectivaGenerada()
+            val escena = escenaGenerada()
             val dp = resources.displayMetrics.density
             celdasDeVista[SketchMedidasView.Vista.PERSPECTIVA]?.second?.setImageBitmap(
-                if (generada != null) bitmapDelVolumen(generada, (56 * dp).toInt(), (44 * dp).toInt())
-                else binding.sketchMedidas.miniaturaDeVista(SketchMedidasView.Vista.PERSPECTIVA, (56 * dp).toInt(), (44 * dp).toInt())
+                miniaturaDePerspectiva(generada, escena, (56 * dp).toInt(), (44 * dp).toInt())
             )
             val enPerspectiva = binding.sketchMedidas.vistaActiva == SketchMedidasView.Vista.PERSPECTIVA
-            mostrarPerspectivaGenerada(if (enPerspectiva) generada else null)
+            mostrarLaPerspectiva(enPerspectiva, generada, escena)
             refrescarPerspectivaRopero(enPerspectiva)
         }
     }
@@ -817,6 +947,18 @@ class MedidaActivity : AppCompatActivity() {
                         android.widget.Toast.makeText(this, "Pared cambiada de lado", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
+                // Elegida con un toque, la pared se arrastra para subirla o bajarla (2026-10-05).
+                nueva.alMoverPared = { tramo, cm ->
+                    binding.sketchMedidas.moverParedEnAlto(tramo, cm)
+                    refrescarPerspectivaGenerada()
+                    val total = binding.sketchMedidas.desnivelDePared(tramo)
+                    val texto = when {
+                        total == 0f -> "Pared de vuelta a su sitio"
+                        total > 0f -> "Pared subida ${String.format(java.util.Locale.US, "%.1f", total)} cm"
+                        else -> "Pared bajada ${String.format(java.util.Locale.US, "%.1f", -total)} cm"
+                    }
+                    android.widget.Toast.makeText(this, texto, android.widget.Toast.LENGTH_SHORT).show()
+                }
                 volumenGenerado = nueva
             }
             // Al ponerla al día no se le cambia el punto de vista al usuario: se conserva lo girado.
@@ -886,8 +1028,10 @@ class MedidaActivity : AppCompatActivity() {
         val texto: String? = when {
             vista == SketchMedidasView.Vista.PERSPECTIVA && roperoGenerado?.visibility == View.VISIBLE ->
                 "◰ ropero en 3D · toca el mueble para ver puertas o interior · toca aquí para dibujar a mano"
+            vista == SketchMedidasView.Vista.PERSPECTIVA && escena3dVista?.visibility == View.VISIBLE ->
+                "◰ 3D de todas las vistas · arrastra para girar, pellizca para acercar · toca una pieza para ver qué es y editarla · toca aquí para dibujar a mano"
             vista == SketchMedidasView.Vista.PERSPECTIVA && conPerspectiva ->
-                "◰ perspectiva generada · arrastra para girar · toca una pared lateral para cambiarla de lado · pellizca para acercar · toca aquí para dibujar a mano"
+                "◰ perspectiva generada · arrastra para girar · toca una pared para elegirla y arrástrala para subirla o bajarla · tócala otra vez para cambiarla de lado · toca aquí para dibujar a mano"
             vista == SketchMedidasView.Vista.SUPERIOR && binding.sketchMedidas.enseniaAlgoGenerado() ->
                 "planta generada de las alzadas · toca aquí para editarla a mano"
             // Lo dibujado en la planta, visto desde aquí (2026-10-04).
@@ -895,7 +1039,17 @@ class MedidaActivity : AppCompatActivity() {
                 "paredes de la planta vistas desde aquí · toca aquí para editarlas en esta vista"
             (vista == SketchMedidasView.Vista.IZQUIERDA || vista == SketchMedidasView.Vista.DERECHA) &&
                 binding.sketchMedidas.enseniaAlgoGenerado() ->
-                "dibuja esta pared de frente: arranca en el canto con la frontal, en el cero"
+                if (vista == SketchMedidasView.Vista.IZQUIERDA) "dibuja esta pared a la IZQUIERDA del cero: el cero es el canto con la frontal"
+                else "dibuja esta pared a la DERECHA del cero: el cero es el canto con la frontal"
+            // En la planta, las bases de las alzadas (2026-10-19): se explican al entrar.
+            vista == SketchMedidasView.Vista.SUPERIOR && binding.sketchMedidas.tieneBases() &&
+                System.currentTimeMillis() - entradaEnVista < 6000L ->
+                "en naranja, dónde va cada vista: elígela y muévela o gírala (Rotar → desde un nodo) · el gris es lo dibujado en ellas"
+            // Lo de las otras vistas, en gris (2026-10-19): al entrar en la vista o mientras está
+            // vacía; después se quita para no tapar el dibujo (alinear sigue en la tira, pulsando largo).
+            vista != SketchMedidasView.Vista.PERSPECTIVA && binding.sketchMedidas.enseniaOtrasVistas() &&
+                (!binding.sketchMedidas.vistaTieneDibujo(vista) || System.currentTimeMillis() - entradaEnVista < 6000L) ->
+                "en gris, lo de las otras vistas: el imán se pega a ello · si no casa, toca aquí para alinear"
             else -> null
         }
         if (texto == null) {
@@ -935,10 +1089,30 @@ class MedidaActivity : AppCompatActivity() {
                     if (binding.sketchMedidas.materializarLoGenerado()) {
                         binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
                         refrescarTiraDeVistas()
+                    } else if (binding.sketchMedidas.enseniaOtrasVistas()) {
+                        preguntarAlinearVistas()
                     }
                 }
             }
         }
+    }
+
+    /** Vuelve a casar las vistas por lo dibujado: la esquina de abajo a la izquierda de cada una. */
+    private fun preguntarAlinearVistas() {
+        AlertDialog.Builder(this)
+            .setTitle("Alinear las vistas")
+            .setMessage(
+                "Cada vista tiene su cero, marcado en rojo: la esquina de la caja. Si lo de una vista " +
+                    "no cae donde debe en las otras, se toma otra vez como cero la esquina de abajo a la " +
+                    "izquierda de lo dibujado en la frontal y en la planta."
+            )
+            .setPositiveButton("Alinear") { _, _ ->
+                binding.sketchMedidas.alinearVistas()
+                binding.sketchMedidas.post { binding.sketchMedidas.fitContentInView() }
+                refrescarTiraDeVistas()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     /** El mismo botón prende el modo y lo apaga; hay que mirar ANTES de cerrar los paneles. */
@@ -1624,11 +1798,70 @@ class MedidaActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Girar lo seleccionado: un cuarto de vuelta, los grados que se escriban, o arrastrando con el
+     * dedo; desde el centro o desde uno de sus nodos. Si ya se eligió un nodo (modo girar puesto),
+     * los grados escritos giran desde ese nodo. Se mira ANTES de cerrar los paneles, que lo apagan.
+     */
     private fun rotarSeleccion() {
+        val sketch = binding.sketchMedidas
+        val eje = sketch.pivoteDeGiro
+        val desdeNodo = sketch.pivoteDeGiroEsNodo
         ocultarPanelesFlotantes()
-        if (!binding.sketchMedidas.rotateSelected()) {
+        if (!sketch.haySeleccion()) {
             mostrar("Selecciona una figura")
+            return
         }
+        val pivote = if (desdeNodo) eje else null
+        fun girar(grados: Float) {
+            sketch.rotateSelected(grados, pivote)
+            // Desde un nodo se sigue en el modo, con el mismo eje, para encadenar giros.
+            if (pivote != null) sketch.activarGiro(desdeNodo = true, pivote = pivote)
+        }
+        val opciones = arrayOf(
+            "90° horario",
+            "90° antihorario",
+            "180°",
+            "Escribir grados",
+            "Arrastrar con el dedo (desde el centro)",
+            "Desde un nodo (tocar el nodo y arrastrar)"
+        )
+        AlertDialog.Builder(this)
+            .setTitle(if (pivote != null) "Rotar desde el nodo elegido" else "Rotar")
+            .setItems(opciones) { _, which ->
+                when (which) {
+                    0 -> girar(90f)
+                    1 -> girar(-90f)
+                    2 -> girar(180f)
+                    3 -> pedirGradosDeGiro { girar(it) }
+                    4 -> sketch.activarGiro(desdeNodo = false)
+                    5 -> sketch.activarGiro(desdeNodo = true)
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun pedirGradosDeGiro(alAceptar: (Float) -> Unit) {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
+            hint = "Grados"
+            setSingleLine(true)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Grados")
+            .setMessage("Positivo gira en sentido horario; negativo (con −), antihorario.")
+            .setView(input)
+            .setPositiveButton("Rotar") { _, _ ->
+                val grados = input.text?.toString()?.replace(",", ".")?.replace("−", "-")?.trim()?.toFloatOrNull()
+                if (grados == null || grados == 0f || abs(grados) > 360f) {
+                    mostrar("Escribe un ángulo entre -360 y 360")
+                    return@setPositiveButton
+                }
+                alAceptar(grados)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun agruparSeleccion() {
@@ -2965,7 +3198,9 @@ class MedidaActivity : AppCompatActivity() {
                         // Y el ropero de melamina entero, si la medida es un ropero.
                         disenoRopero = binding.sketchMedidas.roperoDelDibujo()?.aJson().orEmpty(),
                         // Y si es un círculo (o una elipse), que la calculadora lo sepa.
-                        forma = if (binding.sketchMedidas.esCircularPrincipal()) "circular" else ""
+                        forma = if (binding.sketchMedidas.esCircularPrincipal()) "circular" else "",
+                        // Y los arcos de un contorno unido: el vano arqueado (2026-10-21).
+                        arcos = FormaDeLaMedida.arcosATexto(binding.sketchMedidas.arcosDelVanoEnCm())
                     )
                 )
         }

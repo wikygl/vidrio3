@@ -170,11 +170,19 @@ data class VentanaMedida(
                 lados.add(lado)
             }
             m.lados.forEachIndexed { i, l ->
+                // Una pared de cero no es un lado (2026-10-19, "ni debe existir"): la usaban la ventana
+                // que empieza o acaba en curva para hacerle sitio. Su curva sí entra, como un lado curvo.
+                if (l.ancho <= 0.5f) {
+                    m.curvaDe(i)?.let { c -> agregar(ladoDeCurva(c, m.lados.getOrNull(i + 1) ?: l), TANGENTE) }
+                    return@forEachIndexed
+                }
                 val antes = if (i == 0) null else m.angulos.getOrNull(i - 1)
                 val union = when {
-                    // Antes, toda curva entraba y salía tangente: detrás de una curva de arista, y
-                    // junto a una pared curva (el ángulo escrito ahí era el giro del arco, no una esquina).
-                    i > 0 && (m.curvaDe(i - 1) != null || l.esCurva || m.lados[i - 1].esCurva) -> TANGENTE
+                    // La curva de una arista entra y sale tangente.
+                    i > 0 && m.curvaDe(i - 1) != null -> TANGENTE
+                    // Junto a una pared curva, el ángulo de la unión (2026-10-19): 180 en tangente, y lo que
+                    // no lo sea es su quiebre. Antes se tomaba siempre tangente.
+                    i > 0 && (l.esCurva || m.lados[i - 1].esCurva) -> unionJuntoACurva(m, i)
                     else -> UnionDeLados(antes?.toFloatOrNull() ?: 90f)
                 }
                 agregar(
@@ -188,6 +196,25 @@ data class VentanaMedida(
                 m.curvaDe(i)?.let { c -> agregar(ladoDeCurva(c, l), TANGENTE) }
             }
             return VentanaMedida(lados, uniones)
+        }
+
+        /**
+         * La unión entre el lado [i] y el de antes cuando uno de los dos es una pared curva. Hasta el
+         * 2026-10-19 detrás de una curva se escribía lo que gira el arco o la esquina entera: esos números
+         * se leen como tangente. Dos curvas seguidas todavía no tienen regla: tangente.
+         */
+        private fun unionJuntoACurva(m: EsquinaMedida, i: Int): UnionDeLados {
+            val antes = m.lados[i - 1]
+            val lado = m.lados[i]
+            if (antes.esCurva && lado.esCurva) return TANGENTE
+            val g = m.angulos.getOrNull(i - 1)?.toFloatOrNull() ?: return TANGENTE
+            if (antes.esCurva) {
+                // Lo de antes: la plantilla escribía lo que gira el arco y el 3D la esquina entera (180 menos
+                // ese giro). Cualquiera de los dos números es una curva que sale en tangente.
+                val arco = ArcoEsquina.deDesarrolloYFlecha(antes.ancho, abs(antes.flecha))?.anguloGrados ?: 0f
+                if (abs(abs(g) - arco) < 1f || abs(abs(g) - (180f - arco)) < 1f) return TANGENTE
+            }
+            return UnionDeLados(g)
         }
 
         /** La curva escrita en una arista, como un lado curvo. Sin alto ni puente, los de la pared de antes. */

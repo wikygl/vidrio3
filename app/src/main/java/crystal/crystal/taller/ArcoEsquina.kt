@@ -26,7 +26,50 @@ data class ArcoEsquina(
     val radio: Float,
     val anguloGrados: Float
 ) {
+    /**
+     * Cuánto se desvía la cuerda de la pared recta cuando la curva entra en TANGENTE: la mitad de lo
+     * que gira. Un cuarto de círculo, 45°.
+     */
+    val desvioDeLaCuerdaEnTangente: Float get() = anguloGrados / 2f
+
+    /**
+     * El quiebre en la unión de una pared recta con esta curva, desde el ángulo que se mide en obra
+     * entre la pared y la CUERDA (dictado por el usuario el 2026-10-19). La dirección con que arranca la
+     * curva no se puede medir; la cuerda sí, con un hilo de punta a punta. En tangente la cuerda se
+     * desvía la mitad del giro de la curva; lo que pase de ahí es quiebre:
+     *
+     *     quiebre = (180 − ángulo pared-cuerda) − giro / 2
+     *
+     * Cuarto de círculo: 135° es tangente (quiebre 0) y 105° es un quiebre de 30°. Con signo: en menos
+     * la curva sale hacia el otro lado de lo que se curva.
+     */
+    fun quiebreConAnguloDeCuerda(anguloParedCuerda: Float): Float =
+        (180f - anguloParedCuerda) - desvioDeLaCuerdaEnTangente
+
+    /**
+     * El ángulo en la unión, como el de cualquier esquina: 180 si la curva entra en tangente (la pared
+     * sigue derecho) y 180 − quiebre si no (150 con un quiebre de 30). Es lo que gira la ventana al
+     * entrar en la curva; después gira la curva lo suyo, [anguloGrados].
+     */
+    fun anguloEnLaUnion(anguloParedCuerda: Float): Float = 180f - quiebreConAnguloDeCuerda(anguloParedCuerda)
+
+    /** Al revés: el ángulo entre la pared y la cuerda que da una unión de [union] grados (180 = tangente). */
+    fun anguloDeCuerdaConUnion(union: Float): Float = abs(union) - desvioDeLaCuerdaEnTangente
+
     companion object {
+        /**
+         * La unión de dos curvas seguidas, desde el ángulo entre sus dos cuerdas (2026-10-20: el ángulo
+         * de un lado se mide con el de antes, sea plano o curvo). En tangente cada cuerda se desvía la
+         * mitad de lo que gira su curva; lo que pase de ahí es quiebre. Dos cuartos de círculo en
+         * tangente: 90° entre las cuerdas.
+         */
+        fun anguloEnLaUnionDeCuerdas(antes: ArcoEsquina, despues: ArcoEsquina, anguloCuerdas: Float): Float =
+            anguloCuerdas + antes.desvioDeLaCuerdaEnTangente + despues.desvioDeLaCuerdaEnTangente
+
+        /** Al revés: el ángulo entre las dos cuerdas que da una unión de [union] grados (180 = tangente). */
+        fun anguloDeCuerdasConUnion(antes: ArcoEsquina, despues: ArcoEsquina, union: Float): Float =
+            abs(union) - antes.desvioDeLaCuerdaEnTangente - despues.desvioDeLaCuerdaEnTangente
+
         /** Por debajo de esto no hay curva que valga: es una pared recta. */
         private const val MINIMO = 0.05f
 

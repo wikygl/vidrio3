@@ -102,4 +102,37 @@ class ArcoEsquinaTest {
         assertNull(ArcoEsquina.deDesarrolloYRadio(0f, 100f))
         assertNull(ArcoEsquina.deDesarrolloYRadio(1000f, 10f))
     }
+
+    /**
+     * El quiebre en la unión con una pared recta, desde el ángulo entre la pared y la cuerda (dictado
+     * por el usuario el 2026-10-19). Cuarto de círculo de radio 60: en tangente la cuerda se desvía
+     * 45° (135° con la pared); con un quiebre de 30°, 75° (105°). La curva de su prueba (58.6 de
+     * desarrollo, 58.2 de cuerda) gira 23.2°: en tangente la cuerda forma 168.4° con la pared.
+     */
+    @Test
+    fun el_quiebre_sale_del_angulo_entre_la_pared_y_la_cuerda() {
+        val cuarto = ArcoEsquina.deDesarrolloYCuerda((Math.PI * 30).toFloat(), (60 * Math.sqrt(2.0)).toFloat())!!
+        assertEquals(45f, cuarto.desvioDeLaCuerdaEnTangente, 0.1f)
+        assertEquals(0f, cuarto.quiebreConAnguloDeCuerda(135f), 0.1f)
+        assertEquals(180f, cuarto.anguloEnLaUnion(135f), 0.1f)
+        assertEquals(30f, cuarto.quiebreConAnguloDeCuerda(105f), 0.1f)
+        assertEquals(150f, cuarto.anguloEnLaUnion(105f), 0.1f)
+
+        val prueba = ArcoEsquina.deDesarrolloYCuerda(58.6f, 58.2f)!!
+        assertEquals(11.6f, prueba.desvioDeLaCuerdaEnTangente, 0.05f)
+        assertEquals(0f, prueba.quiebreConAnguloDeCuerda(168.4f), 0.05f)
+        assertEquals(13.4f, prueba.quiebreConAnguloDeCuerda(155f), 0.05f)
+    }
+
+    /**
+     * Dos curvas seguidas (2026-10-20): el ángulo se mide entre sus cuerdas. Dos cuartos de círculo en
+     * tangente forman 90° entre las cuerdas; con 80°, un quiebre de 10° (unión de 170°).
+     */
+    @Test
+    fun entre_dos_curvas_el_angulo_es_entre_sus_cuerdas() {
+        val cuarto = ArcoEsquina.deDesarrolloYCuerda((Math.PI * 30).toFloat(), (60 * Math.sqrt(2.0)).toFloat())!!
+        assertEquals(180f, ArcoEsquina.anguloEnLaUnionDeCuerdas(cuarto, cuarto, 90f), 0.1f)
+        assertEquals(170f, ArcoEsquina.anguloEnLaUnionDeCuerdas(cuarto, cuarto, 80f), 0.1f)
+        assertEquals(80f, ArcoEsquina.anguloDeCuerdasConUnion(cuarto, cuarto, 170f), 0.1f)
+    }
 }

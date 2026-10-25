@@ -752,6 +752,7 @@
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1" />
+
         </LinearLayout>
     </LinearLayout>
 
@@ -1043,10 +1044,23 @@
                     android:src="@drawable/pegar" />
             </LinearLayout>
 
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Contorno" />
+
+                <ImageButton
+                    android:id="@+id/btnContornoPanelMedida"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Unir líneas y arcos en un contorno cerrado"
+                    android:src="@drawable/unir_contorno" />
+            </LinearLayout>
+
             <Space
                 android:layout_width="0dp"
                 android:layout_height="1dp"
-                android:layout_weight="2" />
+                android:layout_weight="1" />
         </LinearLayout>
     </LinearLayout>
 

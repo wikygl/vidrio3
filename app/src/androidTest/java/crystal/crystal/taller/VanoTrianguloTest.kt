@@ -48,15 +48,12 @@ class VanoTrianguloTest {
         val d = ContornoEnTramos.disenoDesdeContorno(contorno, "apa", altoHoja = medida.altoCm * 0.7f)
         assertNotNull(d)
         assertTrue("el vano triangular se leyó como un rectángulo", d!!.esIrregular)
-        // El vano se parte: las puntas, donde la hoja no entra, y el rectángulo del medio.
-        assertTrue("no se partió el vano: ${d.aPaquete()}", d.nTramos >= 3)
+        // Un tramo (2026-10-19, "cuanto más simple mejor"; antes, un tramo por punta y otro en el
+        // medio): el sistema en el rectángulo donde la hoja entra entera, las puntas fijos.
+        assertEquals("el vano no salió en un tramo: ${d.aPaquete()}", 1, d.nTramos)
         assertTrue("el vano triangular se quedó sin corrediza: ${d.aPaquete()}", d.nCorredizas >= 1)
         // Y la corrediza va en el medio, no en las puntas.
-        val conCorrediza = d.tramos.indices.filter { i -> (d.tramos[i].sistema?.nCorredizas ?: 0) > 0 }
-        assertTrue("la corrediza cayó en una punta: $conCorrediza de ${d.nTramos}",
-            conCorrediza.none { it == 0 || it == d.nTramos - 1 })
-        // Los tramos de las puntas son todo fijo.
-        assertEquals(0, d.tramos.first().sistema?.nCorredizas)
-        assertEquals(0, d.tramos.last().sistema?.nCorredizas)
+        val mods = d.tramos[0].sistema!!.modulos
+        assertTrue("la corrediza cayó en una punta: ${d.aPaquete()}", mods.first().esFijo && mods.last().esFijo)
     }
 }

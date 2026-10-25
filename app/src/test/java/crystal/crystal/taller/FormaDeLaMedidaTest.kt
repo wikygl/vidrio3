@@ -66,4 +66,21 @@ class FormaDeLaMedidaTest {
         assertTrue(l.descripcion, l.descripcion.contains("150 + 120") && l.descripcion.contains("curva"))
         assertEquals(FormaDeLaMedida.Tipo.CIRCULAR, FormaDeLaMedida.de(base.copy(forma = "circular")).tipo)
     }
+
+    /**
+     * El vano arqueado (2026-10-21): el contorno unido de líneas y un arco llega con sus arcos, y la
+     * forma se dice por su nombre de taller, no "con lados inclinados".
+     */
+    @Test
+    fun el_vano_arqueado_dice_su_arco() {
+        val arcos = listOf(FormaDeLaMedida.ArcoDelVano("izquierda", 164f, 39f, 187.7f))
+        val texto = FormaDeLaMedida.arcosATexto(arcos)
+        assertEquals(arcos, FormaDeLaMedida.arcosDesdeTexto(texto))
+        val item = ColaCalculadoras.MedidaCalc("Ventana", 205.6f, 164f, 1f, "x", "", arcos = texto)
+        val f = FormaDeLaMedida.de(item)
+        assertEquals(FormaDeLaMedida.Tipo.ARQUEADO, f.tipo)
+        assertTrue(f.descripcion, f.descripcion.contains("arco rebajado a la izquierda"))
+        assertEquals("de medio punto (semicircular)", FormaDeLaMedida.ArcoDelVano("arriba", 100f, 50f, 157.1f).nombre)
+        assertEquals("de herradura", FormaDeLaMedida.ArcoDelVano("arriba", 100f, 70f, 200f).nombre)
+    }
 }
