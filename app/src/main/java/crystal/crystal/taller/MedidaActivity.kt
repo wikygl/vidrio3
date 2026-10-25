@@ -32,6 +32,7 @@ import androidx.appcompat.app.AlertDialog
 import kotlin.math.abs
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
 import crystal.crystal.MainActivity
 import crystal.crystal.R
 import crystal.crystal.databinding.ActivityMedidaBinding
@@ -43,6 +44,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 class MedidaActivity : AppCompatActivity() {
 
@@ -109,6 +111,12 @@ class MedidaActivity : AppCompatActivity() {
         configurarPantalla()
         configurarAcciones()
         manejarIntentEntrada(intent)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Copia en la nube de lo que cambió mientras se trabajaba aquí (no espera ni avisa).
+        MedidasNube.respaldarEnSegundoPlano(this, obtenerDirectorioMedidas())
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -214,6 +222,10 @@ class MedidaActivity : AppCompatActivity() {
         binding.btnArchivoLimpiarLienzo.setOnClickListener {
             ocultarPanelesFlotantes()
             confirmarLimpiarLienzoActual()
+        }
+        binding.btnArchivoNube.setOnClickListener {
+            ocultarPanelesFlotantes()
+            mostrarDialogoNube()
         }
         binding.btnArchivoCompartir.setOnClickListener {
             ocultarPanelesFlotantes()
@@ -2125,6 +2137,129 @@ class MedidaActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Copia de las medidas en la cuenta del usuario, por si el celular se pierde o se malogra.
+     * Se sube sola al salir de Medidas; aquí se puede forzar la subida o recuperarlas en otro equipo.
+     */
+    private fun mostrarDialogoNube() {
+        if (MedidasNube.uid() == null) {
+            AlertDialog.Builder(this)
+                .setTitle("Medidas en la nube")
+                .setMessage("Inicie sesión en Crystal para guardar las medidas en su cuenta.")
+                .setPositiveButton("Entendido", null)
+                .show()
+            return
+        }
+        val ultimo = MedidasNube.ultimoRespaldo(this)
+        val cuando = if (ultimo > 0L) {
+            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(ultimo))
+        } else {
+            "todavía ninguno"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Medidas en la nube")
+            .setMessage(
+                "Las medidas guardadas se copian solas en su cuenta cada vez que sale de Medidas. " +
+                    "Si cambia de celular, inicie sesión con la misma cuenta y use Recuperar.\n\n" +
+                    "Último respaldo confirmado: $cuando"
+            )
+            .setPositiveButton("Subir ahora") { _, _ -> subirMedidasANube() }
+            .setNeutralButton("Recuperar") { _, _ -> mostrarMedidasEnNube() }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    private fun subirMedidasANube() {
+        mostrar("Subiendo medidas…")
+        lifecycleScope.launch {
+            val r = MedidasNube.subirAhora(this@MedidaActivity, obtenerDirectorioMedidas(), todos = true)
+            if (r == null) {
+                mostrar("Inicie sesión para subir las medidas")
+                return@launch
+            }
+            val mensaje = buildString {
+                append(
+                    when {
+                        r.subidos == 0 && r.muyGrandes.isEmpty() && r.fallidos == 0 -> "No hay medidas guardadas para subir."
+                        r.confirmados -> "Proyectos guardados en la nube: ${r.subidos}."
+                        else -> "Sin respuesta del servidor. ${r.subidos} proyectos quedaron en cola " +
+                            "y se suben solos cuando haya internet."
+                    }
+                )
+                if (r.muyGrandes.isNotEmpty()) {
+                    append("\n\nDemasiado grandes para la nube:\n")
+                    append(r.muyGrandes.joinToString("\n") { "• $it" })
+                }
+                if (r.fallidos > 0) append("\n\nNo se pudieron leer: ${r.fallidos}")
+            }
+            AlertDialog.Builder(this@MedidaActivity)
+                .setTitle("Medidas en la nube")
+                .setMessage(mensaje)
+                .setPositiveButton("Entendido", null)
+                .show()
+        }
+    }
+
+    private fun mostrarMedidasEnNube() {
+        mostrar("Buscando en la nube…")
+        lifecycleScope.launch {
+            val proyectos = MedidasNube.listar()
+            if (proyectos == null) {
+                mostrar("No se pudo leer la nube. Revise la conexión a internet.")
+                return@launch
+            }
+            if (proyectos.isEmpty()) {
+                mostrar("No hay medidas en la nube")
+                return@launch
+            }
+            val dir = obtenerDirectorioMedidas()
+            val enCelular = proyectos.map { File(dir, "${it.baseName}.txt").exists() }
+            val nombres = proyectos.mapIndexed { i, p ->
+                val fecha = p.baseName.take(8).let { f ->
+                    if (f.length == 8 && f.all { it.isDigit() }) "${f.substring(6)}/${f.substring(4, 6)}/${f.substring(0, 4)}" else ""
+                }
+                val dibujos = if (p.dibujos == 1) "1 medida" else "${p.dibujos} medidas"
+                val estado = if (enCelular[i]) "ya está en el celular" else "falta en el celular"
+                "${p.cliente}  $fecha\n$dibujos · $estado"
+            }.toTypedArray()
+            // De entrada se marcan las que faltan: es lo que se busca al cambiar de celular.
+            val marcadas = BooleanArray(proyectos.size) { !enCelular[it] }
+            AlertDialog.Builder(this@MedidaActivity)
+                .setTitle("Recuperar de la nube")
+                .setMultiChoiceItems(nombres, marcadas) { _, cual, marcada -> marcadas[cual] = marcada }
+                .setPositiveButton("Recuperar") { _, _ ->
+                    val elegidos = proyectos.filterIndexed { i, _ -> marcadas[i] }
+                    if (elegidos.isEmpty()) {
+                        mostrar("No marcó ningún proyecto")
+                        return@setPositiveButton
+                    }
+                    val reemplaza = proyectos.indices.count { marcadas[it] && enCelular[it] }
+                    if (reemplaza == 0) {
+                        recuperarMedidasDeNube(elegidos)
+                    } else {
+                        AlertDialog.Builder(this@MedidaActivity)
+                            .setTitle("Reemplazar")
+                            .setMessage(
+                                "$reemplaza de los marcados ya están en el celular. Se reemplazan con " +
+                                    "la copia de la nube; lo que haya cambiado aquí después se pierde."
+                            )
+                            .setPositiveButton("Reemplazar") { _, _ -> recuperarMedidasDeNube(elegidos) }
+                            .setNegativeButton("Cancelar", null)
+                            .show()
+                    }
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
+    }
+
+    private fun recuperarMedidasDeNube(proyectos: List<MedidasNube.ProyectoNube>) {
+        lifecycleScope.launch {
+            val n = MedidasNube.recuperar(this@MedidaActivity, obtenerDirectorioMedidas(), proyectos)
+            mostrar(if (n == 1) "1 proyecto recuperado. Ábralo con Abrir." else "$n proyectos recuperados. Ábralos con Abrir.")
+        }
+    }
+
     private fun mostrarGuardados() {
         val archivos = obtenerDirectorioMedidas()
             .listFiles { file -> file.extension.equals("txt", ignoreCase = true) }
@@ -2173,7 +2308,7 @@ class MedidaActivity : AppCompatActivity() {
         val detalle = archivos.joinToString("\n") { "• ${it.nameWithoutExtension}" }
         AlertDialog.Builder(this)
             .setTitle(if (archivos.size == 1) "Eliminar proyecto" else "Eliminar ${archivos.size} proyectos")
-            .setMessage("Se borran el texto guardado, el indice y todos los dibujos. No se puede deshacer.\n\n$detalle")
+            .setMessage("Se borran el texto guardado, el indice, todos los dibujos y su copia en la nube. No se puede deshacer.\n\n$detalle")
             .setPositiveButton("Eliminar") { _, _ ->
                 val borrados = archivos.count { eliminarProyectoMedidas(it) }
                 mostrar(if (borrados == 1) "Proyecto eliminado" else "Eliminados: $borrados")
@@ -2194,6 +2329,7 @@ class MedidaActivity : AppCompatActivity() {
         dir.listFiles { f -> f.name.startsWith("${baseName}_") && f.extension.equals("json", true) }
             ?.forEach { it.delete() }
         txtFile.delete()
+        MedidasNube.eliminar(this, baseName)
         if (archivoActualTxt?.absolutePath == txtFile.absolutePath) limpiarProyectoEnPantalla()
         true
     }.getOrElse {

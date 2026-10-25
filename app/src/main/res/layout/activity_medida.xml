@@ -673,6 +673,19 @@
                     android:contentDescription="Limpiar lienzo"
                     android:src="@drawable/limpia" />
             </LinearLayout>
+
+            <LinearLayout style="@style/CeldaIconoMedida">
+
+                <TextView
+                    style="@style/RotuloIconoMedida"
+                    android:text="Nube" />
+
+                <ImageButton
+                    android:id="@+id/btnArchivoNube"
+                    style="@style/IconoMedida"
+                    android:contentDescription="Medidas en la nube"
+                    android:src="@drawable/nube" />
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout
@@ -732,6 +745,13 @@
                     android:contentDescription="Enviar a calculadoras"
                     android:src="@drawable/enviar_m" />
             </LinearLayout>
+
+            <!-- Celda vacía: la fila de arriba tiene cinco y así las columnas quedan alineadas. Space y
+                 no View: un View con alto wrap_content toma todo el alto y estira el panel entero. -->
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
         </LinearLayout>
     </LinearLayout>
 

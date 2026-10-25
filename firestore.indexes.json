@@ -160,6 +160,11 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "medidas_nube",
+      "fieldPath": "archivos",
+      "indexes": []
+    },
+    {
       "collectionGroup": "usuarios",
       "fieldPath": "fecha",
       "ttl": false,

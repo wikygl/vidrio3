@@ -166,17 +166,31 @@ rules_version = '2';
 
           match /{secDocId} {
             allow read: if isOwner(uid) || isPanelRole();
+            // Rastros que deja el propio usuario: cambio de PIN (PinAuthActivity) y congelado de
+            // emergencia de la wallet (AyudaActivity).
             allow create: if (
-                isOwner(uid) && secDocId.matches("^walletPin_audit_.*$")
+                isOwner(uid) && secDocId.matches("^(walletPin|walletState)_audit_.*$")
               ) || isPanelRole();
             allow update, delete: if isPanelRole();
           }
         }
 
-        // Subcolecciones de usuarios
+        // ===== Medidas en la nube (MedidasNube.kt) =====
+        // Las medidas de los clientes solo las ve el dueño: ni otros usuarios ni el panel.
+        match /medidas_nube/{proyecto} {
+          allow read, write: if isOwner(uid);
+        }
+
+        // Subcolecciones de usuarios. Las que tienen regla propia quedan fuera: en las reglas basta
+        // con que UNA permita, así que este comodín anulaba las suyas. Abría el PIN de la wallet a
+        // cualquiera con sesión y dejaba al dueño escribir en pin_reset, wallet_state y wallet_movs.
+        function conReglaPropia(sub) {
+          return sub[0] in ['medidas_nube', 'security', 'wallet_movs'];
+        }
+
         match /{sub=**}/{doc} {
-          allow read: if isSignedIn() || isOwner(uid) || isPanelRole();
-          allow write: if isOwner(uid) || isPanelRole();
+          allow read: if !conReglaPropia(sub) && (isSignedIn() || isOwner(uid) || isPanelRole());
+          allow write: if !conReglaPropia(sub) && (isOwner(uid) || isPanelRole());
         }
       }
 
