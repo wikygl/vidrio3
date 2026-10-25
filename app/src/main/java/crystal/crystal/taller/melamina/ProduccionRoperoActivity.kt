@@ -179,8 +179,8 @@ class ProduccionRoperoActivity : AppCompatActivity() {
     private fun elegirExportacion() {
         AlertDialog.Builder(this)
             .setTitle("Exportar hoja de corte")
-            .setItems(arrayOf("Excel (.xlsx): para abrir en Excel, Hojas de cálculo o WPS", "CSV por comas: para máquinas")) { _, i ->
-                if (i == 0) compartirXlsx() else compartirCsv()
+            .setItems(arrayOf("Excel (.xlsx): para abrir en Excel, Hojas de cálculo o WPS", "Excel para el proveedor: largo, ancho y canto por lado", "CSV por comas: para máquinas")) { _, i ->
+                when (i) { 0 -> compartirXlsx(); 1 -> compartirProveedor(); else -> compartirCsv() }
             }
             .show()
     }
@@ -208,6 +208,16 @@ class ProduccionRoperoActivity : AppCompatActivity() {
             val file = File(dir, "${nombreDeArchivo()}.xlsx")
             file.writeBytes(HojaDeCorteXlsx.generar(muebles, nombreDeHoja()))
             compartir(file, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Compartir hoja de corte")
+        }.onFailure { Toast.makeText(this, "No se pudo hacer el Excel: ${it.message}", Toast.LENGTH_LONG).show() }
+    }
+
+    /** La hoja en el formato del proveedor (mm, lado largo primero, canto lado por lado), una hoja por melamina. */
+    private fun compartirProveedor() {
+        runCatching {
+            val dir = File(cacheDir, "pdfs").apply { mkdirs() }
+            val file = File(dir, "${nombreDeArchivo()}_proveedor.xlsx")
+            file.writeBytes(HojaDeCorteXlsx.generarProveedor(muebles))
+            compartir(file, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Compartir hoja para el proveedor")
         }.onFailure { Toast.makeText(this, "No se pudo hacer el Excel: ${it.message}", Toast.LENGTH_LONG).show() }
     }
 

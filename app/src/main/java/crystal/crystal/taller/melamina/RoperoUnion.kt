@@ -67,7 +67,9 @@ object RoperoUnion {
         // Las columnas de las dos celdas unidas se pierden; las demás corren un puesto.
         val partes = c.partes.filterKeys { it != quitar && it != quitar + 1 }
             .mapKeys { (k, _) -> if (k > quitar + 1) k - 1 else k }
-        return r.conCuerpoEn(a.cuerpo, a.ruta, c.copy(entrepanos = alturas.size, alturasEntrepanosCm = alturas, partes = partes))
+        // Los fijos: los dos unidos dejan de serlo; los de encima corren un puesto.
+        val fijos = c.casillerosFijosCm.filterKeys { it != quitar && it != quitar + 1 }.mapKeys { (k, _) -> if (k > quitar + 1) k - 1 else k }
+        return r.conCuerpoEn(a.cuerpo, a.ruta, c.copy(entrepanos = alturas.size, alturasEntrepanosCm = alturas, partes = partes, casillerosFijosCm = fijos))
     }
 
     /** La celda con una repisa al medio: lo contrario de unir a lo alto. Sobre unos cajones sin tapa, les devuelve la tapa. */
@@ -81,7 +83,8 @@ object RoperoUnion {
         alturas.add(el.indice.coerceAtMost(alturas.size), nueva)
         val partes = c.partes.mapKeys { (k, _) -> if (k > el.indice) k + 1 else k }
         val tipo = if (c.tipo == TipoCuerpo.CAJONES) TipoCuerpo.CAJONES_CASILLEROS else c.tipo
-        return r.conCuerpoEn(el.cuerpo, el.ruta, c.copy(tipo = tipo, entrepanos = alturas.size, alturasEntrepanosCm = alturas, partes = partes))
+        val fijos = c.casillerosFijosCm.filterKeys { it != el.indice }.mapKeys { (k, _) -> if (k > el.indice) k + 1 else k }
+        return r.conCuerpoEn(el.cuerpo, el.ruta, c.copy(tipo = tipo, entrepanos = alturas.size, alturasEntrepanosCm = alturas, partes = partes, casillerosFijosCm = fijos))
     }
 
     // ==================== A lo ancho ====================
@@ -176,7 +179,7 @@ object RoperoUnion {
         }
         return c.copy(
             tipo = tipo, cajones = altos.size, altosCajonesCm = altos,
-            entrepanos = nuevasAlturas.size, alturasEntrepanosCm = nuevasAlturas, partes = partes
+            entrepanos = nuevasAlturas.size, alturasEntrepanosCm = nuevasAlturas, partes = partes, casillerosFijosCm = emptyMap()
         )
     }
 

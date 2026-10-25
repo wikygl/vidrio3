@@ -246,7 +246,7 @@ object PlanoRopero {
             }
         }
         if (r.zocaloCm > 0.5f) {
-            val rf = if (r.zocaloDelante) RectF(x(frente), y(RoperoCalculo.altoZocalo(r) + r.tapacantoPuertasCm), x(frente + e), y(0f))
+            val rf = if (r.zocaloDelante) RectF(x(frente), y(RoperoCalculo.altoZocalo(r) + 2 * r.tapacantoPuertasCm), x(frente + e), y(0f))
                      else RectF(x(frente - e), y(r.bajoPisoCm), x(frente), y(0f))
             c.drawRect(rf, puerta); c.drawRect(rf, linea)
         }
@@ -343,6 +343,11 @@ object PlanoRopero {
         // La ranura del fondo del cajón, a su distancia del canto de abajo.
         if (p.ranuraCm > 0f) {
             val yr = rf.bottom - p.ranuraCm * k
+            c.drawLine(rf.left, yr, rf.right, yr, trazo(0.8f, Color.parseColor(COLOR_COTA)).apply { pathEffect = DashPathEffect(floatArrayOf(4f, 2f), 0f) })
+        }
+        // Las ranuras de la corrediza D-25 (piso y techo), desde el canto de delante, que es el de abajo.
+        p.ranurasCorredizaCm.forEach { d ->
+            val yr = rf.bottom - d * k
             c.drawLine(rf.left, yr, rf.right, yr, trazo(0.8f, Color.parseColor(COLOR_COTA)).apply { pathEffect = DashPathEffect(floatArrayOf(4f, 2f), 0f) })
         }
         // La veta a lo alto, en lo que es melamina.

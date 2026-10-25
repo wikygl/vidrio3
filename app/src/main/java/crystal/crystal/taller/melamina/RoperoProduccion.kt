@@ -82,7 +82,10 @@ object RoperoProduccion {
                 material = nombreDeMaterial(r, p.material),
                 vetas = if (veta) fmt(alto) else "",
                 canto = textoDeCanto(r, p),
-                ranura = if (p.ranuraCm > 0f) "${fmt(p.ranuraCm)} en ${fmt(ancho)}, cajonería" else "",
+                ranura = listOfNotNull(
+                    if (p.ranuraCm > 0f) "${fmt(p.ranuraCm)} en ${fmt(ancho)}, cajonería" else null,
+                    if (p.ranurasCorredizaCm.isNotEmpty()) "${p.ranurasCorredizaCm.joinToString(" y ") { fmt(it) }} del frente en ${fmt(ancho)}, corrediza D-25 (2 a 3 mm, 10 de hondo)" else null
+                ).joinToString("; "),
                 router = "",
                 etiqueta = etiqueta(codigoMueble, p),
                 codigo = codigoSimbolico(r, p)
@@ -131,6 +134,7 @@ object RoperoProduccion {
         val color = colorDeCanto(r, p.canto).lowercase(Locale.ROOT).trim().replace(Regex("\\s+"), "_")
         ladosConCanto(p).forEach { partes.add("$letra${fmt(it)}$color") }
         if (p.ranuraCm > 0f) partes.add("r${fmt(p.ranuraCm)}:${fmt(ancho)}")
+        p.ranurasCorredizaCm.forEach { partes.add("r${fmt(it)}:${fmt(ancho)}") }
         return partes.joinToString(",")
     }
 
@@ -162,6 +166,77 @@ object RoperoProduccion {
             appendLine()
         }
     }
+
+    // ==================== Hoja para el proveedor ====================
+    // Como la piden los proveedores del usuario (su captura del 2026-10-12): en mm, el lado más
+    // largo primero (no ancho y alto: comparan los lados), el canto lado por lado y su resumen.
+
+    /** Una fila de la hoja del proveedor; las piezas iguales van juntas. */
+    data class FilaProveedor(
+        val obs: String,
+        val largoMm: Int,
+        val anchoMm: Int,
+        val cantidad: Int,
+        val veta: String,
+        val canto: String,
+        val info: String
+    )
+
+    val COLUMNAS_PROVEEDOR = listOf("OBS", "Largo pieza", "Ancho pieza", "Cantidad", "VETA", "Ajuste de canto", "INFO")
+
+    /**
+     * El canto como lo escribe el proveedor: los cuatro lados separados por "|", primero los dos
+     * cortos y después los dos largos; cada uno "tipo;espesor" o vacío. El delgado va con su nombre
+     * de siempre, "D;1", aunque el de ahora mida 0.45 (el usuario: así lo llaman); el grueso, con
+     * su medida ("3 MM;3"). El resumen: I / II (largos), I CORT / II CORT (cortos), L (uno y uno),
+     * C (un largo y dos cortos), U (dos largos y un corto), O (todo el contorno); el grueso, con su
+     * medida detrás ("O 3MM").
+     */
+    fun cantoProveedor(r: Ropero, p: PiezaMelamina): Pair<String, String> {
+        val anchoLargo = p.anchoMm >= p.altoMm
+        val largos = if (anchoLargo) p.cantosEnAncho else p.cantosEnAlto
+        val cortos = if (anchoLargo) p.cantosEnAlto else p.cantosEnAncho
+        if (largos == 0 && cortos == 0) return "" to ""
+        val grueso = p.canto == TipoCanto.GRUESO
+        val mm = fmt(r.tapacantoPuertasMm)
+        val tipo = if (grueso) "$mm MM;$mm" else "D;1"
+        val lados = List(4) { i -> if ((i < 2 && i < cortos) || (i >= 2 && i - 2 < largos)) tipo else "" }
+        val forma = when {
+            largos == 2 && cortos == 2 -> "O"
+            largos == 1 && cortos == 2 -> "C"
+            largos == 2 && cortos == 1 -> "U"
+            largos == 1 && cortos == 1 -> "L"
+            cortos == 0 -> "I".repeat(largos)
+            else -> "I".repeat(cortos) + " CORT"
+        }
+        return lados.joinToString("|") to (if (grueso) "$forma ${mm}MM" else forma)
+    }
+
+    /**
+     * La fila de una pieza: la ranura del fondo del cajón en OBS ("R 1.8", en cm desde el canto,
+     * como "R 2.5 Y 4.5" de las corredizas), largo y ancho en mm, y la veta como en la hoja del
+     * taller (la medida a lo largo de la que corre); sin veta, "(T_N)" como en la del proveedor.
+     */
+    fun filaProveedor(r: Ropero, p: PiezaMelamina): FilaProveedor {
+        val (canto, info) = cantoProveedor(r, p)
+        return FilaProveedor(
+            obs = (listOfNotNull(p.ranuraCm.takeIf { it > 0f }) + p.ranurasCorredizaCm).let { rs -> if (rs.isEmpty()) "" else "R " + rs.joinToString(" Y ") { fmt(it) } },
+            largoMm = maxOf(p.anchoMm, p.altoMm),
+            anchoMm = minOf(p.anchoMm, p.altoMm),
+            cantidad = p.cantidad,
+            veta = if (tieneVeta(r, p.material)) "${p.altoMm}" else "(T_N)",
+            canto = canto,
+            info = info
+        )
+    }
+
+    /** Las filas de varios muebles, una hoja por melamina, con las piezas iguales sumadas. */
+    fun hojasDelProveedor(muebles: List<Mueble>): Map<String, List<FilaProveedor>> =
+        muebles.flatMap { mu -> RoperoCalculo.calcular(mu.ropero).piezas.map { nombreDeMaterial(mu.ropero, it.material) to filaProveedor(mu.ropero, it) } }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, filas) ->
+                filas.groupBy { it.copy(cantidad = 0) }.map { (f, iguales) -> f.copy(cantidad = iguales.sumOf { it.cantidad }) }
+            }
 
     /** Un campo de CSV: entre comillas si lleva coma, comillas o salto. */
     private fun campo(t: String): String =

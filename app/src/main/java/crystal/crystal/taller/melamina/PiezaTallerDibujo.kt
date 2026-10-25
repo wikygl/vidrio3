@@ -70,6 +70,13 @@ object PiezaTallerDibujo {
             c.drawLine(rf.left, y, rf.right, y, trazo(4f, AZUL).apply { pathEffect = DashPathEffect(floatArrayOf(18f, 10f), 0f) })
             c.drawText("ranura a ${RoperoProduccion.fmt(p.ranuraCm)} del canto de abajo", rf.left + 10f, y - 12f, texto(30f, AZUL))
         }
+        // Las ranuras de la corrediza D-25 (piso y techo), desde el canto de delante, que es el de abajo.
+        p.ranurasCorredizaCm.forEach { d ->
+            val y = rf.bottom - d * k
+            c.drawLine(rf.left, y, rf.right, y, trazo(4f, AZUL).apply { pathEffect = DashPathEffect(floatArrayOf(18f, 10f), 0f) })
+        }
+        if (p.ranurasCorredizaCm.isNotEmpty())
+            c.drawText("ranuras D-25 a ${p.ranurasCorredizaCm.joinToString(" y ") { RoperoProduccion.fmt(it) }} del frente", rf.left + 10f, rf.bottom - p.ranurasCorredizaCm.last() * k - 12f, texto(30f, AZUL))
         // La veta, a lo alto.
         if (f.vetas.isNotBlank()) {
             val x = rf.centerX(); val y0 = rf.centerY() - rf.height() * 0.3f; val y1 = rf.centerY() + rf.height() * 0.3f

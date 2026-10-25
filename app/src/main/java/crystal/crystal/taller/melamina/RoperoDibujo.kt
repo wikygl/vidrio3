@@ -254,7 +254,7 @@ class RoperoDibujo(private val dp: Float) {
         // El zócalo delante, en el plano de las puertas y de su color: de punta a punta, tapando
         // los laterales, con su canto grueso arriba y la gruña hasta las puertas.
         if (r.zocaloCm > 0.5f && r.zocaloDelante) {
-            val rect = RectF(x(0f), y(RoperoCalculo.altoZocalo(r) + r.tapacantoPuertasCm), x(r.anchoCm), y(0f))
+            val rect = RectF(x(0f), y(RoperoCalculo.altoZocalo(r) + 2 * r.tapacantoPuertasCm), x(r.anchoCm), y(0f))
             canvas.drawRect(rect, pPuerta)
             canvas.drawRect(rect, pLinea)
         }

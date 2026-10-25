@@ -80,8 +80,8 @@ class RoperoGeometriaTest {
         // pasaría de 180), del alto mayor, y cada techo llega a su cara.
         val m = RoperoCalculo.calcular(escalera)
         val laterales = m.piezas.filter { it.nombre == "Lateral" }.map { it.altoMm }.sorted()
-        assertEquals(listOf(2000, 2400), laterales)
-        assertEquals(2400, m.piezas.first { it.nombre == "División pasante" }.altoMm)
+        assertEquals(listOf(1999, 2399), laterales)   // con canto abajo, que va al piso (antes 2000 y 2400)
+        assertEquals(2399, m.piezas.first { it.nombre == "División pasante" }.altoMm)
         assertEquals(listOf(117.3f, 117.3f), RoperoGeometria.tramosDeTecho(escalera).map { kotlin.math.round((it.x1 - it.x0) * 10f) / 10f })
         // Uno de 170 (sin pasante): la división llega al techo más alto, el techo alto la tapa
         // (82.3 + 1.8 = 84.1) y el bajo llega a su cara (82.3); los dos suman el ancho interior.
@@ -131,11 +131,19 @@ class RoperoGeometriaTest {
         assertEquals(30f, cas2[0].y1 - cas2[0].y0, 0.05f)
         assertEquals(50f, cas2[1].y1 - cas2[1].y0, 0.05f)
         assertEquals(226.4f - 30f - 50f - 3.6f, cas2[2].y1 - cas2[2].y0, 0.05f)
-        // El de arriba del todo baja la repisa de debajo y no toca las demás.
+        // El de arriba del todo a 60: los dos de abajo se escribieron a mano y quedaron fijos, así que
+        // no hay quien ceda y no cambia nada (antes bajaba la repisa de debajo y el de 50 pasaba a
+        // 132.6: lo escrito no se respetaba; regla del usuario del 2026-10-11).
         val r3 = conAlto(r2, 2, 60f)
         val cas3 = RoperoGeometria.elementos(r3).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
-        assertEquals(60f, cas3[2].y1 - cas3[2].y0, 0.05f)
-        assertEquals(30f, cas3[0].y1 - cas3[0].y0, 0.05f)
+        assertEquals(226.4f - 30f - 50f - 3.6f, cas3[2].y1 - cas3[2].y0, 0.05f)
+        // Suelto el de 50 ("Libre"), el de arriba a 60 baja la repisa de debajo; el de 30 no se toca.
+        val suelto = r2.conCuerpo(1, r2.cuerpos[1].copy(casillerosFijosCm = r2.cuerpos[1].casillerosFijosCm - 1))
+        val r4 = conAlto(suelto, 2, 60f)
+        val cas4 = RoperoGeometria.elementos(r4).filter { it.tipo == TipoElemento.CASILLERO && it.cuerpo == 1 }
+        assertEquals(60f, cas4[2].y1 - cas4[2].y0, 0.05f)
+        assertEquals(30f, cas4[0].y1 - cas4[0].y0, 0.05f)
+        assertEquals(226.4f - 30f - 60f - 3.6f, cas4[1].y1 - cas4[1].y0, 0.05f)
     }
 
     @Test
@@ -244,18 +252,18 @@ class RoperoGeometriaTest {
         val puertas = RoperoPuertas.de(r)
         val corredizas = puertas.hojas.filter { it.clase == ClaseDePuerta.HOJA_CORREDIZA }
         assertEquals(4, corredizas.size)     // dos por casillero
-        assertEquals(4, puertas.rielesCm.size)
+        assertEquals(0, puertas.rielesCm.size)   // el D-25 no lleva riel (antes 4, dos por casillero)
         val cas = RoperoGeometria.casilleros(r, r.cuerpos[1], RoperoGeometria.huecoDeCuerpo(r, 1))
-        // Cada hoja: (117.3 + 5) / 2 = 61.15 de ancho, y el alto del casillero menos 3.5.
-        assertEquals(61.15f, corredizas[0].ancho, 0.01f)
-        assertEquals(cas[0].alto - 3.5f, corredizas[0].alto, 0.01f)
+        // Cada hoja (D-25, 2026-10-12): (117.3 + 3) / 2 = 60.15 de ancho, y el alto del casillero menos 0.7 (antes 61.15 y 3.5).
+        assertEquals(60.15f, corredizas[0].ancho, 0.01f)
+        assertEquals(cas[0].alto - 0.7f, corredizas[0].alto, 0.01f)
         assertEquals(2, puertas.hojas.count { it.clase == ClaseDePuerta.PUERTA })   // las dos hojas del cuerpo 1
         // Sin puertas propias en un cuerpo: no lleva; y con corredizas propias, lo de dentro pierde el carril.
         val sin = base.conCuerpo(1, base.cuerpos[1].copy(puertasPropias = TipoPuertas.SIN))
         assertEquals(2, RoperoPuertas.de(sin).hojas.size)
         val m = RoperoCalculo.calcular(r)
-        // 57.9 del armazón (las batientes del ropero van delante) - 8 del carril - 0.045 de canto.
-        assertTrue(m.piezas.filter { it.nombre == "Entrepaño" }.any { it.altoMm == 499 })
+        // 57.9 del armazón (las batientes del ropero van delante) - 4.75 de las ranuras del D-25 - 0.045 de canto (antes 8 de carril: 49.9).
+        assertTrue(m.piezas.filter { it.nombre == "Entrepaño" }.any { it.altoMm == 531 })
     }
 
     @Test
@@ -468,8 +476,9 @@ class RoperoGeometriaTest {
         assertEquals(zona80.y1, els.first { it.tipo == TipoElemento.TAPA_CAJONES }.y0, 0.01f)
         // En los materiales: frentes de 26.67 - 0.4 (- 0.09 de canto fino) y cajas de las 18 escritas (- 0.05).
         val m80 = RoperoCalculo.calcular(ochenta)
-        assertEquals(262, m80.piezas.first { it.nombre == "Frente cajón" && it.cantidad == 3 }.altoMm)
-        assertEquals(180, m80.piezas.first { it.nombre == "Lateral cajón" && it.cantidad == 6 }.altoMm)
+        // Con 0.5 de gruña entre frentes (2026-10-11): 26.67 - 0.67 - 0.09 → 25.9 (antes 26.2).
+        assertEquals(259, m80.piezas.first { it.nombre == "Frente cajón" && it.cantidad == 3 }.altoMm)
+        assertEquals(179, m80.piezas.first { it.nombre == "Lateral cajón" && it.cantidad == 6 }.altoMm)   // canto arriba y abajo (antes 180)
         // Cajas de 17, 15 y 16.2 en un espacio fijo de 48.2: no sobra nada, los frentes son las cajas.
         val justo = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.CAJONES, cajones = 3, altosCajonesCm = listOf(17f, 15f, 16.2f), altoCajonesFijoCm = 48.2f))
         assertEquals(listOf(17f, 15f, 16.2f), RoperoGeometria.altosDeCajones(justo, justo.cuerpos[0], RoperoGeometria.huecoDeCuerpo(justo, 0)))
@@ -597,7 +606,8 @@ class RoperoGeometriaTest {
         val conAlto = base.conCuerpo(0, base.cuerpos[0].conAltoDeCajon(0, 30f, 20f))
         val m = RoperoCalculo.calcular(conAlto)
         val frentes = m.piezas.filter { it.nombre == "Frente cajón" }
-        assertEquals(setOf(295, 195), frentes.map { it.altoMm }.toSet())   // menos 0.09 de canto fino
+        // Menos 4 x 0.5 / 3 de gruña y 0.09 de canto fino (2026-10-11; antes 29.5 y 19.5, con 0.4).
+        assertEquals(setOf(292, 192), frentes.map { it.altoMm }.toSet())
         assertEquals(3, frentes.sumOf { it.cantidad })
         // Una hoja a mano en un cuerpo de 117: dos tocaban.
         val unaHoja = base.conCuerpo(1, base.cuerpos[1].copy(hojasBatientes = 1))
@@ -607,5 +617,67 @@ class RoperoGeometriaTest {
         assertEquals(4, RoperoCalculo.hojasCorredizas(base.copy(hojasCorredizas = 4)))
         assertEquals(2, RoperoCalculo.hojasCorredizas(base))
         assertEquals("Tapacanto 22 x 2 mm", RoperoCalculo.nombreTapacanto(base.copy(tapacantoGrosorMm = 2f)))
+    }
+
+    /**
+     * El caso del usuario (2026-10-11): un cuerpo con un cajón, tres casilleros y el colgador. El
+     * colgador se iguala a 93.4 con "Solo esta" y queda fijo: editar después el casillero de debajo
+     * (Solo esta, Poner o Repartir) ya no lo cambia, hasta que se suelta con "Libre".
+     */
+    @Test
+    fun lo_escrito_a_mano_queda_fijo_hasta_soltarlo() {
+        val r0 = base.conCuerpo(1, Cuerpo(tipo = TipoCuerpo.MIXTO, cajones = 1, entrepanos = 3))
+        val h = RoperoGeometria.huecoDeCuerpo(r0, 1)
+        fun altos(r: Ropero) = RoperoGeometria.altosDeCasilleros(r, r.cuerpos[1], h)
+        val antes = altos(r0)
+        assertEquals(4, antes.size)       // tres casilleros y el colgador
+        val total = antes.sum()
+
+        // El colgador a 93.4, solo esa repisa: el casillero de debajo cede la diferencia.
+        val r1 = r0.conCuerpo(1, RoperoGeometria.conAltoDeCasilleroSoloEsa(r0, r0.cuerpos[1], h, 3, 93.4f)!!)
+        val a1 = altos(r1)
+        assertEquals(93.4f, a1[3], 0.05f)
+        assertEquals(antes[0], a1[0], 0.05f)
+        assertEquals(antes[1], a1[1], 0.05f)
+        assertEquals(total - antes[0] - antes[1] - 93.4f, a1[2], 0.05f)
+        assertEquals(mapOf(3 to 93.4f), r1.cuerpos[1].casillerosFijosCm)
+
+        // El de debajo a 30 con "Solo esta": como el colgador está fijo, baja la repisa de debajo.
+        val r2 = r1.conCuerpo(1, RoperoGeometria.conAltoDeCasilleroSoloEsa(r1, r1.cuerpos[1], h, 2, 30f)!!)
+        val a2 = altos(r2)
+        assertEquals(93.4f, a2[3], 0.05f)
+        assertEquals(30f, a2[2], 0.05f)
+        assertEquals(antes[0], a2[0], 0.05f)
+        assertEquals(total - antes[0] - 30f - 93.4f, a2[1], 0.05f)
+
+        // "Poner" 25 en ese mismo: arriba no hay libres, se reparten los dos de abajo.
+        val r3 = r2.conCuerpo(1, RoperoGeometria.ponerAltoDeCasillero(r2, r2.cuerpos[1], h, 2, 25f)!!)
+        val a3 = altos(r3)
+        assertEquals(93.4f, a3[3], 0.05f)
+        assertEquals(25f, a3[2], 0.05f)
+        assertEquals((total - 25f - 93.4f) / 2f, a3[0], 0.05f)
+        assertEquals(a3[0], a3[1], 0.05f)
+
+        // "Repartir": los fijos se quedan y los libres se reparten.
+        val r4 = r3.conCuerpo(1, RoperoGeometria.repartidoConFijos(r3, r3.cuerpos[1], h))
+        assertEquals(93.4f, altos(r4)[3], 0.05f)
+        assertEquals(25f, altos(r4)[2], 0.05f)
+
+        // Un cajón más alto: los fijos no se mueven, cede el casillero libre más cercano.
+        val conCajon = r4.conCuerpo(1, r4.cuerpos[1].conAltoDeCajon(0, 40f, r4.altoCajonCm))
+        val r5 = RoperoGeometria.conFijosRespetados(conCajon)
+        val a5 = altos(r5)
+        assertEquals(93.4f, a5[3], 0.05f)
+        assertEquals(25f, a5[2], 0.05f)
+
+        // Con los dos vecinos fijos, "Solo esta" no puede: hay que soltar uno.
+        val r6 = r5.conCuerpo(1, RoperoGeometria.ponerAltoDeCasillero(r5, r5.cuerpos[1], h, 1, a5[1])!!)
+        assertEquals(null, RoperoGeometria.conAltoDeCasilleroSoloEsa(r6, r6.cuerpos[1], h, 2, 20f))
+        assertTrue(RoperoGeometria.repisaTocaFijo(r6.cuerpos[1], 2))
+        // "Libre" en el colgador: ahora sí, y es el colgador el que cede.
+        val suelto = r6.conCuerpo(1, r6.cuerpos[1].copy(casillerosFijosCm = r6.cuerpos[1].casillerosFijosCm - 3))
+        val r7 = suelto.conCuerpo(1, RoperoGeometria.conAltoDeCasilleroSoloEsa(suelto, suelto.cuerpos[1], h, 2, 20f)!!)
+        assertEquals(98.4f, altos(r7)[3], 0.05f)
+
     }
 }

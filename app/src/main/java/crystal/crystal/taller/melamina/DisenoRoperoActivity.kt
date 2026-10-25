@@ -117,13 +117,16 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val iman = imantar(yCm, el)
         when (el.tipo) {
             TipoElemento.ENTREPANO -> {
+                // La repisa de un casillero fijo no se arrastra: hay que soltarlo antes ("Libre").
+                if (RoperoGeometria.repisaTocaFijo(c, el.indice)) { binding.tvInfoSeleccion.text = TEXTO_FIJO; return }
                 val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c, hueco)
                 val nueva = (if (iman != null) iman - piso else redondear(yCm - piso)).coerceIn(5f, hueco.alto - ropero.espesorCm - 5f)
                 ropero = ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conAlturaDeEntrepano(el.indice, nueva, repartidas))
             }
             TipoElemento.CAJON -> {
                 val alto = (if (iman != null) iman - el.y0 else redondear(yCm - el.y0)).coerceIn(8f, 80f)
-                ropero = ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conAltoDeCajon(el.indice, alto, ropero.altoCajonCm))
+                // Los casilleros fijos de encima no se mueven: el cajón se lo quita al libre más cercano.
+                ropero = RoperoGeometria.conFijosRespetados(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conAltoDeCajon(el.indice, alto, ropero.altoCajonCm)))
             }
             else -> return
         }
@@ -172,7 +175,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val c = ropero.cuerpoEn(movil.cuerpo, movil.ruta) ?: return
         val hueco = RoperoGeometria.huecoDe(ropero, movil.cuerpo, movil.ruta) ?: return
         val nuevo = when (movil.tipo) {
-            TipoElemento.ENTREPANO -> ropero.conCuerpoEn(movil.cuerpo, movil.ruta,
+            TipoElemento.ENTREPANO -> if (RoperoGeometria.repisaTocaFijo(c, movil.indice)) { avisarFijo(); return } else ropero.conCuerpoEn(movil.cuerpo, movil.ruta,
                 c.conAlturaDeEntrepano(movil.indice, (y - hueco.y0).coerceIn(5f, hueco.alto - ropero.espesorCm - 5f), RoperoGeometria.alturasDeEntrepanos(ropero, c, hueco)))
             TipoElemento.CAJON -> ropero.conCuerpoEn(movil.cuerpo, movil.ruta, c.conAltoDeCajon(movil.indice, (y - movil.y0).coerceIn(8f, 80f), ropero.altoCajonCm))
             TipoElemento.ZONA_CAJONES -> RoperoGeometria.conAltoDeTrozo(ropero, movil, y - hueco.y0)
@@ -231,10 +234,10 @@ class DisenoRoperoActivity : AppCompatActivity() {
             TipoElemento.ENTREPANO -> "Repisa ${el.indice + 1} $donde: a ${fmt(el.y0 - piso)} del piso"
             TipoElemento.REPISA_MALETERO -> "Repisa del maletero: ${fmt(ropero.maleteroCm)} libres arriba"
             TipoElemento.TUBO -> "Tubo del colgador $donde: a ${fmt(ropero.tuboBajoTopeCm)} bajo el tope, ${fmt((el.y0 + el.y1) / 2f - piso)} del piso"
-            TipoElemento.CASILLERO -> "Casillero ${el.indice + 1} $donde: ${fmt(el.y1 - el.y0)} de alto libre" + (if (c.columnasDe(el.indice).isNotEmpty()) ", partido en ${c.columnasDe(el.indice).size} columnas" else "")
+            TipoElemento.CASILLERO -> "Casillero ${el.indice + 1} $donde: ${fmt(el.y1 - el.y0)} de alto libre" + (if (el.indice in RoperoGeometria.fijosDe(c)) " (fijo)" else "") + (if (c.columnasDe(el.indice).isNotEmpty()) ", partido en ${c.columnasDe(el.indice).size} columnas" else "")
             TipoElemento.TAPA_CAJONES -> "Tapa sobre los cajones $donde: a ${fmt(el.y0 - piso)} del piso (sube con los cajones)"
             TipoElemento.ZONA_CAJONES -> "Cajones $donde: ${c.cajonesEfectivos} en ${fmt(el.y1 - el.y0)} de alto" + (if (c.altoCajonesFijoCm > 0f) " (fijo)" else "") + (if (!c.tapaSobreCajones) ", sin tapa (unidos al casillero de encima)" else "")
-            TipoElemento.COLGADOR -> "Colgador $donde: ${fmt(el.y1 - el.y0)} libres, el tubo a ${fmt(ropero.tuboBajoTopeCm)} del tope"
+            TipoElemento.COLGADOR -> "Colgador $donde: ${fmt(el.y1 - el.y0)} libres" + (if (el.indice in RoperoGeometria.fijosDe(c)) " (fijo)" else "") + ", el tubo a ${fmt(ropero.tuboBajoTopeCm)} del tope"
             TipoElemento.DIVISION_COLUMNA -> "División entre columnas del casillero ${el.ruta.last() + 1}, cuerpo ${el.cuerpo + 1}"
             TipoElemento.COLUMNA -> "Columna ${el.ruta.last() + 1} del casillero ${el.ruta[el.ruta.size - 2] + 1}, cuerpo ${el.cuerpo + 1}: ${c.tipo.etiqueta.lowercase()}, ${fmt(el.x1 - el.x0)} de ancho"
             TipoElemento.MALETERO -> if (ropero.maleteroPropio) "Maletero, compartimento ${el.indice + 1} de ${ropero.maleteroCuerpos}: ${fmt(el.x1 - el.x0)} de ancho, ${fmt(ropero.maleteroCm)} libres"
@@ -312,8 +315,11 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 val repartidas = RoperoGeometria.alturasDeEntrepanos(ropero, c, hueco)
                 mando.addView(fila(
                     etAltura,
-                    boton("Poner") { aplicar(conEste(c.conAlturaDeEntrepano(el.indice, num(etAltura, el.y0 - piso), repartidas))) },
-                    boton("Repartir de nuevo") { aplicar(conEste(c.copy(alturasEntrepanosCm = emptyList()))) }
+                    boton("Poner") {
+                        if (RoperoGeometria.repisaTocaFijo(c, el.indice)) avisarFijo()
+                        else aplicar(conEste(c.conAlturaDeEntrepano(el.indice, num(etAltura, el.y0 - piso), repartidas)))
+                    },
+                    boton("Repartir de nuevo") { aplicar(conEste(RoperoGeometria.repartidoConFijos(ropero, c, hueco))) }
                 ))
                 mando.addView(fila(botonIgualar(el)))
             }
@@ -363,6 +369,26 @@ class DisenoRoperoActivity : AppCompatActivity() {
     }
 
     /** Esconde el mando y el teclado, para que se vea el dibujo entero (la selección se queda). */
+    private val TEXTO_FIJO = "Ese casillero está fijo (se escribió a mano): tócalo y pulsa \"Libre\" para soltarlo, o pon otra medida"
+
+    /** Lo que se pidió movería un casillero fijo, o no queda uno libre que se lleve la diferencia. */
+    private fun avisarFijo() = Toast.makeText(this, TEXTO_FIJO, Toast.LENGTH_LONG).show()
+
+    /** Un alto de casillero que puede no caber (null): si no se puede, se dice por qué. */
+    private fun aplicarAlto(el: ElementoRopero, nuevo: Cuerpo?) {
+        if (nuevo == null) { avisarFijo(); return }
+        aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, nuevo))
+    }
+
+    /** "Poner" el alto de un trozo: los casilleros y el colgador con sus fijos; lo demás (cajones, maletero), como siempre. */
+    private fun ponerAlto(el: ElementoRopero, alto: Float) {
+        val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: return
+        val h = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: return
+        val conRepisas = RoperoGeometria.altosDeCasilleros(ropero, c, h).size > 1
+        if ((el.tipo == TipoElemento.CASILLERO || el.tipo == TipoElemento.COLGADOR) && conRepisas) aplicarAlto(el, RoperoGeometria.ponerAltoDeCasillero(ropero, c, h, el.indice, alto))
+        else aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, alto))
+    }
+
     private fun esconderMando() {
         binding.scrollMando.visibility = View.GONE
         esconderTeclado()
@@ -375,13 +401,15 @@ class DisenoRoperoActivity : AppCompatActivity() {
      */
     private fun filaDeAlto(el: ElementoRopero, c: Cuerpo, hueco: Hueco): View {
         val et = campo("Alto libre (cm)", fmt(el.y1 - el.y0))
-        val botones = mutableListOf<View>(et, boton("Poner") { aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, num(et, el.y1 - el.y0))) })
+        val botones = mutableListOf<View>(et, boton("Poner") { ponerAlto(el, num(et, el.y1 - el.y0)) })
         if (el.tipo == TipoElemento.ZONA_CAJONES && c.altoCajonesFijoCm > 0f) {
             botones.add(boton("Libre") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(altoCajonesFijoCm = 0f))) })
         }
         if (el.tipo != TipoElemento.ZONA_CAJONES) {
-            botones.add(boton("Solo esta") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, RoperoGeometria.conAltoDeCasilleroSoloEsa(ropero, c, hueco, el.indice, num(et, el.y1 - el.y0)))) })
-            botones.add(boton("Repartir") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(alturasEntrepanosCm = emptyList()))) })
+            botones.add(boton("Solo esta") { aplicarAlto(el, RoperoGeometria.conAltoDeCasilleroSoloEsa(ropero, c, hueco, el.indice, num(et, el.y1 - el.y0))) })
+            botones.add(boton("Repartir") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, RoperoGeometria.repartidoConFijos(ropero, c, hueco))) })
+            // Escrito a mano, queda fijo: "Libre" lo suelta para que vuelva a repartirse con los demás.
+            if (el.indice in RoperoGeometria.fijosDe(c)) botones.add(boton("Libre") { aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(casillerosFijosCm = c.casillerosFijosCm - el.indice))) })
         }
         return fila(*botones.toTypedArray())
     }
@@ -407,13 +435,13 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val dialogo = androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle(descripcion(el))
             .setView(fila(et))
-            .setPositiveButton("Poner") { _, _ -> aplicar(RoperoGeometria.conAltoDeTrozo(ropero, el, num(et, el.y1 - el.y0))) }
+            .setPositiveButton("Poner") { _, _ -> ponerAlto(el, num(et, el.y1 - el.y0)) }
             .setNegativeButton("Cancelar", null)
         if (el.tipo == TipoElemento.CASILLERO || el.tipo == TipoElemento.COLGADOR) {
             dialogo.setNeutralButton("Solo esta repisa") { _, _ ->
                 val c = ropero.cuerpoEn(el.cuerpo, el.ruta) ?: return@setNeutralButton
                 val hueco = RoperoGeometria.huecoDe(ropero, el.cuerpo, el.ruta) ?: return@setNeutralButton
-                aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, RoperoGeometria.conAltoDeCasilleroSoloEsa(ropero, c, hueco, el.indice, num(et, el.y1 - el.y0))))
+                aplicarAlto(el, RoperoGeometria.conAltoDeCasilleroSoloEsa(ropero, c, hueco, el.indice, num(et, el.y1 - el.y0)))
             }
         }
         dialogo.show()
@@ -425,7 +453,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         return fila(et, boton("Poner") {
             val n = (et.text.toString().toIntOrNull() ?: c.entrepanosEfectivos).coerceIn(0, 12)
             // Las alturas escritas solo se pierden si cambia el número de repisas.
-            aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(entrepanos = n, alturasEntrepanosCm = if (n == c.entrepanosEfectivos) c.alturasEntrepanosCm else emptyList())))
+            aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.copy(entrepanos = n, alturasEntrepanosCm = if (n == c.entrepanosEfectivos) c.alturasEntrepanosCm else emptyList(), casillerosFijosCm = if (n == c.entrepanosEfectivos) c.casillerosFijosCm else emptyMap())))
         })
     }
 
@@ -440,7 +468,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val sp = desplegable(opciones, if (unica == null) 0 else tipos.indexOf(unica.tipo) + 1)
         return fila(sp, boton("Poner") {
             val elegido = sp.selectedItemPosition
-            val nuevas = if (elegido == 0) emptyList() else listOf((unica ?: Cuerpo(anchoCm = el.x1 - el.x0)).copy(tipo = tipos[elegido - 1], alturasEntrepanosCm = emptyList()))
+            val nuevas = if (elegido == 0) emptyList() else listOf((unica ?: Cuerpo(anchoCm = el.x1 - el.x0)).copy(tipo = tipos[elegido - 1], alturasEntrepanosCm = emptyList(), casillerosFijosCm = emptyMap()))
             aplicar(ropero.conCuerpoEn(el.cuerpo, el.ruta, c.conColumnas(el.indice, nuevas)))
         })
     }
@@ -541,6 +569,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 cajones = cajones,
                 hojasBatientes = spHojas.selectedItemPosition,
                 alturasEntrepanosCm = if (tipo == c.tipo && repisas == c.entrepanos) c.alturasEntrepanosCm else emptyList(),
+                casillerosFijosCm = if (tipo == c.tipo && repisas == c.entrepanos) c.casillerosFijosCm else emptyMap(),
                 altosCajonesCm = if (tipo == c.tipo && cajones == c.cajones) c.altosCajonesCm else emptyList(),
                 altoCm = if (esColumna) c.altoCm else num(etAltoLado, 0f).let { if (it >= 30f) it else 0f },
                 cajonesALaVista = cbALaVista.isChecked,
@@ -560,7 +589,8 @@ class DisenoRoperoActivity : AppCompatActivity() {
     private fun aplicar(nuevo: Ropero) {
         esconderTeclado()
         val antes = ropero
-        ropero = nuevo.aplanado()
+        // Los casilleros fijos vuelven a su alto si el cambio los movió (los cajones, el alto del lado).
+        ropero = RoperoGeometria.conFijosRespetados(nuevo.aplanado())
         anotar(antes)
         refrescar(conMando = true)
     }
@@ -609,6 +639,8 @@ class DisenoRoperoActivity : AppCompatActivity() {
         val spPuertas = desplegable(puertas.map { it.etiqueta }, puertas.indexOf(ropero.puertas))
         val spPosicion = desplegable(listOf("Frontales (sobre el armazón)", "Interiores (dentro del armazón)"), if (ropero.puertasInteriores) 1 else 0)
         val spHojas = desplegable(listOf("Hojas corredizas: las que tocan", "2", "3", "4", "5", "6"), if (ropero.hojasCorredizas in 2..6) ropero.hojasCorredizas - 1 else 0)
+        val sistemas = SistemaCorredizo.values()
+        val spSistema = desplegable(sistemas.map { "Corredizas: ${it.etiqueta}" }, sistemas.indexOf(ropero.sistemaCorredizo))
         val spTapacantoPuertas = desplegable(grosores.map { "Tapacanto puertas ${fmt(it)} mm" }, grosor(ropero.tapacantoPuertasMm))
         // ---- Materiales ----
         val spEspesor = desplegable(listOf("Melamina 18 mm", "Melamina 15 mm"), if (ropero.espesorMm <= 15) 1 else 0)
@@ -627,7 +659,8 @@ class DisenoRoperoActivity : AppCompatActivity() {
         caja.addView(fila(etAltoCajon, etTubo))
         caja.addView(titulo("Puertas"))
         caja.addView(fila(spPuertas, spPosicion))
-        caja.addView(fila(spHojas, spTapacantoPuertas))
+        caja.addView(fila(spHojas, spSistema))
+        caja.addView(fila(spTapacantoPuertas))
         caja.addView(titulo("Materiales"))
         caja.addView(fila(spEspesor, spFondo, spTapacanto))
         caja.addView(fila(spColor))
@@ -644,6 +677,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
                 puertas = puertas[spPuertas.selectedItemPosition.coerceIn(0, puertas.lastIndex)],
                 puertasInteriores = spPosicion.selectedItemPosition == 1,
                 hojasCorredizas = if (spHojas.selectedItemPosition == 0) 0 else spHojas.selectedItemPosition + 1,
+                sistemaCorredizo = sistemas[spSistema.selectedItemPosition.coerceIn(0, sistemas.lastIndex)],
                 tapacantoPuertasMm = grosores[spTapacantoPuertas.selectedItemPosition.coerceIn(0, grosores.lastIndex)],
                 espesorMm = if (spEspesor.selectedItemPosition == 1) 15 else 18,
                 conFondo = fondoElegido > 0f,
@@ -690,7 +724,7 @@ class DisenoRoperoActivity : AppCompatActivity() {
         binding.btnLimpiarDiseno.setOnClickListener {
             // Vuelve a lo de fábrica en lo fino; el hueco y los cuerpos se quedan.
             aplicar(ropero.copy(
-                cuerpos = ropero.cuerpos.map { it.copy(altosCajonesCm = emptyList(), alturasEntrepanosCm = emptyList(), hojasBatientes = 0, altoCm = 0f, cajonesALaVista = false, anchoFijo = false, partes = emptyMap(), puertasPropias = null, puertasPorCasillero = false, tapaSobreCajones = true) },
+                cuerpos = ropero.cuerpos.map { it.copy(altosCajonesCm = emptyList(), alturasEntrepanosCm = emptyList(), casillerosFijosCm = emptyMap(), hojasBatientes = 0, altoCm = 0f, cajonesALaVista = false, anchoFijo = false, partes = emptyMap(), puertasPropias = null, puertasPorCasillero = false, tapaSobreCajones = true) },
                 hojasCorredizas = 0, tuboBajoTopeCm = 6f, tapacantoGrosorMm = 0.45f, tapacantoPuertasMm = 3f, espesorFondoMm = 3f, maleteroCuerpos = 0, maleteroHojas = 0
             ))
             Toast.makeText(this, "Lo fino vuelve a lo de fábrica", Toast.LENGTH_SHORT).show()

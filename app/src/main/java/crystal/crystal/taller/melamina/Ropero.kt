@@ -61,6 +61,8 @@ data class Ropero(
     val espesorFondoMm: Float = 3f,
     /** Cuántas hojas corredizas; 0 = las que tocan por el ancho (2 hasta 240, 3 más allá). */
     val hojasCorredizas: Int = 0,
+    /** El sistema de las corredizas: Ducasse D-25 (al piso, ranuras en piso y techo) o D-52 (riel y guía). */
+    val sistemaCorredizo: SistemaCorredizo = SistemaCorredizo.D25,
     /** A cuánto del tope va el tubo del colgador. */
     val tuboBajoTopeCm: Float = 6f,
     // ---- Lo de producción, que se pide al archivar ----
@@ -108,7 +110,22 @@ data class Ropero(
     val fondoArmazonCm: Float get() = fondoCm - fondoNordexCm - puertasDelanteCm
 
     /** El fondo útil de entrepaños y cajones: con corredizas, las hojas corren por dentro y se comen su carril. */
-    val fondoInteriorCm: Float get() = fondoArmazonCm - (if (puertas == TipoPuertas.CORREDIZAS) CARRIL_CORREDIZAS_CM else 0f)
+    val fondoInteriorCm: Float get() = fondoArmazonCm - (if (puertas == TipoPuertas.CORREDIZAS) carrilCorredizasCm else 0f)
+
+    /**
+     * Lo que las corredizas se comen del fondo, según su sistema (fichas de Ducasse, E = espesor):
+     * D-25, las dos ranuras a E + 5 y 2 (E + 5) del frente y la mitad de la ranura (4.75 con 18);
+     * D-52, el riel de abajo, 2E + 9 (4.5 con 18). Antes, 8 a ojo para todas.
+     */
+    val carrilCorredizasCm: Float get() = when (sistemaCorredizo) {
+        SistemaCorredizo.D25 -> 2 * (espesorCm + SistemaCorredizo.D25_LUZ_RANURA_CM) + SistemaCorredizo.D25_ANCHO_RANURA_CM / 2f
+        SistemaCorredizo.D52 -> 2 * espesorCm + 0.9f
+    }
+
+    /** Las ranuras del D-25 en piso y techo, desde su canto de delante: E + 5 y 2 (E + 5) (2.3 y 4.6 con 18). */
+    val ranurasCorredizaCm: List<Float> get() =
+        if (puertas == TipoPuertas.CORREDIZAS && sistemaCorredizo == SistemaCorredizo.D25)
+            listOf(espesorCm + SistemaCorredizo.D25_LUZ_RANURA_CM, 2 * (espesorCm + SistemaCorredizo.D25_LUZ_RANURA_CM)) else emptyList()
 
     /** Alto interior de la parte baja de cada cuerpo, debajo de la repisa del maletero si la hay. */
     val altoBajoCm: Float get() = altoInteriorCm - (if (maleteroCm > 0f) maleteroCm + espesorCm else 0f)
@@ -262,14 +279,14 @@ data class Ropero(
         put("tapacanto", tapacantoGrosorMm); put("tapacantoPuertas", tapacantoPuertasMm); put("espesorFondo", espesorFondoMm)
         put("maleteroCuerpos", maleteroCuerpos); put("maleteroHojas", maleteroHojas)
         put("zocaloDelante", zocaloDelante); put("puertasInteriores", puertasInteriores); put("interiorBlanco", interiorBlanco)
-        put("hojasCorredizas", hojasCorredizas); put("tuboBajoTope", tuboBajoTopeCm)
+        put("hojasCorredizas", hojasCorredizas); put("sistemaCorredizo", sistemaCorredizo.name); put("tuboBajoTope", tuboBajoTopeCm)
         put("colorExterior", colorExterior); put("vetaExterior", vetaExterior)
         put("colorInterior", colorInterior); put("vetaInterior", vetaInterior); put("colorTapacanto", colorTapacanto)
         put("cuerpos", JSONArray().apply { cuerpos.forEach { put(it.aJson()) } })
     }.toString()
 
     companion object {
-        /** Lo que las hojas corredizas se llevan del fondo: los rieles y el grosor de las hojas. */
+        /** Lo que las corredizas se llevaban del fondo antes de los sistemas Ducasse (a ojo); ver [carrilCorredizasCm]. */
         const val CARRIL_CORREDIZAS_CM = 8f
 
         fun desdeJson(texto: String?): Ropero? = runCatching {
@@ -298,6 +315,7 @@ data class Ropero(
                 interiorBlanco = o.optBoolean("interiorBlanco", true),
                 espesorFondoMm = o.optDouble("espesorFondo", 3.0).toFloat(),
                 hojasCorredizas = o.optInt("hojasCorredizas", 0),
+                sistemaCorredizo = runCatching { SistemaCorredizo.valueOf(o.optString("sistemaCorredizo", "D25")) }.getOrDefault(SistemaCorredizo.D25),
                 tuboBajoTopeCm = o.optDouble("tuboBajoTope", 6.0).toFloat(),
                 colorExterior = o.optString("colorExterior", ""),
                 vetaExterior = o.optBoolean("vetaExterior", true),
@@ -320,6 +338,31 @@ enum class TipoCuerpo(val etiqueta: String) {
     COLGAR_CASILLEROS("Colgador + casilleros"),
     /** Cajones abajo y casilleros encima, sin colgador. */
     CAJONES_CASILLEROS("Casilleros + cajones")
+}
+
+/**
+ * El sistema de las puertas corredizas, con las medidas de las fichas de Ducasse y lo que dictó
+ * el usuario (2026-10-12). Ambos: hojas dentro del vano, montadas [traslapeCm] entre sí.
+ * - D-25: al piso, sin riel; guías y carros que corren en dos ranuras de 2 a 3 mm de ancho y 10
+ *   de hondo en piso y techo, a E + 5 y 2 (E + 5) del frente. Luz arriba 4 y abajo 3: la hoja,
+ *   el vano menos 0.7. Kit para dos hojas.
+ * - D-52: riel abajo y guía arriba, de aluminio (kit de 2 o 3 m para dos hojas); la hoja, el
+ *   vano menos 1.2 (el usuario: de 100, 98.8).
+ * (El usuario, en su taller, hace la 1.ª ranura a una melamina + 1 mm para ganar fondo y dejar la
+ * hoja de delante a ras de la estructura; pidió usar la cuenta oficial.)
+ */
+enum class SistemaCorredizo(val etiqueta: String, val luzAbajoCm: Float, val luzArribaCm: Float) {
+    D25("Ducasse D-25", 0.3f, 0.4f),
+    D52("Ducasse D-52", 0.5f, 0.7f);
+
+    /** Lo que se montan dos hojas vecinas (3 cm en total, dictado 2026-10-12). */
+    val traslapeCm: Float get() = 3f
+
+    companion object {
+        /** D-25: de la cara de atrás de la hoja a su ranura (E + 5). */
+        const val D25_LUZ_RANURA_CM = 0.5f
+        const val D25_ANCHO_RANURA_CM = 0.3f
+    }
 }
 
 enum class TipoPuertas(val etiqueta: String) {
@@ -371,7 +414,13 @@ data class Cuerpo(
      * mueve: los cajones se quedan con su alto y lo que sobre queda libre encima; solo si entre
      * todos se pasan del espacio, se encogen hasta caber.
      */
-    val altoCajonesFijoCm: Float = 0f
+    val altoCajonesFijoCm: Float = 0f,
+    /**
+     * Los casilleros (el colgador es el último) cuyo alto libre se escribió a mano: casillero → alto.
+     * Quedan fijos hasta que se los suelta ("Libre"): al editar otro casillero, repartir o cambiar los
+     * cajones, lo que falte o sobre se lo llevan los libres (pedido del usuario, 2026-10-11).
+     */
+    val casillerosFijosCm: Map<Int, Float> = emptyMap()
 ) {
     /**
      * Una columna que no es más que un reparto: sin repisas, cajones, tubo ni puertas, y con su
@@ -481,6 +530,9 @@ data class Cuerpo(
         })
         put("altosCajones", JSONArray().apply { altosCajonesCm.forEach { put(it.toDouble()) } })
         put("alturasEntrepanos", JSONArray().apply { alturasEntrepanosCm.forEach { put(it.toDouble()) } })
+        if (casillerosFijosCm.isNotEmpty()) put("casillerosFijos", JSONArray().apply {
+            casillerosFijosCm.forEach { (k, alto) -> put(JSONObject().apply { put("casillero", k); put("alto", alto.toDouble()) }) }
+        })
     }
 
     companion object {
@@ -561,7 +613,11 @@ data class Cuerpo(
                     }.filter { it.second.isNotEmpty() }.toMap()
                 },
                 altosCajonesCm = lista(o.optJSONArray("altosCajones")),
-                alturasEntrepanosCm = lista(o.optJSONArray("alturasEntrepanos"))
+                alturasEntrepanosCm = lista(o.optJSONArray("alturasEntrepanos")),
+                casillerosFijosCm = (o.optJSONArray("casillerosFijos") ?: JSONArray()).let { arr ->
+                    (0 until arr.length()).mapNotNull { idx -> arr.optJSONObject(idx)?.let { it.optInt("casillero") to it.optDouble("alto", 0.0).toFloat() } }
+                        .filter { it.second > 0f }.toMap()
+                }
             )
         }.getOrNull()
 

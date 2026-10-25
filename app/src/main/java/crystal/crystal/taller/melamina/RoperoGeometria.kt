@@ -266,45 +266,142 @@ object RoperoGeometria {
         return (1..n).map { desde + libre * it + r.espesorCm * (it - 1) }
     }
 
-    /**
-     * El cuerpo con el casillero [k] de [altoCm] libres: se pone la repisa de encima y las de
-     * más arriba se reparten de nuevo a partes iguales en lo que queda; las de abajo no se
-     * tocan. En el casillero de arriba del todo se baja la repisa de debajo y no se mueve
-     * ninguna otra. Así se hacen los de abajo chicos (zapatillas) y los demás iguales.
-     */
-    fun conAltoDeCasillero(r: Ropero, c: Cuerpo, h: Hueco, k: Int, altoCm: Float): Cuerpo {
-        val e = r.espesorCm
-        val repartidas = alturasDeEntrepanos(r, c, h)
-        val n = repartidas.size
-        if (n == 0) return c
-        val alto = altoCm.coerceAtLeast(5f)
-        val hasta = hastaLasRepisas(r, c, h)
-        if (k >= n) {
-            // El de arriba: la repisa de debajo baja hasta dejarle ese alto.
-            return c.conAlturaDeEntrepano(n - 1, (hasta - alto - e).coerceAtLeast(5f), repartidas)
-        }
-        val suelo = if (k == 0) sobreLosCajones(r, c, h) - h.y0 else repartidas[k - 1] + e
-        val nuevas = repartidas.toMutableList()
-        nuevas[k] = suelo + alto
-        val quedan = n - 1 - k
-        if (quedan > 0) {
-            val desde = nuevas[k] + e
-            val libre = ((hasta - desde - quedan * e) / (quedan + 1)).coerceAtLeast(1f)
-            for (j in 1..quedan) nuevas[k + j] = desde + libre * j + e * (j - 1)
-        }
-        return c.copy(alturasEntrepanosCm = nuevas)
+    // ==================== Casilleros fijos ====================
+    // Lo que se escribe a mano de un casillero (o del colgador, que es el último) queda fijo hasta
+    // que se suelta: al editar otro, repartir o cambiar los cajones, lo que falte o sobre se lo
+    // llevan los libres (pedido del usuario, 2026-10-11: el colgador igualado a 93.4 cambiaba al
+    // editar el casillero de debajo).
+
+    /** Lo menos que puede quedar libre en un casillero. */
+    const val CASILLERO_MINIMO_CM = 5f
+
+    /** El alto libre de cada casillero del hueco, de abajo arriba (el colgador, si lo hay, es el último). */
+    fun altosDeCasilleros(r: Ropero, c: Cuerpo, h: Hueco): List<Float> = casilleros(r, c, h).map { it.alto }
+
+    /** Los casilleros fijos que existen hoy (con menos repisas, los de más arriba ya no cuentan). */
+    fun fijosDe(c: Cuerpo): Map<Int, Float> = c.casillerosFijosCm.filterKeys { it in 0..c.entrepanosEfectivos }
+
+    /** El cuerpo con los casilleros de esos altos libres, de abajo arriba: cada repisa donde la dejan los de debajo. */
+    private fun conAltos(r: Ropero, c: Cuerpo, h: Hueco, altos: List<Float>): Cuerpo {
+        var suelo = sobreLosCajones(r, c, h) - h.y0
+        val alturas = altos.dropLast(1).map { a -> (suelo + a).also { suelo = it + r.espesorCm } }
+        return c.copy(alturasEntrepanosCm = alturas)
     }
 
-    /** El cuerpo con el casillero [k] de [altoCm] libres moviendo SOLO la repisa de encima (o la de abajo en el último): las demás no se tocan. */
-    fun conAltoDeCasilleroSoloEsa(r: Ropero, c: Cuerpo, h: Hueco, k: Int, altoCm: Float): Cuerpo {
-        val repartidas = alturasDeEntrepanos(r, c, h)
-        val alto = altoCm.coerceAtLeast(5f)
-        val cas = casilleros(r, c, h).getOrNull(k) ?: return c
-        return when {
-            k < repartidas.size -> c.conAlturaDeEntrepano(k, cas.y0 - h.y0 + alto, repartidas)
-            k > 0 -> c.conAlturaDeEntrepano(k - 1, (cas.y1 - alto - r.espesorCm - h.y0).coerceAtLeast(5f), repartidas)
-            else -> c
+    /**
+     * Reparte [resto] entre los casilleros [libres] a partes iguales; el colgador, si está entre
+     * ellos con otros, se lleva además lo del tubo y la ropa colgada, como en el reparto de fábrica
+     * (si no alcanza, todos iguales). False si no cabe [CASILLERO_MINIMO_CM] en cada uno.
+     */
+    private fun repartirEntre(r: Ropero, c: Cuerpo, h: Hueco, altos: MutableList<Float>, libres: List<Int>, resto: Float): Boolean {
+        if (libres.isEmpty()) return false
+        val colgador = if (c.llevaTubo) altos.lastIndex else -1
+        var extra = if (colgador in libres && libres.size > 1) (h.y1 - h.y0) - hastaLasRepisas(r, c, h) else 0f
+        var cada = (resto - extra) / libres.size
+        if (cada < CASILLERO_MINIMO_CM && extra > 0f) { extra = 0f; cada = resto / libres.size }
+        if (cada < CASILLERO_MINIMO_CM) return false
+        libres.forEach { altos[it] = cada + if (it == colgador) extra else 0f }
+        return true
+    }
+
+    /**
+     * "Poner": el casillero [k] a [altoCm] libres, fijo. Los libres de arriba se reparten a partes
+     * iguales lo que quede (los fijos no se tocan); si arriba no hay libres, los de abajo. Null si
+     * no hay ningún libre que se lleve la diferencia o no cabe.
+     */
+    fun ponerAltoDeCasillero(r: Ropero, c: Cuerpo, h: Hueco, k: Int, altoCm: Float): Cuerpo? {
+        val altos = altosDeCasilleros(r, c, h).toMutableList()
+        if (k !in altos.indices || altos.size < 2) return null
+        val alto = altoCm.coerceAtLeast(CASILLERO_MINIMO_CM)
+        val fijos = fijosDe(c) - k
+        val total = altos.sum()
+        altos[k] = alto
+        val arriba = (k + 1 until altos.size).filter { it !in fijos }
+        val abajo = (0 until k).filter { it !in fijos }
+        for (grupo in listOf(arriba, abajo)) {
+            if (grupo.isEmpty()) continue
+            val resto = total - altos.indices.filter { it !in grupo }.sumOf { altos[it].toDouble() }.toFloat()
+            val prueba = altos.toMutableList()
+            if (repartirEntre(r, c, h, prueba, grupo, resto)) return conAltos(r, c, h, prueba).copy(casillerosFijosCm = fijos + (k to alto))
         }
+        return null
+    }
+
+    /** "Poner" que, si no se puede, deja el cuerpo como estaba. */
+    fun conAltoDeCasillero(r: Ropero, c: Cuerpo, h: Hueco, k: Int, altoCm: Float): Cuerpo =
+        ponerAltoDeCasillero(r, c, h, k, altoCm) ?: c
+
+    /**
+     * "Solo esta": el casillero [k] a [altoCm] libres, fijo, moviendo una sola repisa: la de encima
+     * (lo cambia el casillero de arriba) o, si ese está fijo o no hay, la de debajo. Null si los dos
+     * vecinos están fijos o el vecino se queda sin sitio.
+     */
+    fun conAltoDeCasilleroSoloEsa(r: Ropero, c: Cuerpo, h: Hueco, k: Int, altoCm: Float): Cuerpo? {
+        val altos = altosDeCasilleros(r, c, h).toMutableList()
+        if (k !in altos.indices || altos.size < 2) return null
+        val alto = altoCm.coerceAtLeast(CASILLERO_MINIMO_CM)
+        val fijos = fijosDe(c) - k
+        val vecino = listOf(k + 1, k - 1).firstOrNull { it in altos.indices && it !in fijos } ?: return null
+        val delVecino = altos[vecino] + altos[k] - alto
+        if (delVecino < CASILLERO_MINIMO_CM) return null
+        altos[k] = alto
+        altos[vecino] = delVecino
+        return conAltos(r, c, h, altos).copy(casillerosFijosCm = fijos + (k to alto))
+    }
+
+    /** "Repartir": sin fijos, el reparto de fábrica; con fijos, los libres a partes iguales en lo que dejan. */
+    fun repartidoConFijos(r: Ropero, c: Cuerpo, h: Hueco): Cuerpo {
+        val fijos = fijosDe(c)
+        if (fijos.isEmpty()) return c.copy(alturasEntrepanosCm = emptyList(), casillerosFijosCm = emptyMap())
+        val altos = altosDeCasilleros(r, c, h).toMutableList()
+        val libres = altos.indices.filter { it !in fijos }
+        val resto = altos.sum() - fijos.keys.filter { it in altos.indices }.sumOf { altos[it].toDouble() }.toFloat()
+        return if (repartirEntre(r, c, h, altos, libres, resto)) conAltos(r, c, h, altos) else c
+    }
+
+    /** La repisa [k] es el techo del casillero k y el piso del k + 1: no se mueve si alguno de los dos está fijo. */
+    fun repisaTocaFijo(c: Cuerpo, k: Int): Boolean = fijosDe(c).let { k in it || (k + 1) in it }
+
+    /**
+     * Los fijos de vuelta a su alto si otro cambio los movió (los cajones, el alto del lado): lo
+     * que sobre o falte se lo lleva el libre más cercano de arriba (o de abajo); si no le cabe,
+     * todos los libres a partes iguales. Sin libres, se queda como está.
+     */
+    fun conFijosRespetados(r: Ropero, c: Cuerpo, h: Hueco): Cuerpo {
+        val fijos = fijosDe(c)
+        if (fijos.isEmpty()) return c
+        val altos = altosDeCasilleros(r, c, h).toMutableList()
+        val movidos = fijos.filter { (k, alto) -> k in altos.indices && kotlin.math.abs(altos[k] - alto) > 0.05f }
+        if (movidos.isEmpty()) return c
+        val libres = altos.indices.filter { it !in fijos }
+        if (libres.isEmpty()) return c
+        val total = altos.sum()
+        movidos.forEach { (k, alto) -> altos[k] = alto }
+        val k0 = movidos.keys.first()
+        val cercano = libres.minByOrNull { if (it > k0) it - k0 else k0 - it + altos.size } ?: return c
+        val sobra = total - altos.sum()
+        if (altos[cercano] + sobra >= CASILLERO_MINIMO_CM) altos[cercano] += sobra
+        else {
+            val resto = total - altos.indices.filter { it !in libres }.sumOf { altos[it].toDouble() }.toFloat()
+            if (resto / libres.size < CASILLERO_MINIMO_CM) return c
+            libres.forEach { altos[it] = resto / libres.size }
+        }
+        return conAltos(r, c, h, altos)
+    }
+
+    /** El ropero entero con los fijos respetados en cada cuerpo y cada columna (de fuera adentro: las columnas dependen de su casillero). */
+    fun conFijosRespetados(r: Ropero): Ropero {
+        var salida = r
+        fun recorrer(i: Int, ruta: List<Int>) {
+            val c = salida.cuerpoEn(i, ruta) ?: return
+            val h = huecoDe(salida, i, ruta) ?: return
+            val nuevo = conFijosRespetados(salida, c, h)
+            if (nuevo != c) salida = salida.conCuerpoEn(i, ruta, nuevo)
+            val actual = salida.cuerpoEn(i, ruta) ?: return
+            actual.partes.forEach { (k, cols) -> cols.indices.forEach { j -> recorrer(i, ruta + listOf(k, j)) } }
+        }
+        r.cuerpos.indices.forEach { recorrer(it, emptyList()) }
+        return salida
     }
 
     /**

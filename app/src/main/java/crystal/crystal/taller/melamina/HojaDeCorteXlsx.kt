@@ -70,31 +70,85 @@ object HojaDeCorteXlsx {
             append("</worksheet>")
         }
 
+        return libro(listOf(nombreHoja to hoja))
+    }
+
+    /**
+     * La hoja para el proveedor (su formato, ver [RoperoProduccion.hojasDelProveedor]): una hoja
+     * por melamina, con el encabezado en la fila 1 y una fila por pieza; largo, ancho y cantidad
+     * como números, en mm.
+     */
+    fun generarProveedor(muebles: List<RoperoProduccion.Mueble>): ByteArray {
+        val usados = mutableSetOf<String>()
+        val hojas = RoperoProduccion.hojasDelProveedor(muebles).map { (material, filas) ->
+            val sb = StringBuilder()
+            var r = 0
+            fun fila(celdas: String) { r++; sb.append("<row r=\"$r\">").append(celdas).append("</row>") }
+            fila(RoperoProduccion.COLUMNAS_PROVEEDOR.mapIndexed { i, t -> texto(i, r + 1, t, NEGRITA) }.joinToString(""))
+            filas.forEach { f ->
+                fila(listOf(
+                    texto(0, r + 1, f.obs),
+                    numero(1, r + 1, "${f.largoMm}"),
+                    numero(2, r + 1, "${f.anchoMm}"),
+                    numero(3, r + 1, "${f.cantidad}"),
+                    if (f.veta.all { it.isDigit() }) numero(4, r + 1, f.veta) else texto(4, r + 1, f.veta),
+                    texto(5, r + 1, f.canto),
+                    texto(6, r + 1, f.info)
+                ).joinToString(""))
+            }
+            val hoja = buildString {
+                append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
+                append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">""")
+                append("<cols>")
+                listOf(14, 12, 12, 10, 10, 34, 12).forEachIndexed { i, w -> append("<col min=\"${i + 1}\" max=\"${i + 1}\" width=\"$w\" customWidth=\"1\"/>") }
+                append("</cols>")
+                append("<sheetData>").append(sb).append("</sheetData>")
+                append("</worksheet>")
+            }
+            // El nombre de la hoja: el de la melamina, sin los signos que Excel no acepta, hasta 31 letras y sin repetir.
+            val base = material.filterNot { it in "[]:*?/\\" }.trim().take(28).ifBlank { "Hoja" }
+            var nombre = base
+            var n = 2
+            while (!usados.add(nombre.lowercase())) nombre = "$base ${n++}"
+            nombre to hoja
+        }
+        return libro(hojas.ifEmpty { listOf("Corte" to """<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>""") })
+    }
+
+    /** El libro (.xlsx) con sus hojas, en orden: nombre y XML de cada una. */
+    private fun libro(hojas: List<Pair<String, String>>): ByteArray {
         val salida = ByteArrayOutputStream()
         ZipOutputStream(salida).use { zip ->
             fun archivo(nombre: String, contenido: String) {
                 zip.putNextEntry(ZipEntry(nombre)); zip.write(contenido.toByteArray(Charsets.UTF_8)); zip.closeEntry()
+            }
+            val tipos = hojas.indices.joinToString("\n") { i ->
+                """<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>"""
             }
             archivo("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 <Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+$tipos
 <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>""")
             archivo("_rels/.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
 </Relationships>""")
+            val hojasXml = hojas.mapIndexed { i, (nombre, _) -> """<sheet name="${xml(nombre.take(31))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>""" }.joinToString("")
             archivo("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="${xml(nombreHoja.take(31))}" sheetId="1" r:id="rId1"/></sheets>
+<sheets>$hojasXml</sheets>
 </workbook>""")
+            val relaciones = hojas.indices.joinToString("\n") { i ->
+                """<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>"""
+            }
             archivo("xl/_rels/workbook.xml.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+$relaciones
+<Relationship Id="rId${hojas.size + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>""")
             archivo("xl/styles.xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -104,7 +158,7 @@ object HojaDeCorteXlsx {
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
 <cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>
 </styleSheet>""")
-            archivo("xl/worksheets/sheet1.xml", hoja)
+            hojas.forEachIndexed { i, (_, hoja) -> archivo("xl/worksheets/sheet${i + 1}.xml", hoja) }
         }
         return salida.toByteArray()
     }

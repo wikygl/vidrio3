@@ -41,7 +41,8 @@ class RoperoCalculoTest {
         val lateral = pieza(m, "Lateral")!!
         assertEquals(2, lateral.cantidad)
         assertEquals(579, lateral.anchoMm)     // fondo menos el nordex y la puerta de delante
-        assertEquals(2400, lateral.altoMm)
+        // Canto fino arriba y abajo, que va al piso (2026-10-12): 240 - 0.09 = 239.9 (antes 240, con uno solo).
+        assertEquals(2399, lateral.altoMm)
         // Con las puertas por dentro (interiores o corredizas) el armazón llega hasta delante: 59.7.
         assertEquals(597, pieza(RoperoCalculo.calcular(base.copy(puertasInteriores = true)), "Lateral")!!.anchoMm)
         assertEquals(597, pieza(RoperoCalculo.calcular(base.copy(puertas = TipoPuertas.CORREDIZAS)), "Lateral")!!.anchoMm)
@@ -53,7 +54,7 @@ class RoperoCalculoTest {
         assertEquals(579, techo.altoMm)
         assertEquals(1173, pieza(m, "Piso")!!.anchoMm)
         assertNull(pieza(m, "División"))
-        assertEquals(2400, pieza(m, "División pasante")!!.altoMm)
+        assertEquals(2399, pieza(m, "División pasante")!!.altoMm)   // también va al piso: canto abajo (antes 2400)
         // Uno de 170 no la necesita: piso entero y la división entre piso y techo.
         val angosto = RoperoCalculo.calcular(base.conHueco(170f, 240f, 60f))
         assertEquals(1664, pieza(angosto, "Piso")!!.anchoMm)
@@ -62,7 +63,8 @@ class RoperoCalculoTest {
         // atornillan al canto de la pasante), y llega a medio piso (10.9): de alto 10.9 - 0.3 de
         // canto - 0.15 de gruña = 10.45 → 10 al medio centímetro hacia abajo.
         assertEquals(100, pieza(m, "Zócalo")!!.altoMm)
-        assertEquals(1200, pieza(m, "Zócalo")!!.anchoMm)
+        // Cada tramo lleva el canto de 3 mm en su punta del mueble, no en la junta (2026-10-12): 119.7 (antes 120).
+        assertEquals(1197, pieza(m, "Zócalo")!!.anchoMm)
         assertEquals(2, pieza(m, "Zócalo")!!.cantidad)
         assertEquals(5.5f, RoperoCalculo.altoZocalo(base.copy(zocaloCm = 7f)), 0.01f)   // 7 - 0.9 - 0.3 - 0.15 = 5.65
         // El fondo partido en la división: cada trozo lleva medio espesor de división y su lateral,
@@ -97,7 +99,9 @@ class RoperoCalculoTest {
         // techo: de medio piso (10.9; la otra mitad la tapa el zócalo, y en ella topa la puerta) a 240
         // = 229.1 - 0.3 = 228.8; canteadas a la vuelta con 3 mm se cortan 0.6 menos: 59.1 x 228.2.
         assertEquals(4, puerta.cantidad)
-        assertEquals(591, puerta.anchoMm)
+        // Gruña solo entre hojas (2026-10-11): 3 x 0.3 / 4 = 0.225 por hoja → 59.2 no cabe por 1 mm y
+        // 59.1 deja 3 mm (más de 2): gruña de 2.5 → 59.2 y sobra 0.5 mm. Antes 59.1.
+        assertEquals(592, puerta.anchoMm)
         assertEquals(2282, puerta.altoMm)
         // 228.8 de alto (más de 1.60): cuatro bisagras por hoja (hasta 1 m, dos; de 1 a 1.60, tres).
         assertEquals(4 * 4, m.accesorios.first { it.nombre.startsWith("Bisagra") }.cantidad)
@@ -161,7 +165,8 @@ class RoperoCalculoTest {
         // Tan anchos como la puerta del cuerpo (tapa el lateral entero): 117.3 + 0.9 + 1.8 - 0.3 - 0.6 = 119.1; altos: los tres 20.6 - 0.3 - 0.6 = 19.7.
         val fs = m.piezas.filter { it.nombre == "Frente cajón" }
         assertEquals(3, fs.sumOf { it.cantidad })
-        assertTrue(fs.all { it.anchoMm == 1191 })
+        // Sin gruña en el canto del mueble (2026-10-11): 120 - 0.15 - 0.6 = 119.25 → 119.3 no cabe, 119.2. Antes 119.1.
+        assertTrue(fs.all { it.anchoMm == 1192 })
         assertEquals(setOf(197), fs.map { it.altoMm }.toSet())
         // El caso del usuario, un casillero de 80 con cuatro cajones: los frentes van de medio piso
         // (10.9) a media tapa (92.7), 81.8 / 4 - 0.9 = 19.55; el último acaba en 80.75 sobre el piso.
@@ -186,11 +191,12 @@ class RoperoCalculoTest {
         // piso (11.8) a la repisa del maletero (196.4): 184.6 - 0.3 - 0.6 = 183.7.
         val puerta = pieza(m, "Puerta")!!
         assertEquals(4, puerta.cantidad)
-        assertEquals(578, puerta.anchoMm)
+        // 57.8 + 57.8 + 0.6 + 0.6 de gruña = 117.4: no cabían por 1 mm. Ahora 57.7 y sobra 1 mm (antes 57.8).
+        assertEquals(577, puerta.anchoMm)
         assertEquals(1837, puerta.altoMm)
         // La del maletero: 40 - 0.3 - 0.6 = 39.1, en el hueco de 117.3.
         assertEquals(391, pieza(m, "Puerta maletero")!!.altoMm)
-        assertEquals(578, pieza(m, "Puerta maletero")!!.anchoMm)
+        assertEquals(577, pieza(m, "Puerta maletero")!!.anchoMm)   // antes 57.8
         // El zócalo metido bajo el piso: entre laterales, partido en la pasante (dos de 117.3), y de su alto, sin canto.
         assertEquals(1173, pieza(m, "Zócalo")!!.anchoMm)
         assertEquals(100, pieza(m, "Zócalo")!!.altoMm)
@@ -219,7 +225,8 @@ class RoperoCalculoTest {
         // sobre el piso (87.75 del suelo), sin pasar la media tapa menos la media gruña.
         assertEquals(196, pieza(m, "Frente cajón")!!.altoMm)
         val frentes = RoperoPuertas.de(r).hojas.filter { it.clase == ClaseDePuerta.FRENTE_CAJON }
-        assertEquals(7f + 80.75f, frentes.maxOf { it.y1 }, 0.01f)
+        // Sin gruña arriba: la lleva entera la puerta de encima (2026-10-12; antes 80.75, media gruña abajo de la tapa).
+        assertEquals(7f + 80.9f, frentes.maxOf { it.y1 }, 0.01f)
         // La puerta de encima, de media tapa a 230: 142.1 - 0.9 = 141.2.
         assertTrue("puertas: $puertas", 1412 in puertas)
         // El zócalo de delante, de 155, llega a medio piso: 6.1 - 0.3 - 0.15 → 5.5 de melamina.
@@ -239,10 +246,75 @@ class RoperoCalculoTest {
         assertEquals(4, puerta.cantidad)
         assertEquals(379, puerta.anchoMm)
         val hojas = RoperoPuertas.de(r).hojas
-        assertEquals(0.15f, hojas.minOf { it.x0 }, 0.01f)
-        assertEquals(155f - 0.15f, hojas.maxOf { it.x1 }, 0.01f)
+        // Sin gruña en los cantos del mueble (2026-10-11; antes 0.15 a cada punta).
+        assertEquals(0f, hojas.minOf { it.x0 }, 0.01f)
+        assertEquals(155f, hojas.maxOf { it.x1 }, 0.01f)
         // Y el zócalo de delante, en su mismo plano, de punta a punta.
         assertEquals(listOf(155f), RoperoCalculo.tramosDeZocalo(r))
+    }
+
+    @Test
+    fun los_frentes_interiores_dejan_medio_centimetro_y_la_caja_queda_mas_baja() {
+        // El ropero del usuario (2026-10-11): tres cajones tras la puerta en un espacio de 65 y uno
+        // solo en 18.4 con caja de 18. Cuatro gruñas de 0.5 en 65: 65 - 2 = 63 / 3 = 21 terminados,
+        // 20.9 cortados con el canto fino (antes 21.2, con 2 mm); la caja de 20 ya es más baja.
+        // El de 18.4: 18.4 - 1 = 17.4 → 17.3 cortado (antes 17.9), y la caja de 18 baja a 17.
+        val r = base.conCuerpo(0, Cuerpo(tipo = TipoCuerpo.MIXTO, cajones = 3, altoCajonesFijoCm = 65f, altosCajonesCm = listOf(20f, 20f, 20f)))
+            .conCuerpo(1, Cuerpo(tipo = TipoCuerpo.MIXTO, cajones = 1, altoCajonesFijoCm = 18.4f, altosCajonesCm = listOf(18f)))
+        val m = RoperoCalculo.calcular(r)
+        val frentes = m.piezas.filter { it.nombre == "Frente cajón" }.groupBy { it.altoMm }.mapValues { (_, p) -> p.sumOf { it.cantidad } }
+        assertEquals(mapOf(209 to 3, 173 to 1), frentes)
+        val laterales = m.piezas.filter { it.nombre == "Lateral cajón" }.groupBy { it.altoMm }.mapValues { (_, p) -> p.sumOf { it.cantidad } }
+        assertEquals(mapOf(199 to 6, 169 to 2), laterales)   // canto arriba y abajo: - 0.09 (antes 200 y 170)
+        val cajas = m.piezas.filter { it.nombre == "Frente y trasera de caja" }.groupBy { it.altoMm }.mapValues { (_, p) -> p.sumOf { it.cantidad } }
+        assertEquals(mapOf(199 to 6, 169 to 2), cajas)
+        // El ropero de 157 del Xiaomi: cuerpos de 49.93, frentes de 49.93 - 3.6 = 46.33, cortados 46.2 (antes 49.4).
+        val r157 = r.conHueco(157f, 242f, 62f).conCuerposIguales(3)
+        assertTrue(RoperoCalculo.calcular(r157).piezas.filter { it.nombre == "Frente cajón" }.all { it.anchoMm == 462 })
+        // El zócalo de punta a punta, con el canto de 3 mm en sus dos puntas (2026-10-12): 157 - 0.6 = 156.4 (antes 157).
+        assertEquals(1564, pieza(RoperoCalculo.calcular(r157), "Zócalo")!!.anchoMm)
+        // Y los dos suplementos de cada cuerpo con cajones, del alto de su espacio.
+        assertEquals(mapOf(650 to 2, 184 to 2), m.piezas.filter { it.nombre == "Suplemento de riel" }.groupBy { it.altoMm }.mapValues { (_, p) -> p.sumOf { it.cantidad } })
+    }
+
+    @Test
+    fun a_lo_alto_cuadra_exacto_sin_gruna_en_los_cantos() {
+        // El ropero del usuario (2026-10-12): 242 de alto, zócalo 8, maletero 30. Zócalo con canto
+        // arriba y abajo (va al piso), puertas con la gruña de 3 mm abajo y nada arriba:
+        // 6.5 + 202.2 + 30.9 + 6 cantos de 0.3 + 2 gruñas de 0.3 = 242.
+        val r = base.copy(zocaloCm = 8f, maleteroCm = 30f, maleteroCuerpos = 2, maleteroHojas = 1).conHueco(157f, 242f, 62f).conCuerposIguales(3)
+        val m = RoperoCalculo.calcular(r)
+        val zocalo = pieza(m, "Zócalo")!!
+        assertEquals(65, zocalo.altoMm)                      // 8 - 0.9 - 0.6 (antes 8 - 0.9 - 0.3 - 0.15 → 6.5 también, por el redondeo)
+        assertEquals(1564, zocalo.anchoMm)
+        assertEquals(2, zocalo.cantosEnAncho)               // arriba y abajo
+        assertEquals(2022, pieza(m, "Puerta")!!.altoMm)
+        assertEquals(309, pieza(m, "Puerta maletero")!!.altoMm)
+        val hojas = RoperoPuertas.de(r).hojas
+        val puerta = hojas.first { it.clase == ClaseDePuerta.PUERTA }
+        val maletero = hojas.first { it.clase == ClaseDePuerta.PUERTA_MALETERO }
+        assertEquals(7.1f + 0.3f, puerta.y0, 0.01f)         // el zócalo termina en 7.1 y la gruña
+        assertEquals(210.2f, puerta.y1, 0.01f)              // hasta la cara de arriba de la repisa del maletero
+        assertEquals(210.5f, maletero.y0, 0.01f)
+        assertEquals(242f, maletero.y1, 0.01f)              // hasta el canto del mueble, sin gruña
+        // Los laterales, también con canto abajo: 242 - 0.09.
+        assertEquals(2419, pieza(m, "Lateral")!!.altoMm)
+    }
+
+    @Test
+    fun la_gruna_va_entre_hojas_y_no_en_los_cantos_del_mueble() {
+        // El ropero del usuario (2026-10-11): 157 de ancho, tres cuerpos de 49.9, una hoja cada
+        // uno, canto de 3 mm. Gruña 0.3 solo entre hojas (2 x 0.3), repartida por igual: cada
+        // hoja pierde 0.2 → 51.8 = 2 y 50.9 = 1 cortadas, y sobra 1 mm. Antes 51.7 = 2 y 50.8 = 1.
+        val r = base.conHueco(157f, 230f, 60f).conCuerposIguales(3)
+        val puertas = RoperoCalculo.calcular(r).piezas.filter { it.nombre == "Puerta" }
+        assertEquals(mapOf(518 to 2, 509 to 1), puertas.groupBy { it.anchoMm }.mapValues { (_, p) -> p.sumOf { it.cantidad } })
+        val hojas = RoperoPuertas.de(r).hojas.sortedBy { it.x0 }
+        assertEquals(0f, hojas.first().x0, 0.001f)
+        assertEquals(157f, hojas.last().x1, 0.01f)
+        // Las juntas: 0.3 de gruña y medio milímetro de lo que sobra en cada una.
+        assertEquals(0.35f, hojas[1].x0 - hojas[0].x1, 0.001f)
+        assertEquals(0.35f, hojas[2].x0 - hojas[1].x1, 0.001f)
     }
 
     @Test
@@ -251,12 +323,19 @@ class RoperoCalculoTest {
         val m = RoperoCalculo.calcular(conCajones)
         val frente = pieza(m, "Frente cajón")!!
         assertEquals(3, frente.cantidad)
-        assertEquals(1168, frente.anchoMm)   // 117.3 - 0.4 - 0.09 de canto fino
-        assertEquals(195, frente.altoMm)     // 20 - 0.4 - 0.09
+        // El hueco menos dos melaminas (2026-10-11): 117.3 - 3.6 - 0.09 de canto fino → 113.6 (antes 116.8, que no abría).
+        assertEquals(1136, frente.anchoMm)
+        // Gruña de 0.5 entre frentes interiores (2026-10-11): 20 - 4 x 0.5 / 3 = 19.33 - 0.09 → 19.2 (antes 19.5, 20 - 0.4 - 0.09).
+        assertEquals(192, frente.altoMm)
         val lateral = pieza(m, "Lateral cajón")!!
         assertEquals(6, lateral.cantidad)
         assertEquals(529, lateral.anchoMm)   // fondo útil 57.9 menos 5
-        assertEquals(200, lateral.altoMm)    // la caja de 20 escrita (- 0.045 de canto fino)
+        // La caja de 20 escrita no puede pasar su frente de 19.33: baja a 19 (2026-10-11; antes 20).
+        assertEquals(189, lateral.altoMm)   // canto arriba y abajo (2026-10-12): 19 - 0.09 (antes 190, con uno)
+        // Canto en todo lado que no toca otra melamina (2026-10-12): el lateral en U (delante topa con
+        // el frente), frente y trasera en II (sus puntas topan con los laterales).
+        assertEquals("U", RoperoProduccion.cantoProveedor(conCajones, lateral).second)
+        assertEquals("II", RoperoProduccion.cantoProveedor(conCajones, pieza(m, "Frente y trasera de caja")!!).second)
         // El fondo, de MDF o nordex de 3, entra en la ranura de las cuatro piezas de la caja (a 1.8 del canto
         // de abajo): lo de dentro de la caja más 0.7 por lado. Caja interior de 117.3 - 2.6 de
         // rieles - 3.6 = 111.1; por dentro 107.5 → fondo 108.9; de fondo 52.9 - 3.6 + 1.4 = 50.7.
@@ -281,14 +360,27 @@ class RoperoCalculoTest {
 
     @Test
     fun corredizas_dos_hojas_montadas_y_fondo_util_menor() {
+        // Con los sistemas Ducasse (2026-10-12): traslape 3, D-25 el vano menos 0.7 de alto y D-52 menos 1.2.
+        // Antes, a ojo: (236.4 + 5) / 2 - 0.6 = 120.1, 226.4 - 3.5 - 0.6 = 222.3, 8 de carril y dos rieles.
         val m = RoperoCalculo.calcular(base.copy(puertas = TipoPuertas.CORREDIZAS))
         val hoja = pieza(m, "Hoja corrediza")!!
         assertEquals(2, hoja.cantidad)
-        assertEquals(1201, hoja.anchoMm)   // (236.4 + 5) / 2 - 0.6 de canto grueso
-        assertEquals(2223, hoja.altoMm)    // 226.4 - 3.5 - 0.6
-        // Los entrepaños pierden el carril de las hojas: 59.7 - 8.
-        assertEquals(517, pieza(m, "Entrepaño")!!.altoMm)
-        assertEquals("236 = 2", m.lineasConLargo("Riel corredizo"))
+        assertEquals(1191, hoja.anchoMm)   // (236.4 + 3) / 2 - 0.6 de canto grueso
+        assertEquals(2251, hoja.altoMm)    // 226.4 - 0.7 - 0.6
+        // Los entrepaños pierden lo de las ranuras: 59.7 - (2 x 2.3 + 0.15) = 54.95, menos el canto fino.
+        assertEquals(549, pieza(m, "Entrepaño")!!.altoMm)
+        assertEquals("", m.lineasConLargo("Riel corredizo"))   // el D-25 no lleva riel
+        assertEquals(1, m.accesorios.first { it.nombre.startsWith("Sistema corredizo Ducasse D-25") }.cantidad)
+        // Piso y techo con sus dos ranuras: en el Excel del proveedor, "R 2.3 Y 4.6".
+        assertEquals(listOf(2.3f, 4.6f), pieza(m, "Piso")!!.ranurasCorredizaCm.map { kotlin.math.round(it * 10f) / 10f })
+        assertEquals("R 2.3 Y 4.6", RoperoProduccion.filaProveedor(base, pieza(m, "Techo")!!).obs)
+        // D-52: la hoja 1.2 menos que el vano, riel de 2E + 9 = 4.5 y el kit de 3 m (el hueco pasa de 2 m).
+        val d52 = RoperoCalculo.calcular(base.copy(puertas = TipoPuertas.CORREDIZAS, sistemaCorredizo = SistemaCorredizo.D52))
+        assertEquals(1191, pieza(d52, "Hoja corrediza")!!.anchoMm)
+        assertEquals(2246, pieza(d52, "Hoja corrediza")!!.altoMm)   // 226.4 - 1.2 - 0.6
+        assertEquals(552, pieza(d52, "Entrepaño")!!.altoMm)          // 59.7 - 4.5
+        assertTrue(pieza(d52, "Piso")!!.ranurasCorredizaCm.isEmpty())
+        assertEquals(1, d52.accesorios.first { it.nombre == "Kit clóset Ducasse D-52 de 3 m (2 hojas)" }.cantidad)
         assertEquals(3, RoperoPuertas.hojasCorredizasPorAncho(300f))
     }
 
@@ -305,7 +397,7 @@ class RoperoCalculoTest {
         val m = RoperoCalculo.calcular(ancho)
         assertEquals(3, m.piezas.filter { it.nombre == "Techo" }.sumOf { it.cantidad })
         assertEquals(2, pieza(m, "División pasante")!!.cantidad)
-        assertEquals(2400, pieza(m, "División pasante")!!.altoMm)
+        assertEquals(2399, pieza(m, "División pasante")!!.altoMm)   // también va al piso: canto abajo (antes 2400)
         assertNull(pieza(m, "División"))
         // El zócalo de delante se parte en el centro de las pasantes, en cuyo canto se atornilla.
         assertEquals(300f, RoperoCalculo.tramosDeZocalo(ancho).sum(), 0.05f)
@@ -382,12 +474,13 @@ class RoperoCalculoTest {
         assertTrue("tapacanto de puertas: $grueso", grueso in 20f..30f)
         assertTrue(m.lineasDeTapacantoPuertas().lines().contains("228 = 8"))
         val lineas = m.lineasDePiezas(MaterialPlancha.MELAMINA_18).lines()
-        assertTrue(m.lineasDePiezas(MaterialPlancha.MELAMINA_18_COLOR).lines().contains("57.9x240 = 2"))
+        assertTrue(m.lineasDePiezas(MaterialPlancha.MELAMINA_18_COLOR).lines().contains("57.9x239.9 = 2"))   // antes 240: canto también abajo
         // En la blanca, de ese largo, solo la pasante del medio: sus dos caras quedan por dentro.
-        assertTrue(lineas.contains("57.9x240 = 1"))
-        assertTrue(m.lineasDePiezas(MaterialPlancha.MELAMINA_18_COLOR).lines().contains("59.1x228.2 = 4"))
+        assertTrue(lineas.contains("57.9x239.9 = 1"))
+        assertTrue(m.lineasDePiezas(MaterialPlancha.MELAMINA_18_COLOR).lines().contains("59.2x228.2 = 4"))   // antes 59.1 (gruña también en los cantos)
         // Los cantos de los laterales van en el fino de color, no en el blanco.
-        assertEquals(listOf("240 = 2", "58 = 2"), m.lineasDeTapacantoColor().lines())
+        // Su frente, su canto de arriba y el de abajo, que va al piso (2026-10-12; antes "58 = 2").
+        assertEquals(listOf("240 = 2", "58 = 4"), m.lineasDeTapacantoColor().lines())
         assertTrue(m.lineasDeTapacanto().lines().none { it == "240 = 2" })
         // Todo del mismo color: no hay lista aparte.
         assertTrue(RoperoCalculo.calcular(base.copy(interiorBlanco = false)).tapacantoColor.isEmpty())

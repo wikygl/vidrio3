@@ -36,6 +36,8 @@ data class PiezaMelamina(
     val canto: TipoCanto = TipoCanto.FINO,
     /** La ranura para el fondo del cajón: a cuántos cm del canto de abajo empieza (0 = sin ranura); corre a lo largo del ancho. */
     val ranuraCm: Float = 0f,
+    /** Las ranuras de las corredizas D-25 (piso y techo): a cuántos cm del canto de delante; corren a lo largo del ancho. */
+    val ranurasCorredizaCm: List<Float> = emptyList(),
     /** De dónde es la pieza: "armazón", "cuerpo 2", "cuerpo 2, col 1"… (las iguales juntas llevan todas las suyas). */
     val zonas: List<String> = emptyList()
 ) {
@@ -122,7 +124,8 @@ data class MaterialesRopero(
  *   arriba como un lateral (pasante) y los trozos llegan a su cara: dos piezas nunca se juntan a tope.
  * - Laterales y divisiones con el fondo del hueco menos el nordex y, con batientes encima del
  *   armazón, menos la puerta: el mueble con sus puertas mide el fondo apuntado.
- * - Cajones: frente falso 4 mm menor que el hueco por lado; la caja, del alto escrito en el
+ * - Cajones: frente falso 2 mm menor que el hueco por lado; tras la puerta, a lo alto, 5 mm de
+ *   gruña entre frentes y contra piso y tapa, y la caja más baja que su frente; la caja, del alto escrito en el
  *   diseño y 5 cm más corta que el fondo útil, con 13 mm por lado para los rieles, fondo de nordex.
  * - Puertas batientes superpuestas: tapan el lateral entero en las puntas y media división entre
  *   cuerpos; una por cuerpo hasta 60 cm, dos si es más ancho, 3 mm de
@@ -135,8 +138,8 @@ data class MaterialesRopero(
  *   de color: se ve entero desde fuera.
  * - Los laterales, de color por su cara de fuera, con su canto fino también de color.
  * - Corredizas por dentro del armazón: dos hojas hasta 240, tres más allá, montadas 5 cm.
- * - Tapacanto en todo canto que se ve: frentes del armazón, cantos de entrepaños, contorno de
- *   puertas y frentes de cajón, canto superior de las cajas. Lo de dentro con el fino (0.45)
+ * - Tapacanto en todo lado que no toca otra melamina o el MDF (dictado 2026-10-12): frentes del armazón, cantos de entrepaños, contorno de
+ *   puertas y frentes de cajón, lo que va al piso, cajas en U (laterales) y II (frente y trasera). Lo de dentro con el fino (0.45)
  *   y lo de fuera con el grueso (3). El tapacanto SE DESCUENTA de la pieza: una puerta de
  *   100 x 50 canteada a la vuelta con 3 mm se corta a 99.4 x 49.4.
  * - Planchas: el área de las piezas más un 15% de merma, a plancha entera; el optimizador de
@@ -153,8 +156,8 @@ object RoperoCalculo {
     private const val EN_RANURA_CM = 0.7f
     /** Desde este ancho de dentro, el fondo del cajón lleva refuerzo al centro. */
     private const val ANCHO_CON_REFUERZO_CM = 90f
-    /** La gruña mínima entre el zócalo y las puertas: la de 1.5 mm se redondea a 2. */
-    private const val GRUNA_ZOCALO_CM = 0.15f
+    /** La gruña mínima a lo alto de los frentes de cajón interiores: entre ellos y contra el piso y la tapa. */
+    private const val GRUNA_CAJON_INTERIOR_CM = 0.5f
     private val RIELES_CAJON = listOf(30, 35, 40, 45, 50, 55)
 
     /** La melamina del armazón y lo de dentro (blanca si el interior va en blanco). */
@@ -193,7 +196,8 @@ object RoperoCalculo {
          */
         fun pieza(
             nombre: String, anchoCm: Float, altoCm: Float, cantidad: Int, material: MaterialPlancha = mel,
-            cantosEnAncho: Int = 0, cantosEnAlto: Int = 0, visible: Boolean = false, ranuraCm: Float = 0f
+            cantosEnAncho: Int = 0, cantosEnAlto: Int = 0, visible: Boolean = false, ranuraCm: Float = 0f,
+            ranurasCorredizaCm: List<Float> = emptyList()
         ) {
             if (cantidad <= 0 || anchoCm <= 0f || altoCm <= 0f) return
             val t = if (visible) r.tapacantoPuertasCm else r.tapacantoCm
@@ -205,7 +209,7 @@ object RoperoCalculo {
             // Una pieza de color que no es puerta (un lateral): su canto fino, también de color.
             val deColor = !visible && mat == melColor && melColor != mel
             val tipoCanto = when { visible -> TipoCanto.GRUESO; deColor -> TipoCanto.FINO_COLOR; else -> TipoCanto.FINO }
-            piezas.add(PiezaMelamina(nombre, mm(w), mm(h), cantidad, mat, mm(cantoCm), cantosEnAncho, cantosEnAlto, tipoCanto, ranuraCm, listOf(zona)))
+            piezas.add(PiezaMelamina(nombre, mm(w), mm(h), cantidad, mat, mm(cantoCm), cantosEnAncho, cantosEnAlto, tipoCanto, ranuraCm, ranurasCorredizaCm, listOf(zona)))
             canto(w, cantosEnAncho * cantidad, visible, deColor)
             canto(h, cantosEnAlto * cantidad, visible, deColor)
         }
@@ -219,29 +223,39 @@ object RoperoCalculo {
         val altoIzq = r.altoDeCuerpo(0)
         val altoDer = r.altoDeCuerpo(n - 1)
         // Los laterales se ven por fuera: van en la melamina de color aunque el interior sea blanco.
-        pieza("Lateral", fondoArm, altoIzq, 1, melColor, cantosEnAncho = 1, cantosEnAlto = 1)
-        pieza("Lateral", fondoArm, altoDer, 1, melColor, cantosEnAncho = 1, cantosEnAlto = 1)
+        // Canto arriba, delante y abajo: lo que va al piso lleva canto contra golpes y humedad (el usuario, 2026-10-12).
+        pieza("Lateral", fondoArm, altoIzq, 1, melColor, cantosEnAncho = 2, cantosEnAlto = 1)
+        pieza("Lateral", fondoArm, altoDer, 1, melColor, cantosEnAncho = 2, cantosEnAlto = 1)
         // Piso y techo van de lateral a lateral. Si no caben en la plancha, una división va del
         // suelo arriba como un lateral (pasante) y cada trozo llega a su cara: nunca se juntan
         // dos piezas a tope, una se atornilla en la otra.
         val tramosAncho = tramosDeAncho(r)
         val pasantes = RoperoGeometria.divisionesPasantes(r)
-        RoperoGeometria.tramosDeTecho(r).forEach { t -> pieza("Techo", t.x1 - t.x0, fondoArm, 1, cantosEnAncho = 1) }
-        tramosAncho.forEach { w -> pieza("Piso", w, fondoArm, 1, cantosEnAncho = 1) }
-        // El zócalo va delante, en el plano de las puertas, con el canto grueso arriba; la pieza
+        // Con corredizas D-25 del ropero entero, piso y techo llevan sus dos ranuras.
+        RoperoGeometria.tramosDeTecho(r).forEach { t -> pieza("Techo", t.x1 - t.x0, fondoArm, 1, cantosEnAncho = 1, ranurasCorredizaCm = r.ranurasCorredizaCm) }
+        tramosAncho.forEach { w -> pieza("Piso", w, fondoArm, 1, cantosEnAncho = 1, ranurasCorredizaCm = r.ranurasCorredizaCm) }
+        // El zócalo va delante, en el plano de las puertas, con el canto grueso arriba y abajo; la pieza
         // se pide con el canto puesto para que quede la melamina de altoZocalo.
         if (r.zocaloCm > 0.5f) {
-            if (r.zocaloDelante) tramosDeZocalo(r).forEach { w -> pieza("Zócalo", w, altoZocalo(r) + r.tapacantoPuertasCm, 1, cantosEnAncho = 1, visible = true) }
+            // Las puntas del mueble se ven y llevan el canto grueso, descontado como en las puertas (el
+            // usuario, 2026-10-12: 157 → 156.4); donde se juntan dos tramos, sin canto. Antes 157 entero.
+            if (r.zocaloDelante) tramosDeZocalo(r).let { tramos ->
+                tramos.forEachIndexed { i, w ->
+                    val puntas = (if (i == 0) 1 else 0) + (if (i == tramos.lastIndex) 1 else 0)
+                    pieza("Zócalo", w, altoZocalo(r) + 2 * r.tapacantoPuertasCm, 1, cantosEnAncho = 2, cantosEnAlto = puntas, visible = true)
+                }
+            }
             // Metido bajo el piso, entre laterales (el zócalo menos el piso): aunque vaya dentro se ve
             // entero desde fuera, así que va de color.
-            else if (r.bajoPisoCm > 0.5f) tramosAncho.forEach { w -> pieza("Zócalo", w, r.bajoPisoCm, 1, melColor) }
+            // Con su canto en el borde que va al piso (2026-10-12; antes sin canto).
+            else if (r.bajoPisoCm > 0.5f) tramosAncho.forEach { w -> pieza("Zócalo", w, r.bajoPisoCm, 1, melColor, cantosEnAncho = 1) }
         }
         // Cada división sube hasta el techo más alto de los dos cuerpos que separa; con el
         // maletero propio, solo hasta su repisa.
         // Las pasantes, del suelo arriba como los laterales (y cruzando el maletero).
         for (i in 0 until n - 1) {
             val altoMayor = maxOf(r.altoDeCuerpo(i), r.altoDeCuerpo(i + 1))
-            if (i in pasantes) { pieza("División pasante", fondoArm, altoMayor, 1, cantosEnAncho = 1, cantosEnAlto = 1); continue }
+            if (i in pasantes) { pieza("División pasante", fondoArm, altoMayor, 1, cantosEnAncho = 2, cantosEnAlto = 1); continue }   // también llega al piso
             val altoDiv = if (r.maleteroPropio) r.altoBajoCm else altoMayor - r.pisoArribaCm - e
             pieza("División", fondoArm, altoDiv, 1, cantosEnAlto = 1)
         }
@@ -288,19 +302,43 @@ object RoperoCalculo {
                 val cajaProf = (fondoUtil - CAJA_MAS_CORTA_CM).coerceAtLeast(20f)
                 // El cajón interior (tras la puerta) pierde además dos melaminas para el riel telescópico.
                 val cajaW = w - 2 * RIEL_CAJON_CM - (if (c.cajonesALaVista) 0f else 2 * e)
-                altosCajas.forEach { hc ->
-                    // El alto de la caja es el que se escribió en el diseño, sin descontar nada más.
-                    val cajaH = hc.coerceAtLeast(6f)
+                // Los frentes interiores (tras la puerta), terminados: entre frente y frente, y contra
+                // el piso y la tapa, al menos [GRUNA_CAJON_INTERIOR_CM]; las n + 1 gruñas se reparten
+                // por igual y cada frente se corta al milímetro hacia abajo (el usuario, 2026-10-11:
+                // tres frentes en 65 → 20.9 cortados con canto fino; antes 21.2, con 2 mm de gruña).
+                val t = r.tapacantoCm
+                val frentesH = altosCajones.map { hc ->
+                    val terminado = hc - (cajones + 1) * GRUNA_CAJON_INTERIOR_CM / cajones
+                    kotlin.math.floor((terminado - 2 * t) * 10f + 0.001f) / 10f + 2 * t
+                }
+                altosCajas.forEachIndexed { k, hc ->
+                    // El alto de la caja es el que se escribió en el diseño; tras la puerta, si su frente
+                    // no la pasa, se baja al centímetro entero por debajo del frente (el usuario,
+                    // 2026-10-11: la caja, frente y trasera incluidas, siempre más baja que su frente).
+                    val escrito = hc.coerceAtLeast(6f)
+                    val frente = frentesH.getOrNull(k)
+                    val cajaH = if (!c.cajonesALaVista && frente != null && frente <= escrito + 0.001f)
+                        (ceil(frente - 0.001f) - 1f).coerceAtLeast(6f) else escrito
                     // Las cuatro piezas de la caja llevan la ranura del fondo a 1.8 del canto de abajo:
                     // debajo queda sitio para un refuerzo de melamina que no se ve.
-                    pieza("Lateral cajón", cajaProf, cajaH, 2, cantosEnAncho = 1, ranuraCm = RANURA_CAJON_CM)
-                    pieza("Frente y trasera de caja", cajaW - 2 * e, cajaH, 2, cantosEnAncho = 1, ranuraCm = RANURA_CAJON_CM)
+                    // Canto en todo lado que no toca otra melamina (el usuario, 2026-10-12): el lateral en U
+                    // (arriba, abajo y atrás; delante topa con el frente), frente y trasera en II (arriba y
+                    // abajo; sus puntas topan con los laterales). Antes, solo arriba.
+                    pieza("Lateral cajón", cajaProf, cajaH, 2, cantosEnAncho = 2, cantosEnAlto = 1, ranuraCm = RANURA_CAJON_CM)
+                    pieza("Frente y trasera de caja", cajaW - 2 * e, cajaH, 2, cantosEnAncho = 2, ranuraCm = RANURA_CAJON_CM)
                 }
                 // Los frentes a la vista van con las puertas (RoperoPuertas); los interiores, aquí.
                 if (!c.cajonesALaVista) {
-                    val frenteW = w - 0.4f
-                    altosCajones.forEach { hc -> pieza("Frente cajón", frenteW, hc - 0.4f, 1, cantosEnAncho = 2, cantosEnAlto = 2) }
+                    // Tras la puerta, el frente mide el hueco menos dos melaminas, cortado al milímetro
+                    // hacia abajo (el usuario, 2026-10-11: en un cuerpo de 49.9 el de 49.4 chocaba y no
+                    // abría; ahora 49.93 - 3.6 = 46.33, cortado 46.2). Antes: w - 0.4 de ancho y hc - 0.4 de alto.
+                    val frenteW = kotlin.math.floor((w - 2 * e - 2 * t) * 10f + 0.001f) / 10f + 2 * t
+                    frentesH.forEach { fh -> pieza("Frente cajón", frenteW, fh, 1, cantosEnAncho = 2, cantosEnAlto = 2) }
                     tiradores += cajones
+                    // Los dos suplementos, uno en cada costado, del alto del espacio de cajones y del
+                    // fondo del lateral, con su canto de delante: llevan los rieles por delante de las bisagras.
+                    pieza("Suplemento de riel", fondoUtil, RoperoGeometria.altoDeZonaDeCajones(r, c, h), 2, cantosEnAlto = 1)
+                    tornillos16 += 2 * 4
                 }
                 // El fondo, de MDF o nordex de 3, entra en la ranura de las cuatro piezas: lo de dentro de la
                 // caja más lo que se mete en la ranura por cada lado (con un milímetro de juego).
@@ -309,7 +347,7 @@ object RoperoCalculo {
                 pieza("Fondo cajón", dentroW + 2 * EN_RANURA_CM, dentroF + 2 * EN_RANURA_CM, cajones, MaterialPlancha.NORDEX_3)
                 // En los cajones anchos el MDF se cuelga: un refuerzo de melamina de canto, al centro,
                 // de frente a trasera, bajo el fondo (el hueco de 1.8 bajo la ranura).
-                if (dentroW >= ANCHO_CON_REFUERZO_CM) pieza("Refuerzo fondo cajón", dentroF, RANURA_CAJON_CM, cajones)
+                if (dentroW >= ANCHO_CON_REFUERZO_CM) pieza("Refuerzo fondo cajón", dentroF, RANURA_CAJON_CM, cajones, cantosEnAncho = 1)   // su borde de abajo queda al aire
                 // La tapa sobre los cajones, que los separa del colgador o del hueco de arriba (si la llevan).
                 if (RoperoGeometria.llevaTapa(r, c, h)) { pieza("Tapa de cajones", w, fondoUtil, 1, cantosEnAncho = 1); tornillos40 += 4 }
                 val riel = RIELES_CAJON.lastOrNull { it <= cajaProf } ?: RIELES_CAJON.first()
@@ -327,7 +365,7 @@ object RoperoCalculo {
         }
         r.cuerpos.forEachIndexed { i, c ->
             // Con corredizas propias del cuerpo, lo de dentro pierde el carril de las hojas.
-            val fondoUtil = if (r.puertas != TipoPuertas.CORREDIZAS && (c.puertasPropias ?: r.puertas) == TipoPuertas.CORREDIZAS) fondoArm - Ropero.CARRIL_CORREDIZAS_CM else fondoInt
+            val fondoUtil = if (r.puertas != TipoPuertas.CORREDIZAS && (c.puertasPropias ?: r.puertas) == TipoPuertas.CORREDIZAS) fondoArm - r.carrilCorredizasCm else fondoInt
             piezasDelHueco(c, RoperoGeometria.huecoDeCuerpo(r, i), fondoUtil, "cuerpo ${i + 1}")
         }
 
@@ -345,10 +383,19 @@ object RoperoCalculo {
         }
         val corredizas = puertas.hojas.count { it.clase == ClaseDePuerta.HOJA_CORREDIZA }
         if (corredizas > 0) {
-            puertas.rielesCm.forEach { largo -> accesorios.add(Accesorio("Riel corredizo", 1, largoCm = largo)) }
-            accesorios.add(Accesorio("Kit ruedas corredizas", corredizas))
+            // El kit de Ducasse, uno por cada dos hojas: el D-25 con sus carros, guías y topes; el
+            // D-52 además con riel y guía de 2 o 3 m (el de 3 si el hueco pasa de 2 m). Antes: un
+            // riel por largo y un kit de ruedas por hoja, genéricos.
+            val kits = (corredizas + 1) / 2
+            when (r.sistemaCorredizo) {
+                SistemaCorredizo.D25 -> accesorios.add(Accesorio("Sistema corredizo Ducasse D-25 (2 hojas)", kits))
+                SistemaCorredizo.D52 -> {
+                    val metros = if ((puertas.rielesCm.maxOrNull() ?: 0f) <= 200f) 2 else 3
+                    accesorios.add(Accesorio("Kit clóset Ducasse D-52 de $metros m (2 hojas)", kits))
+                    tornillos16 += 4 * ceil(puertas.rielesCm.sum() / 2f / 30f).toInt()
+                }
+            }
             accesorios.add(Accesorio("Tirador embutido", corredizas))
-            tornillos16 += 4 * ceil(puertas.rielesCm.sum() / 2f / 30f).toInt()
         }
         if (bisagras > 0) accesorios.add(Accesorio("Bisagra cangrejo 35 mm", bisagras))
         if (tiradores > 0) accesorios.add(Accesorio("Tirador", tiradores))
@@ -373,12 +420,12 @@ object RoperoCalculo {
             append("Ropero empotrado ${fmt(r.anchoCm)} x ${fmt(r.altoCm)} x ${fmt(r.fondoCm)} cm, melamina ${r.espesorMm} mm")
             append(if (r.interiorBlanco) " (interior en blanco, lo visible de color)\n" else " (todo del mismo color)\n")
             append("Cuerpos: ").append(r.cuerpos.joinToString(", ") { "${fmt(it.anchoCm)} ${it.tipo.etiqueta.lowercase()}" }).append('\n')
-            append(if (r.zocaloDelante) "Zócalo ${fmt(r.zocaloCm)} delante hasta medio piso (melamina ${fmt(altoZocalo(r))} + canto)" else "Zócalo ${fmt(r.zocaloCm)} metido (${fmt(r.bajoPisoCm)} bajo el piso)")
+            append(if (r.zocaloDelante) "Zócalo ${fmt(r.zocaloCm)} delante hasta medio piso (melamina ${fmt(altoZocalo(r))} + canto arriba y abajo)" else "Zócalo ${fmt(r.zocaloCm)} metido (${fmt(r.bajoPisoCm)} bajo el piso)")
             if (r.maleteroCm > 0f) append(", maletero ${fmt(r.maleteroCm)}").append(if (r.maleteroPropio) " en ${r.maleteroCuerpos}" else "")
             append('\n')
             append("Puertas: ${r.puertas.etiqueta.lowercase()}")
             if (r.puertas == TipoPuertas.BATIENTES) append(if (r.puertasInteriores) " interiores" else " frontales")
-            if (r.puertas == TipoPuertas.CORREDIZAS) append(" (${hojasCorredizas(r)} hojas)")
+            if (r.puertas == TipoPuertas.CORREDIZAS) append(" (${hojasCorredizas(r)} hojas, ${r.sistemaCorredizo.etiqueta})")
             append('\n')
             if (r.altosDesiguales) {
                 append("Altos por lado: ").append(r.cuerpos.indices.joinToString(", ") { fmt(r.altoDeCuerpo(it)) }).append('\n')
@@ -396,12 +443,14 @@ object RoperoCalculo {
 
     /**
      * El alto de la melamina del zócalo de delante: llega a medio piso (el piso es parte del zócalo;
-     * la otra mitad la tapan las puertas y los frentes, que topan en él), menos el canto grueso y
-     * una gruña de al menos 1.5 mm, al medio centímetro hacia abajo. Zócalo 7 con melamina 18 y
-     * canto 3: 7 - 0.9 - 0.3 - 0.15 = 5.65 → 5.5; con el canto, 5.8, y la puerta arranca en 6.1.
+     * la otra mitad la tapan las puertas y los frentes, que topan en él), menos el canto grueso
+     * arriba y abajo (lo que va al piso lleva canto), al medio centímetro hacia abajo. Sin gruña:
+     * la de 3 mm con la puerta la pone la puerta (el usuario, 2026-10-12: 6.5 + 202.2 + 30.9 +
+     * 6 cantos + 2 gruñas = 242). Zócalo 8 con melamina 18 y canto 3: 8 - 0.9 - 0.6 = 6.5 → con
+     * los cantos 7.1, y la puerta arranca en 7.4. Antes: un solo canto y 0.15 de gruña.
      */
     fun altoZocalo(r: Ropero): Float =
-        (kotlin.math.floor((r.pisoArribaCm - r.espesorCm / 2f - r.tapacantoPuertasCm - GRUNA_ZOCALO_CM) * 2f) / 2f).coerceAtLeast(2f)
+        (kotlin.math.floor((r.pisoArribaCm - r.espesorCm / 2f - 2 * r.tapacantoPuertasCm) * 2f + 0.001f) / 2f).coerceAtLeast(2f)
 
     /**
      * El zócalo en el plano de las puertas va de punta a punta del mueble (tapa los laterales,
