@@ -155,11 +155,13 @@ class CorteOptimizer {
         Log.d("CortesLargos", "Piezas después del tratamiento: ${piezasAjustadas.size}")
         Log.d("CortesLargos", "Varillas completas generadas: ${varillasCompletas.size}")
 
-        // PASO 1: Aplicar Fórmula 1 con las piezas ajustadas
-        val resultadoInicial = formula1VarillaMinimaCorteMayor(piezasAjustadas, varillasDisponibles, grosorDisco, nivelClamped)
+        // PASO 1: Aplicar Fórmula 1 con las piezas ajustadas. Desde 2026-10-05 el llenado de cada
+        // varilla es exacto y el nivel es tiempo de búsqueda (ver MotorVarillas). La versión con la
+        // búsqueda acotada, [formula1VarillaMinimaCorteMayor], queda abajo como consulta.
+        val resultadoInicial = formula1Exacta(piezasAjustadas, varillasDisponibles, grosorDisco, nivelClamped)
 
         // PASO 2: Combinar varillas completas + resultado de optimización
-        val resultadoCombinado = combinarResultados(varillasCompletas, resultadoInicial.varillasUsadas)
+        val resultadoCombinado = combinarResultados(varillasCompletas, resultadoInicial)
 
         Log.d("Redistribucion", "\n=== INICIANDO POST-PROCESAMIENTO ===")
         Log.d("Redistribucion", "Resultado combinado: ${resultadoCombinado.size} varillas")
@@ -179,7 +181,31 @@ class CorteOptimizer {
         val tiempoTotal = System.currentTimeMillis() - tiempoInicio
         Log.d("CorteOptimizer", "✅ Optimización completada en ${tiempoTotal}ms")
 
-        return resultadoReparado
+        // De menos a más retazo, como salía la Fórmula 1: primero las varillas bien aprovechadas.
+        return resultadoReparado.sortedWith(
+            compareBy<VarillaConReferencias> { it.varilla.restante }.thenByDescending { it.varilla.longitud }
+        )
+    }
+
+    /** La Fórmula 1 con el llenado exacto de [MotorVarillas], en el formato del resto del optimizador. */
+    private fun formula1Exacta(
+        piezas: List<PiezaCorte>,
+        varillas: List<PiezaCorte>,
+        grosorDisco: Float,
+        nivel: Int
+    ): List<VarillaConReferencias> {
+        val solucion = MotorVarillas.optimizar(
+            piezas.map { MotorVarillas.Pieza(it.longitud, it.cantidad, it.referencia) },
+            varillas.map { MotorVarillas.Stock(it.longitud, it.cantidad) },
+            grosorDisco,
+            nivel
+        )
+        return solucion.barras.map { b ->
+            VarillaConReferencias(
+                Varilla(b.largo, b.cortes.map { it.first }.toMutableList(), b.retazo),
+                b.cortes.map { it.second }.toMutableList()
+            )
+        }
     }
 
     /**
