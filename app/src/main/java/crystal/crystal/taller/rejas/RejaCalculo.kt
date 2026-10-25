@@ -1,5 +1,6 @@
 package crystal.crystal.taller.rejas
 
+import crystal.crystal.taller.puerta.logica.CalculosPuerta
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -24,6 +25,15 @@ enum class ModeloReja(val etiqueta: String) {
      */
     TRABADO("Trabado (ladrillo)")
 }
+
+/** Fija (un paño con su marco) o puerta (marco fijo, hoja que abre y, encima del puente, la sobreluz). */
+enum class TipoReja(val etiqueta: String) {
+    FIJA("Fija"),
+    PUERTA("Puerta")
+}
+
+/** El relleno de la mocheta de una reja de puerta: su modelo ([modelo] null = sin relleno), su paso y sus intermedios. */
+data class DisenoMocheta(val modelo: ModeloReja?, val pasoCm: Float = 15f, val intermedios: Int = 0)
 
 /** Un tubo de la reja: dónde va (cm desde la esquina de abajo a la izquierda, ejes) y cómo se corta. */
 data class TuboReja(
@@ -60,7 +70,18 @@ object RejaCalculo {
         val pasoCm: Float = 15f,
         val modelo: ModeloReja = ModeloReja.CUADRICULA,
         /** Travesaños intermedios en los barrotes verticales (o parantes en los horizontales); en el trabado, los tramos de las columnas impares (3 si es 0). */
-        val intermedios: Int = 0
+        val intermedios: Int = 0,
+        val tipo: TipoReja = TipoReja.FIJA,
+        /** Puerta: la altura del puente, como en la calculadora de puertas; 0 = la de fábrica ([alturaPuente]). */
+        val puenteCm: Float = 0f,
+        /** Puerta: el juego que se le deja a la hoja para que entre y gire (el de Puerta, 1 de fábrica). */
+        val holguraCm: Float = 1f,
+        /**
+         * Puerta: el diseño de la mocheta (la sobreluz sobre el puente), aparte del de la hoja
+         * (pedido del usuario, 2026-10-10: copiar el de la hoja en un hueco tan bajo lo dejaba
+         * reducido). Null = el mismo de la hoja.
+         */
+        val mocheta: DisenoMocheta? = null
     ) {
         val interiorAncho: Float get() = anchoCm - 2 * marcoCm
         val interiorAlto: Float get() = altoCm - 2 * marcoCm
@@ -90,7 +111,72 @@ object RejaCalculo {
         ModeloReja.TRABADO -> trabado(r, tramos(r.interiorAncho, r.pasoCm), if (r.intermedios > 0) r.intermedios else 3)
     }
 
-    fun todos(r: Reja): List<TuboReja> = marco(r) + interior(r)
+    fun todos(r: Reja): List<TuboReja> = when (r.tipo) {
+        TipoReja.FIJA -> marco(r) + interior(r)
+        TipoReja.PUERTA -> puerta(r)
+    }
+
+    // ==================== REJA DE PUERTA (2026-10-10) ====================
+    // Como la calculadora de puertas: un marco fijo, la hoja hasta la altura del puente y, si arriba
+    // queda sitio, el puente y la sobreluz fija. Las cuentas de la hoja y del puente son las de
+    // Puerta (CalculosPuerta), no copias. Asumido, por revisar con el usuario: el marco fijo no lleva
+    // tubo abajo (es puerta, no hay umbral); el puente y el marco de la hoja son del grueso del marco;
+    // la sobreluz y la hoja se rellenan con el mismo modelo.
+
+    /**
+     * La altura del puente: la escrita o, en 0, la de fábrica de Puerta (199 si el alto pasa de 210…).
+     * Sin sitio para la sobreluz, la hoja llega al cabezal: alto − marco.
+     */
+    fun alturaPuente(r: Reja): Float {
+        val h = CalculosPuerta.hPuente(r.altoCm, r.puenteCm, 0f, CalculosPuerta.HOJA_REF, r.marcoCm)
+        return if (altoSobreluz(r, h) > 2f) h else r.altoCm - r.marcoCm
+    }
+
+    /** El alto libre de la sobreluz: lo de Puerta (mocheta), con el puente del grueso del marco. */
+    private fun altoSobreluz(r: Reja, puente: Float): Float = CalculosPuerta.mocheta(r.altoCm, puente, r.marcoCm, r.marcoCm)
+
+    /** ¿La puerta lleva puente y sobreluz encima de la hoja? */
+    fun conSobreluz(r: Reja): Boolean = r.tipo == TipoReja.PUERTA && alturaPuente(r) < r.altoCm - r.marcoCm - 0.01f
+
+    /** La hoja de la puerta: ancho y alto como en Puerta (vano menos marcos y holgura; puente menos holgura). */
+    fun hoja(r: Reja): Reja = r.copy(
+        anchoCm = CalculosPuerta.anchoHoja(r.anchoCm, r.marcoCm, r.marcoCm, r.holguraCm),
+        altoCm = CalculosPuerta.parante(alturaPuente(r), 0f, r.holguraCm),
+        tipo = TipoReja.FIJA
+    )
+
+    private fun puerta(r: Reja): List<TuboReja> {
+        val m = r.marcoCm
+        val salen = mutableListOf(
+            // El marco fijo: las dos jambas enteras y el cabezal entre ellas; abajo no lleva nada.
+            TuboReja("Marco", m / 2f, 0f, m / 2f, r.altoCm),
+            TuboReja("Marco", r.anchoCm - m / 2f, 0f, r.anchoCm - m / 2f, r.altoCm),
+            TuboReja("Marco", m, r.altoCm - m / 2f, r.anchoCm - m, r.altoCm - m / 2f)
+        )
+        val puente = alturaPuente(r)
+        if (conSobreluz(r)) {
+            salen.add(TuboReja("Puente", m, puente + m / 2f, r.anchoCm - m, puente + m / 2f))
+            // La mocheta: su propio diseño entre las caras de las jambas, el puente y el cabezal.
+            val diseno = r.mocheta ?: DisenoMocheta(r.modelo, r.pasoCm, r.intermedios)
+            val modeloMocheta = diseno.modelo
+            if (modeloMocheta != null) {
+                val sobreluz = r.copy(
+                    anchoCm = r.anchoCm - 2 * m, altoCm = altoSobreluz(r, puente), marcoCm = 0f, tipo = TipoReja.FIJA,
+                    modelo = modeloMocheta, pasoCm = diseno.pasoCm, intermedios = diseno.intermedios
+                )
+                salen.addAll(interior(sobreluz).map { it.copy(nombre = "${it.nombre} mocheta").corrido(m, puente + m) })
+            }
+        }
+        // La hoja, con su propio marco, centrada en el hueco del marco fijo y bajo el puente.
+        val h = hoja(r)
+        val dx = m + r.holguraCm / 2f
+        val dy = r.holguraCm / 2f
+        salen.addAll(marco(h).map { it.copy(nombre = "Marco hoja").corrido(dx, dy) })
+        salen.addAll(interior(h).map { it.corrido(dx, dy) })
+        return salen
+    }
+
+    private fun TuboReja.corrido(dx: Float, dy: Float) = copy(x0 = x0 + dx, y0 = y0 + dy, x1 = x1 + dx, y1 = y1 + dy)
 
     /**
      * Parantes enteros (columnas − 1) de cara a cara del marco, y travesaños partidos entre

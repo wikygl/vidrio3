@@ -37,7 +37,7 @@ class VistaReja @JvmOverloads constructor(context: Context, attrs: AttributeSet?
         canvas.drawRect(x(0f), y(r.altoCm), x(r.anchoCm), y(0f), pFondo)
         RejaCalculo.todos(r).forEach { t ->
             val p = if (t.a45) pTuboDiagonal else pTubo
-            p.strokeWidth = (if (t.nombre == "Marco") r.marcoCm else r.tuboCm) * escala
+            p.strokeWidth = (if (t.nombre in TUBOS_DE_MARCO) r.marcoCm else r.tuboCm) * escala
             canvas.drawLine(x(t.x0), y(t.y0), x(t.x1), y(t.y1), p)
         }
         // Las cotas: el ancho arriba y el alto a la izquierda.
@@ -50,5 +50,21 @@ class VistaReja @JvmOverloads constructor(context: Context, attrs: AttributeSet?
         canvas.rotate(-90f, xA - 3 * dp, y(r.altoCm / 2f))
         canvas.drawText(RejaCalculo.fmt(r.altoCm), xA - 3 * dp, y(r.altoCm / 2f), pTexto)
         canvas.restore()
+        // En la puerta, la altura del puente a la derecha: del suelo a la cara de abajo del puente.
+        if (r.tipo == TipoReja.PUERTA) {
+            val h = RejaCalculo.alturaPuente(r)
+            val xP = x(r.anchoCm) + 8 * dp
+            canvas.drawLine(xP, y(0f), xP, y(h), pCota)
+            canvas.drawLine(xP - 3 * dp, y(h), xP + 3 * dp, y(h), pCota)
+            canvas.save()
+            canvas.rotate(-90f, xP + 10 * dp, y(h / 2f))
+            canvas.drawText(RejaCalculo.fmt(h), xP + 10 * dp, y(h / 2f), pTexto)
+            canvas.restore()
+        }
+    }
+
+    private companion object {
+        /** Los que se dibujan con el grueso del marco; lo demás, con el del tubo. */
+        val TUBOS_DE_MARCO = setOf("Marco", "Marco hoja", "Puente")
     }
 }

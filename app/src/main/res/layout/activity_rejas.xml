@@ -345,6 +345,84 @@
                                     tools:ignore="LabelFor" />
                             </LinearLayout>
 
+                            <!-- Fija o puerta; la puerta lleva altura de puente y holgura, como la calculadora de puertas. -->
+                            <LinearLayout
+                                android:id="@+id/lyTipoReja"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    android:layout_weight="0.81"
+                                    android:paddingStart="6dp"
+                                    android:text="Tipo"
+                                    tools:ignore="RtlSymmetry,TextContrastCheck" />
+
+                                <Spinner
+                                    android:id="@+id/spTipoReja"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    tools:ignore="TouchTargetSizeCheck" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyAlturaPuente"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:orientation="horizontal"
+                                android:visibility="gone">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    android:layout_weight="0.81"
+                                    android:paddingStart="6dp"
+                                    android:text="@string/h_puente"
+                                    tools:ignore="RtlSymmetry,TextContrastCheck" />
+
+                                <EditText
+                                    android:id="@+id/etAlturaPuente"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:autofillHints="@string/todo"
+                                    android:inputType="number|numberDecimal"
+                                    android:text="0"
+                                    tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/lyHolgura"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:orientation="horizontal"
+                                android:visibility="gone">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    android:layout_weight="0.81"
+                                    android:paddingStart="6dp"
+                                    android:text="Holgura"
+                                    tools:ignore="RtlSymmetry,TextContrastCheck" />
+
+                                <EditText
+                                    android:id="@+id/etHolgura"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:autofillHints="@string/todo"
+                                    android:inputType="number|numberDecimal"
+                                    android:text="1"
+                                    tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                            </LinearLayout>
+
                             <!-- El paso (hueco máximo entre tubos) y los travesaños o parantes intermedios de los barrotes. -->
                             <LinearLayout
                                 android:id="@+id/lyPaso"
@@ -397,6 +475,89 @@
                                     android:text="0"
                                     tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
                             </LinearLayout>
+                            <!-- La mocheta de la puerta, con su propio diseño (modelo, paso e intermedios). -->
+                            <LinearLayout
+                                android:id="@+id/lyMocheta"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:visibility="gone">
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="3dp"
+                                        android:layout_weight="0.81"
+                                        android:paddingStart="6dp"
+                                        android:text="Mocheta"
+                                        tools:ignore="RtlSymmetry,TextContrastCheck" />
+
+                                    <Spinner
+                                        android:id="@+id/spModeloMocheta"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        tools:ignore="TouchTargetSizeCheck" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/lyPasoMocheta"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="3dp"
+                                        android:layout_weight="0.81"
+                                        android:paddingStart="6dp"
+                                        android:text="Paso moch."
+                                        tools:ignore="RtlSymmetry,TextContrastCheck" />
+
+                                    <EditText
+                                        android:id="@+id/etPasoMocheta"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:autofillHints="@string/todo"
+                                        android:inputType="number|numberDecimal"
+                                        android:text="15"
+                                        tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/lyIntermediosMocheta"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="3dp"
+                                        android:layout_weight="0.81"
+                                        android:paddingStart="6dp"
+                                        android:text="Interm. moch."
+                                        tools:ignore="RtlSymmetry,TextContrastCheck" />
+
+                                    <EditText
+                                        android:id="@+id/etIntermediosMocheta"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:autofillHints="@string/todo"
+                                        android:inputType="number"
+                                        android:text="0"
+                                        tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck,TextContrastCheck" />
+                                </LinearLayout>
+                            </LinearLayout>
+
 
                         </LinearLayout>
 

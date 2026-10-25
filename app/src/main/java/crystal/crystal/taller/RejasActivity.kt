@@ -22,6 +22,8 @@ import crystal.crystal.casilla.ProyectoUIHelper
 import crystal.crystal.databinding.ActivityRejasBinding
 import crystal.crystal.taller.rejas.ModeloReja
 import crystal.crystal.taller.rejas.RejaCalculo
+import crystal.crystal.taller.rejas.TipoReja
+import crystal.crystal.taller.rejas.DisenoMocheta
 import kotlin.math.ceil
 
 /**
@@ -54,8 +56,14 @@ class RejasActivity : AppCompatActivity() {
     /** El modelo elegido en el desplegable. */
     private val modelo: ModeloReja get() = ModeloReja.values().getOrElse(binding.spModelo.selectedItemPosition) { ModeloReja.CUADRICULA }
 
-    /** ¿Este modelo se dibuja y se calcula con la grilla (cuadrícula y barrotes) o con la cuenta propia (rombos, espina)? */
-    private val conGrilla: Boolean get() = modelo == ModeloReja.CUADRICULA
+    /** Fija o puerta (2026-10-10). */
+    private val tipo: TipoReja get() = TipoReja.values().getOrElse(binding.spTipoReja.selectedItemPosition) { TipoReja.FIJA }
+
+    /**
+     * ¿Se dibuja y se calcula con la grilla editable? Solo la cuadrícula fija; los demás modelos y
+     * la puerta van con la cuenta propia ([RejaCalculo]), que sabe de hoja, puente y sobreluz.
+     */
+    private val conGrilla: Boolean get() = modelo == ModeloReja.CUADRICULA && tipo == TipoReja.FIJA
 
     /** La reja tal como está escrita en las casillas, para la cuenta propia. */
     private fun rejaEscrita(): RejaCalculo.Reja = RejaCalculo.Reja(
@@ -65,8 +73,28 @@ class RejasActivity : AppCompatActivity() {
         tuboCm = binding.etTubo.text.toString().toFloatOrNull() ?: TUBO_REJA,
         pasoCm = binding.etPaso.text.toString().toFloatOrNull() ?: MEDIDA_AUTOMATICA,
         modelo = modelo,
-        intermedios = binding.etIntermedios.text.toString().toIntOrNull() ?: 0
+        intermedios = binding.etIntermedios.text.toString().toIntOrNull() ?: 0,
+        tipo = tipo,
+        puenteCm = binding.etAlturaPuente.text.toString().toFloatOrNull() ?: 0f,
+        holguraCm = binding.etHolgura.text.toString().toFloatOrNull() ?: 1f,
+        mocheta = DisenoMocheta(
+            modelo = modeloMocheta,
+            pasoCm = binding.etPasoMocheta.text.toString().toFloatOrNull()?.takeIf { it > 0f } ?: MEDIDA_AUTOMATICA,
+            intermedios = binding.etIntermediosMocheta.text.toString().toIntOrNull() ?: 0
+        )
     )
+
+    /**
+     * El modelo de la mocheta, aparte del de la hoja: los mismos modelos y, al final, "Sin relleno"
+     * (null). De fábrica, barrotes verticales.
+     */
+    private val modeloMocheta: ModeloReja?
+        get() = ModeloReja.values().getOrNull(binding.spModeloMocheta.selectedItemPosition)
+            ?: if (binding.spModeloMocheta.selectedItemPosition == ModeloReja.values().size) null else ModeloReja.BARROTES_VERTICALES
+
+    /** ¿Ese modelo usa la casilla de intermedios? */
+    private fun usaIntermedios(m: ModeloReja?) =
+        m == ModeloReja.BARROTES_VERTICALES || m == ModeloReja.BARROTES_HORIZONTALES || m == ModeloReja.TRABADO
 
     private var aplicandoResultadoEdicion = false
     private var metaColorAluminio: String = ""
@@ -146,6 +174,22 @@ class RejasActivity : AppCompatActivity() {
             override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) { modeloCambiado() }
             override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
         }
+        // Fija o puerta: la puerta enseña la altura de puente y la holgura, como en Puertas.
+        binding.spTipoReja.adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, TipoReja.values().map { it.etiqueta })
+        binding.spTipoReja.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) { modeloCambiado() }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        // La mocheta con su propio diseño (2026-10-10): los modelos de siempre más "Sin relleno".
+        binding.spModeloMocheta.adapter = android.widget.ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item,
+            ModeloReja.values().map { it.etiqueta } + "Sin relleno"
+        )
+        binding.spModeloMocheta.setSelection(ModeloReja.BARROTES_VERTICALES.ordinal)
+        binding.spModeloMocheta.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) { modeloCambiado() }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
         disenoInicial()
         configurarActualizacionAutomatica()
         modeloCambiado()
@@ -183,6 +227,9 @@ class RejasActivity : AppCompatActivity() {
             ProyectoUIHelper.actualizarVisorProyectoActivo(this, binding.tvProyectoActivo)
             true
         }
+
+        // El plano, como en Puertas: toque largo sobre el dibujo (2026-10-10).
+        binding.vistaReja.setOnLongClickListener { mostrarPlano(); true }
 
         binding.rectanguloView.setOnClickListener { mostrarEditGridFragment() }
         binding.rectanguloView.setOnLongClickListener {
@@ -277,6 +324,10 @@ class RejasActivity : AppCompatActivity() {
         binding.etTubo.addTextChangedListener(textWatcher)  // Grueso del tubo
         binding.etPaso.addTextChangedListener(textWatcher)  // Paso entre tubos
         binding.etIntermedios.addTextChangedListener(textWatcher)
+        binding.etAlturaPuente.addTextChangedListener(textWatcher)
+        binding.etHolgura.addTextChangedListener(textWatcher)
+        binding.etPasoMocheta.addTextChangedListener(textWatcher)
+        binding.etIntermediosMocheta.addTextChangedListener(textWatcher)
     }
 
     /** Al cambiar de modelo: qué casillas se enseñan y qué lienzo pinta. */
@@ -287,6 +338,23 @@ class RejasActivity : AppCompatActivity() {
         binding.lyIntermedios.visibility = if (m == ModeloReja.BARROTES_VERTICALES || m == ModeloReja.BARROTES_HORIZONTALES || m == ModeloReja.TRABADO) View.VISIBLE else View.GONE
         binding.rectanguloView.visibility = if (conGrilla) View.VISIBLE else View.GONE
         binding.vistaReja.visibility = if (conGrilla) View.GONE else View.VISIBLE
+        // La puerta: altura de puente y holgura, y en los cálculos la hoja y el puente en filas propias.
+        val esPuerta = tipo == TipoReja.PUERTA
+        binding.lyAlturaPuente.visibility = if (esPuerta) View.VISIBLE else View.GONE
+        binding.lyHolgura.visibility = if (esPuerta) View.VISIBLE else View.GONE
+        binding.lyAlnMarco.visibility = if (esPuerta) View.VISIBLE else View.GONE
+        binding.lyAlnTubo.visibility = if (esPuerta) View.VISIBLE else View.GONE
+        binding.txAlnMarco.text = "Hoja"
+        binding.txAlnTubo.text = "Puente"
+        if (!esPuerta) { binding.tvAlnMarco.text = ""; binding.tvAlnTubo.text = "" }
+        // La mocheta: su diseño en las casillas y sus tubos en una fila propia (la de vidrios, que la reja no usa).
+        val mm = modeloMocheta
+        binding.lyMocheta.visibility = if (esPuerta) View.VISIBLE else View.GONE
+        binding.lyPasoMocheta.visibility = if (mm != null) View.VISIBLE else View.GONE
+        binding.lyIntermediosMocheta.visibility = if (usaIntermedios(mm)) View.VISIBLE else View.GONE
+        binding.lyVidrios.visibility = if (esPuerta && mm != null) View.VISIBLE else View.GONE
+        binding.txVidrios.text = "Mocheta"
+        if (!esPuerta || mm == null) binding.tvVidrios.text = ""
         actualizarDisenoAutomaticamente()
     }
 
@@ -412,6 +480,31 @@ class RejasActivity : AppCompatActivity() {
             )
         }
         editarGridLauncher.launch(intent)
+    }
+
+    /**
+     * El plano de la reja ([crystal.crystal.taller.rejas.PlanoReja]): cada tubo con su largo y las
+     * reglas de dónde va. Se enseña a pantalla completa como el de Puertas.
+     */
+    private fun mostrarPlano() {
+        val r = rejaEscrita()
+        if (r.anchoCm <= 0f || r.altoCm <= 0f) {
+            Toast.makeText(this, "Escriba el ancho y el alto primero", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val cliente = binding.txC.text.toString().trim().takeIf { it.isNotBlank() && it != getString(crystal.crystal.R.string._0_0) }
+        val titulo = listOfNotNull("Reja ${r.modelo.etiqueta}", cliente).joinToString(" · ")
+        val bmp = try {
+            crystal.crystal.taller.rejas.PlanoReja.dibujar(r, titulo)
+        } catch (e: Exception) {
+            Toast.makeText(this, "No se pudo dibujar el plano: ${e.message}", Toast.LENGTH_LONG).show()
+            return
+        }
+        crystal.crystal.taller.puerta.dibujo.DibujoPuerta.guardarPlanoEnCache(this, bmp)
+        startActivity(Intent(this, crystal.crystal.Diseno.DisenoActivity::class.java).apply {
+            putExtra(crystal.crystal.Diseno.DisenoActivity.EXTRA_PLANO, true)
+            putExtra(crystal.crystal.Diseno.DisenoActivity.EXTRA_PLANO_TITULO, "Plano $titulo")
+        })
     }
 
     private fun diseno() {
@@ -582,8 +675,20 @@ class RejasActivity : AppCompatActivity() {
         binding.tvMarco.text = RejaCalculo.lineas(tubos, "Marco")
         binding.tvTubo.text = RejaCalculo.lineas(tubos, "Parante", "Travesaño", "Diagonal", "Diagonal partida")
         val conIntermedios = r.intermedios > 0 && (r.modelo == ModeloReja.BARROTES_VERTICALES || r.modelo == ModeloReja.BARROTES_HORIZONTALES || r.modelo == ModeloReja.TRABADO)
-        binding.txReferencias.text = "Reja anch ${df(r.anchoCm)} x alt ${df(r.altoCm)}\nModelo: ${r.modelo.etiqueta}, paso ${df(r.pasoCm)}" +
+        val puerta = if (r.tipo != TipoReja.PUERTA) "" else {
+            // La hoja y el puente en sus filas; la altura del puente con las medidas, como en Puertas.
+            val h = RejaCalculo.hoja(r)
+            val puente = RejaCalculo.alturaPuente(r)
+            binding.tvAlnMarco.text = RejaCalculo.lineas(tubos, "Marco hoja")
+            binding.tvAlnTubo.text = RejaCalculo.lineas(tubos, "Puente")
+            binding.tvVidrios.text = RejaCalculo.lineas(tubos, "Parante mocheta", "Travesaño mocheta", "Diagonal mocheta", "Diagonal partida mocheta")
+            binding.txPuente.text = "${df(puente)} = 1"
+            "\nPuerta: hoja ${df(h.anchoCm)} x ${df(h.altoCm)}, puente a ${df(puente)}, holgura ${df(r.holguraCm)}" +
+                (if (RejaCalculo.conSobreluz(r)) "" else ", sin sobreluz")
+        }
+        binding.txReferencias.text = "Reja ${if (r.tipo == TipoReja.PUERTA) "puerta " else ""}anch ${df(r.anchoCm)} x alt ${df(r.altoCm)}\nModelo: ${r.modelo.etiqueta}, paso ${df(r.pasoCm)}" +
             (if (conIntermedios) ", ${r.intermedios} intermedios" else "") +
+            puerta +
             "\nMarco y tubo ${df(r.marcoCm)} / ${df(r.tuboCm)}\nTubo total: ${RejaCalculo.metros(tubos)} m (ejes; diagonales cortadas a 45°)"
     }
 
@@ -748,8 +853,10 @@ class RejasActivity : AppCompatActivity() {
             val perfiles = mapOf(
                 "Marco" to ModoMasivoHelper.texto(binding.tvMarco),
                 "Tubo" to ModoMasivoHelper.texto(binding.tvTubo),
-                "Aln Marco" to ModoMasivoHelper.texto(binding.tvAlnMarco),
-                "Aln Tubo" to ModoMasivoHelper.texto(binding.tvAlnTubo)
+                // En la puerta, la hoja y el puente (vacías en la fija).
+                "Hoja" to ModoMasivoHelper.texto(binding.tvAlnMarco),
+                "Puente" to ModoMasivoHelper.texto(binding.tvAlnTubo),
+                "Mocheta" to ModoMasivoHelper.texto(binding.tvVidrios)
             ).filter { it.value.isNotBlank() }
 
             ModoMasivoHelper.devolverResultado(
