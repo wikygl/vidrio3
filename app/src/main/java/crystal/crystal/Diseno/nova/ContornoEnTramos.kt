@@ -28,6 +28,79 @@ object ContornoEnTramos {
      * corto sobrevive a todo —a las versiones viejas del app, que lo ignoran, y a mirarlo a ojo
      * cuando algo no cuadra.
      */
+    /**
+     * Un arco dentro de un contorno de puntos (2026-10-21): el vano arqueado de Medidas llega con su
+     * arco hecho de trocitos, y así se dibujaba, con una cota en cada uno. Va del vértice [desde] al
+     * [hasta] (dando la vuelta si hace falta), con sus tres medidas y el punto más salido.
+     */
+    data class ArcoDelContorno(
+        val desde: Int, val hasta: Int,
+        val cuerda: Float, val flecha: Float, val desarrollo: Float,
+        val apice: Pair<Float, Float>
+    ) {
+        /** Los lados del contorno que son de este arco (el lado i va del vértice i al i + 1). */
+        fun lados(n: Int): Set<Int> {
+            val r = mutableSetOf<Int>()
+            var i = desde
+            while (i != hasta && r.size < n) { r.add(i); i = (i + 1) % n }
+            return r
+        }
+    }
+
+    /**
+     * Los arcos de un contorno: cinco lados o más seguidos, casi del mismo largo, que doblan poco y
+     * siempre hacia el mismo lado (así se trocea un arco). Una esquina o un lado largo los corta. Un
+     * contorno que es todo curva (el círculo) no tiene arcos sueltos: tiene su propio modo.
+     */
+    fun arcosDelContorno(puntos: List<Pair<Float, Float>>): List<ArcoDelContorno> {
+        val n = puntos.size
+        if (n < 8) return emptyList()
+        fun largo(i: Int): Float {
+            val (ax, ay) = puntos[i]; val (bx, by) = puntos[(i + 1) % n]
+            return kotlin.math.hypot(bx - ax, by - ay)
+        }
+        // Lo que dobla el contorno en el vértice i, en grados, con signo.
+        fun giro(i: Int): Float {
+            val (ax, ay) = puntos[(i - 1 + n) % n]; val (bx, by) = puntos[i]; val (cx, cy) = puntos[(i + 1) % n]
+            var d = Math.toDegrees((kotlin.math.atan2(cy - by, cx - bx) - kotlin.math.atan2(by - ay, bx - ax)).toDouble()).toFloat()
+            while (d > 180f) d -= 360f
+            while (d < -180f) d += 360f
+            return d
+        }
+        // ¿El lado i sigue en el i + 1 como un trozo más del mismo arco?
+        fun sigue(i: Int, signo: Float): Boolean {
+            val g = giro((i + 1) % n)
+            val a = largo(i); val b = largo((i + 1) % n)
+            return abs(g) in 0.2f..20f && g * signo > 0f && a > 0.01f && b / a in 0.6f..1.67f
+        }
+        fun signoEn(i: Int) = if (giro((i + 1) % n) >= 0f) 1f else -1f
+        val inicio = (0 until n).firstOrNull { i -> !sigue((i - 1 + n) % n, signoEn((i - 1 + n) % n)) } ?: return emptyList()
+        val arcos = mutableListOf<ArcoDelContorno>()
+        var k = 0
+        while (k < n) {
+            val primero = (inicio + k) % n
+            val signo = signoEn(primero)
+            var ultimo = k
+            while (ultimo + 1 < n && sigue((inicio + ultimo) % n, signo)) ultimo++
+            val lados = ultimo - k + 1
+            if (lados >= 5) {
+                val desde = primero
+                val hasta = (inicio + ultimo + 1) % n
+                val vertices = (k..ultimo + 1).map { puntos[(inicio + it) % n] }
+                val (ax, ay) = vertices.first(); val (bx, by) = vertices.last()
+                val cuerda = kotlin.math.hypot(bx - ax, by - ay)
+                if (cuerda > 0.5f) {
+                    fun aLaCuerda(p: Pair<Float, Float>) = abs((p.first - ax) * (by - ay) - (p.second - ay) * (bx - ax)) / cuerda
+                    val apice = vertices.maxByOrNull { aLaCuerda(it) }!!
+                    val desarrollo = (k..ultimo).sumOf { largo((inicio + it) % n).toDouble() }.toFloat()
+                    arcos.add(ArcoDelContorno(desde, hasta, cuerda, aLaCuerda(apice), desarrollo, apice))
+                }
+            }
+            k = ultimo + 1
+        }
+        return arcos
+    }
+
     fun aTexto(puntos: List<Pair<Float, Float>>): String =
         puntos.joinToString(";") { (x, y) -> "${NovaCalculos.df1(x)},${NovaCalculos.df1(y)}" }
 
@@ -452,7 +525,7 @@ object ContornoEnTramos {
             }
             return DisenoNova(acabado, ancho, alto, tramos).conContornoVano(medido)
         }
-        trapecioLateral(puntos, medido, acabado, altoHoja, anchoParante, divisiones)?.let { return it }
+        formaEnUnTramo(puntos, medido, acabado, altoHoja, anchoParante, divisiones)?.let { return it }
         // Hasta el 2026-09-28 el escalonado también pasaba por aquí: la banda recta llevaba la hoja
         // al alto entero del tramo (`s<144.4>; m<0>`), un descuadre de 0.9 la volvía inclinada con
         // la hoja de la ventana entera (`s<103.2>; m<6.1>`) y los anchos no dejaban sitio a los
@@ -514,59 +587,165 @@ object ContornoEnTramos {
     }
 
     /**
-     * El vano con un costado inclinado junto a un rectángulo: el trapecio (Vna4 de "polis", dictado
-     * el 2026-09-26 en N-99) o la cara asimétrica de una esquina (Formas 13, 120 abajo y 189 arriba).
-     * Como lo diseñó el usuario: UN tramo, el fijo contra el lado inclinado (su vidrio es el
-     * rectángulo que lo contiene y se corta en obra) y las corredizas en el rectángulo, donde entran
-     * enteras (N-67). El rectángulo se reparte con la regla de los 60 (N-15) y el costado inclinado
-     * lleva su fijo; el orden es el preestablecido (N-22), dado vuelta si hace falta para que el
-     * extremo inclinado quede en fijo. La geometría de cada módulo la mide el motor (N-99).
+     * Un vano con lados inclinados en UN tramo (pedido del usuario el 2026-10-19, con una forma de seis
+     * lados que salía en cinco tramos, uno de 6.8: "es simpático, pero no factible; cuanto más simple
+     * mejor"). Es la regla del trapecio (Vna4 de "polis", N-99) para cualquier forma:
      *
-     * Antes pasaba por el camino de los lados inclinados, que partía el triángulo en un tramo aparte y
-     * le acortaba la hoja "a lo que entra": en la punta, 0 (un sistema de alto 0 con una corrediza).
-     * Null si el vano no es de esta forma.
+     * - **El sistema es el rectángulo más ancho donde la hoja entra entera (N-66, N-67)**, apoyado en el
+     *   borde recto: sobre el alféizar (normal) o, si el alféizar no es recto, colgado del dintel
+     *   (invertido). Hacia arriba no importa la forma: la mocheta acepta cualquiera (N-66) y el dibujo y
+     *   el motor la recortan con la silueta, módulo por módulo (N-99).
+     * - **Lo que queda a cada costado es un fijo** contra el lado inclinado, con el vidrio del rectángulo
+     *   que lo contiene, cortado en obra (N-99); uno cada 180, como los paños de mocheta.
+     * - El rectángulo se reparte con la regla de los 60 (N-15) y el orden es el preestablecido (N-22),
+     *   dado vuelta si hace falta para que los costados queden en fijo.
+     * - Un costado que queda fuera solo porque el borde de enfrente baja un poco —menos que el módulo de
+     *   la casa, sobre el mismo borde recto— no lleva fijo: la hoja se acorta a lo que entra ahí, como en
+     *   el dintel que roza el límite.
+     *
+     * Antes estas formas se partían en un tramo por cada vértice: parantes por todas partes, tramos de
+     * nada y corredizas colgadas de dinteles a media pendiente. Antes también el trapecio tenía su propia
+     * función, que pedía el rectángulo de dintel a alféizar; ahora es un caso de esta.
+     *
+     * Las formas de una sola banda (el dintel o el alféizar inclinados de Fide, los dos bordes en
+     * bandera) siguen su camino dictado y las de sin ningún borde recto también: null.
      */
-    private fun trapecioLateral(
+    private fun formaEnUnTramo(
         puntos: List<Pair<Float, Float>>, medido: List<Pair<Float, Float>>, acabado: String,
         pedida: Float, anchoParante: Float, divisiones: Int = 0
     ): DisenoNova? {
-        val b = bandas(puntos)
-        if (b.size < 2) return null
-        fun inclinada(x: Banda) =
-            abs(x.altoDerCm - x.altoCm) > DESCUADRE_ESCALON || abs(x.caidaDerCm - x.caidaCm) > DESCUADRE_ESCALON
-        val izq = inclinada(b.first())
-        val der = inclinada(b.last())
-        if (!izq && !der) return null
-        val rectas = b.subList(if (izq) 1 else 0, b.size - (if (der) 1 else 0))
-        if (rectas.isEmpty() || rectas.any { inclinada(it) }) return null
-        val alto = puntos.maxOf { it.second } - puntos.minOf { it.second }
-        // El rectángulo va de dintel a alféizar, sin escalones.
-        if (rectas.any { abs(maxOf(it.altoCm, it.altoDerCm) - alto) > DESCUADRE_ESCALON || minOf(it.caidaCm, it.caidaDerCm) > DESCUADRE_ESCALON }) return null
-        // Y el costado inclinado arranca de él: su lado de junto al rectángulo llega a su alto.
-        if (izq && abs(b.first().altoDerCm - alto) > DESCUADRE_ESCALON) return null
-        if (der && abs(b.last().altoCm - alto) > DESCUADRE_ESCALON) return null
+        if (bandas(puntos).size < 2) return null
+        val minX = puntos.minOf { it.first }
+        val maxX = puntos.maxOf { it.first }
+        val minY = puntos.minOf { it.second }
+        val maxY = puntos.maxOf { it.second }
+        val ancho = maxX - minX
+        val alto = maxY - minY
+        if (ancho <= TOLERANCIA || alto <= TOLERANCIA) return null
+        val deLaCasa = HerramientasDiseno.repartirAlto(listOf(0f, 0f), listOf(true, false), alto)[0]
+        val primera = if (pedida > 0f) min(pedida, alto) else deLaCasa
 
-        val anchoRect = rectas.sumOf { it.anchoCm.toDouble() }.toFloat()
-        val laterales = (if (izq) 1 else 0) + (if (der) 1 else 0)
-        // Las escritas son las de la ventana entera: el rectángulo se queda con las que no son el
-        // fijo de cada costado inclinado.
-        val nRect = if (divisiones > laterales) divisiones - laterales else NovaCalculos.divisiones(anchoRect, 0)
-        val total = nRect + laterales
-        var orden = NovaCalculos.ordenDivis(total, total.toFloat()).filter { it == 'f' || it == 'c' }
-        if (orden.length != total) return null
-        if ((izq && orden.first() != 'f') || (der && orden.last() != 'f')) orden = orden.reversed()
-        if ((izq && orden.first() != 'f') || (der && orden.last() != 'f')) return null
-        val anchos = buildList {
-            if (izq) add(b.first().anchoCm)
-            repeat(nRect) { add(anchoRect / nRect) }
-            if (der) add(b.last().anchoCm)
+        for (abajo in listOf(true, false)) {
+            val apoyo = bordeRecto(puntos, abajo)
+            if (apoyo.isEmpty()) continue
+            var hoja = primera
+            var rect = rectanguloDelSistema(puntos, apoyo, hoja, abajo) ?: continue
+            // El costado que solo pierde la hoja por poco se la queda, acortada.
+            val acortada = listOf(minX to rect.first, rect.second to maxX)
+                .filter { (a, b) -> b - a > DESCUADRE_ESCALON && b - a < MODULO_CASA && dentroDe(apoyo, a, b) }
+                .map { (a, b) -> luzEn(puntos, a, b, abajo) }
+                .minOrNull()
+            if (acortada != null && acortada >= MODULO_CASA && acortada < hoja) {
+                rectanguloDelSistema(puntos, apoyo, acortada, abajo)?.let { hoja = acortada; rect = it }
+            }
+            if (rect.second - rect.first < MODULO_CASA / 2f) continue
+
+            // Un costado de un pelo es descuadre: va con el rectángulo.
+            var wIzq = rect.first - minX
+            var wDer = maxX - rect.second
+            var wRect = rect.second - rect.first
+            if (wIzq <= DESCUADRE_ESCALON) { wRect += wIzq; wIzq = 0f }
+            if (wDer <= DESCUADRE_ESCALON) { wRect += wDer; wDer = 0f }
+            val izq = wIzq > 0f
+            val der = wDer > 0f
+            val laterales = (if (izq) 1 else 0) + (if (der) 1 else 0)
+            val nRect = if (divisiones > laterales) divisiones - laterales else NovaCalculos.divisiones(wRect, 0)
+            val total = nRect + laterales
+            var orden = NovaCalculos.ordenDivis(total, total.toFloat()).filter { it == 'f' || it == 'c' }
+            if (orden.length != total) return null
+            if ((izq && orden.first() != 'f') || (der && orden.last() != 'f')) orden = orden.reversed()
+            if ((izq && orden.first() != 'f') || (der && orden.last() != 'f')) return null
+            val modulos = buildList {
+                orden.forEachIndexed { k, tipo ->
+                    val lateral = when {
+                        izq && k == 0 -> wIzq
+                        der && k == orden.lastIndex -> wDer
+                        else -> 0f
+                    }
+                    if (lateral > 0f) {
+                        val panos = NovaCalculos.anchMota(lateral)
+                        repeat(panos) { add(NovaModulo('f', lateral / panos)) }
+                    } else {
+                        add(NovaModulo(tipo, wRect / nRect))
+                    }
+                }
+            }
+            val franjas = franjasDeEscalon(acabado, ancho, alto, hoja, anchoParante) ?: return null
+            val conModulos = franjas.map { f -> if (!f.esSistema) f else f.copy(modulos = modulos) }
+            // De abajo arriba: el invertido lleva la mocheta debajo.
+            val enOrden = if (abajo) conModulos else conModulos.reversed()
+            return DisenoNova(acabado, ancho, alto, listOf(NovaTramo(ancho = ancho, franjas = enOrden)))
+                .conContornoVano(medido)
         }
-        val ancho = anchos.sum()
-        val franjas = franjasDeEscalon(acabado, ancho, alto, pedida, anchoParante) ?: return null
-        val conModulos = franjas.map { f ->
-            if (!f.esSistema) f else f.copy(modulos = orden.mapIndexed { k, c -> NovaModulo(c, anchos[k]) })
+        return null
+    }
+
+    /**
+     * Los trozos de x donde el vano tiene su borde recto: el alféizar ([abajo]) o el dintel. Son los lados
+     * casi horizontales —hasta el descuadre— que están a esa altura.
+     */
+    private fun bordeRecto(puntos: List<Pair<Float, Float>>, abajo: Boolean): List<Pair<Float, Float>> {
+        val nivel = if (abajo) puntos.maxOf { it.second } else puntos.minOf { it.second }
+        val trozos = puntos.indices.mapNotNull { i ->
+            val (ax, ay) = puntos[i]
+            val (bx, by) = puntos[(i + 1) % puntos.size]
+            val aNivel = abs(ay - nivel) <= DESCUADRE_ESCALON && abs(by - nivel) <= DESCUADRE_ESCALON
+            if (aNivel && abs(bx - ax) > TOLERANCIA) min(ax, bx) to max(ax, bx) else null
+        }.sortedBy { it.first }
+        val juntos = mutableListOf<Pair<Float, Float>>()
+        for (t in trozos) {
+            val u = juntos.lastOrNull()
+            if (u != null && t.first <= u.second + TOLERANCIA) juntos[juntos.lastIndex] = u.first to max(u.second, t.second)
+            else juntos.add(t)
         }
-        return DisenoNova(acabado, ancho, alto, listOf(NovaTramo(ancho = ancho, franjas = conModulos))).conContornoVano(medido)
+        return juntos
+    }
+
+    private fun dentroDe(trozos: List<Pair<Float, Float>>, a: Float, b: Float): Boolean =
+        trozos.any { it.first <= a + TOLERANCIA && it.second >= b - TOLERANCIA }
+
+    /**
+     * El rectángulo del sistema: el trozo más ancho del borde recto donde el vano deja [hoja] de luz. Sus
+     * extremos caen en un vértice o donde un lado cruza la altura de la hoja; entre dos de esos puntos
+     * todo es recta, así que basta mirar el medio de cada trozo.
+     */
+    private fun rectanguloDelSistema(
+        puntos: List<Pair<Float, Float>>, apoyo: List<Pair<Float, Float>>, hoja: Float, abajo: Boolean
+    ): Pair<Float, Float>? {
+        val minY = puntos.minOf { it.second }
+        val maxY = puntos.maxOf { it.second }
+        val nivel = if (abajo) maxY - hoja else minY + hoja
+        val cortes = buildList {
+            puntos.forEach { add(it.first) }
+            apoyo.forEach { add(it.first); add(it.second) }
+            for (i in puntos.indices) {
+                val (ax, ay) = puntos[i]
+                val (bx, by) = puntos[(i + 1) % puntos.size]
+                if ((ay - nivel) * (by - nivel) < 0f) add(ax + (nivel - ay) / (by - ay) * (bx - ax))
+            }
+        }.distinctBy { Math.round(it * 100f) }.sorted()
+        var mejor: Pair<Float, Float>? = null
+        var actual: Pair<Float, Float>? = null
+        for ((a, b) in cortes.zipWithNext()) {
+            if (b - a <= 0.01f) continue
+            val m = (a + b) / 2f
+            val bordes = bordesEn(puntos, m)
+            val cabe = bordes != null && dentroDe(apoyo, m, m) &&
+                (if (abajo) bordes.first <= nivel + TOLERANCIA else bordes.second >= nivel - TOLERANCIA)
+            actual = if (cabe) (actual?.first ?: a) to b else null
+            if (actual != null && (mejor == null || actual.second - actual.first > mejor.second - mejor.first)) mejor = actual
+        }
+        return mejor
+    }
+
+    /** La luz más corta que deja el vano entre [a] y [b] desde su borde recto: lo que entra de hoja ahí. */
+    private fun luzEn(puntos: List<Pair<Float, Float>>, a: Float, b: Float, abajo: Boolean): Float {
+        val maxY = puntos.maxOf { it.second }
+        val minY = puntos.minOf { it.second }
+        val dentro = 0.01f
+        val xs = (listOf(a + dentro, b - dentro) + puntos.map { it.first }.filter { it > a && it < b })
+        return xs.mapNotNull { x -> bordesEn(puntos, x)?.let { if (abajo) maxY - it.first else it.second - minY } }
+            .minOrNull() ?: 0f
     }
 
     /** Un trozo de vano ya decidido: si lleva hoja corrediza y con qué alto. */

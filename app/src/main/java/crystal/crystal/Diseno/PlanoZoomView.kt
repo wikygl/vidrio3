@@ -19,6 +19,8 @@ class PlanoZoomView(context: Context) : AppCompatImageView(context) {
     private val valores = FloatArray(9)
     private var fitScale = 1f
     private var maxScale = 8f
+    /** Parte de la vista que ocupa la imagen al ajustarla (0.9 deja margen alrededor del plano). */
+    var margenAjuste = 0.9f
     private val last = PointF()
     private var arrastrando = false
 
@@ -49,7 +51,9 @@ class PlanoZoomView(context: Context) : AppCompatImageView(context) {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> arrastrando = false
             }
-            parent?.requestDisallowInterceptTouchEvent(true)
+            // Dentro de una lista (diálogo con varias imágenes), sin zoom y con un dedo se deja
+            // desplazar la lista; al pellizcar o con la imagen agrandada, el gesto es de la imagen.
+            parent?.requestDisallowInterceptTouchEvent(e.pointerCount > 1 || escalaActual() > fitScale * 1.01f)
             true
         }
     }
@@ -66,7 +70,7 @@ class PlanoZoomView(context: Context) : AppCompatImageView(context) {
         val vw = width.toFloat(); val vh = height.toFloat()
         val dw = d.intrinsicWidth.toFloat(); val dh = d.intrinsicHeight.toFloat()
         if (vw <= 0f || vh <= 0f || dw <= 0f || dh <= 0f) return
-        fitScale = minOf(vw / dw, vh / dh) * 0.9f   // deja un margen de separación del lienzo
+        fitScale = minOf(vw / dw, vh / dh) * margenAjuste
         maxScale = fitScale * 8f
         m.reset()
         m.postScale(fitScale, fitScale)

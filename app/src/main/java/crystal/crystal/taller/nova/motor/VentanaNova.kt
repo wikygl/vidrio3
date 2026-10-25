@@ -67,7 +67,11 @@ data class Modulo(
  * [faltaContenido] y [faltaAbajo] son lo que al módulo le falta respecto de su ancho: se guardan así
  * para que valgan igual con el módulo ya ajustado al ancho de la ventana.
  */
-data class Inclinado(val faltaContenido: Float, val faltaAbajo: Float, val diagonalIzq: Float, val diagonalDer: Float)
+data class Inclinado(
+    val faltaContenido: Float, val faltaAbajo: Float, val diagonalIzq: Float, val diagonalDer: Float,
+    /** Si ese costado es un arco (el vano arqueado, 2026-10-21), su radio: la U va curvada (N-102). 0 = recto. */
+    val radioIzq: Float = 0f, val radioDer: Float = 0f
+)
 
 /**
  * Una columna que entra en un fijo por su costado. [caraArriba] y [caraAbajo] son sus caras
@@ -108,7 +112,18 @@ data class FranjaTramo(
      * propia medida. 0 y 0: el borde de arriba es recto.
      */
     val bajaIzq: Float = 0f,
-    val bajaDer: Float = 0f
+    val bajaDer: Float = 0f,
+    /** El radio de un costado en arco (el vano arqueado, 2026-10-21): su U va curvada. 0 = recto. */
+    val radioIzq: Float = 0f,
+    val radioDer: Float = 0f,
+    /**
+     * En una mocheta con un costado en arco, lo que mide su borde de arriba y el de abajo dentro del
+     * vano (2026-10-21). Sus U horizontales van hasta donde empieza el arco; el rectángulo que la
+     * contiene ([ancho]) se mete en la curva, y con él la U de arriba medía también el arco, que ya
+     * lleva su U curvada. Null: los de siempre.
+     */
+    val anchoArribaEnArco: Float? = null,
+    val anchoAbajoEnArco: Float? = null
 )
 
 /**

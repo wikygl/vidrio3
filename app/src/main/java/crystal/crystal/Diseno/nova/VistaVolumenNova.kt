@@ -183,7 +183,12 @@ class VistaVolumenNova @JvmOverloads constructor(
                 Mirada(g, dadaVuelta, abierta.toFloat())
             }
         }.filter { m -> (hondo(recorrido.last(), m.giro) > hondo(b, m.giro)) == desdeAfuera }
-        val elegida = miradas.maxByOrNull { it.abierta } ?: return
+        // Con una esquina poco cerrada (A<160>, la pared curva de la L de 170, 2026-10-19) pasan las dos
+        // caras del lado 1 y ganaba la de atrás por verse más abierta: la ventana salía en espejo, el
+        // lado inclinado de la frontal a la derecha y el lado 2 a la izquierda. Si la cara pedida pasa,
+        // manda ella; si no (una esquina hacia afuera), como antes.
+        val deSuCara = miradas.filter { it.dadaVuelta == desdeAfuera }
+        val elegida = deSuCara.ifEmpty { miradas }.maxByOrNull { it.abierta } ?: return
         invertirCaras = elegida.dadaVuelta
         giroGrados = elegida.giro
     }
@@ -337,6 +342,9 @@ class VistaVolumenNova @JvmOverloads constructor(
                 yInicio = event.y
                 movido = false
                 conDosDedos = false
+                // Sobre la pared elegida, el dedo la mueve en vez de girar la vista.
+                arrastrandoPared = alMoverPared != null && paredElegida != null && paredEn(event.x, event.y) == paredElegida
+                desnivelEnVivo = 0f
                 return true
             }
             android.view.MotionEvent.ACTION_POINTER_DOWN -> {
@@ -349,6 +357,19 @@ class VistaVolumenNova @JvmOverloads constructor(
                 return true
             }
             android.view.MotionEvent.ACTION_UP -> {
+                if (arrastrandoPared) {
+                    arrastrandoPared = false
+                    val tramo = paredElegida
+                    // De medio en medio centímetro, que es como se mide.
+                    val cm = Math.round(desnivelEnVivo * 2f) / 2f
+                    desnivelEnVivo = 0f
+                    if (movido && !conDosDedos && tramo != null && cm != 0f) {
+                        alMoverPared?.invoke(tramo, cm)
+                        invalidate()
+                        return true
+                    }
+                    invalidate()
+                }
                 if (!movido && !conDosDedos) {
                     val ahora = android.os.SystemClock.uptimeMillis()
                     if (ahora - ultimoToqueMs < 300L) {
@@ -357,7 +378,14 @@ class VistaVolumenNova @JvmOverloads constructor(
                         encuadrar()
                     } else {
                         ultimoToqueMs = ahora
-                        paredEn(event.x, event.y)?.let { alTocarPared?.invoke(it) }
+                        val tocada = paredEn(event.x, event.y)
+                        when {
+                            // Sin mover paredes, el toque de siempre.
+                            alMoverPared == null -> tocada?.let { alTocarPared?.invoke(it) }
+                            // La primera vez se elige; tocando la elegida, el toque de siempre.
+                            tocada != null && tocada == paredElegida -> alTocarPared?.invoke(tocada)
+                            else -> paredElegida = tocada
+                        }
                     }
                 }
                 return true
@@ -389,6 +417,12 @@ class VistaVolumenNova @JvmOverloads constructor(
                 }
                 if (!movido && kotlin.math.hypot(event.x - xInicio, event.y - yInicio) > 12f * resources.displayMetrics.density) movido = true
                 if (!movido) return true
+                if (arrastrandoPared && !conDosDedos) {
+                    // Hacia arriba en la pantalla, la pared sube.
+                    desnivelEnVivo = (yInicio - event.y) / pxPorCmEnAlto
+                    invalidate()
+                    return true
+                }
                 giroGrados += (event.x - xAnterior) * 0.4f
                 elevacionGrados = (elevacionGrados + (event.y - yAnterior) * 0.3f).coerceIn(0f, 89f)
                 xAnterior = event.x
@@ -416,8 +450,11 @@ class VistaVolumenNova @JvmOverloads constructor(
             return
         }
 
-        // Todo proyectado primero, para saber cuánto ocupa y meterlo en la pantalla.
-        val caras = v.deLejosACerca(giroGrados, elevacionGrados)
+        // Todo proyectado primero, para saber cuánto ocupa y meterlo en la pantalla. La pared que se
+        // está arrastrando va subida lo que lleva el dedo.
+        val caras = v.deLejosACerca(giroGrados, elevacionGrados).map {
+            if (arrastrandoPared && it.indiceTramo == paredElegida && desnivelEnVivo != 0f) it.subida(desnivelEnVivo) else it
+        }
         val centro = v.centro()
         val distancia = if (perspectiva) distanciaCm else 0f
         val puntos = caras.flatMap { cara ->
@@ -448,9 +485,10 @@ class VistaVolumenNova @JvmOverloads constructor(
         // La huella en el suelo, punteada: dice de un vistazo cómo dobla la ventana.
         val suelo = Path()
         caras.sortedBy { it.indiceTramo }.forEachIndexed { i, cara ->
-            val a = aPapel(cara.abajoIzq)
+            // En el suelo aunque la pared cuelgue más arriba.
+            val a = aPapel(cara.abajoIzq.copy(z = 0f))
             if (i == 0) suelo.moveTo(a.x, a.y) else suelo.lineTo(a.x, a.y)
-            val b = aPapel(cara.abajoDer)
+            val b = aPapel(cara.abajoDer.copy(z = 0f))
             suelo.lineTo(b.x, b.y)
         }
         if (!estiloDibujo) canvas.drawPath(suelo, pSuelo)
@@ -474,6 +512,53 @@ class VistaVolumenNova @JvmOverloads constructor(
             }
             dibujarCara(canvas, cara, d, ::aPapel, Parte.PIEZAS)
         }
+
+        // La pared elegida, remarcada encima de todo; mientras se arrastra, lo que sube o baja.
+        val elegida = paredElegida ?: return
+        val suyas = caras.filter { it.indiceTramo == elegida }
+        if (suyas.isEmpty()) return
+        suyas.forEach { cara ->
+            val p = cara.esquinas.map(::aPapel)
+            canvas.drawPath(Path().apply {
+                moveTo(p[0].x, p[0].y); p.drop(1).forEach { lineTo(it.x, it.y) }; close()
+            }, pElegida)
+        }
+        val una = suyas.first()
+        val pie = aPapel(una.abajoIzq)
+        val cien = aPapel(una.abajoIzq.copy(z = una.abajoIzq.z + 100f))
+        // Fija mientras se arrastra: el encuadre se rehace con la pared movida y el dedo no seguiría.
+        if (!arrastrandoPared) pxPorCmEnAlto = (kotlin.math.hypot(cien.x - pie.x, cien.y - pie.y) / 100f).coerceAtLeast(0.01f)
+        if (arrastrandoPared && desnivelEnVivo != 0f) {
+            val arriba = suyas.flatMap { it.esquinas }.map(::aPapel)
+            val texto = (if (desnivelEnVivo > 0f) "↑ " else "↓ ") + String.format(java.util.Locale.US, "%.1f", kotlin.math.abs(desnivelEnVivo))
+            canvas.drawText(texto, arriba.map { it.x }.average().toFloat(), arriba.minOf { it.y } - 16f, pTextoElegida)
+        }
+    }
+
+    // ---- Elegir una pared y subirla o bajarla (Medidas 3D, 2026-10-05) ----
+    // Un toque elige la pared (queda remarcada); arrastrándola con un dedo sube o baja, y al
+    // soltarla se avisa cuánto con [alMoverPared]. Tocar la ya elegida es el toque de siempre
+    // ([alTocarPared]); tocar fuera la suelta. Sin [alMoverPared] la vista es solo de mirar.
+
+    /** La pared remarcada, por su tramo; null = ninguna. */
+    var paredElegida: Int? = null
+        set(value) { field = value; invalidate() }
+
+    /** Avisa con el tramo y lo que se subió (en menos, bajó), en cm, al soltar la pared arrastrada. */
+    var alMoverPared: ((Int, Float) -> Unit)? = null
+
+    private var arrastrandoPared = false
+    private var desnivelEnVivo = 0f
+    /** Cuántos px del papel mide un cm de alto en la pared elegida, según el último dibujo. */
+    private var pxPorCmEnAlto = 1f
+
+    private val pElegida = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#E65100"); style = Paint.Style.STROKE; strokeWidth = 5f
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val pTextoElegida = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#E65100"); textSize = 40f; textAlign = Paint.Align.CENTER
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
 
     /**

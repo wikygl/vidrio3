@@ -32,6 +32,12 @@ data class CaraDelVolumen(
     val esCurva: Boolean
 ) {
     val esquinas: List<Punto3D> get() = listOf(abajoIzq, abajoDer, arribaDer, arribaIzq)
+
+    /** La misma cara subida (o bajada, en menos) [cm]: es la pared que se está moviendo con el dedo. */
+    fun subida(cm: Float): CaraDelVolumen {
+        fun s(p: Punto3D) = p.copy(z = p.z + cm)
+        return copy(abajoIzq = s(abajoIzq), abajoDer = s(abajoDer), arribaDer = s(arribaDer), arribaIzq = s(arribaIzq))
+    }
 }
 
 /**
@@ -96,10 +102,10 @@ data class VolumenDelDiseno(val caras: List<CaraDelVolumen>) {
                     caras.add(
                         CaraDelVolumen(
                             indiceTramo = pared.indiceTramo,
-                            abajoIzq = Punto3D(a.x, a.y, 0f),
-                            abajoDer = Punto3D(b.x, b.y, 0f),
-                            arribaDer = Punto3D(b.x, b.y, pared.altoCm),
-                            arribaIzq = Punto3D(a.x, a.y, pared.altoCm),
+                            abajoIzq = Punto3D(a.x, a.y, pared.baseCm),
+                            abajoDer = Punto3D(b.x, b.y, pared.baseCm),
+                            arribaDer = Punto3D(b.x, b.y, pared.baseCm + pared.altoCm),
+                            arribaIzq = Punto3D(a.x, a.y, pared.baseCm + pared.altoCm),
                             desdeU = k / trozos.toFloat(),
                             hastaU = (k + 1) / trozos.toFloat(),
                             esCurva = pared.esCurva

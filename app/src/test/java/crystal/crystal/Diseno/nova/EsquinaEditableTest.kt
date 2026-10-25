@@ -225,4 +225,55 @@ class EsquinaEditableTest {
         assertTrue("apareció una panza de la nada: $paquete", !paquete.contains("Q<"))
         assertNotNull(DisenoNova.desdePaquete(paquete))
     }
+
+    /**
+     * La ventana entera se rearma con el alto de sus lados, no con el del lado que se editaba
+     * (2026-10-21, Porla: frontal de 164 y derecha de 196; las dos salían de 164). El lado editado
+     * llega con el alto de su pared y la derecha sin alto propio.
+     */
+    @Test
+    fun la_ventana_entera_mide_lo_que_su_pared_mas_alta() {
+        val d = DisenoNova.desdePaquete("{nova,apa,[191.1,164:Tl<191.1>(s<117.1>(fccf);m<46.8>(ff)) A<90> Tl<246>(s<140>(fcfcf);m<54.5>(ff))]}")!!
+            .conAltosDeLado(listOf(164f, 196f))
+        val lados = d.separarEnLados().toMutableList()
+        // Lo que vuelve del editor al guardar el lado de frente: con el alto de su pared.
+        lados[0] = lados[0].copy(alto = 164f)
+        val entera = lados[0].conLadosConSusAltos(lados, d.esquinaDeCadaLado())
+        assertEquals(196f, entera.alto, 0.01f)
+        val planta = PlantaDelDiseno.de(entera).paredes
+        assertEquals(listOf(164f, 196f), planta.map { it.altoCm })
+    }
+
+    /**
+     * La L con una pared curva (2026-10-21, Porla: la curva de 47.7 de la planta, 143.7 de alto, y la
+     * frontal de 300 × 199.4). El diseño de la lista de lados llevaba en la cabecera el alto del primer
+     * lado y la frontal lo heredaba: salía de 143.7. Es el diseño tal como lo armó Nova en el celular.
+     */
+    @Test
+    fun en_la_l_con_curva_cada_lado_lleva_su_alto() {
+        val crudo = "{nova,apa,[47.1,143.7:Tl<47.1>(s<102.6>(f<47.1>Q<10>);m<39.5>(f<47.1>)) A<82> " +
+            "Tl<297.5>(s<142.4>(f<59.5>c<59.5>f<59.5>c<59.5>f<59.5>);m<55.4>(f<148.7>f<148.7>))]}"
+        val d = DisenoNova.desdePaquete(crudo)!!.conAltosPorTramo(listOf(143.7f, 199.4f))
+        assertEquals(199.4f, d.alto, 0.01f)
+        assertEquals(listOf(143.7f, 199.4f), PlantaDelDiseno.de(d).paredes.map { it.altoCm })
+        // Con otro número de altos que de tramos, no se toca.
+        assertEquals(DisenoNova.desdePaquete(crudo)!!.aPaquete(), DisenoNova.desdePaquete(crudo)!!.conAltosPorTramo(listOf(1f)).aPaquete())
+    }
+
+    /**
+     * El lado de dintel inclinado, abierto para editarlo (2026-10-21, Porla): su silueta se mide desde
+     * su esquina más alta, no desde la caída izquierda. Con la caída izquierda bajaba 32 de más y en el
+     * editor se salía por debajo de la ventana, con una franja de 32 bajo el sistema.
+     */
+    @Test
+    fun el_lado_inclinado_lleva_su_silueta_desde_su_esquina_mas_alta() {
+        val d = DisenoNova.desdePaquete("{nova,apa,[185.1,196:Tl<185.1>(H<164>;D<32>;s<117.1>(fccf);m<46.8>(ff)) A<90> " +
+            "Tl<243.5>(H<164,196>;D<32,0>;L<0/32|246/0|246/196|0/196>;s<140>(fcfcf);m<56>(ff))]}")!!
+        val lado = d.separarEnLados()[1]
+        val t = lado.tramos.single()
+        assertEquals(0f, t.techo, 0.01f)
+        val silueta = t.contorno.map { (x, y) -> x to y + t.techo }
+        assertEquals("la silueta se sale de la ventana", lado.alto, silueta.maxOf { it.second }, 0.01f)
+        assertEquals("la esquina no cuelga sus 32", 32f, silueta.first().second, 0.01f)
+    }
 }

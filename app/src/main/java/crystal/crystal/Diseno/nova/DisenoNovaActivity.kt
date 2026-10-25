@@ -1277,17 +1277,20 @@ class DisenoNovaActivity : AppCompatActivity() {
         // Línea de franja — siempre que haya una franja seleccionada, sin importar si hay tramo
         // La franja elegida, del tramo elegido: su tipo y su rectángulo dentro del vano (en Formas la
         // mocheta de abajo del tramo 2 mide 151.7 × 35, no el ancho del tramo).
-        val franjaModelo = modelo?.tramos?.getOrNull(tramoSel)?.franjas?.getOrNull(indiceFranjaActiva)
+        // Con un solo tramo la franja es de ese tramo aunque no se haya elegido: sin esto la mocheta del
+        // lado de 72.2 × 143.9 decía 199.4, el alto de la ventana (2026-10-19).
+        val tramoDeFranja = if (tramoSel >= 0) tramoSel else if (tramoInfo.size == 1) 0 else -1
+        val franjaModelo = modelo?.tramos?.getOrNull(tramoDeFranja)?.franjas?.getOrNull(indiceFranjaActiva)
         if (franjaModelo != null || indiceFranjaActiva in franjas.indices) {
             val esSis = franjaModelo?.esSistema ?: franjas[indiceFranjaActiva].esSistema
             val franjaLabel = if (esSis) "sistema" else "mocheta"
-            val rect = if (modelo != null && tramoSel >= 0)
-                HerramientasDiseno.rectanguloDeFranja(modelo, tramoSel, indiceFranjaActiva, anchoParanteCm) else null
-            val franjaAncho = rect?.first ?: if (tramoSel >= 0) anchoTramo(tramoSel) else anchoCm
+            val rect = if (modelo != null && tramoDeFranja >= 0)
+                HerramientasDiseno.rectanguloDeFranja(modelo, tramoDeFranja, indiceFranjaActiva, anchoParanteCm) else null
+            val franjaAncho = rect?.first ?: if (tramoDeFranja >= 0) anchoTramo(tramoDeFranja) else anchoCm
             val franjaAltura = rect?.second ?: when {
-                tramoSel >= 0 && esSis  -> tramoInfo[tramoSel].sistemaAltura
-                tramoSel >= 0 && !esSis -> tramoInfo[tramoSel].mochetaAltura
-                else                    -> altoCm
+                tramoDeFranja >= 0 && esSis  -> tramoInfo[tramoDeFranja].sistemaAltura
+                tramoDeFranja >= 0 && !esSis -> tramoInfo[tramoDeFranja].mochetaAltura
+                else                         -> altoCm
             }
             ssb.append("\n")
             val franjaStart = ssb.length
@@ -1762,7 +1765,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         chipRehacer?.alpha = if (posHistorial < historial.lastIndex) 1f else 0.35f
     }
 
-    /** Los dos chips, en una fila a la derecha, debajo de los de herramientas. */
+    /** Los dos chips, en la barra de arriba (ordenarBarra). */
     private fun instalarChipsHistorial() {
         if (chipRehacer != null) return
         val dp = resources.displayMetrics.density
@@ -1776,26 +1779,11 @@ class DisenoNovaActivity : AppCompatActivity() {
             elevation = 8 * dp
         }
         val rehacer = chip("↷ rehacer") { rehacer() }
-        binding.root.addView(rehacer, androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
-            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
-            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-            endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-            topMargin = (212 * dp).toInt()
-            marginEnd = (12 * dp).toInt()
-        })
         val deshacer = chip("↶ deshacer") { deshacer() }
-        binding.root.addView(deshacer, androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
-            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
-            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topToTop = rehacer.id
-            endToStart = rehacer.id
-            marginEnd = (6 * dp).toInt()
-        })
         chipRehacer = rehacer
         chipDeshacer = deshacer
+        alaBarra(deshacer)
+        alaBarra(rehacer)
         refrescarChipsHistorial()
     }
 
@@ -2687,7 +2675,11 @@ class DisenoNovaActivity : AppCompatActivity() {
      * La ventana que dobla dibujada con la vista 3D en perspectiva, recortada a lo dibujado; null si
      * no dobla (la plana sigue con el dibujo de siempre) o si no se pudo armar.
      */
-    private fun imagenEnPerspectiva(paquete: String): android.graphics.Bitmap? {
+    private fun imagenEnPerspectiva(
+        paquete: String,
+        anchoPx: Int = intent.getIntExtra(EXTRA_ANCHO_PX, 0),
+        altoPx: Int = intent.getIntExtra(EXTRA_ALTO_PX, 0)
+    ): android.graphics.Bitmap? {
         val d = runCatching { DisenoNova.desdePaquete(paquete) }.getOrNull() ?: return null
         if (!d.doblaEnEsquina) return null
         val vista = VistaVolumenNova(this)
@@ -2708,8 +2700,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         // Del tamaño del recuadro de Nova donde se va a ver, con los trazos para ese tamaño (2026-10-02).
         // Generada más grande y achicada al mostrarla, las líneas finas quedaban por debajo de un punto
         // y se perdían, sobre todo en las ventanas grandes, que se achican más para entrar.
-        val w = intent.getIntExtra(EXTRA_ANCHO_PX, 0).takeIf { it > 50 } ?: 800
-        val h = intent.getIntExtra(EXTRA_ALTO_PX, 0).takeIf { it > 50 } ?: 600
+        val w = anchoPx.takeIf { it > 50 } ?: 800
+        val h = altoPx.takeIf { it > 50 } ?: 600
         vista.trazosPara(w)
         vista.measure(
             View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
@@ -2772,6 +2764,23 @@ class DisenoNovaActivity : AppCompatActivity() {
      */
     private fun paqueteEnBlanco(): String {
         val tipoTxt = if (tipo == TipoEnsamble.APA) "apa" else "ina"
+        // Un lado de una esquina guarda su pared en su tramo: el alto y la caída de una pared más baja
+        // que la ventana y su silueta `L<…>`, medida desde la esquina de arriba de la pared. Limpiarlo
+        // la conserva ahí (2026-10-19). Antes la silueta pasaba a ser la del vano sin la caída —arriba,
+        // en una pared que cuelga 55.5— y al volver a armar la ventana la pared perdía su alto.
+        if (editandoPorLados && !mirandoEntera) {
+            val pared = runCatching { DisenoNova.desdePaquete(paqueteActualLectura()) }.getOrNull()
+            val t = pared?.tramos?.firstOrNull()
+            if (pared != null && t != null && (t.alto > 0f || t.caida > 0f || t.contorno.size >= 3)) {
+                val blanco = NovaTramo(
+                    ancho = anchoCm,
+                    franjas = listOf(NovaFranja(true, 0f, listOf(NovaModulo('f', anchoCm)))),
+                    alto = t.alto, caida = t.caida, altoDer = t.altoDer, caidaDer = t.caidaDer,
+                    contorno = t.contorno
+                )
+                return DisenoNova(tipoTxt, anchoCm, altoCm, listOf(blanco)).aPaquete()
+            }
+        }
         val vano = runCatching {
             val d = DisenoNova.desdePaquete(paqueteActualLectura())
             // Si el diseño no trae la silueta guardada, se saca de sus tramos: los escalones y las
@@ -2894,18 +2903,37 @@ class DisenoNovaActivity : AppCompatActivity() {
             text = "◰ ver en 3D"
             setOnClickListener { alternarVista3D() }
         }
-        val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+        chip3D = chip
+        alaBarra(chip)
+    }
+
+    // ==================== LA BARRA DE ARRIBA ====================
+    // Los botones de arriba van en su propia barra, entre el recuadro de medidas y el dibujo, en
+    // tantas filas como pida el ancho (pedido del usuario, 2026-10-18). Antes cada uno iba a una
+    // distancia fija del borde (12, 62, 112, 162 y 212 dp), en columna a la derecha, y quedaban
+    // montados sobre el dibujo: deshacer y rehacer tapaban la cota de arriba.
+
+    private var chipMedidaOriginal: TextView? = null
+
+    /** Pone [chip] en la barra de arriba; la barra lo coloca, sin anclas propias. */
+    private fun alaBarra(chip: TextView) {
+        if (chip.id == View.NO_ID) chip.id = View.generateViewId()
+        chip.elevation = 8 * resources.displayMetrics.density
+        if (chip.parent == null) binding.root.addView(chip, androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
             androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
             androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-            endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-            topMargin = (12 * dp).toInt()
-            marginEnd = (12 * dp).toInt()
-        }
-        binding.root.addView(chip, lp)
-        chip.elevation = 8 * dp
-        chip3D = chip
+        ))
+        ordenarBarra()
+    }
+
+    /**
+     * El orden de la barra: primero lo de la ventana que dobla (qué lado y verla entera), luego
+     * deshacer y rehacer, las herramientas, la medida original y la vista en 3D.
+     */
+    private fun ordenarBarra() {
+        binding.barraHerramientas.referencedIds = listOfNotNull(
+            chipLado, chipEntera, chipDeshacer, chipRehacer, chipMover, chipIman, chipMedidaOriginal, chip3D
+        ).filter { it.parent != null }.map { it.id }.toIntArray()
     }
     // ==================== HERRAMIENTAS: MOVER E IMÁN ====================
     // Pedido del usuario (2026-09-25): poner un parante o un puente justo donde hace falta,
@@ -2933,28 +2961,15 @@ class DisenoNovaActivity : AppCompatActivity() {
     private fun instalarChipsHerramientas() {
         if (chipMover != null) return
         val dp = resources.displayMetrics.density
-        fun chip(texto: String, arribaDp: Int, alTocar: () -> Unit): TextView {
-            val c = TextView(this).apply {
-                setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
-                setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
-                textSize = 14f
-                text = texto
-                setOnClickListener { alTocar() }
-            }
-            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
-                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
-                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-                topMargin = (arribaDp * dp).toInt()
-                marginEnd = (12 * dp).toInt()
-            }
-            binding.root.addView(c, lp)
-            c.elevation = 8 * dp
-            return c
+        // Antes cada chip llevaba su distancia al borde de arriba (arribaDp: 62, 112, 162).
+        fun chip(texto: String, alTocar: () -> Unit): TextView = TextView(this).apply {
+            setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+            setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+            textSize = 14f
+            text = texto
+            setOnClickListener { alTocar() }
         }
-        chipMover = chip(textoMover(), 62) {
+        chipMover = chip(textoMover()) {
             modoMover = !modoMover
             refrescarChipsHerramientas()
             if (modoMover) {
@@ -2965,13 +2980,14 @@ class DisenoNovaActivity : AppCompatActivity() {
                 ).show()
             }
         }
-        chipIman = chip(textoIman(), 112) { imanActivo = !imanActivo; refrescarChipsHerramientas() }
+        chipIman = chip(textoIman()) { imanActivo = !imanActivo; refrescarChipsHerramientas() }
         // La medida tal como se tomó en MedidaActivity. El diseño redondea y oculta cotas para no
         // ensuciarse (el escalón de 109.4 llegaba como 108.5); aquí se ve completa para diseñar.
         val boceto = crystal.crystal.taller.DialogoMedidaOriginal.cargar(this, intent.getStringExtra(EXTRA_BOCETO_ORIGINAL))
         if (boceto != null) {
-            chip("📐 medida original", 162) { crystal.crystal.taller.DialogoMedidaOriginal.mostrar(this, boceto) }
+            chipMedidaOriginal = chip("📐 medida original") { crystal.crystal.taller.DialogoMedidaOriginal.mostrar(this, boceto) }
         }
+        listOfNotNull(chipMover, chipIman, chipMedidaOriginal).forEach { alaBarra(it) }
     }
 
     private fun refrescarChipsHerramientas() {
@@ -3263,6 +3279,7 @@ class DisenoNovaActivity : AppCompatActivity() {
         cargarDesdePaquete(ladosEsquina[indice].aPaquete())
         actualizarVista()
         actualizarChipLado()
+        refrescarImagenArmada()
         refrescarPanelCotasSiEstaAbierto()
         // Cada lado con su propio historial: deshacer no puede traer el diseño de otro lado.
         reiniciarHistorial()
@@ -3285,7 +3302,8 @@ class DisenoNovaActivity : AppCompatActivity() {
         guardarLadoActual()
         val base = runCatching { DisenoNova.desdePaquete(paqueteOriginal) }.getOrNull()
             ?: ladosEsquina.firstOrNull() ?: return null
-        return runCatching { base.conLados(ladosEsquina, esquinaDeLados).aPaquete() }.getOrNull()
+        // Con el alto que dan sus lados, no el del lado que se editaba (2026-10-21).
+        return runCatching { base.conLadosConSusAltos(ladosEsquina, esquinaDeLados).aPaquete() }.getOrNull()
     }
 
     /**
@@ -3316,8 +3334,47 @@ class DisenoNovaActivity : AppCompatActivity() {
         actualizarVista()
         actualizarChipLado()
         refrescarPanelCotasSiEstaAbierto()
+        refrescarImagenArmada()
         // Mirar la ventana entera o volver a un lado no es una edición: historial nuevo.
         reiniciarHistorial()
+    }
+
+    /**
+     * La ventana armada se ve con la misma imagen que recibe Nova en ivDiseno: la vista 3D en
+     * perspectiva con el estilo del dibujo (pedido del usuario, 2026-10-19). El dibujo plano con
+     * aletas fingía la profundidad y no daba a cada pared su alto; la 3D la arma de verdad.
+     * Va encima del dibujo, que sigue debajo para volver al lado.
+     */
+    private var imagenArmada: android.widget.ImageView? = null
+
+    private fun refrescarImagenArmada() {
+        if (!mirandoEntera) {
+            imagenArmada?.visibility = View.GONE
+            return
+        }
+        val iv = imagenArmada ?: android.widget.ImageView(this).also { nueva ->
+            val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(0, 0).apply {
+                topToTop = binding.vistaDiseno.id
+                bottomToBottom = binding.vistaDiseno.id
+                startToStart = binding.vistaDiseno.id
+                endToEnd = binding.vistaDiseno.id
+            }
+            nueva.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            nueva.setBackgroundColor(android.graphics.Color.WHITE)
+            // Solo para mirar: que los toques no lleguen al dibujo de debajo.
+            nueva.isClickable = true
+            binding.root.addView(nueva, lp)
+            nueva.elevation = 2 * resources.displayMetrics.density
+            imagenArmada = nueva
+        }
+        val paquete = paqueteActualLectura()
+        val img = imagenEnPerspectiva(paquete, binding.vistaDiseno.width, binding.vistaDiseno.height)
+        if (img == null) {
+            iv.visibility = View.GONE
+            return
+        }
+        iv.setImageBitmap(img)
+        iv.visibility = View.VISIBLE
     }
 
     private fun instalarChipLado() {
@@ -3329,26 +3386,9 @@ class DisenoNovaActivity : AppCompatActivity() {
             textSize = 14f
             setOnClickListener { irAlLado((ladoActivo + 1) % ladosEsquina.size) }
             setOnLongClickListener { dialogoElegirLado(); true }
-            // Con id propio para que el chip de armar se pueda colgar debajo; sin él los dos se
-            // anclan al borde de arriba y salen montados.
-            id = View.generateViewId()
         }
-        // Anclado por constraints y no por x/y: el lienzo se recoloca solo cuando se abre el
-        // panel de cotas, y con la posición a mano el chip se iba con él.
-        val padre = binding.root
-        val lp = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
-            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
-            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            // Debajo del panel de información, no encima: anclado arriba del todo tapaba sus
-            // líneas en la ventana en L (captura del usuario, 2026-09-28).
-            topToBottom = R.id.panelInfoSeleccion
-            startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-            topMargin = (8 * dp).toInt()
-            marginStart = (12 * dp).toInt()
-        }
-        padre.addView(chip, lp)
-        chip.elevation = 8 * dp
+        // En la barra de arriba, debajo del panel de información y no encima: anclado arriba del
+        // todo tapaba sus líneas en la ventana en L (captura del usuario, 2026-09-28).
         chipLado = chip
 
         // Y al lado, el que arma la ventana entera para verla antes de mandarla.
@@ -3358,18 +3398,9 @@ class DisenoNovaActivity : AppCompatActivity() {
             textSize = 14f
             setOnClickListener { alternarVistaEntera() }
         }
-        val lpArmar = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
-            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT,
-            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topToBottom = chip.id
-            startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
-            topMargin = (8 * dp).toInt()
-            marginStart = (12 * dp).toInt()
-        }
-        padre.addView(armar, lpArmar)
-        armar.elevation = 8 * dp
         chipEntera = armar
+        alaBarra(chip)
+        alaBarra(armar)
 
         actualizarChipLado()
     }

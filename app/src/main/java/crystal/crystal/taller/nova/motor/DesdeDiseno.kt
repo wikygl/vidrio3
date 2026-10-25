@@ -56,9 +56,20 @@ object DesdeDiseno {
         // Hallado el 2026-09-29 (Formas 13): la cara de 120 abajo y 189 arriba se calculaba como su
         // rectángulo de 189.
         val ladosDelDiseno = if (grupos.size > 1) d.separarEnLados() else emptyList()
+        // Una pared más baja que la ventana (conAltosDeLado: cuelga del dintel con su caída) se calcula
+        // con SU alto, como una ventana sola (2026-10-19, la L de 277.5 × 199.4 con el lado de 72.2 ×
+        // 143.9). Antes cada lado tomaba el alto de la ventana: sin silueta la mocheta salía de 94.6 en
+        // vez de 39.1, y con su silueta (medida desde la esquina de arriba de la pared, no desde el
+        // dintel) el fijo de 102.8 salía con vidrio de 45.9 y dos topes.
+        val ladosConSuAlto = ladosDelDiseno.map { conSuAlto(it) }
+        fun altoDelLado(i: Int) = ladosConSuAlto.getOrNull(i)?.alto ?: d.alto
         val ladoConForma: List<LadoNova?> = grupos.mapIndexed { i, indices ->
-            val silueta = d.tramos[indices.first()].contorno.takeIf { it.size >= 3 } ?: return@mapIndexed null
-            val lado = ladosDelDiseno.getOrNull(i) ?: return@mapIndexed null
+            val silueta = d.tramos[indices.first()].contorno.takeIf { it.size >= 3 }
+            val propio = ladosConSuAlto.getOrNull(i)
+            if (silueta == null) {
+                return@mapIndexed propio?.let { ventana(it.aPaquete(), u, puente, cruce, modulacion = modulacion)?.lados?.singleOrNull() }
+            }
+            val lado = propio ?: ladosDelDiseno.getOrNull(i) ?: return@mapIndexed null
             // La silueta es la de la pared; en aparente los tramos ya perdieron el esquinero por el
             // lado de la esquina, así que la pared empieza antes que el primer tramo.
             val sobra = (silueta.maxOf { it.first } - silueta.minOf { it.first } - lado.ancho).coerceAtLeast(0f)
@@ -103,10 +114,11 @@ object DesdeDiseno {
                 else -> tramosLeidos
             }
             val sistema = tramosLado.first().sistema
-            val altoHoja = sistema?.alto?.takeIf { it > 0f && it < d.alto } ?: d.alto
+            val altoLado = altoDelLado(i)
+            val altoHoja = sistema?.alto?.takeIf { it > 0f && it < altoLado } ?: altoLado
             LadoNova(
                 anchoMedido = anchoLado, anchoCalculo = anchoLado,
-                alto = d.alto, altoMedido = d.alto, altoHoja = altoHoja,
+                alto = altoLado, altoMedido = altoLado, altoHoja = altoHoja,
                 tramos = tramos,
                 izquierda = if (i == 0) izquierda else Borde.ESQUINA_ANGULO,
                 derecha = if (i == grupos.lastIndex) derecha else Borde.ESQUINA_ANGULO,
@@ -121,6 +133,31 @@ object DesdeDiseno {
         }
         // Circular (N-01): el paquete lleva la marca O<1>.
         return VentanaNova(acabado, modelo, lados, u, puente, cruce, esquinero = esquinero, circular = paquete.contains("O<1>"))
+    }
+
+    /**
+     * El lado como una ventana de su alto, o null si mide lo que la ventana. Sus tramos cuelgan de la
+     * esquina de arriba de la pared, no del dintel de la ventana; uno que va de punta a punta de la
+     * pared no anota alto ni caída, que es el caso normal.
+     */
+    private fun conSuAlto(lado: DisenoNova): DisenoNova? {
+        val ts = lado.tramos
+        if (ts.isEmpty()) return null
+        fun abajoDe(t: crystal.crystal.Diseno.nova.NovaTramo) = t.caida + (if (t.alto > 0f) t.alto else lado.alto - t.caida)
+        val arriba = ts.minOf { it.caida.coerceAtLeast(0f) }
+        val alto = ts.maxOf { abajoDe(it) } - arriba
+        if (arriba <= 0.05f && kotlin.math.abs(alto - lado.alto) <= 0.05f) return null
+        if (alto <= 0f) return null
+        return lado.copy(alto = alto, tramos = ts.map { t ->
+            val caida = (t.caida - arriba).coerceAtLeast(0f)
+            val h = abajoDe(t) - t.caida
+            val entero = t.altoDer == null && t.caidaDer == null && caida <= 0.05f && kotlin.math.abs(h - alto) <= 0.05f
+            t.copy(
+                caida = if (entero) 0f else caida,
+                alto = if (entero) 0f else h,
+                caidaDer = t.caidaDer?.let { (it - arriba).coerceAtLeast(0f) }
+            )
+        })
     }
 
     /** El preestablecido de todo lo que no es aparente normal (N-03), como lo entiende el motor. */
@@ -208,7 +245,7 @@ object DesdeDiseno {
                 inclinado = g?.let {
                     // Lo que le falta, medido con el ancho del DISEÑO, que es con el que se midió.
                     val w = s.modulos.getOrNull(k)?.ancho ?: m.ancho
-                    Inclinado((w - it.contenido).coerceAtLeast(0f), (w - it.abajo).coerceAtLeast(0f), it.diagonalIzq, it.diagonalDer)
+                    Inclinado((w - it.contenido).coerceAtLeast(0f), (w - it.abajo).coerceAtLeast(0f), it.diagonalIzq, it.diagonalDer, it.radioIzq, it.radioDer)
                 }
             )
         }
@@ -245,7 +282,13 @@ object DesdeDiseno {
                 }
                 else -> 0f to 0f
             }
-            FranjaTramo(f.esSistema || mods.any { it.corrediza }, alto, mods, anchosRect?.getOrNull(k), incIzq, incDer, bajaIzq, bajaDer)
+            FranjaTramo(f.esSistema || mods.any { it.corrediza }, alto, mods, anchosRect?.getOrNull(k), incIzq, incDer, bajaIzq, bajaDer,
+                radioIzq = if (incIzq > 0f) geo.firstOrNull()?.radioIzq ?: 0f else 0f,
+                radioDer = if (incDer > 0f) geo.lastOrNull()?.radioDer ?: 0f else 0f,
+                anchoArribaEnArco = geo.takeIf { g -> !f.esSistema && g.any { it.radioIzq > 0f || it.radioDer > 0f } }
+                    ?.sumOf { it.arriba.toDouble() }?.toFloat(),
+                anchoAbajoEnArco = geo.takeIf { g -> !f.esSistema && g.any { it.radioIzq > 0f || it.radioDer > 0f } }
+                    ?.sumOf { it.abajo.toDouble() }?.toFloat())
         }
         // En un vano con forma, el alto de ESTE tramo (un escalón puede ser más bajo que la ventana):
         // es el que se reparten sus franjas en el motor.

@@ -103,6 +103,11 @@ class VistaDiseno @JvmOverloads constructor(
     private var mochetaRParantes: List<Int> = emptyList()
     private var mochetaRFranjas: List<FranjaNova> = emptyList()
     private var segmentosNs: List<SegmentoNs> = emptyList()
+    /**
+     * De dónde a dónde va cada parante entre tramos en un vano con forma (cm desde el dintel), o
+     * null sin vano. Un parante que va fuera del escalón llega al piso del tramo alto (N-94).
+     */
+    private var bordesDeParantesCm: List<Pair<Float, Float>?> = emptyList()
     // (xIni, xFin, franjas) por cada segmento PLANO en rangosTramoX
     private val segmentosPlanoInfo = mutableListOf<Triple<Float, Float, List<FranjaNova>>>()
     private var modoArcoCurvo: Boolean = false
@@ -459,6 +464,7 @@ class VistaDiseno @JvmOverloads constructor(
         mochetaRParantes = emptyList()
         mochetaRFranjas = emptyList()
         segmentosNs = emptyList()
+        bordesDeParantesCm = emptyList()
         modoArcoCurvo = false
         flechaArcoCm = 0f
         modoCircular = false
@@ -485,7 +491,15 @@ class VistaDiseno @JvmOverloads constructor(
         if (d.tramos.size == 1) {
             val t = d.tramos[0]
             val franjas = t.franjas.map { franjaDelModelo(it) }
-            if (contornoVanoCm.isEmpty() && t.contorno.size >= 3) contornoVanoCm = siluetaAlAncho(t.contorno, t.ancho)
+            // La silueta de la pared se mide desde SU esquina de arriba; la del vano, desde el dintel de
+            // la ventana: una pared más baja cuelga con su caída (2026-10-19, lado de 72.2 × 143.9 en una
+            // ventana de 199.4: la silueta quedaba arriba y recortaba el sistema por la mitad).
+            // Su esquina de arriba es la más alta de las dos (2026-10-21, Porla: la pared de 164 en la
+            // esquina y 196 en la punta, D<32,0>). Con la caída izquierda la silueta, que ya trae su
+            // inclinación, bajaba 32 de más y se salía por debajo de la ventana.
+            if (contornoVanoCm.isEmpty() && t.contorno.size >= 3) {
+                contornoVanoCm = siluetaAlAncho(t.contorno, t.ancho).map { (x, y) -> x to y + t.techo }
+            }
             modoCircular = d.esCircular
             if (arco != null) { modoArcoCurvo = true; flechaArcoCm = arco.coerceAtLeast(0f) }
             // Un tramo con sus propias medidas (escalón o dintel inclinado) se dibuja por el
@@ -540,6 +554,7 @@ class VistaDiseno @JvmOverloads constructor(
         }.toMutableList()
         ponerDeFrente(segs)
         segmentosNs = segs
+        bordesDeParantesCm = (0 until d.tramos.size - 1).map { HerramientasDiseno.bordesDelParante(d, it) }
         return segs.first().franjas.ifEmpty { listOf(FranjaNova(TipoFranja.SISTEMA, emptyList(), null, emptyList())) }
     }
 
@@ -870,6 +885,7 @@ class VistaDiseno @JvmOverloads constructor(
                 val anchoLado = s.contornoCm.maxOf { it.first }
                 val altoLado = s.contornoCm.maxOf { it.second }
                 dibujarCotasDePoligono(canvas, s.contornoCm, s.x0, s.y0, s.escala, anchoLado, altoLado)
+                dibujarCotasDeArcos(canvas, s.contornoCm, s.x0, s.y0, s.escala)
             }
         }
         dibujarGuiaDelIman(canvas)
@@ -1026,6 +1042,41 @@ class VistaDiseno @JvmOverloads constructor(
         dibujarDescuadres(canvas, x0, y0, escala)
     }
 
+    /**
+     * La cota de cada arco del contorno, como la pone Medidas: "◠ desarrollo  c cuerda  f flecha",
+     * por fuera de su punto más salido (2026-10-21).
+     */
+    private fun dibujarCotasDeArcos(
+        canvas: Canvas, contorno: List<Pair<Float, Float>>, x0: Float, y0: Float, escala: Float
+    ) {
+        fun fmt(v: Float) = if (v % 1 == 0f) v.toInt().toString() else "%.1f".format(v).replace(",", ".")
+        ContornoEnTramos.arcosDelContorno(contorno).forEach { a ->
+            val (ax, ay) = contorno[a.desde]; val (bx, by) = contorno[a.hasta]
+            val mx = (ax + bx) / 2f; val my = (ay + by) / 2f
+            var nx = a.apice.first - mx; var ny = a.apice.second - my
+            val l = kotlin.math.hypot(nx, ny).takeIf { it > 0.01f } ?: return@forEach
+            nx /= l; ny /= l
+            val texto = "◠ ${fmt(a.desarrollo)}  c ${fmt(a.cuerda)}  f ${fmt(a.flecha)}"
+            val px = x0 + a.apice.first * escala + nx * 28f
+            val py = y0 + a.apice.second * escala + ny * 28f
+            val ancho = pTextoCota.measureText(texto)
+            // Del lado de fuera: a la izquierda o arriba, el texto termina en el arco; si no, empieza.
+            val tx = when {
+                nx < -0.5f -> px - ancho / 2f
+                nx > 0.5f -> px + ancho / 2f
+                else -> px
+            }
+            val alinear = pTextoCota.textAlign
+            pTextoCota.textAlign = Paint.Align.CENTER
+            // Dentro de la vista si cabe. Con la vista aún sin medir (ancho 0) o más angosta que el texto,
+            // donde cae: el rango quedaba vacío y la app se cerraba (2026-10-21). El lienzo no sirve de
+            // medida: la imagen que se guarda dibuja en las coordenadas de la vista, corridas.
+            val xTexto = if (ancho >= width) tx else tx.coerceIn(ancho / 2f, width - ancho / 2f)
+            canvas.drawText(texto, xTexto, py + pTextoCota.textSize / 3f, pTextoCota)
+            pTextoCota.textAlign = alinear
+        }
+    }
+
     private val pDescuadre = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(110, 229, 57, 53)
         style = Paint.Style.STROKE
@@ -1043,7 +1094,11 @@ class VistaDiseno @JvmOverloads constructor(
      * detección está en HerramientasDiseno.descuadres.
      */
     private fun dibujarDescuadres(canvas: Canvas, x0: Float, y0: Float, escala: Float) {
-        val lista = HerramientasDiseno.descuadres(contornoVanoCm)
+        // Los trocitos de un arco no son lados descuadrados (2026-10-21).
+        val n = contornoVanoCm.size
+        val enArco = ContornoEnTramos.arcosDelContorno(contornoVanoCm).flatMap { it.lados(n) }
+            .flatMap { listOf(contornoVanoCm[it], contornoVanoCm[(it + 1) % n]) }.toSet()
+        val lista = HerramientasDiseno.descuadres(contornoVanoCm).filter { !(it.desde in enArco && it.hasta in enArco) }
         if (lista.isEmpty()) return
         val dp = resources.displayMetrics.density
         pDescuadre.strokeWidth = 10f * dp
@@ -1077,8 +1132,10 @@ class VistaDiseno @JvmOverloads constructor(
         val anchoTotalCm = anchoEfectivoCm()
         val escala = min(anchoDisp / anchoTotalCm, altoDisp / altoCm)
         // Medio puente: en cada frontera dibujan las DOS franjas que se tocan —una hacia abajo y
-        // otra hacia arriba—, así que lo que se ve es el doble de esto.
-        altoPuentePx = max(5f, 1.1f * escala)
+        // otra hacia arriba—, así que lo que se ve es el doble de esto. El puente se ve tan grueso
+        // como el parante (pedido del usuario, 2026-10-18); antes era 1.1 por lado y salía más delgado.
+        // Antes: `altoPuentePx = max(5f, 1.1f * escala)`.
+        altoPuentePx = max(10f, 2.5f * escala) / 2f
 
         val x0 = (width  - anchoTotalCm * escala) / 2f
         val y0 = (height - altoCm * escala) / 2f
@@ -1619,6 +1676,11 @@ class VistaDiseno @JvmOverloads constructor(
         var yBottomPlanoActual = yBottom
         var escalaAcumulada = 1f
         val huecoParanteCm = huecoDeParantesCm()
+        // Entre tramo y tramo el parante se ve con el borde de los dos tramos encima: el puente,
+        // del mismo grueso que se ve el parante.
+        if (huecoParanteCm > 0f) {
+            altoPuentePx = max(max(10f, 2.5f * escalaPxPorCm), huecoParanteCm * escalaPxPorCm + anchoMarcoPx) / 2f
+        }
 
         segmentosNs.forEachIndexed { idx, segmento ->
             val escalaLocal = (escalaPxPorCm * escalaAcumulada).coerceAtLeast(0.0001f)
@@ -1650,10 +1712,17 @@ class VistaDiseno @JvmOverloads constructor(
             val yPisoTramo = max(yAbajoTramo, yAbajoDe(segmento, derecha = true))
             val altoLlenoCm = if (segmento.esInclinado) (yPisoTramo - yTechoTramo) / escalaLocal else segmento.altoCm
             if (idx > 0) {
-                // El parante solo existe donde los dos tramos se tocan: hasta donde llega el más corto.
+                // El parante existe donde los dos tramos se tocan: hasta donde llega el más corto. En
+                // un vano con forma, además, todo el alto del vano donde queda: fuera del escalón
+                // (del lado del tramo alto) llega a su piso, como lo que mide (N-94). Antes se
+                // cortaba en el tramo corto y dejaba un hueco entre el tramo alto y el vano.
                 val vecino = segmentosNs.getOrNull(idx - 1)
-                val yAbajoParante = min(yAbajoTramo, yAbajoDe(vecino))
-                val yArribaParante = max(yArribaTramo, yArribaDe(vecino))
+                var yAbajoParante = min(yAbajoTramo, yAbajoDe(vecino))
+                var yArribaParante = max(yArribaTramo, yArribaDe(vecino))
+                bordesDeParantesCm.getOrNull(idx - 1)?.takeIf { escalaAcumulada == 1f }?.let { (arriba, abajo) ->
+                    yArribaParante = min(yArribaParante, (yTopPlanoActual + arriba * escalaLocal).coerceAtLeast(yTopPlanoActual))
+                    yAbajoParante = max(yAbajoParante, (yTopPlanoActual + abajo * escalaLocal).coerceAtMost(yBottomPlanoActual))
+                }
                 // Con hueco, el parante lo llena; sin hueco (tramos que suman el ancho entero,
                 // como los que salen del contorno) va centrado en la frontera, como siempre.
                 val xParante = xIni - huecoPx / 2f
@@ -1698,7 +1767,7 @@ class VistaDiseno @JvmOverloads constructor(
                     // todo dibujado, porque la silueta abarca el lado entero aunque lo partan.
                     if (segmento.contornoCm.size >= 3 && !curvo) {
                         siluetasPendientes.add(
-                            SiluetaDePared(segmento.contornoCm, xIni, yArribaTramo, escalaLocal)
+                            SiluetaDePared(segmento.contornoCm, xIni, yTechoTramo, escalaLocal)
                         )
                     }
                     val segIdx = segmentosPlanoInfo.size
@@ -1823,6 +1892,13 @@ class VistaDiseno @JvmOverloads constructor(
                         (if (vieneDeCurva) altoEnLaPunta else 1f)
                     val yTopAleta = centroAleta - medioAleta
                     val yBottomAleta = centroAleta + medioAleta
+                    // La pared de la aleta con SU alto (2026-10-19): una pared más baja que la ventana
+                    // cuelga del dintel con su caída (conAltosDeLado). Antes se dibujaba con el alto de
+                    // la ventana entera; la 3D sí la ponía bien. Se mide en el canto de la unión.
+                    val altoPlano = (yBottomPlanoActual - yTopPlanoActual).coerceAtLeast(1f)
+                    val tSuArriba = ((yArribaDe(segmento, esAletaIzq) - yTopPlanoActual) / altoPlano).coerceIn(0f, 1f)
+                    val tSuAbajo = ((yAbajoDe(segmento, esAletaIzq) - yTopPlanoActual) / altoPlano).coerceIn(0f, 1f)
+                    val suTramo = if (tSuAbajo - tSuArriba > 0.01f && (tSuArriba > 0.001f || tSuAbajo < 0.999f)) tSuArriba to tSuAbajo else null
                     val perspectiva = calcularAletaPerspectiva(
                         lado = ladoAleta,
                         xUnion = xUnionAleta,
@@ -1839,7 +1915,8 @@ class VistaDiseno @JvmOverloads constructor(
                             yTop = yTopAleta,
                             yBottom = yBottomAleta,
                             anchoAletaPx = anchoNominalPx,
-                            escalaPxPorCm = escalaLocal
+                            escalaPxPorCm = escalaLocal,
+                            tramoPropio = suTramo
                         )
                     } else {
                         dibujarAletaPerspectivaINA(
@@ -1850,7 +1927,8 @@ class VistaDiseno @JvmOverloads constructor(
                             yTop = yTopAleta,
                             yBottom = yBottomAleta,
                             anchoAletaPx = anchoNominalPx,
-                            escalaPxPorCm = escalaLocal
+                            escalaPxPorCm = escalaLocal,
+                            tramoPropio = suTramo
                         )
                     }
                     if (esAletaIzq) {
@@ -2468,16 +2546,18 @@ class VistaDiseno @JvmOverloads constructor(
         yTop: Float,
         yBottom: Float,
         anchoAletaPx: Float,
-        escalaPxPorCm: Float
+        escalaPxPorCm: Float,
+        tramoPropio: Pair<Float, Float>? = null
     ) {
         if (franjas.isEmpty()) return
-        val perspectiva = calcularAletaPerspectiva(
+        val perspectiva = soloSuTramo(calcularAletaPerspectiva(
             lado = lado,
             xUnion = xUnion,
             yTop = yTop,
             yBottom = yBottom,
             anchoAletaPx = anchoAletaPx
-        )
+        ), tramoPropio)
+        val altoPropioPx = (perspectiva.bordeUnionBottom.y - perspectiva.bordeUnionTop.y).coerceAtLeast(1f)
         dibujarQuad(
             canvas = canvas,
             a = perspectiva.bordeUnionTop,
@@ -2500,8 +2580,8 @@ class VistaDiseno @JvmOverloads constructor(
         val alturasCm = distribuirAlturas(franjas)
         val altoTotalCm = alturasCm.sum().coerceAtLeast(1f)
         var acumuladoCm = 0f
-        val toleranciaPuenteT = (altoPuentePx / (yBottom - yTop).coerceAtLeast(1f)).coerceIn(0.005f, 0.12f)
-        val toleranciaZocaloT = (altoZocaloPx / (yBottom - yTop).coerceAtLeast(1f)).coerceIn(0.005f, 0.12f)
+        val toleranciaPuenteT = (altoPuentePx / altoPropioPx).coerceIn(0.005f, 0.12f)
+        val toleranciaZocaloT = (altoZocaloPx / altoPropioPx).coerceIn(0.005f, 0.12f)
 
         franjas.forEachIndexed { idx, franja ->
             val h = alturasCm.getOrElse(idx) { 0f }.coerceAtLeast(0f)
@@ -2575,7 +2655,8 @@ class VistaDiseno @JvmOverloads constructor(
         yTop: Float,
         yBottom: Float,
         anchoAletaPx: Float,
-        escalaPxPorCm: Float
+        escalaPxPorCm: Float,
+        tramoPropio: Pair<Float, Float>? = null
     ) {
         if (franjas.isEmpty()) return
         val idxS = franjas.indexOfFirst { it.tipo == TipoFranja.SISTEMA }
@@ -2584,13 +2665,13 @@ class VistaDiseno @JvmOverloads constructor(
         val mods = sistema.modulos
         if (mods.isEmpty()) return
 
-        val p = calcularAletaPerspectiva(
+        val p = soloSuTramo(calcularAletaPerspectiva(
             lado = lado,
             xUnion = xUnion,
             yTop = yTop,
             yBottom = yBottom,
             anchoAletaPx = anchoAletaPx
-        )
+        ), tramoPropio)
 
         dibujarQuad(
             canvas = canvas,
@@ -2653,7 +2734,7 @@ class VistaDiseno @JvmOverloads constructor(
             }
         }
 
-        val toleranciaZocaloT = (altoZocaloPx / (yBottom - yTop).coerceAtLeast(1f)).coerceIn(0.005f, 0.12f)
+        val toleranciaZocaloT = (altoZocaloPx / (p.bordeUnionBottom.y - p.bordeUnionTop.y).coerceAtLeast(1f)).coerceIn(0.005f, 0.12f)
         for (i in 0 until n) {
             if (mods[i] != TipoModulo.CORREDIZA) continue
             val l0 = i / n.toFloat()
@@ -2665,6 +2746,22 @@ class VistaDiseno @JvmOverloads constructor(
             val d = puntoEnAleta(p, tPanelBottom, l0)
             dibujarQuad(canvas, a, b, c, d, pRellenoNegro, pLinea)
         }
+    }
+
+    /**
+     * El trozo de la aleta que ocupa su pared, de [tramo].first a [tramo].second (0 = el dintel de la
+     * ventana, 1 = su piso), dentro de la perspectiva del alto entero. Así una pared más baja que la
+     * ventana se ve con su alto y apoyada donde le toca, con la misma fuga que el resto.
+     */
+    private fun soloSuTramo(p: AletaPerspectiva, tramo: Pair<Float, Float>?): AletaPerspectiva {
+        if (tramo == null) return p
+        val (a, b) = tramo
+        return AletaPerspectiva(
+            bordeUnionTop = puntoEnAleta(p, a, 0f),
+            bordeUnionBottom = puntoEnAleta(p, b, 0f),
+            bordeExteriorTop = puntoEnAleta(p, a, 1f),
+            bordeExteriorBottom = puntoEnAleta(p, b, 1f)
+        )
     }
 
     private fun calcularAletaPerspectiva(
@@ -3442,8 +3539,10 @@ class VistaDiseno @JvmOverloads constructor(
      * es justo lo que hace falta para repartir el diseño a mano. Un lado que mide lo mismo que el
      * ancho o el alto total no se repite: ya está en la cota total.
      */
-    private fun dibujarCotasDelContorno(canvas: Canvas, x0: Float, y0: Float, escala: Float) =
+    private fun dibujarCotasDelContorno(canvas: Canvas, x0: Float, y0: Float, escala: Float) {
         dibujarCotasDePoligono(canvas, contornoVanoCm, x0, y0, escala, anchoEfectivoCm(), altoCm)
+        dibujarCotasDeArcos(canvas, contornoVanoCm, x0, y0, escala)
+    }
 
     /**
      * La cota de cada lado de un polígono en cm, puesto en el papel en ([x0], [y0]) con esa
@@ -3462,6 +3561,9 @@ class VistaDiseno @JvmOverloads constructor(
         if (contorno.size < 3) return
         val puntos = contorno.map { (xCm, yCm) -> PointF(x0 + xCm * escala, y0 + yCm * escala) }
         val n = puntos.size
+        // Un arco del vano lleva una sola cota, la suya, y no una por trocito (2026-10-21).
+        val arcos = ContornoEnTramos.arcosDelContorno(contorno)
+        val ladosDeArco = arcos.flatMap { it.lados(n) }.toSet()
         // Orientación del recorrido, para saber hacia qué lado queda "fuera" en cada tramo.
         var doble = 0f
         for (i in 0 until n) {
@@ -3484,6 +3586,7 @@ class VistaDiseno @JvmOverloads constructor(
             val dy = b.y - a.y
             val largo = sqrt(dx * dx + dy * dy)
             if (largo < 1f || medidaCm < 0.05f) continue
+            if (i in ladosDeArco) continue
             val horizontal = kotlin.math.abs(dx) >= kotlin.math.abs(dy)
             // Lo que ya dice la cota total no se repite.
             if (horizontal && kotlin.math.abs(medidaCm - anchoTotal) < 0.05f) continue
@@ -3601,7 +3704,7 @@ class VistaDiseno @JvmOverloads constructor(
         val altoDisp  = height - 2 * margenPx
         val anchoTotalCm = anchoCm + mochetaLateralCm + mochetaLateralDerechaCm
         val escala = min(anchoDisp / anchoTotalCm, altoDisp / altoCm)
-        altoPuentePx = max(5f, 1.1f * escala)
+        altoPuentePx = max(10f, 2.5f * escala) / 2f
 
         val x0 = (width  - (anchoTotalCm * escala)) / 2f
         val y0 = (height - (altoCm * escala)) / 2f

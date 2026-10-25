@@ -25,7 +25,12 @@ data class ParedEnPlanta(
     val anchoCm: Float,
     val altoCm: Float,
     val flechaCm: Float,
-    val giroGrados: Float
+    val giroGrados: Float,
+    /**
+     * Lo que la pared queda por encima del suelo: la que cuelga del dintel ([NovaTramo.caida]) y
+     * mide menos que la ventana no llega abajo. 0 = arranca en el suelo, como todas antes.
+     */
+    val baseCm: Float = 0f
 ) {
     val esCurva: Boolean get() = flechaCm != 0f
 
@@ -109,7 +114,15 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
                     // la curva: se pone el rumbo ahí, gire la curva lo que haya girado.
                     rumbo = if (veniaDeCurva) rumboAntesDeCurva + giroConSigno else rumbo + giroConSigno
                 }
-                val alto = if (tramo.alto > 0f) tramo.alto else diseno.alto
+                // La pared entera, de su dintel más alto a su alféizar más bajo (2026-10-21, Porla: la
+                // derecha de 164 en la esquina y 196 en la punta). Antes un tramo inclinado se levantaba
+                // con el alto de su lado izquierdo, y su silueta (que mide el más alto) se encogía dentro:
+                // la esquina salía de 137 en vez de 164.
+                val altoIzq = if (tramo.alto > 0f) tramo.alto else diseno.alto
+                val altoDer = if (tramo.altoDerecho > 0f) tramo.altoDerecho else diseno.alto
+                val techo = if (tramo.alto > 0f) tramo.techo else 0f
+                val pie = if (tramo.alto > 0f) maxOf(tramo.caida + altoIzq, tramo.caidaDerecha + altoDer) else diseno.alto
+                val alto = pie - techo
                 val desde = PuntoPlanta(x, y)
                 val giroDeLaPared: Float
 
@@ -149,7 +162,11 @@ data class PlantaDelDiseno(val paredes: List<ParedEnPlanta>) {
                         anchoCm = tramo.ancho,
                         altoCm = alto,
                         flechaCm = flecha,
-                        giroGrados = giroDeLaPared
+                        giroGrados = giroDeLaPared,
+                        // El tramo cuelga de su dintel: con su caída y su alto, su pie queda donde
+                        // dice el modelo (2026-10-05). Antes todas arrancaban del suelo, y una pared
+                        // más baja que la de al lado no se juntaba con ella por arriba.
+                        baseCm = if (tramo.alto > 0f) (diseno.alto - pie).coerceAtLeast(0f) else 0f
                     )
                 )
             }

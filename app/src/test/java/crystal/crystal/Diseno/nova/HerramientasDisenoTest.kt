@@ -79,6 +79,25 @@ class HerramientasDisenoTest {
         assertNull(HerramientasDiseno.escalonDelParante(hecho, 0))
     }
 
+    @Test
+    fun el_parante_fuera_del_escalon_se_dibuja_de_dintel_a_piso() {
+        // Pedido del usuario (2026-10-18): elegido fuera, el parante llega al piso del tramo alto y
+        // no deja un hueco entre el tramo y el vano. El dibujo lo lleva de donde a donde dice esto.
+        val d = dosTramosEnElEscalon()
+        val op = HerramientasDiseno.opcionesDelParante(d, 0).associateBy { it.lado }
+        val fuera = HerramientasDiseno.conParanteEnEscalon(d, 0, op.getValue(HerramientasDiseno.LadoParante.FUERA))
+        val (arribaF, abajoF) = HerramientasDiseno.bordesDelParante(fuera, 0)!!
+        assertEquals(0.1f, r1(arribaF), 0.11f)
+        assertEquals(144.5f, r1(abajoF), 0.01f)
+        assertEquals(HerramientasDiseno.largoDelParante(fuera, 0)!!, abajoF - arribaF, 0.001f)
+
+        // Dentro (del lado del tramo bajo), solo lo del escalón: del dintel bajo (67.3) al piso.
+        val dentro = HerramientasDiseno.conParanteEnEscalon(d, 0, op.getValue(HerramientasDiseno.LadoParante.DENTRO))
+        val (arribaD, abajoD) = HerramientasDiseno.bordesDelParante(dentro, 0)!!
+        assertEquals(67.3f, r1(arribaD), 0.01f)
+        assertEquals(144.5f, r1(abajoD), 0.01f)
+    }
+
     /**
      * El diseño del usuario (2026-09-26), parante dentro: tramo 2 invertido, con la mocheta abajo
      * (35.1, con el puente dentro) y el sistema arriba (109.4), f c c f.

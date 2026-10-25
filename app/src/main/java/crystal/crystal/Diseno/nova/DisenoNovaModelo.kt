@@ -104,6 +104,13 @@ data class NovaTramo(
     /** Lo que baja el dintel del lado derecho. */
     val caidaDerecha: Float get() = caidaDer ?: caida
 
+    /**
+     * Lo que baja la esquina más alta de su dintel: de ahí se mide su silueta `L<…>` (2026-10-21).
+     * En uno inclinado no es la caída izquierda: la pared de 164 en la esquina y 196 en la punta
+     * (D<32,0>) arranca en el dintel, y su silueta ya trae los 32 de la izquierda.
+     */
+    val techo: Float get() = minOf(caida, caidaDerecha)
+
     /** ¿Tiene los dos lados distintos? Entonces es un tramo inclinado, no un rectángulo. */
     val esInclinado: Boolean
         get() = kotlin.math.abs(altoDerecho - alto) > 0.05f ||
@@ -320,6 +327,25 @@ data class DisenoNova(
      * El ancho de la ventana es el del PRIMER lado, no la suma: cada lado se mide contra su
      * pared, que es como se apunta en obra y como lo escribe la calculadora.
      */
+    /**
+     * Como [conLados], con el alto de la ventana que dan sus lados (2026-10-21, Porla: la frontal de
+     * 164 y la derecha de 196). Al rearmarla desde el lado que se editaba, el alto era el de ese lado y
+     * la pared que no trae alto propio lo heredaba: las dos salían de 164. Aquí la ventana mide lo que
+     * su pared más alta, y un lado más bajo sin alto propio cuelga del dintel, como en [conAltosDeLado].
+     */
+    fun conLadosConSusAltos(lados: List<DisenoNova>, esquinaDeLado: List<Pair<String?, Float>>): DisenoNova {
+        if (lados.isEmpty()) return this
+        val altoVentana = lados.flatMap { lado -> lado.tramos.map { t -> if (t.alto > 0f) t.caida + t.alto else lado.alto } }
+            .maxOrNull()?.takeIf { it > 0f } ?: alto
+        val ajustados = lados.map { lado ->
+            lado.copy(tramos = lado.tramos.map { t ->
+                if (t.alto > 0f || kotlin.math.abs(lado.alto - altoVentana) < 0.05f || lado.alto <= 0f) t
+                else t.copy(alto = lado.alto, caida = if (t.caida > 0.05f) t.caida else altoVentana - lado.alto)
+            })
+        }
+        return copy(alto = altoVentana).conLados(ajustados, esquinaDeLado)
+    }
+
     fun conLados(lados: List<DisenoNova>, esquinaDeLado: List<Pair<String?, Float>>): DisenoNova {
         if (lados.isEmpty()) return this
         val tramosNuevos = mutableListOf<NovaTramo>()
@@ -386,6 +412,21 @@ data class DisenoNova(
      * de los lados; 0 o igual al de la ventana deja el lado como está. Las franjas no se tocan: la
      * calculadora ya las repartió para ese alto.
      */
+    /**
+     * Como [conAltosDeLado], tramo por tramo: [altos] trae uno por tramo, en orden (2026-10-21, la L
+     * con curva de Nova, cuyos lados no siempre se separan con un pliegue). La ventana mide lo que su
+     * tramo más alto; los demás cuelgan del dintel. Con otro número de altos no se toca.
+     */
+    fun conAltosPorTramo(altos: List<Float>): DisenoNova {
+        if (altos.size != tramos.size || altos.none { it > 0f }) return this
+        val altoVentana = maxOf(alto, altos.max())
+        return copy(alto = altoVentana, tramos = tramos.mapIndexed { i, tramo ->
+            val a = altos[i]
+            if (a <= 0f || kotlin.math.abs(a - altoVentana) < 0.05f) tramo
+            else tramo.copy(alto = a, caida = altoVentana - a, altoDer = null, caidaDer = null)
+        })
+    }
+
     fun conAltosDeLado(altos: List<Float>): DisenoNova {
         val validos = altos.filter { it > 0f }
         if (validos.isEmpty()) return this

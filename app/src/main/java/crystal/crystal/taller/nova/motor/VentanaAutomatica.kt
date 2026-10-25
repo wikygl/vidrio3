@@ -54,7 +54,13 @@ object VentanaAutomatica {
         /** La curva con la que EMPIEZA la ventana, antes del primer lado: la misma regla al revés. */
         val curvaInicial: LadoMedido? = null,
         val repartoManual: List<Int>? = null,
-        val corredizasPorTramoNfc: Int = 0
+        val corredizasPorTramoNfc: Int = 0,
+        /**
+         * El quiebre de cada curva al entrar y al salir, en grados, en el orden en que aparecen en la
+         * ventana (la del principio, las de las esquinas, la del final). 0 = entra en tangente. Se
+         * calcula del ángulo entre la pared y la cuerda (ArcoEsquina.quiebreConAnguloDeCuerda).
+         */
+        val quiebres: List<Pair<Float, Float>> = emptyList()
     )
 
     /** Un lado de la lista de la ventana (2026-10-03): recto o curvo, en orden. */
@@ -67,7 +73,7 @@ object VentanaAutomatica {
      * lista no tiene paredes (la ventana curva va por su camino) o lleva dos curvas seguidas, que
      * todavía no tienen regla.
      */
-    fun conLados(base: Entrada, lista: List<LadoDeLista>): Entrada? {
+    fun conLados(base: Entrada, lista: List<LadoDeLista>, uniones: List<Float> = emptyList()): Entrada? {
         if (lista.none { !it.curvo }) return null
         if (lista.zipWithNext().any { (a, b) -> a.curvo && b.curvo }) return null
         val paredes = lista.indices.filter { !lista[it].curvo }
@@ -75,78 +81,89 @@ object VentanaAutomatica {
         val ultima = paredes.last()
         // Entre dos paredes seguidas, la curva que haya entre ellas.
         val curvas = (0 until paredes.size - 1).map { k -> lista.getOrNull(paredes[k] + 1)?.takeIf { it.curvo }?.medida }
+        // El quiebre de cada curva, de los grados de sus uniones (180 = sigue de largo, tangente).
+        fun quiebre(union: Int) = uniones.getOrNull(union)?.let { 180f - kotlin.math.abs(it) } ?: 0f
+        val quiebres = lista.indices.filter { lista[it].curvo }.map { i -> (if (i > 0) quiebre(i - 1) else 0f) to (if (i < lista.lastIndex) quiebre(i) else 0f) }
         return base.copy(
             lados = paredes.map { lista[it].medida },
             curvas = curvas,
+            quiebres = quiebres,
             curvaInicial = lista.getOrNull(primera - 1)?.takeIf { it.curvo }?.medida,
             curvaFinal = lista.getOrNull(ultima + 1)?.takeIf { it.curvo }?.medida
         )
     }
 
-    /**
-     * Un lado en cero con la curva en su esquina es la ventana que empieza (o acaba) en la curva
-     * (2026-10-03): así se escribe en Nova y así llega de Medidas. La pared en cero no existe; la
-     * curva pasa a ser la del principio (o la del final), con su parante y N-104/N-105.
-     */
-    fun conCurvasEnLasPuntas(entrada: Entrada): Entrada {
-        var e = entrada
-        if (e.lados.size >= 2 && e.lados.first().ancho <= 0.5f && e.curvaInicial == null) {
-            e.curvas.firstOrNull()?.let { c -> e = e.copy(lados = e.lados.drop(1), curvas = e.curvas.drop(1), curvaInicial = c) }
-        }
-        val n = e.lados.size
-        if (n >= 2 && e.lados.last().ancho <= 0.5f && e.curvaFinal == null) {
-            e.curvas.getOrNull(n - 2)?.let { c ->
-                e = e.copy(lados = e.lados.dropLast(1), curvas = e.curvas.take(n - 2), curvaFinal = c)
-            }
-        }
-        return e
-    }
+    // `conCurvasEnLasPuntas` traducía el lado en cero con la curva en su esquina (2026-10-03). Desde el
+    // 2026-10-19 no hay lados en cero: la curva de una punta llega como un lado curvo (conLados).
 
     fun ventana(e: Entrada): VentanaNova {
         val apa = e.acabado == Acabado.APA
         val n = e.lados.size
-        // Qué hay en cada arista entre dos lados: ¿una curva?
-        val curvaEn = (0 until (n - 1).coerceAtLeast(0)).map { i -> e.esquinaCurva || e.curvas.getOrNull(i) != null }
-        // El reparto del esquinero, solo en las aristas en ángulo. En aparente lo pierde el lado entero;
+        // Los trozos de la ventana en orden: las paredes y las curvas (N-84), cada curva con su desarrollo.
+        // Hasta el 2026-10-19 las paredes y las curvas se armaban por caminos separados y la unión de una
+        // pared con una curva era siempre esquina curva; ahora cada unión dice lo que es.
+        val trozos = buildList {
+            e.curvaInicial?.let { add(it to true) }
+            e.lados.forEachIndexed { i, l ->
+                add(l to false)
+                if (i < n - 1) e.curvas.getOrNull(i)?.let { add(it to true) }
+            }
+            e.curvaFinal?.let { add(it to true) }
+        }
+        // El número de cada curva en el orden de la ventana, para leer su quiebre.
+        val ordenDeCurva = IntArray(trozos.size) { -1 }
+        var curvasVistas = 0
+        trozos.forEachIndexed { j, t -> if (t.second) ordenDeCurva[j] = curvasVistas++ }
+        // Qué hay en cada unión: esquina curva (true) o en ángulo. Dos paredes seguidas doblan en ángulo,
+        // salvo la esquina curva de toda la ventana. Una pared y una curva: esquina curva si la curva entra
+        // en tangente, y en ángulo —lo mismo que en la L, con su esquinero— si entra con un quiebre de
+        // [QUIEBRE_ESQUINA] o más (dictado el 2026-10-19).
+        val enCurva = (0 until (trozos.size - 1).coerceAtLeast(0)).map { j ->
+            val antesCurva = trozos[j].second
+            val despuesCurva = trozos[j + 1].second
+            when {
+                !antesCurva && !despuesCurva -> e.esquinaCurva
+                despuesCurva -> quiebreDe(e, ordenDeCurva[j + 1]).first < QUIEBRE_ESQUINA
+                else -> quiebreDe(e, ordenDeCurva[j]).second < QUIEBRE_ESQUINA
+            }
+        }
+        // El reparto del esquinero, solo en las uniones en ángulo. En aparente lo pierde el trozo entero;
         // en inaparente solo su estructura (N-75).
-        val anchosEsquina = descuentoEsquinas(e.lados.map { it.ancho }, e.esquinero, curvaEn)
+        val anchosEsquina = descuentoEsquinas(trozos.map { it.first.ancho }, e.esquinero, enCurva)
+        val paranteCurva = e.esquinero?.altura ?: 0f
 
-        val lados = mutableListOf<LadoNova>()
-        // La curva del principio: arranca en el borde izquierdo de la ventana y entra en la primera pared.
-        e.curvaInicial?.let { lados.add(trozoCurvo(e, it, e.esquinero?.altura ?: 0f, Borde.ESQUINA_CURVA, izquierda = e.izquierda)) }
-        e.lados.forEachIndexed { i, l ->
-            val izq = if (i == 0) (if (e.curvaInicial != null) Borde.ESQUINA_CURVA else e.izquierda)
-                else if (curvaEn[i - 1]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
-            val der = if (i == n - 1) (if (e.curvaFinal != null) Borde.ESQUINA_CURVA else e.derecha)
-                else if (curvaEn[i]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
+        val lados = trozos.mapIndexed { j, (l, esCurva) ->
+            val izq = if (j == 0) e.izquierda else if (enCurva[j - 1]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
+            val der = if (j == trozos.lastIndex) e.derecha else if (enCurva[j]) Borde.ESQUINA_CURVA else Borde.ESQUINA_ANGULO
             val libresLaterales = listOf(izq, der).count { it == Borde.LIBRE }
-            val esquina = anchosEsquina[i]
+            val esquina = anchosEsquina[j]
             // Esquina curva (dictado el 2026-10-02). APA (N-104): cada pared descuenta entero el
             // parante de su punta de curva y se calcula con ese ancho útil; la curva conserva su
             // desarrollo. INA (N-105): el parante se reparte, media a la pared y media a la curva, y
             // solo en la estructura (puente, riel y lo que sale del puente); el vidrio pasa por delante.
-            val paranteCurva = e.esquinero?.altura ?: 0f
             val curvaIzq = if (izq == Borde.ESQUINA_CURVA) paranteCurva else 0f
             val curvaDer = if (der == Borde.ESQUINA_CURVA) paranteCurva else 0f
             val pierdeIzq = esquina.first + curvaIzq / 2f
             val pierdeDer = esquina.second + curvaDer / 2f
-            val anchoCalculo = l.ancho - (if (apa) esquina.first + esquina.second + curvaIzq + curvaDer + libresLaterales * e.perfilLibre else 0f)
+            // Lo que pierde en aparente: la pared, el parante entero de su punta de curva; la curva, nada.
+            val curvaEnAncho = if (esCurva) 0f else curvaIzq + curvaDer
+            val anchoCalculo = l.ancho - (if (apa) esquina.first + esquina.second + curvaEnAncho + libresLaterales * e.perfilLibre else 0f)
             val altoCalculo = l.alto - (if (apa) e.libresVerticales * e.perfilLibre else 0f)
             val lado = DisenoAutomatico.lado(DisenoAutomatico.Entrada(
                 anchoMedido = l.ancho, anchoCalculo = anchoCalculo.coerceAtLeast(0f),
                 anchoEstructura = if (apa) null else (anchoCalculo - pierdeIzq - pierdeDer).coerceAtLeast(0f),
                 alto = altoCalculo, altoMedido = l.alto, hoja = l.hoja,
                 acabado = e.acabado, puente = e.puente, divisManual = l.divisManual,
-                modulacion = e.modulacion, repartoManual = e.repartoManual,
+                modulacion = e.modulacion, repartoManual = if (esCurva) null else e.repartoManual,
                 corredizasPorTramoNfc = e.corredizasPorTramoNfc,
                 izquierda = izq, derecha = der
             ))
-            lados.add(if (apa) lado else lado.copy(estructuraIzq = pierdeIzq, estructuraDer = pierdeDer))
-            // La curva de la arista que sigue: su propio trozo, con su desarrollo (N-08, N-84).
-            if (i < n - 1) e.curvas.getOrNull(i)?.let { lados.add(trozoCurvo(e, it, paranteCurva, Borde.ESQUINA_CURVA)) }
+            when {
+                esCurva -> lado.copy(curvaDeEsquina = true, estructuraIzq = if (apa) 0f else pierdeIzq, estructuraDer = if (apa) 0f else pierdeDer)
+                apa -> lado
+                else -> lado.copy(estructuraIzq = pierdeIzq, estructuraDer = pierdeDer)
+            }
         }
-        // La curva del final: entra desde la última pared y acaba en el borde derecho de la ventana.
-        e.curvaFinal?.let { lados.add(trozoCurvo(e, it, e.esquinero?.altura ?: 0f, e.derecha)) }
         return VentanaNova(
             e.acabado, e.modelo, lados, e.u, e.puente, e.cruce, e.mochetaInferior,
             libresVerticales = e.libresVerticales, perfilLibre = e.perfilLibre,
@@ -154,28 +171,19 @@ object VentanaAutomatica {
         )
     }
 
+    /** El quiebre de entrada y de salida de la curva número [orden] de la ventana, en grados (0 = tangente). */
+    private fun quiebreDe(e: Entrada, orden: Int): Pair<Float, Float> =
+        e.quiebres.getOrNull(orden)?.let { kotlin.math.abs(it.first) to kotlin.math.abs(it.second) } ?: (0f to 0f)
+
     /**
-     * El trozo de una curva de esquina (N-84): su desarrollo, entre [izquierda] y [derecha]. Cada
-     * punta es una esquina curva (da a una pared) o el borde de la ventana (la curva del principio o
-     * la del final). La curva no descuenta nada en APA (N-104); en INA su estructura pierde media
-     * parante en cada punta que da a una pared (N-105). Contra el vacío, como cualquier lado libre.
+     * Desde cuánto el quiebre entre una pared y una curva es una esquina en ángulo, con su parante de
+     * esquina como en la L, y no una tangente imperfecta (dictado el 2026-10-19: 5°, lo mismo con que
+     * Medidas lee un dibujo como recto o en escuadra).
      */
-    private fun trozoCurvo(e: Entrada, c: LadoMedido, parante: Float, derecha: Borde, izquierda: Borde = Borde.ESQUINA_CURVA): LadoNova {
-        val apa = e.acabado == Acabado.APA
-        val mediaParante = if (apa) 0f else parante / 2f
-        val mediaIzq = if (izquierda == Borde.ESQUINA_CURVA) mediaParante else 0f
-        val mediaDer = if (derecha == Borde.ESQUINA_CURVA) mediaParante else 0f
-        val libre = if (apa) listOf(izquierda, derecha).count { it == Borde.LIBRE } * e.perfilLibre else 0f
-        val anchoCalculo = (c.ancho - libre).coerceAtLeast(0f)
-        return DisenoAutomatico.lado(DisenoAutomatico.Entrada(
-            anchoMedido = c.ancho, anchoCalculo = anchoCalculo,
-            anchoEstructura = if (apa) null else (anchoCalculo - mediaIzq - mediaDer).coerceAtLeast(0f),
-            alto = c.alto - (if (apa) e.libresVerticales * e.perfilLibre else 0f), altoMedido = c.alto,
-            hoja = c.hoja, acabado = e.acabado, puente = e.puente, divisManual = c.divisManual,
-            modulacion = e.modulacion, corredizasPorTramoNfc = e.corredizasPorTramoNfc,
-            izquierda = izquierda, derecha = derecha
-        )).copy(curvaDeEsquina = true, estructuraIzq = mediaIzq, estructuraDer = mediaDer)
-    }
+    const val QUIEBRE_ESQUINA = 5f
+
+    // El trozo de cada curva se armaba aparte en `trozoCurvo` hasta el 2026-10-19; ahora sale del mismo
+    // camino que las paredes, en ventana(). Está en el historial de git.
 
     /**
      * N-38: en cada esquina de aparente los dos lados se reparten el esquinero. Si su medida normal

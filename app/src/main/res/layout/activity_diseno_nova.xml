@@ -31,6 +31,25 @@
             android:textSize="12sp" />
     </LinearLayout>
 
+    <!-- La barra de los botones de arriba (lado, deshacer, mover, imán, 3D…): entre el recuadro de
+         medidas y el dibujo, en tantas filas como haga falta. Antes cada botón iba puesto a mano a
+         una distancia del borde y quedaban montados sobre el dibujo. Los botones los pone la
+         actividad (DisenoNovaActivity.ordenarBarra). -->
+    <androidx.constraintlayout.helper.widget.Flow
+        android:id="@+id/barraHerramientas"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="6dp"
+        app:flow_horizontalGap="2dp"
+        app:flow_verticalGap="0dp"
+        app:flow_horizontalStyle="packed"
+        app:flow_wrapMode="chain"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/panelInfoSeleccion" />
+
     <crystal.crystal.Diseno.nova.VistaDiseno
         android:id="@+id/vistaDiseno"
         android:layout_width="0dp"
@@ -40,7 +59,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/panelInfoSeleccion" />
+        app:layout_constraintTop_toBottomOf="@+id/barraHerramientas" />
 
 
     <!-- Mando de la franja o el módulo tocados. Va pegado encima del bloque de controles y no

@@ -252,13 +252,22 @@ object HerramientasDiseno {
      * Lo que mide el parante [indice] en un vano con forma: el alto del vano donde queda; si pisa
      * los dos lados de un escalón, el mayor (N-94). Null sin vano.
      */
-    fun largoDelParante(d: DisenoNova, indice: Int, anchoParante: Float = 2.5f): Float? {
+    fun largoDelParante(d: DisenoNova, indice: Int, anchoParante: Float = 2.5f): Float? =
+        bordesDelParante(d, indice, anchoParante)?.let { (arriba, abajo) -> abajo - arriba }
+
+    /**
+     * De dónde a dónde va el parante [indice] en un vano con forma, en cm desde el dintel de la
+     * ventana: el alto del vano donde queda, el mayor si pisa los dos lados (N-94), lo mismo que
+     * [largoDelParante]. Con él el dibujo lo lleva hasta el piso cuando va fuera del escalón. Null
+     * sin vano.
+     */
+    fun bordesDelParante(d: DisenoNova, indice: Int, anchoParante: Float = 2.5f): Pair<Float, Float>? {
         val puntos = puntosDelVano(d)
         if (puntos.size < 3) return null
         val eje = ejesDeParantes(d, anchoParante).getOrNull(indice) ?: return null
         val medio = anchoParante / 2f
         return listOf(eje - medio + 0.05f, eje, eje + medio - 0.05f)
-            .mapNotNull { altoDelVanoEn(puntos, it) }.maxOrNull()
+            .mapNotNull { bordesEn(puntos, it) }.maxByOrNull { (arriba, abajo) -> abajo - arriba }
     }
 
     /**
@@ -343,7 +352,12 @@ object HerramientasDiseno {
      */
     data class GeometriaModulo(
         val contenido: Float, val abajo: Float, val arriba: Float,
-        val diagonalIzq: Float, val diagonalDer: Float
+        val diagonalIzq: Float, val diagonalDer: Float,
+        /**
+         * El radio del costado si el vano lo corta en arco (2026-10-21: el vano arqueado unido en
+         * Medidas); entonces [diagonalIzq] / [diagonalDer] es el largo del arco en esa franja. 0 = recto.
+         */
+        val radioIzq: Float = 0f, val radioDer: Float = 0f
     ) {
         val inclinado: Boolean get() = diagonalIzq > 0f || diagonalDer > 0f
     }
@@ -376,12 +390,46 @@ object HerramientasDiseno {
                 if (abs(mid - (a + b) / 2f) > salto * 0.15f) return 0f
                 return kotlin.math.sqrt(salto * salto + alto * alto)
             }
+            // Un costado en arco (2026-10-21, el vano arqueado): cada altura de la franja cae sobre el
+            // círculo que pasa por su punto de arriba, el del medio y el de abajo. Su largo es el del
+            // arco y su U va curvada (N-102). Un escalón no pasa: cambia de golpe.
+            fun arco(izquierdo: Boolean): Pair<Float, Float> {
+                val n = 24
+                val ys = (0..n).map { k -> techo + 0.05f + (alto - 0.1f) * k / n }
+                val xs = ys.map { y -> extensionEn(puntos, y, x0, x1)?.let { if (izquierdo) it.first else it.second } ?: return 0f to 0f }
+                if (xs.maxOrNull()!! - xs.minOrNull()!! <= DESCUADRE_CM) return 0f to 0f
+                // Lo que se aparta de la recta entre sus puntas: con menos de medio centímetro es una
+                // diagonal (un trozo corto de arco, en la práctica, se corta recto).
+                val dx = xs.last() - xs.first(); val dy = ys.last() - ys.first()
+                val cuerda = kotlin.math.hypot(dx, dy)
+                if (cuerda < 1e-3f) return 0f to 0f
+                val panza = xs.indices.maxOf { k -> abs((xs[k] - xs.first()) * dy - (ys[k] - ys.first()) * dx) / cuerda }
+                if (panza < 0.5f) return 0f to 0f
+                val (ax, ay) = xs.first() to ys.first()
+                val (bx, by) = xs[n / 2] to ys[n / 2]
+                val (cx, cy) = xs.last() to ys.last()
+                val d = 2f * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+                if (abs(d) < 1e-3f) return 0f to 0f
+                val a2 = ax * ax + ay * ay; val b2 = bx * bx + by * by; val c2 = cx * cx + cy * cy
+                val ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d
+                val uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d
+                val radio = kotlin.math.hypot(ax - ux, ay - uy)
+                val tolerancia = maxOf(0.6f, radio * 0.02f)
+                if (xs.indices.any { k -> abs(kotlin.math.hypot(xs[k] - ux, ys[k] - uy) - radio) > tolerancia }) return 0f to 0f
+                val largo = (1..n).sumOf { k -> kotlin.math.hypot(xs[k] - xs[k - 1], ys[k] - ys[k - 1]).toDouble() }.toFloat()
+                return largo to radio
+            }
+            val rectaIzq = diagonal(arriba?.first, medio?.first, abajo?.first)
+            val rectaDer = diagonal(arriba?.second, medio?.second, abajo?.second)
+            val (arcoIzq, radioIzq) = arco(true)
+            val (arcoDer, radioDer) = arco(false)
             GeometriaModulo(
                 contenido = contenido,
                 abajo = abajo?.let { it.second - it.first } ?: 0f,
                 arriba = arriba?.let { it.second - it.first } ?: 0f,
-                diagonalIzq = diagonal(arriba?.first, medio?.first, abajo?.first),
-                diagonalDer = diagonal(arriba?.second, medio?.second, abajo?.second)
+                diagonalIzq = if (radioIzq > 0f) arcoIzq else rectaIzq,
+                diagonalDer = if (radioDer > 0f) arcoDer else rectaDer,
+                radioIzq = radioIzq, radioDer = radioDer
             )
         }
     }

@@ -32,7 +32,11 @@ object MotorNova {
         /** Cuánto se alarga cada costado inclinado por cm de alto (ver [FranjaTramo.inclinacionIzq]). */
         val inclinacionIzq: Float = 0f, val inclinacionDer: Float = 0f,
         /** Cuánto baja su borde de arriba en cada costado: el dintel inclinado (ver [FranjaTramo.bajaIzq]). */
-        val bajaIzq: Float = 0f, val bajaDer: Float = 0f
+        val bajaIzq: Float = 0f, val bajaDer: Float = 0f,
+        /** El radio de un costado en arco (ver [FranjaTramo.radioIzq]); 0 = recto. */
+        val radioIzq: Float = 0f, val radioDer: Float = 0f,
+        /** Sus bordes dentro del vano con un costado en arco (ver [FranjaTramo.anchoArribaEnArco]). */
+        val arribaEnArco: Float? = null, val abajoEnArco: Float? = null
     ) {
         val dintelInclinado: Boolean get() = kotlin.math.abs(bajaDer - bajaIzq) > 0.05f
     }
@@ -158,7 +162,7 @@ object MotorNova {
         val suma = mochetas.sumOf { it.value.alto.toDouble() }.toFloat()
         val lista = mochetas.map { (i, f) ->
             val parte = if (suma > 0f) disponible * f.alto / suma else disponible / mochetas.size
-            Mocheta(if (i < iSistema) Ubicacion.ABAJO else Ubicacion.ARRIBA, parte - h * cargas[i], parte, f.ancho, f.inclinacionIzq, f.inclinacionDer, f.bajaIzq, f.bajaDer)
+            Mocheta(if (i < iSistema) Ubicacion.ABAJO else Ubicacion.ARRIBA, parte - h * cargas[i], parte, f.ancho, f.inclinacionIzq, f.inclinacionDer, f.bajaIzq, f.bajaDer, f.radioIzq, f.radioDer, f.anchoArribaEnArco, f.anchoAbajoEnArco)
         }
         // Mismo orden que las del modelo (la de arriba primero), para que las listas salgan iguales.
         val ordenadas = lista.sortedBy { it.ubicacion.ordinal }
@@ -246,8 +250,14 @@ object MotorNova {
             // Un fijo contra un lado inclinado: su U de fijo es su borde de abajo, "como 2 o 3 cm"
             // (dictado el 2026-09-26, Vna4: 2.7 + su parte de cruce), no el ancho del módulo.
             apa -> rachasDeFijos(ms, cruzaParantes = false).forEach { racha ->
-                val trozos = racha.map { m -> m.tramo to (m.inclinado?.let { m.u - it.faltaAbajo } ?: (m.u + aumentoPorHoja)) }
-                u.add(Pieza(trozos.sumOf { it.second.toDouble() }.toFloat(), 1, curva = CurvadoNova.arcos(l, trozos)))
+                // El que llega al alféizar en una punta no tiene borde de abajo (2026-10-19, la forma de
+                // seis lados y el triángulo en un tramo): sin esto quedaba una U de 0.7, su parte de cruce
+                // sola. Su U es la diagonal.
+                val trozos = racha.map { m ->
+                    m.tramo to (m.inclinado?.let { if (m.ancho - it.faltaAbajo < 0.5f) 0f else m.u - it.faltaAbajo } ?: (m.u + aumentoPorHoja))
+                }
+                val largo = trozos.sumOf { it.second.toDouble() }.toFloat()
+                if (largo > 0f) u.add(Pieza(largo, 1, curva = CurvadoNova.arcos(l, trozos)))
             }
             // INA con corredizas: la U de cada borde (ver uDelBorde), que reemplaza a la U de fijos
             // y a la U superior e inferior de lado a lado.
@@ -279,6 +289,14 @@ object MotorNova {
                 val porTramoN = if ((t.puente ?: v.puente).esMultipleOGorrito) 1 else 2
                 vert[i].mochetas.forEach { m ->
                     val w = m.ancho ?: t.ancho
+                    // Con un costado en arco (2026-10-21; ❓ por confirmar, N-69): la U contra el muro
+                    // va hasta donde empieza el arco, y la de sobre el puente, lo que mide el vano ahí.
+                    if (m.arribaEnArco != null && m.abajoEnArco != null) {
+                        val (muro, puente) = if (m.ubicacion == Ubicacion.ARRIBA) m.arribaEnArco to m.abajoEnArco else m.abajoEnArco to m.arribaEnArco
+                        u.add(Pieza(muro, 1, tramo = i))
+                        if (porTramoN == 2) u.add(Pieza(puente, 1, tramo = i))
+                        return@forEach
+                    }
                     if (!m.dintelInclinado) {
                         u.add(Pieza(w, porTramoN, tramo = i))
                         return@forEach
@@ -303,15 +321,19 @@ object MotorNova {
                     // El primero y el último, cada uno con su lado de pared (un tramo de un solo fijo:
                     // los dos lados, y la columna solo en el primero).
                     listOfNotNull(
-                        t.first().takeIf { !it.corrediza }?.let { Triple(it, it.columna, it.inclinado?.diagonalIzq ?: 0f) },
-                        t.last().takeIf { !it.corrediza }?.let { Triple(it, if (t.size > 1) it.columna else null, it.inclinado?.diagonalDer ?: 0f) }
-                    ).forEach { (f, col, diagonal) ->
+                        t.first().takeIf { !it.corrediza }?.let { Triple(it, it.columna, it.inclinado?.diagonalIzq ?: 0f) to (it.inclinado?.radioIzq ?: 0f) },
+                        t.last().takeIf { !it.corrediza }?.let { Triple(it, if (t.size > 1) it.columna else null, it.inclinado?.diagonalDer ?: 0f) to (it.inclinado?.radioDer ?: 0f) }
+                    ).forEach { (lado, radio) ->
+                        val (f, col, diagonal) = lado
                         val hoja = vert[i].altoHoja - f.recorte
                         // Contra un lado inclinado (dictado el 2026-09-26, Vna4): la U de ese costado es
                         // una diagonal. Primero va la de abajo (la U de fijo, horizontal, G-01) y sobre
                         // ella la diagonal: su largo menos el alto de la U, como el 99 → 98 de G-01.
                         if (diagonal > 0f) {
-                            u.add(Pieza(diagonal - us, 1, Orientacion.DIAGONAL))
+                            // Contra un arco (el vano arqueado, 2026-10-21) la misma U va curvada, con
+                            // el largo del arco (N-102). ❓ Por confirmar con pruebas (N-69).
+                            val curva = if (radio > 0f) listOf(Arco(diagonal - us, radio)) else emptyList()
+                            u.add(Pieza(diagonal - us, 1, Orientacion.DIAGONAL, curva = curva))
                             return@forEach
                         }
                         if (col == null) {
@@ -384,10 +406,15 @@ object MotorNova {
                     val nU = if ((l.tramos[i].puente ?: v.puente).esMultipleOGorrito) 1 else 2
                     val w = m.ancho ?: l.tramos[i].ancho
                     listOf(Triple(m.inclinacionIzq, m.bajaIzq, true), Triple(m.inclinacionDer, m.bajaDer, false)).forEach { (k, baja, izquierdo) ->
+                        val radio = if (izquierdo) m.radioIzq else m.radioDer
                         // Una mocheta que llega en punta a ese costado no lleva U ahí (2026-10-02): por
                         // el canto largo quedaba una astilla de medio centímetro.
                         if (m.dintelInclinado && m.espacio - baja <= 0.05f) return@forEach
-                        if (k > 0f) u.add(Pieza((m.espacio - baja) * k - nU * us, 1, Orientacion.DIAGONAL))
+                        if (k > 0f) {
+                            val largo = (m.espacio - baja) * k - nU * us
+                            // Contra un arco, curvada (2026-10-21; ❓ por confirmar, N-69).
+                            u.add(Pieza(largo, 1, Orientacion.DIAGONAL, curva = if (radio > 0f) listOf(Arco(largo, radio)) else emptyList()))
+                        }
                         // Arriba la U del dintel (por su canto más largo, [arribaDeLaUParante]); abajo,
                         // la de la mocheta si va (sin Múltiple).
                         else u.add(Pieza(m.espacio - arribaDeLaUParante(m.bajaIzq, m.bajaDer, w, us, izquierdo) - (nU - 1) * us, 1, Orientacion.VERTICAL))

@@ -51,7 +51,19 @@ class VolumenDelDisenoTest {
     fun cada_pared_sube_su_alto() {
         val v = volumen(tramo(150f), tramo(120f, pliegue = "A<90>", alto = 100f))
         assertEquals(160f, v.caras[0].arribaIzq.z, 0.01f)
-        assertEquals("la pared baja no se quedó con su alto", 100f, v.caras[1].arribaIzq.z, 0.01f)
+        assertEquals("la pared baja no se quedó con su alto", 100f, v.caras[1].arribaIzq.z - v.caras[1].abajoIzq.z, 0.01f)
+        // Sin caída cuelga del dintel de la ventana (el alféizar que sube, ver NovaTramo): se junta
+        // por arriba con la de al lado (2026-10-05; antes arrancaba del suelo y su techo quedaba en 100).
+        assertEquals("la pared baja no cuelga del dintel", 160f, v.caras[1].arribaIzq.z, 0.01f)
+        assertEquals(60f, v.caras[1].abajoIzq.z, 0.01f)
+    }
+
+    /** La que cuelga más abajo del dintel ([NovaTramo.caida]) baja eso desde arriba. */
+    @Test
+    fun la_caida_baja_la_pared_desde_el_dintel() {
+        val v = volumen(tramo(150f), tramo(120f, pliegue = "A<90>", alto = 100f).copy(caida = 60f))
+        assertEquals("con caída 60 y alto 100 en 160 llega al suelo", 0f, v.caras[1].abajoIzq.z, 0.01f)
+        assertEquals(100f, v.caras[1].arribaIzq.z, 0.01f)
     }
 
     /** En L, la segunda cara está en otro plano: con el rincón (A<90>) viene hacia quien mira (+y). */

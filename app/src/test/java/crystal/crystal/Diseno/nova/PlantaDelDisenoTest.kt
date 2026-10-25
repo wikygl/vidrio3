@@ -250,4 +250,19 @@ class PlantaDelDisenoTest {
         assertEquals(160f, hypot(a.hasta.x - a.desde.x, a.hasta.y - a.desde.y), 0.5f)
         assertEquals(120f, hypot(b.hasta.x - b.desde.x, b.hasta.y - b.desde.y), 0.5f)
     }
+
+    /**
+     * La pared de dintel inclinado sube entera (2026-10-21, Porla): la frontal de 164 con su parte
+     * circular, colgada 32 bajo el dintel, y la derecha de 164 en la esquina y 196 en la punta. Las dos
+     * miden 164 en la esquina. Antes la derecha se levantaba con su lado izquierdo (164) y su silueta
+     * de 196 se encogía dentro: en la esquina salía de 137.
+     */
+    @Test
+    fun la_pared_inclinada_sube_de_su_dintel_mas_alto_a_su_pie() {
+        val d = DisenoNova.desdePaquete("{nova,apa,[185.1,196:Tl<185.1>(H<164>;D<32>;s<117.1>(fccf);m<46.8>(ff)) A<90> " +
+            "Tl<243.5>(H<164,196>;D<32,0>;s<140>(fcfcf);m<56>(ff))]}")!!
+        val paredes = PlantaDelDiseno.de(d).paredes
+        assertEquals(listOf(164f, 196f), paredes.map { it.altoCm })
+        assertEquals(listOf(0f, 0f), paredes.map { it.baseCm })
+    }
 }

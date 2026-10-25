@@ -235,6 +235,7 @@ class NovaCorrediza : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityNovaCorredizaBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        instalarListaDeLados()
         // Tocar "Referencias y Cálculos" abre la calculadora flotante.
         crystal.crystal.calculadora.CalculadoraFlotante.instalarEnReferencias(this)
         cantidadProducto = intent.getFloatExtra("cantidad", 1f).toInt().coerceAtLeast(1)
@@ -626,22 +627,16 @@ class NovaCorrediza : AppCompatActivity() {
                 }
 
                 // Validar medidas completas según geometría
-                if (texto == "nu" && (primeraMedidaNu == null || segundaMedidaNu == null)) {
-                    val faltantes = (if (primeraMedidaNu == null) 1 else 0) + (if (segundaMedidaNu == null) 1 else 0)
-                    val medIngresadas = 3 - faltantes
+                // La L y la C son su lista de lados (2026-10-19): una curva también es un lado.
+                if (esListaDeLados() && listaDelFormulario() == null) {
                     Toast.makeText(this,
-                        "En C requiere 3 medidas. Ingresadas: $medIngresadas/3. Usa 'Agregar' para cada lado.",
-                        Toast.LENGTH_LONG).show()
-                    return@setOnClickListener
-                }
-                if (texto == "nl" && primeraMedidaNl == null) {
-                    Toast.makeText(this,
-                        "En L requiere 2 medidas. Ingresada: 1/2. Usa 'Agregar' para el primer lado.",
+                        if (texto == "nl") "En L: dos lados o más, con una o dos paredes. Un lado curvo lleva su desarrollo y su flecha o su cuerda. Usa 'Agregar' para cada lado."
+                        else "En C: tres paredes, y las curvas que haya. Un lado curvo lleva su desarrollo y su flecha o su cuerda. Usa 'Agregar' para cada lado.",
                         Toast.LENGTH_LONG).show()
                     return@setOnClickListener
                 }
                 // Las esquinas de la L y la C escritas a mano: en ángulo si sus casillas están vacías, curva si no.
-                if (texto == "nl" || texto == "nu") aplicarEsquinaEscrita()
+                if (texto == "nl" || texto == "nu") { aplicarEsquinaEscrita(); conAngulosEscritos() }
 
                 // El vano con forma se rehace desde ella si cambió el alto de hoja o las divisiones.
                 rehacerDesdeLaFormaSiCambio()
@@ -743,8 +738,7 @@ class NovaCorrediza : AppCompatActivity() {
                 m.curvaDe(arista)?.let { c -> crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(c.desarrollo, c.alto, c.puente, c.divisiones) }
             }
         }.orEmpty()
-        // Un lado en cero con la curva en su esquina: la ventana empieza o acaba en la curva (2026-10-03).
-        return crystal.crystal.taller.nova.motor.VentanaAutomatica.ventana(crystal.crystal.taller.nova.motor.VentanaAutomatica.conCurvasEnLasPuntas(crystal.crystal.taller.nova.motor.VentanaAutomatica.Entrada(
+        val entrada = crystal.crystal.taller.nova.motor.VentanaAutomatica.Entrada(
             acabado = if (tipoNova == TipoNova.APA) crystal.crystal.taller.nova.motor.Acabado.APA else crystal.crystal.taller.nova.motor.Acabado.INA,
             // Circular (sección 11): en automático el modelo pasa a bandera.
             modelo = if (textoModelo == "nci") crystal.crystal.taller.nova.motor.ModeloMocheta.BANDERA else modeloMotor(),
@@ -760,7 +754,17 @@ class NovaCorrediza : AppCompatActivity() {
                 crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(c.desarrollo, c.alto, c.puente, c.divisiones)
             },
             repartoManual = NovaCalculos.repartoManual, corredizasPorTramoNfc = corredizasPorTramo
-        ))).copy(circular = textoModelo == "nci")
+        )
+        // En la L y la C, la lista de lados del formulario (2026-10-19): las paredes, las curvas de
+        // las esquinas y las de las puntas, cada una con el quiebre de sus uniones. Ya no hay lados en
+        // cero que hagan sitio a una curva.
+        val desdeLaLista = listaDelFormulario()?.let { l ->
+            crystal.crystal.taller.nova.motor.VentanaAutomatica.conLados(
+                entrada.copy(lados = emptyList(), curvas = emptyList(), curvaFinal = null), l.lados, l.uniones
+            )
+        }
+        return crystal.crystal.taller.nova.motor.VentanaAutomatica.ventana(desdeLaLista ?: entrada)
+            .copy(circular = textoModelo == "nci")
     }
 
     private fun modeloMotor() = when (modeloRemate) {
@@ -787,7 +791,8 @@ class NovaCorrediza : AppCompatActivity() {
         // Una esquina leída del diseño trae los anchos útiles; se muestran los que se midieron.
         val paredes = v.lados.count { !it.curvaDeEsquina }
         val medidos = esquinaDeLaMedida?.lados?.map { it.ancho }?.takeIf { it.size == paredes && paredes > 1 }
-        val base = crystal.crystal.taller.nova.motor.ReferenciasNova.texto(v, medidos)
+        val base = crystal.crystal.taller.nova.motor.ReferenciasNova.texto(v, medidos) +
+            if (esListaDeLados()) lineaDeLosMuros() else ""
         if (texto != "ncu") return base
         arcosDeLaMedida()?.let { return "$base\n${resumenDeVariosArcos(it)}" }
         val l = v.lados.first()
@@ -886,6 +891,13 @@ class NovaCorrediza : AppCompatActivity() {
                 listOfNotNull(geometriaCurva(desarrollo, 1)?.takeIf { it.flecha > 0f }?.radio?.let { if (haciaAdentro) -it else it })
             }
             return v.copy(lados = listOf(l.copy(radios = radios)))
+        }
+        listaDelFormulario()?.takeIf { it.hayCurva && it.lados.size == v.lados.size }?.let { lista ->
+            return v.copy(lados = v.lados.mapIndexed { k, l ->
+                if (!lista.lados[k].curvo) return@mapIndexed l
+                val r = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(l.anchoMedido, kotlin.math.abs(lista.flechas[k]))?.radio
+                if (r == null) l else l.copy(radios = listOf(r))
+            })
         }
         val medida = esquinaDeLaMedida ?: return v
         val curvas = medida.lados.indices.mapNotNull { medida.curvaDe(it) }
@@ -1133,7 +1145,16 @@ class NovaCorrediza : AppCompatActivity() {
                 Toast.makeText(this, "Ingrese ancho y alto válidos", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            agregarLado(ancho, alto, hoja, divisManual)
+            if (esListaDeLados()) {
+                val curvo = chkCurvoActual?.isChecked == true
+                if (curvo && numeroDe(etFlechaActual) <= 0f && numeroDe(etCuerdaActual) <= 0f) {
+                    Toast.makeText(this, "Un lado curvo necesita su flecha o su cuerda", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                agregarLado(ancho, alto, hoja, divisManual, curvo, numeroDe(etFlechaActual), numeroDe(etCuerdaActual), numeroDe(etAnguloActual))
+            } else {
+                agregarLado(ancho, alto, hoja, divisManual)
+            }
             // Tras agregar, devolver el foco a la primera medida (med1) para la siguiente.
             binding.etAncho.requestFocus()
         }
@@ -1149,7 +1170,22 @@ class NovaCorrediza : AppCompatActivity() {
      * Es lo que hace el botón "Agregar", aparte: así un lado se puede meter también sin tocar la
      * pantalla, que es como llegan los de una ventana de esquina medida en el apunte.
      */
-    private fun agregarLado(ancho: Float, alto: Float, hoja: Float, divisManual: Int) {
+    private fun agregarLado(
+        ancho: Float, alto: Float, hoja: Float, divisManual: Int,
+        curvo: Boolean = false, flecha: Float = 0f, cuerda: Float = 0f, angulo: Float = 0f
+    ) {
+        // En la L y la C, un bloque más de la lista (2026-10-19), sin límite: una curva también es un lado.
+        if (esListaDeLados()) {
+            agregarBloqueDeLado(ancho, alto, hoja, divisManual, curvo, flecha, cuerda, angulo)
+            // Solo se escribe el ancho (dictado el 2026-10-20): el alto y el h.puente siguen los del lado
+            // de antes y se editan si hace falta. Las divisiones vuelven a automático.
+            binding.etAncho.setText("")
+            binding.etPartes.setText("0")
+            chkCurvoActual?.isChecked = false
+            listOf(etFlechaActual, etCuerdaActual, etAnguloActual).forEach { it?.setText("") }
+            refrescarListaDeLados()
+            return
+        }
         if (texto == "nl") {
             primeraMedidaNl = MedidaNl(ancho, alto, hoja, divisManual)
             binding.etAncho2.setText(df1(ancho))
@@ -2707,18 +2743,12 @@ class NovaCorrediza : AppCompatActivity() {
         val altoHoja = NovaCalculos.altoHoja(alto, hoja)
         val mochetaInferior = mochetaInferiorDoblePuente()
 
+        // Con una curva en la L o la C, el diseño sale de la misma lista que el cálculo (2026-10-19).
+        if (texto == "nl" || texto == "nu") listaDelFormulario()?.takeIf { it.hayCurva }?.let { lista ->
+            disenoDeLaLista(vMotor, lista)?.let { return it }
+        }
         if (texto == "nl") {
             val primera = obtenerPrimeraMedidaNlEditable()
-            // La L que empieza en la curva (2026-10-03): el lado 1 en cero y la curva en su esquina.
-            // La pared en cero no existe: el diseño arranca con la curva y sigue con el lado 2.
-            if (primera != null && primera.ancho <= 0.5f && esquinaDeLaMedida?.curvaDe(0) != null && paredes.size == 1) {
-                val tramosAleta = escritor.tramos(vMotor, paredes[0], consolidado = true)
-                val cabecera = "${NovaCalculos.df1(ancho)},${NovaCalculos.df1(alto)}:"
-                val curva = esquinaEnElDiseno(0, alto, hoja)
-                val aleta = conPanzaDelLado(1, tramosAleta)
-                val final = curvaFinalEnElDiseno(1, alto, hoja)
-                return conLoQueTrajoLaMedida("{nova,${tipoPaquete()},[$cabecera$curva $aleta$final]}")
-            }
             if (primera != null) {
                 // Aplicar el descuento de esquina (mismo que materiales) para que el dibujo use
                 // el ancho ÚTIL: divisiones y paños de mocheta coinciden con la lista de corte.
@@ -2893,10 +2923,9 @@ class NovaCorrediza : AppCompatActivity() {
             divisManual = binding.etPartes.text?.toString()?.toIntOrNull() ?: 0
         )
         return when (texto) {
-            "nl" -> listOfNotNull(obtenerPrimeraMedidaNlEditable(), actual)
-            "nu" -> listOfNotNull(
-                obtenerPrimeraMedidaNuEditable(), obtenerSegundaMedidaNuEditable(), actual
-            )
+            // Las paredes: las de la lista y la de arriba, si no es curva.
+            "nl", "nu" -> bloquesDeLados.filter { !it.curvo }.mapNotNull { medidaDe(it) } +
+                (if (chkCurvoActual?.isChecked == true) emptyList() else listOf(actual))
             "ns" -> {
                 val lados = ladosNs.toMutableList()
                 // En modo navegar, ladosNs ya trae la serie completa (mismo criterio que
@@ -3032,6 +3061,7 @@ class NovaCorrediza : AppCompatActivity() {
         listOf(binding.etFlechaE2, binding.etCuerdaE2, binding.etDesarrolloE2, binding.etAltoCurvaE2, binding.etPuenteCurvaE2)
             .forEach { it.setText("") }
         binding.etDiviCurvaE2.setText("0")
+        limpiarListaDeLados()
     }
 
     /**
@@ -3077,6 +3107,393 @@ class NovaCorrediza : AppCompatActivity() {
             binding.lyAltoCurvaE2, binding.lyPuenteCurvaE2, binding.lyDiviCurvaE2).forEach { it.visibility = View.VISIBLE }
         binding.tvEsquinaCurva.text = if (cuantos >= 2) "Esquina curva 1" else "Esquina curva"
         binding.tvEsquinaCurvaE2.text = if (cuantos >= 2) "Esquina curva 2" else "Curva final"
+    }
+
+    // ==================== LA L Y LA C, LADO POR LADO (2026-10-19) ====================
+    // Cada lado es un bloque, recto o curvo, y solo se ve lo que existe (dictado el 2026-10-19: la curva
+    // es un lado "con el identificador curvo"; ni lados en cero, ni bloques de curva vacíos —"curva
+    // inicial", "curva final"—, ni flecha en los lados planos). Un lado curvo lleva su desarrollo, su
+    // flecha o su cuerda (es lo que lo distingue). El lado que se escribe arriba es el último, como siempre.
+    //
+    // Los ángulos (dictado el 2026-10-20): cada lado tiene uno, "Ángulo", con el lado de antes, sea
+    // plano o curvo (junto a una curva se mide con su cuerda; vacío, en tangente; entre dos planos,
+    // vacío es escuadra). El primero lo da con el muro donde arranca y el último, además, el "Ángulo
+    // final" con el muro o el acople donde termina: vacíos, 90° (corte recto, 0 en la ingletadora,
+    // que es como termina casi siempre). Antes la curva pedía "el ángulo con la pared de antes / de
+    // después", que daba a entender un muro y repetía cada unión en dos lados.
+
+    private inner class BloqueDeLado(
+        val vista: LinearLayout, val titulo: TextView, val curvo: Boolean,
+        val ancho: EditText, val alto: EditText, val puente: EditText, val divisiones: EditText,
+        val flecha: EditText?, val cuerda: EditText?,
+        val angulo: EditText, val ingletadora: TextView
+    )
+
+    private val bloquesDeLados = mutableListOf<BloqueDeLado>()
+    private var contenedorDeLados: LinearLayout? = null
+    private var chkCurvoActual: android.widget.CheckBox? = null
+    private var etFlechaActual: EditText? = null
+    private var etCuerdaActual: EditText? = null
+    private var etAnguloActual: EditText? = null
+    private var etAnguloFinalActual: EditText? = null
+    private var tvIngletadoraActual: TextView? = null
+    private var tvIngletadoraFinal: TextView? = null
+    private var cabeceraDeAngulos: TextView? = null
+    private var angulosAbiertos = false
+    private var etiquetaAnchoOriginal = ""
+    private val filasDeCurva = mutableListOf<Pair<View, () -> Boolean>>()
+
+    private fun esListaDeLados() = texto == "nl" || texto == "nu"
+
+    /** Una fila como las del formulario (etiqueta y casilla), en [padre] en la posición [posicion]. */
+    private fun filaEn(padre: android.view.ViewGroup, posicion: Int, etiqueta: String): Pair<View, EditText> {
+        val dp = resources.displayMetrics.density
+        val modeloEtiqueta = binding.textView13
+        val fila = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val tv = TextView(this).apply {
+            text = etiqueta
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, modeloEtiqueta.textSize)
+            setTextColor(modeloEtiqueta.currentTextColor)
+            setPadding((6 * dp).toInt(), 0, 0, 0)
+        }
+        val et = EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, binding.etAncho.textSize)
+        }
+        fila.addView(tv, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.81f).apply { marginStart = (3 * dp).toInt() })
+        fila.addView(et, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        padre.addView(fila, posicion, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        return fila to et
+    }
+
+    /** Pone la lista de lados en el formulario: una vez, al abrir la pantalla. */
+    private fun instalarListaDeLados() {
+        if (contenedorDeLados != null) return
+        etiquetaAnchoOriginal = binding.textView13.text.toString()
+        // Los bloques de los lados agregados, donde estaban los fijos de "Lado 1" y "Lado 2".
+        val padre = binding.tvLado1.parent as android.view.ViewGroup
+        val cont = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        padre.addView(cont, padre.indexOfChild(binding.tvLado1),
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        contenedorDeLados = cont
+        // El lado que se escribe: su marca de curvo y, marcada, su flecha, su cuerda y su ángulo.
+        val padreActual = binding.ancho.parent as android.view.ViewGroup
+        val chk = android.widget.CheckBox(this).apply {
+            text = "◠ curvo"
+            setTextColor(binding.textView13.currentTextColor)
+        }
+        padreActual.addView(chk, padreActual.indexOfChild(binding.ancho),
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        chkCurvoActual = chk
+        // El orden del taller (dictado el 2026-10-20): desarrollo, cuerda, flecha, alto, h.puente,
+        // divisiones, marco y cruce; los ángulos, plegados al final, para no atosigar. La cuerda y la
+        // flecha entran justo debajo del ancho: la última que se pone queda arriba.
+        val (filaFlecha, flecha) = filaEn(padreActual, padreActual.indexOfChild(binding.ancho) + 1, "Flecha")
+        val (filaCuerda, cuerda) = filaEn(padreActual, padreActual.indexOfChild(binding.ancho) + 1, "Cuerda")
+        val plegable = cabeceraPlegable()
+        padreActual.addView(plegable, padreActual.indexOfChild(binding.lyCruce) + 1,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        val (filaAngulo, angulo) = filaEn(padreActual, padreActual.indexOfChild(plegable) + 1, "Ángulo")
+        val (filaFinal, anguloFinal) = filaEn(padreActual, padreActual.indexOfChild(filaAngulo) + 1, "Ángulo final")
+        cabeceraDeAngulos = plegable
+        plegable.setOnClickListener {
+            angulosAbiertos = !angulosAbiertos
+            resumirAngulos()
+            binding.root.requestLayout()
+        }
+        alEscribir(angulo) { resumirAngulos() }
+        alEscribir(anguloFinal) { resumirAngulos() }
+        etFlechaActual = flecha; etCuerdaActual = cuerda; etAnguloActual = angulo; etAnguloFinalActual = anguloFinal
+        tvIngletadoraActual = lecturaDeIngletadora(filaAngulo, angulo)
+        tvIngletadoraFinal = lecturaDeIngletadora(filaFinal, anguloFinal)
+        chk.setOnCheckedChangeListener { _, _ -> refrescarListaDeLados() }
+        filasDeCurva += chk to { esListaDeLados() }
+        filasDeCurva += filaFlecha to { esListaDeLados() && chk.isChecked }
+        filasDeCurva += filaCuerda to { esListaDeLados() && chk.isChecked }
+        filasDeCurva += plegable to { esListaDeLados() }
+        filasDeCurva += filaAngulo to { esListaDeLados() && angulosAbiertos }
+        filasDeCurva += filaFinal to { esListaDeLados() && angulosAbiertos && bloquesDeLados.isNotEmpty() }
+        filasDeCurva += cont to { esListaDeLados() }
+        // En la L y la C los lados son la lista: los bloques fijos de antes (lado 1, lado 2, esquinas
+        // curvas) no se muestran. La ventana curva sigue usando su flecha y su cuerda.
+        val fijos = listOf(binding.tvLado1, binding.lyAncho2, binding.lyAlto2, binding.lyPuente2, binding.lyDivi2,
+            binding.tvLado2, binding.lyAncho3, binding.lyAlto3, binding.lyPuente3, binding.lyDivi3,
+            binding.tvEsquinaCurva, binding.lyFlecha, binding.lyCuerda, binding.lyDesarrollo, binding.lyAltoCurva,
+            binding.lyPuenteCurva, binding.lyDiviCurva, binding.tvEsquinaCurvaE2, binding.lyFlechaE2, binding.lyCuerdaE2,
+            binding.lyDesarrolloE2, binding.lyAltoCurvaE2, binding.lyPuenteCurvaE2, binding.lyDiviCurvaE2)
+        binding.root.viewTreeObserver.addOnGlobalLayoutListener {
+            filasDeCurva.forEach { (fila, visible) ->
+                val v = if (visible()) View.VISIBLE else View.GONE
+                if (fila.visibility != v) fila.visibility = v
+            }
+            if (esListaDeLados()) fijos.forEach { if (it.visibility != View.GONE) it.visibility = View.GONE }
+        }
+    }
+
+    private fun numeroDe(et: EditText?): Float =
+        et?.text?.toString()?.trim()?.replace(",", ".")?.toFloatOrNull() ?: 0f
+
+    private fun textoDeNumero(v: Float): String = if (v == 0f) "" else df1(v)
+
+    private fun alEscribir(et: EditText, hacer: () -> Unit) {
+        et.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) = hacer()
+        })
+    }
+
+    /** La cabecera de lo que va plegado: "▸ Ángulos", con su toque para abrir y cerrar. */
+    private fun cabeceraPlegable(): TextView {
+        val dp = resources.displayMetrics.density
+        return TextView(this).apply {
+            setTextColor(binding.textView13.currentTextColor)
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, binding.textView13.textSize)
+            setPadding((6 * dp).toInt(), (6 * dp).toInt(), 0, (6 * dp).toInt())
+        }
+    }
+
+    /** Cerrado, dice lo que tiene escrito: "▸ Ángulos · 120 · final 60". */
+    private fun textoPlegable(titulo: String, abierto: Boolean, escritos: List<String>): String =
+        (if (abierto) "▾ " else "▸ ") + titulo +
+            if (!abierto && escritos.isNotEmpty()) " · " + escritos.joinToString(" · ") else ""
+
+    private fun resumirAngulos() {
+        val tv = cabeceraDeAngulos ?: return
+        fun escrito(et: EditText?) = et?.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        tv.text = textoPlegable("Ángulos", angulosAbiertos, listOfNotNull(
+            escrito(etAnguloActual),
+            escrito(etAnguloFinalActual)?.takeIf { bloquesDeLados.isNotEmpty() }?.let { "final $it" }
+        ))
+    }
+
+    /**
+     * Junto al ángulo con el muro, en gris, lo que se marca en la ingletadora: 90° es el corte recto,
+     * 0 en la ingletadora; 60°, 30. Vacío cuenta como 90.
+     */
+    private fun lecturaDeIngletadora(fila: View, et: EditText): TextView {
+        val dp = resources.displayMetrics.density
+        val tv = TextView(this).apply {
+            setTextColor(android.graphics.Color.GRAY)
+            textSize = 12f
+            setPadding((4 * dp).toInt(), 0, (4 * dp).toInt(), 0)
+        }
+        (fila as LinearLayout).addView(tv, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT).apply { gravity = android.view.Gravity.CENTER_VERTICAL })
+        fun poner() {
+            val a = numeroDe(et).takeIf { it > 0f } ?: 90f
+            tv.text = "ingl. ${df1(kotlin.math.abs(90f - a))}°"
+        }
+        et.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) = poner()
+        })
+        poner()
+        return tv
+    }
+
+    private fun medidaDe(b: BloqueDeLado): MedidaNl? {
+        val ancho = numeroDe(b.ancho)
+        val alto = numeroDe(b.alto)
+        if (ancho <= 0f || alto <= 0f) return null
+        return MedidaNl(ancho, alto, numeroDe(b.puente), b.divisiones.text?.toString()?.trim()?.toIntOrNull()?.coerceAtLeast(0) ?: 0)
+    }
+
+    /** Un lado agregado, como bloque de la lista. */
+    private fun agregarBloqueDeLado(
+        ancho: Float, alto: Float, hoja: Float, divisManual: Int,
+        curvo: Boolean, flecha: Float, cuerda: Float, angulo: Float
+    ) {
+        val cont = contenedorDeLados ?: return
+        val dp = resources.displayMetrics.density
+        val vista = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val titulo = TextView(this).apply {
+            setTextColor(binding.tvLadoActual.currentTextColor)
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, binding.tvLadoActual.textSize)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding((6 * dp).toInt(), (6 * dp).toInt(), 0, 0)
+        }
+        vista.addView(titulo)
+        fun fila(etiqueta: String, valor: String): Pair<View, EditText> =
+            filaEn(vista, vista.childCount, etiqueta).also { it.second.setText(valor) }
+        // El mismo orden que arriba; el ángulo, plegado.
+        val etAncho = fila(if (curvo) "Desarrollo" else etiquetaAnchoOriginal, df1(ancho)).second
+        val etCuerda = if (curvo) fila("Cuerda", textoDeNumero(cuerda)).second else null
+        val etFlecha = if (curvo) fila("Flecha", textoDeNumero(flecha)).second else null
+        val etAlto = fila("Alto", df1(alto)).second
+        val etPuente = fila("h.Puente", df1(hoja)).second
+        val etDivisiones = fila("Divisiones", divisManual.toString()).second
+        val cabecera = cabeceraPlegable().also { vista.addView(it) }
+        val (filaAngulo, etAngulo) = fila("Ángulo", textoDeNumero(angulo))
+        val ingletadora = lecturaDeIngletadora(filaAngulo, etAngulo)
+        var abierto = false
+        fun resumir() {
+            cabecera.text = textoPlegable("Ángulo", abierto, listOfNotNull(etAngulo.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }))
+            filaAngulo.visibility = if (abierto) View.VISIBLE else View.GONE
+        }
+        cabecera.setOnClickListener { abierto = !abierto; resumir() }
+        alEscribir(etAngulo) { resumir() }
+        resumir()
+        cont.addView(vista, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        val bloque = BloqueDeLado(vista, titulo, curvo, etAncho, etAlto, etPuente, etDivisiones, etFlecha, etCuerda,
+            etAngulo, ingletadora)
+        titulo.setOnLongClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("¿Quitar el ${titulo.text.toString().lowercase()}?")
+                .setPositiveButton("Quitar") { _, _ ->
+                    cont.removeView(vista)
+                    bloquesDeLados.remove(bloque)
+                    refrescarListaDeLados()
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+            true
+        }
+        bloquesDeLados.add(bloque)
+    }
+
+    /**
+     * Numera los lados, dice en gris qué vale cada ángulo vacío y pone al día lo que leen los caminos
+     * de siempre. La lectura de la ingletadora solo va en los ángulos con el muro de un lado plano.
+     */
+    private fun refrescarListaDeLados() {
+        val curvoArriba = chkCurvoActual?.isChecked == true
+        binding.textView13.text = if (esListaDeLados() && curvoArriba) "Desarrollo" else etiquetaAnchoOriginal
+        bloquesDeLados.forEachIndexed { k, b ->
+            b.titulo.text = "Lado ${k + 1}" + if (b.curvo) " · curvo" else ""
+            b.angulo.hint = vacioDelAngulo(bloquesDeLados.getOrNull(k - 1)?.curvo, b.curvo)
+            b.ingletadora.visibility = if (k == 0 && !b.curvo) View.VISIBLE else View.GONE
+        }
+        val previo = bloquesDeLados.lastOrNull()
+        etAnguloActual?.hint = vacioDelAngulo(previo?.curvo, curvoArriba)
+        etAnguloFinalActual?.hint = if (curvoArriba) "" else "90"
+        tvIngletadoraActual?.visibility = if (previo == null && !curvoArriba) View.VISIBLE else View.GONE
+        tvIngletadoraFinal?.visibility = if (curvoArriba) View.GONE else View.VISIBLE
+        resumirAngulos()
+        val paredes = bloquesDeLados.filter { !it.curvo }.mapNotNull { medidaDe(it) }
+        if (texto == "nl") primeraMedidaNl = paredes.getOrNull(0)
+        if (texto == "nu") { primeraMedidaNu = paredes.getOrNull(0); segundaMedidaNu = paredes.getOrNull(1) }
+        contadorLado = bloquesDeLados.size + 1
+        mostrarLadoActual()
+        binding.root.requestLayout()
+    }
+
+    /** Lo que vale un ángulo vacío: con el muro ([antesCurvo] null), 90 en un lado plano; junto a una curva, tangente. */
+    private fun vacioDelAngulo(antesCurvo: Boolean?, curvo: Boolean): String = when {
+        antesCurvo == null -> if (curvo) "" else "90"
+        antesCurvo || curvo -> "tangente"
+        else -> "90"
+    }
+
+    private fun limpiarListaDeLados() {
+        contenedorDeLados?.removeAllViews()
+        bloquesDeLados.clear()
+        chkCurvoActual?.isChecked = false
+        listOf(etFlechaActual, etCuerdaActual, etAnguloActual, etAnguloFinalActual).forEach { it?.setText("") }
+        if (etiquetaAnchoOriginal.isNotEmpty()) binding.textView13.text = etiquetaAnchoOriginal
+    }
+
+    /**
+     * La ventana del formulario como lista de lados, en orden, con el ángulo de cada unión (180 = sigue
+     * de largo). En la L, dos lados o más con una o dos paredes; en la C, tres paredes. Null si no vale.
+     */
+    private data class ListaDeLaVentana(
+        val lados: List<crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoDeLista>,
+        val uniones: List<Float>,
+        /** La flecha de cada lado; 0 en las paredes. */
+        val flechas: List<Float>,
+        /** El ángulo con el muro donde arranca y donde termina; null si no se escribió (90). */
+        val muroInicio: Float? = null,
+        val muroFin: Float? = null
+    ) {
+        val hayCurva: Boolean get() = lados.any { it.curvo }
+    }
+
+    private fun listaDelFormulario(): ListaDeLaVentana? {
+        if (!esListaDeLados()) return null
+        // [angulo]: con el lado de antes (con el muro, el primero); 0 si está vacío.
+        class Item(val m: MedidaNl, val curvo: Boolean, val flecha: Float, val cuerda: Float, val angulo: Float)
+        val items = bloquesDeLados.mapNotNull { b ->
+            medidaDe(b)?.let { Item(it, b.curvo, numeroDe(b.flecha), numeroDe(b.cuerda), numeroDe(b.angulo)) }
+        }.toMutableList()
+        val arriba = MedidaNl(
+            numeroDe(binding.etAncho), numeroDe(binding.etAlto), numeroDe(binding.etHoja),
+            binding.etPartes.text?.toString()?.trim()?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        )
+        if (arriba.ancho > 0f && arriba.alto > 0f) {
+            items.add(Item(arriba, chkCurvoActual?.isChecked == true, numeroDe(etFlechaActual), numeroDe(etCuerdaActual), numeroDe(etAnguloActual)))
+        }
+        val paredes = items.count { !it.curvo }
+        val vale = if (texto == "nl") items.size >= 2 && paredes in 1..2 else paredes == 3
+        if (!vale) return null
+        // Con su desarrollo y su flecha o su cuerda; con las dos, manda la cuerda.
+        fun arco(it: Item) = when {
+            it.cuerda > 0f -> crystal.crystal.taller.ArcoEsquina.deDesarrolloYCuerda(it.m.ancho, it.cuerda)
+            it.flecha > 0f -> crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(it.m.ancho, it.flecha)
+            else -> null
+        }
+        if (items.any { it.curvo && arco(it) == null }) return null
+        fun union(a: crystal.crystal.taller.ArcoEsquina, anguloCuerda: Float) =
+            if (anguloCuerda <= 0f) 180f else a.anguloEnLaUnion(anguloCuerda)
+        val lados = mutableListOf<crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoDeLista>()
+        val flechas = mutableListOf<Float>()
+        val uniones = mutableListOf<Float>()
+        var paredesVistas = 0
+        items.forEachIndexed { k, it ->
+            if (k > 0) {
+                val antes = items[k - 1]
+                uniones.add(when {
+                    !antes.curvo && !it.curvo -> it.angulo.takeIf { a -> a > 0f }
+                        ?: esquinaDeLaMedida?.gradosDe(paredesVistas - 1)?.let { g -> kotlin.math.abs(g) } ?: 90f
+                    it.curvo && !antes.curvo -> union(arco(it)!!, it.angulo)
+                    antes.curvo && !it.curvo -> union(arco(antes)!!, it.angulo)
+                    it.angulo <= 0f -> 180f
+                    else -> crystal.crystal.taller.ArcoEsquina.anguloEnLaUnionDeCuerdas(arco(antes)!!, arco(it)!!, it.angulo)
+                })
+            }
+            lados.add(crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoDeLista(
+                crystal.crystal.taller.nova.motor.VentanaAutomatica.LadoMedido(it.m.ancho, it.m.alto, it.m.hoja, it.m.divisManual), it.curvo))
+            flechas.add(if (it.curvo) arco(it)!!.flecha else 0f)
+            if (!it.curvo) paredesVistas++
+        }
+        return ListaDeLaVentana(lados, uniones, flechas,
+            muroInicio = items.first().angulo.takeIf { it > 0f },
+            muroFin = numeroDe(etAnguloFinalActual).takeIf { it > 0f })
+    }
+
+    /**
+     * Los ángulos escritos entre dos paredes, en la esquina que dibuja el diseño de siempre (la L o la C
+     * sin curvas). Con el signo que trajo Medidas, que dice hacia dónde dobla. Sin nada escrito y sin
+     * medida, la esquina no se toca: va en escuadra.
+     */
+    private fun conAngulosEscritos() {
+        val lista = listaDelFormulario()?.takeIf { !it.hayCurva } ?: return
+        val m = esquinaDeLaMedida
+        if (m != null && m.lados.size == lista.lados.size && !m.hayCurva) {
+            esquinaDeLaMedida = m.copy(angulos = lista.uniones.mapIndexed { i, a ->
+                df1(if ((m.gradosDe(i) ?: 1f) < 0f) -a else a)
+            } + m.angulos.drop(lista.uniones.size))
+            return
+        }
+        if (m != null || lista.uniones.all { kotlin.math.abs(it - 90f) < 0.05f }) return
+        esquinaDeLaMedida = EsquinaMedida(
+            lista.lados.map { l -> crystal.crystal.taller.LadoEsquina(l.medida.ancho, l.medida.ancho, l.medida.alto, l.medida.alto, l.medida.hoja) },
+            lista.uniones.map { df1(it) }
+        )
+        esquinaEscrita = true
+    }
+
+    /** El corte contra el muro, para las referencias: solo lo que se escribió. */
+    private fun lineaDeLosMuros(): String {
+        val lista = listaDelFormulario() ?: return ""
+        fun corte(a: Float, curvo: Boolean) =
+            if (curvo) "${df1(a)}°" else "${df1(a)}° (ingletadora ${df1(kotlin.math.abs(90f - a))}°)"
+        val partes = listOfNotNull(
+            lista.muroInicio?.let { "inicio " + corte(it, lista.lados.first().curvo) },
+            lista.muroFin?.let { "final " + corte(it, lista.lados.last().curvo) }
+        )
+        return if (partes.isEmpty()) "" else "\nContra el muro: " + partes.joinToString(" · ")
     }
 
     /** Por esquina: lo que mostraban sus casillas al cargarla de Medidas, y la curva tal cual vino. */
@@ -3219,35 +3636,14 @@ class NovaCorrediza : AppCompatActivity() {
         return binding.etAncho.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
     }
 
-    private fun obtenerPrimeraMedidaNlEditable(): MedidaNl? {
-        val base = primeraMedidaNl ?: return null
-        val ancho = binding.etAncho2.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: base.ancho
-        val alto = binding.etAlto2.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: base.alto
-        val hoja = binding.etPuente2.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: base.hoja
-        val divis = binding.etDivi2.text?.toString()?.toIntOrNull()?.coerceAtLeast(0) ?: base.divisManual
-        if (ancho <= 0f || alto <= 0f) return base
-        return MedidaNl(ancho = ancho, alto = alto, hoja = hoja, divisManual = divis)
-    }
+    // Las paredes de la L y la C salen de la lista de lados (2026-10-19); antes, de los bloques fijos.
+    private fun paredDeLaLista(k: Int): MedidaNl? = bloquesDeLados.filter { !it.curvo }.getOrNull(k)?.let { medidaDe(it) }
 
-    private fun obtenerPrimeraMedidaNuEditable(): MedidaNl? {
-        val base = primeraMedidaNu ?: return null
-        val ancho = binding.etAncho2.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: base.ancho
-        val alto = binding.etAlto2.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: base.alto
-        val hoja = binding.etPuente2.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: base.hoja
-        val divis = binding.etDivi2.text?.toString()?.toIntOrNull()?.coerceAtLeast(0) ?: base.divisManual
-        if (ancho <= 0f || alto <= 0f) return base
-        return MedidaNl(ancho = ancho, alto = alto, hoja = hoja, divisManual = divis)
-    }
+    private fun obtenerPrimeraMedidaNlEditable(): MedidaNl? = paredDeLaLista(0)
 
-    private fun obtenerSegundaMedidaNuEditable(): MedidaNl? {
-        val base = segundaMedidaNu ?: return null
-        val ancho = binding.etAncho3.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: base.ancho
-        val alto = binding.etAlto3.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: base.alto
-        val hoja = binding.etPuente3.text?.toString()?.toFloatOrNull()?.coerceAtLeast(0f) ?: base.hoja
-        val divis = binding.etDivi3.text?.toString()?.toIntOrNull()?.coerceAtLeast(0) ?: base.divisManual
-        if (ancho <= 0f || alto <= 0f) return base
-        return MedidaNl(ancho = ancho, alto = alto, hoja = hoja, divisManual = divis)
-    }
+    private fun obtenerPrimeraMedidaNuEditable(): MedidaNl? = paredDeLaLista(0)
+
+    private fun obtenerSegundaMedidaNuEditable(): MedidaNl? = paredDeLaLista(1)
 
 
 
@@ -3263,7 +3659,7 @@ class NovaCorrediza : AppCompatActivity() {
      * no son rectángulo (`L<…>` en su tramo) y los parantes marcados (`;P;` entre hojas). Solo
      * cuando la medida trajo algo: el paquete de siempre no se toca.
      */
-    private fun conLoQueTrajoLaMedida(paquete: String): String {
+    private fun conLoQueTrajoLaMedida(paquete: String, altosDeLaMedida: Boolean = true): String {
         val medida = esquinaDeLaMedida ?: return paquete
         // Con una esquina curva el paño del arco es un lado más en el diseño y los lados del apunte
         // ya no van uno a uno con los tramos: no se toca nada.
@@ -3271,7 +3667,7 @@ class NovaCorrediza : AppCompatActivity() {
         // Los altos de cada pared, tal como se midieron: la pared más baja cuelga más abajo del
         // dintel, y el 3D la sube hasta su alto. Sin esto las dos paredes salían igual de altas.
         val altos = medida.lados.map { it.alto }
-        val distintos = altos.any { kotlin.math.abs(it - altos.first()) > 0.05f }
+        val distintos = altosDeLaMedida && altos.any { kotlin.math.abs(it - altos.first()) > 0.05f }
         val hayQuePoner = distintos || siluetasDeLaMedida.any { it != null } || parantesDeLaMedida.any { it.isNotEmpty() }
         if (!hayQuePoner) return paquete
         val diseno = runCatching { crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(paquete) }.getOrNull()
@@ -3329,6 +3725,51 @@ class NovaCorrediza : AppCompatActivity() {
             cambio = true
         }
         return if (cambio) d.conLados(lados, d.esquinaDeCadaLado()) else d
+    }
+
+    /**
+     * El diseño de la L o la C con curvas, lado por lado desde la ventana del motor (2026-10-19): cada
+     * pared y cada curva con sus tramos, la curva con su panza (`Q<flecha>`) y entre lado y lado el
+     * pliegue que dicen sus uniones (VentanaMedida.plieguesDelDiseno: delante de una curva tangente no
+     * hay pliegue; detrás de una curva, la esquina entera). Una curva tangente al final lleva `A<180>`:
+     * no gira al entrar, pero es otro lado. Null si el motor no tiene un lado por cada uno de la lista.
+     */
+    private fun disenoDeLaLista(v: crystal.crystal.taller.nova.motor.VentanaNova, lista: ListaDeLaVentana): String? {
+        if (v.lados.size != lista.lados.size) return null
+        val medida = crystal.crystal.taller.VentanaMedida(
+            lista.lados.mapIndexed { k, l ->
+                crystal.crystal.taller.LadoDeVentana(l.medida.ancho, l.medida.alto, l.medida.hoja, l.medida.divisManual, lista.flechas[k])
+            },
+            lista.uniones.map { crystal.crystal.taller.UnionDeLados(it) }
+        )
+        val pliegues = medida.plieguesDelDiseno()
+        val cuerpo = StringBuilder()
+        // El alto de cada tramo, el de su lado (2026-10-21, Porla: la curva de 143.7 y la frontal de
+        // 199.4). La cabecera lleva el del primer lado y el resto lo heredaba: la frontal salía de
+        // 143.7, en el dibujo y en lo que se recalcula desde él.
+        val altosPorTramo = mutableListOf<Float>()
+        v.lados.forEachIndexed { k, lado ->
+            var tramos = crystal.crystal.taller.nova.motor.EscritorNova.tramos(v, lado, consolidado = true)
+            val cuantos = runCatching {
+                crystal.crystal.Diseno.nova.DisenoNova.desdePaquete("{nova,${tipoPaquete()},[1,1:$tramos]}")?.tramos?.size
+            }.getOrNull() ?: 1
+            repeat(cuantos) { altosPorTramo.add(lista.lados[k].medida.alto) }
+            if (lista.lados[k].curvo) tramos = conTagEnElSistema(tramos, "Q<${df1(kotlin.math.abs(lista.flechas[k]))}>")
+            if (k > 0) {
+                val pliegue = pliegues.getOrNull(k) ?: if (lista.lados[k].curvo && k == v.lados.lastIndex) 180f else null
+                cuerpo.append(if (pliegue != null) " A<${df1(pliegue)}> " else " ")
+            }
+            cuerpo.append(tramos)
+        }
+        val primero = v.lados.first()
+        val cabecera = "${NovaCalculos.df1(primero.anchoCalculo)},${NovaCalculos.df1(primero.altoMedido)}:"
+        val crudo = "{nova,${tipoPaquete()},[$cabecera$cuerpo]}"
+        val conSusAltos = runCatching {
+            crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(crudo)?.conAltosPorTramo(altosPorTramo)?.aPaquete()
+        }.getOrNull() ?: crudo
+        // Los altos ya van por tramo: los de [esquinaDeLaMedida] son solo de las paredes, sin las
+        // curvas, y no casan con los lados del diseño.
+        return conLoQueTrajoLaMedida(conSusAltos, altosDeLaMedida = false)
     }
 
     private fun conTagEnElSistema(tramos: String, tag: String): String {
@@ -3494,6 +3935,7 @@ class NovaCorrediza : AppCompatActivity() {
         binding.lyPuente2.visibility = View.GONE
         binding.lyDivi2.visibility = View.GONE
         binding.tvLado1.visibility = View.GONE
+        limpiarListaDeLados()
         contadorLado = 1
         maxLados = 2
         mostrarLadoActual()
@@ -3748,24 +4190,15 @@ class NovaCorrediza : AppCompatActivity() {
         runCatching { crystal.crystal.Diseno.nova.DisenoNova.desdePaquete(paquete) }
             .getOrNull()?.doblaEnEsquina == true
 
-    /**
-     * La ventana que empieza en curva (2026-10-03): Medidas la manda con la curva en el sitio del
-     * lado de cero, y Nova la ponía en el lado 1 con las casillas de la curva vacías. Se acomoda
-     * como se escribe en Nova: el lado 1 en cero y la curva en su esquina.
-     */
-    private fun conCurvaInicialEnSuEsquina(m: EsquinaMedida): EsquinaMedida {
-        val primera = m.lados.firstOrNull() ?: return m
-        if (!primera.esCurva || m.lados.size < 2 || m.lados[1].esCurva) return m
-        val arco = crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(primera.ancho, kotlin.math.abs(primera.flecha)) ?: return m
-        val curva = CurvaEsquina(primera.ancho, arco.cuerda, primera.alto, primera.puente)
-        val siguiente = m.lados[1]
-        val cero = crystal.crystal.taller.LadoEsquina(0f, 0f, siguiente.alto, siguiente.alto, siguiente.puente)
-        return EsquinaMedida(listOf(cero) + m.lados.drop(1), listOf(EsquinaMedida.textoDeCurva(curva)) + m.angulos.drop(1))
-    }
-
     private fun cargarEsquinaDeMedida(texto: String, contornosLados: String = "", parantesLados: String = ""): Boolean {
 
-        val medida = conCurvaInicialEnSuEsquina(EsquinaMedida.desdeTexto(texto) ?: return false)
+        val original = EsquinaMedida.desdeTexto(texto) ?: return false
+        // La L o la C con una curva: se reparte como lista de lados (2026-10-19). Lo guardado con una
+        // pared de cero (la ventana que empezaba o acababa en curva) se lee sin ella.
+        repartoEnLaPantalla(original)?.let { (geoLista, enPantalla) ->
+            return cargarListaEnLaPantalla(geoLista, enPantalla, original, contornosLados, parantesLados)
+        }
+        val medida = original
         val geo = medida.geometria ?: return false
         val dibujo = when (geo) {
             "nl" -> R.drawable.venl
@@ -3834,6 +4267,88 @@ class NovaCorrediza : AppCompatActivity() {
         binding.etPartes.setText("0")
         if (geo == "nl" || geo == "nu") mostrarCurvaDeMedidas(medida)
         avisarDeLaEsquina(medida)
+        return true
+    }
+
+    /**
+     * La medida de una L o una C con curvas, repartida como el formulario (2026-10-19): sus bloques de
+     * lado —las paredes y las curvas de las puntas— y entre dos paredes su esquina curva. Null si no
+     * lleva curvas (va por el camino de siempre) o si no cabe en el formulario (dos curvas seguidas, una
+     * curva en el lado del medio de una C, o más de tres lados).
+     */
+    private fun repartoEnLaPantalla(m: EsquinaMedida): Pair<String, crystal.crystal.taller.VentanaMedida>? {
+        val v = crystal.crystal.taller.VentanaMedida.desdeEsquina(m)
+        if (!v.hayCurva || v.lados.all { it.esCurvo }) return null
+        val geo = when (v.lados.count { !it.esCurvo }) {
+            1, 2 -> "nl"
+            3 -> "nu"
+            else -> return null
+        }
+        return geo to v
+    }
+
+    /** La medida con curvas en la lista de lados: cada lado, recto o curvo, con sus ángulos. */
+    private fun cargarListaEnLaPantalla(
+        geo: String, v: crystal.crystal.taller.VentanaMedida, original: EsquinaMedida,
+        contornosLados: String, parantesLados: String
+    ): Boolean {
+        fun arco(l: crystal.crystal.taller.LadoDeVentana) =
+            crystal.crystal.taller.ArcoEsquina.deDesarrolloYFlecha(l.ancho, kotlin.math.abs(l.flecha))
+        // El ángulo de cada lado con el de antes, como se escribe: entre dos paredes, el de la esquina;
+        // junto a una curva, con su cuerda, y vacío (0) si entra en tangente.
+        fun anguloDe(i: Int): Float {
+            if (i == 0) return 0f
+            val antes = v.lados[i - 1]
+            val lado = v.lados[i]
+            val union = v.uniones[i - 1].grados
+            if (!antes.esCurvo && !lado.esCurvo) return kotlin.math.abs(union)
+            if (kotlin.math.abs(180f - kotlin.math.abs(union)) < 0.05f) return 0f
+            return when {
+                antes.esCurvo && lado.esCurvo -> {
+                    val a = arco(antes); val b = arco(lado)
+                    if (a != null && b != null) crystal.crystal.taller.ArcoEsquina.anguloDeCuerdasConUnion(a, b, union) else 0f
+                }
+                lado.esCurvo -> arco(lado)?.anguloDeCuerdaConUnion(union) ?: 0f
+                else -> arco(antes)?.anguloDeCuerdaConUnion(union) ?: 0f
+            }
+        }
+        val paredes = v.lados.indices.filter { !v.lados[it].esCurvo }
+        // Las paredes y el ángulo entre dos seguidas: lo que leen los caminos de siempre.
+        val angulos = (0 until paredes.size - 1).map { k ->
+            val i = paredes[k]
+            if (paredes[k + 1] == i + 1) df1(kotlin.math.abs(v.uniones[i].grados)) else "90"
+        }
+        val enPantalla = EsquinaMedida(
+            paredes.map { i -> v.lados[i].let { l -> crystal.crystal.taller.LadoEsquina(l.ancho, l.anchoArriba, l.alto, l.altoDer, l.puente) } },
+            angulos
+        )
+        seleccionarDesdePanel(if (geo == "nl") R.drawable.venl else R.drawable.venc, geo)
+        esquinaDeLaMedida = enPantalla
+        siluetasDeLaMedida = LadosLibres.contornosDesdeTexto(contornosLados)
+            .takeIf { s -> s.any { it != null } } ?: original.siluetasAsimetricas()
+        parantesDeLaMedida = LadosLibres.parantesDesdeTexto(parantesLados)
+        NovaCalculos.repartoManual = null
+        v.lados.forEachIndexed { i, l ->
+            val angulo = anguloDe(i)
+            val a = if (l.esCurvo) arco(l) else null
+            val flecha = a?.flecha ?: 0f
+            val cuerda = a?.cuerda ?: 0f
+            if (i < v.lados.lastIndex) {
+                agregarLado(l.ancho, l.alto, l.puente, l.divisiones, l.esCurvo, flecha, cuerda, angulo)
+            } else {
+                binding.etAncho.setText(df1(l.ancho))
+                binding.etAlto.setText(df1(l.alto))
+                binding.etHoja.setText(df1(l.puente))
+                binding.etPartes.setText(l.divisiones.toString())
+                chkCurvoActual?.isChecked = l.esCurvo
+                etFlechaActual?.setText(textoDeNumero(flecha))
+                etCuerdaActual?.setText(textoDeNumero(cuerda))
+                etAnguloActual?.setText(textoDeNumero(angulo))
+                etAnguloFinalActual?.setText("")
+            }
+        }
+        refrescarListaDeLados()
+        avisarDeLaEsquina(enPantalla)
         return true
     }
 
@@ -4007,9 +4522,7 @@ class NovaCorrediza : AppCompatActivity() {
                 else -> "en serie de ${medida.lados.size} lados"
             }
         )
-        if (medida.hayCurva) {
-            partes.add("la pared curva entra en el diseño con su desarrollo, pero sus materiales todavía no se cuentan")
-        }
+
         val torcidos = medida.anguloDistinto
         if (torcidos.isNotEmpty()) {
             partes.add(

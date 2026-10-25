@@ -306,27 +306,8 @@ class MedidasDeObraTest {
         assertTrue(VentanaAutomatica.conLados(base, listOf(l(80f, true))) == null)
     }
 
-    /**
-     * Como se escribe en Nova la ventana que empieza en curva (2026-10-03): el lado 1 en cero y la
-     * curva en su esquina. La pared en cero no existe: calcula igual que la curva del principio
-     * (curva de 90 y pared de 150, APA): puente 90 y 147.5, un parante. Y el cero al final, igual.
-     */
-    @Test
-    fun lado_en_cero_con_su_curva_es_la_curva_de_la_punta() {
-        fun calcular(lados: List<Float>, curvas: List<VentanaAutomatica.LadoMedido?>) = MotorNova.calcular(VentanaAutomatica.ventana(
-            VentanaAutomatica.conCurvasEnLasPuntas(VentanaAutomatica.Entrada(
-                Acabado.APA, ModeloMocheta.NORMAL, "nn", lados.map { VentanaAutomatica.LadoMedido(it, 120f, 90f) },
-                u38, multiple, esquinero = tubo238, curvas = curvas
-            ))
-        ))
-        val curva = VentanaAutomatica.LadoMedido(90f, 120f, 90f)
-        val inicio = calcular(listOf(0f, 150f), listOf(curva))
-        val puente = lineas(MaterialesNova.texto(inicio.puente))
-        assertTrue(puente.toString(), listOf("90 = 1", "147.5 = 1").all { it in puente } && puente.size == 2)
-        assertTrue(lineas(MaterialesNova.texto(inicio.parante)).toString(), "120 = 1" in lineas(MaterialesNova.texto(inicio.parante)))
-        val fin = lineas(MaterialesNova.texto(calcular(listOf(150f, 0f), listOf(curva)).puente))
-        assertTrue(fin.toString(), listOf("90 = 1", "147.5 = 1").all { it in fin } && fin.size == 2)
-    }
+    // `lado_en_cero_con_su_curva_es_la_curva_de_la_punta` fijaba el lado en cero (2026-10-03), retirado el
+    // 2026-10-19: lo mismo (puente 90 y 147.5, un parante) lo comprueba la_lista_de_lados_con_la_curva_como_un_lado.
 
     private fun eleConCurva(
         esquinero: Puente, divisionesCurva: Int = 0,
@@ -399,5 +380,111 @@ class MedidasDeObraTest {
         val u = lineas(MaterialesNova.texto(m.u))
         assertTrue(vidrios.toString(), vidrios.any { it.endsWith(" x 76 = 1") })
         assertTrue(u.toString(), "75.2 = 1" in u)
+    }
+
+    /**
+     * La forma de seis lados del usuario (2026-10-19), en un tramo: el fijo de la punta izquierda solo
+     * toca el alféizar en su vértice, así que no lleva U de abajo (salía una de 0.7, su parte de cruce
+     * sola). El puente va de lado a lado.
+     */
+    @Test
+    fun la_forma_de_seis_lados_no_deja_piezas_de_nada() {
+        val d = ContornoEnTramos.disenoDesdeContorno(
+            puntos("0,119.4;54.2,58.1;105.6,58.1;138.5,0;299.5,87.5;299.5,231.4;112.4,231.4"), "apa", 115.3f
+        )!!
+        assertTrue(d.aPaquete(), d.tramos.size == 1)
+        val m = MotorNova.calcular(DesdeDiseno.ventana(d.aPaquete(), u38, tubo238)!!)
+        assertFalse(lineas(MaterialesNova.texto(m.u)).toString(), m.u.any { it.medida < 2f })
+        assertFalse(lineas(MaterialesNova.texto(m.puente)).toString(), m.puente.any { it.medida < 100f })
+        assertFalse(MaterialesNova.textoVidrios(m.vidrios), m.vidrios.any { it.ancho < 10f || it.alto < 10f })
+    }
+
+    /**
+     * El vano arqueado (2026-10-21, prueba del usuario en Medidas: un rectángulo de 166.6 × 164 con un
+     * arco de cuerda 164 y flecha 39 a la izquierda, unido con "Unir contorno"). Es un tramo, con el
+     * fijo de 39 contra el arco. Su U contra el arco va curvada, con el radio del arco (105.7), en el
+     * fijo y en la mocheta; la U de arriba es el dintel recto, 166.6, y no se mete en la curva. Antes
+     * el arco no llevaba U y la de arriba medía 199.5, el rectángulo que contiene la mocheta.
+     */
+    @Test
+    fun el_vano_arqueado_lleva_su_u_curvada() {
+        val arco = crystal.crystal.taller.ArcoDibujado(39f, 164f, 39f, 0f, 39f).puntos(32)
+        val contorno = listOf(39f to 0f, 205.6f to 0f, 205.6f to 164f) + arco.dropLast(1)
+        val d = ContornoEnTramos.disenoDesdeContorno(contorno, "apa", 110f)!!
+        assertTrue(d.aPaquete(), d.tramos.size == 1)
+        val m = MotorNova.calcular(DesdeDiseno.ventana(d.aPaquete(), u38, multiple)!!)
+        val curvas = m.u.filter { it.curva.isNotEmpty() }
+        assertEquals(m.u.toString(), 2, curvas.size)
+        curvas.forEach { p -> assertEquals(p.toString(), 105.7f, p.curva.single().radio, 1f) }
+        assertEquals(listOf(121.1f, 62.6f), curvas.map { Math.round(it.medida * 10) / 10f })
+        assertTrue(lineas(MaterialesNova.texto(m.u)).toString(), lineas(MaterialesNova.texto(m.u)).contains("166.6 = 1"))
+        assertFalse(lineas(MaterialesNova.texto(m.u)).toString(), m.u.any { it.medida < 2f })
+    }
+
+    /**
+     * Una L con la segunda pared más baja que la ventana (2026-10-19, 277.5 × 199.4 con el lado de
+     * 72.2 × 143.9, que cuelga 55.5 del dintel). Cada pared se calcula con SU alto: la L da lo mismo
+     * que la frontal sola más la pared sola. Antes el lado tomaba el alto de la ventana: sin silueta la
+     * mocheta salía de 71.7 x 94.6; con su silueta (`L<…>`, medida desde la esquina de arriba de la
+     * pared) el fijo salía de 35.9 x 45.9, con dos topes.
+     */
+    @Test
+    fun la_pared_mas_baja_de_una_L_se_calcula_con_su_alto() {
+        val frontal = "Tl<200>(s<142.4>(f c c f);m(f f))"
+        val pared = "Tl<72.2>(L<0/0|72.2/0|72.2/143.9|0/143.7>;H<143.9>;D<55.5>;s<102.8>(f c);m(f))"
+        fun calcular(p: String) = MotorNova.calcular(DesdeDiseno.ventana(p, u38, multiple)!!)
+        val sola = calcular("{nova,apa,[72.2,143.9:Tl<72.2>(s<102.8>(fc);m<41.1>(f))]}")
+        val sinPared = calcular("{nova,apa,[200,199.4:$frontal]}")
+        fun ordenadas(t: String) = t.lines().filter { it.isNotBlank() }.sorted()
+        val esperado = ordenadas(MaterialesNova.textoVidrios(sinPared.vidrios) + "\n" + MaterialesNova.textoVidrios(sola.vidrios))
+        for (lado in listOf(pared, pared.replace("L<0/0|72.2/0|72.2/143.9|0/143.7>;", ""))) {
+            val l = calcular("{nova,apa,[200,199.4:$frontal A<90> $lado]}")
+            assertEquals(lado, esperado, ordenadas(MaterialesNova.textoVidrios(l.vidrios)))
+            assertEquals(lado, listOf("101.9 = 1"), ordenadas(MaterialesNova.texto(l.tope)))
+            assertTrue(lado, MaterialesNova.texto(l.u).lines().contains("38.6 = 2"))
+        }
+    }
+
+    /**
+     * Una pared recta que termina en curva (2026-10-19, prueba del usuario: la frontal de 170 y la pared
+     * curva de 58.6 dibujada en la planta, alto 105, hoja 75). La curva es el lado 2, curvo, sin ningún
+     * lado en cero (2026-10-19), y el motor la calcula como curva del final (N-104: la pared pierde su parante en la punta de la curva, 167.5; la
+     * curva, entera). Antes llegaba como un lado 2 recto de 58.6, con el esquinero descontado (52.6).
+     */
+    @Test
+    fun la_pared_recta_que_termina_en_curva() {
+        val v = VentanaAutomatica.ventana(VentanaAutomatica.conLados(
+            VentanaAutomatica.Entrada(Acabado.APA, ModeloMocheta.NORMAL, "nn", emptyList(), u38, multiple, esquinero = tubo238),
+            listOf(
+                VentanaAutomatica.LadoDeLista(VentanaAutomatica.LadoMedido(170f, 105f, 75f), false),
+                VentanaAutomatica.LadoDeLista(VentanaAutomatica.LadoMedido(58.6f, 105f, 75f), true)
+            )
+        )!!)
+        assertEquals(listOf(false, true), v.lados.map { it.curvaDeEsquina })
+        val m = MotorNova.calcular(v)
+        assertEquals(listOf("167.5 = 1", "58.6 = 1"), lineas(MaterialesNova.texto(m.puente)).sorted())
+        assertEquals(listOf("105 = 1"), lineas(MaterialesNova.texto(m.parante)))
+    }
+
+    /**
+     * La curva que entra con quiebre (dictado el 2026-10-19): desde 5° la unión de la pared con la curva
+     * es una esquina en ángulo, lo mismo que en la L, con su esquinero repartido (N-38). La pared de 170 y
+     * la curva de 58.6 (gira 23.2°): con 155° entre la pared y la cuerda el quiebre es 13.4° y la unión
+     * mide 166.6°. Da los mismos puentes que una L de 170 y 58.6 en ángulo: 167.5 y 52.6. Con un quiebre
+     * de 3° es una tangente imperfecta y sigue N-104 (167.5 y la curva entera, 58.6).
+     */
+    @Test
+    fun la_curva_con_quiebre_es_una_esquina_en_angulo() {
+        fun l(ancho: Float, curvo: Boolean = false) = VentanaAutomatica.LadoDeLista(VentanaAutomatica.LadoMedido(ancho, 105f, 75f), curvo)
+        val base = VentanaAutomatica.Entrada(Acabado.APA, ModeloMocheta.NORMAL, "nn", emptyList(), u38, multiple, esquinero = tubo238)
+        fun puentes(e: VentanaAutomatica.Entrada) = lineas(MaterialesNova.texto(MotorNova.calcular(VentanaAutomatica.ventana(e)).puente)).sorted()
+        val quiebre = crystal.crystal.taller.ArcoEsquina.deDesarrolloYCuerda(58.6f, 58.2f)!!.anguloEnLaUnion(155f)
+        assertEquals(166.6f, quiebre, 0.1f)
+        val conQuiebre = puentes(VentanaAutomatica.conLados(base, listOf(l(170f), l(58.6f, true)), listOf(quiebre))!!)
+        val ele = puentes(base.copy(lados = listOf(VentanaAutomatica.LadoMedido(170f, 105f, 75f), VentanaAutomatica.LadoMedido(58.6f, 105f, 75f))))
+        assertEquals(ele, conQuiebre)
+        assertEquals(listOf("167.5 = 1", "52.6 = 1"), conQuiebre)
+        val casiTangente = puentes(VentanaAutomatica.conLados(base, listOf(l(170f), l(58.6f, true)), listOf(177f))!!)
+        assertEquals(listOf("167.5 = 1", "58.6 = 1"), casiTangente)
     }
 }

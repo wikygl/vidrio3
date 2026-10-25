@@ -294,13 +294,18 @@ class ContornoEnTramosTest {
     @Test
     fun `el triángulo invertido deja la corrediza en el rectángulo del medio`() {
         val d = ContornoEnTramos.disenoDesdeContorno(trianguloInvertido, altoHoja = 110f)!!
-        // El vano se parte donde la hoja de 110 deja de entrar: las dos puntas y el medio.
-        assertTrue("no se partió por donde la hoja deja de caber: ${d.aPaquete()}", d.nTramos >= 3)
+        // Un tramo (2026-10-19, "cuanto más simple mejor"; antes, uno por punta y otro en el medio).
+        // El sistema cuelga del dintel, el único borde recto, en el rectángulo donde la hoja de 110
+        // entra entera (62.5); las puntas son fijos contra los lados inclinados.
+        assertEquals(d.aPaquete(), 1, d.nTramos)
+        val mods = d.tramos[0].sistema!!.modulos
         assertTrue("el vano se quedó sin corrediza: ${d.aPaquete()}", d.nCorredizas >= 1)
-        assertEquals("la punta izquierda lleva corrediza", 0, d.tramos.first().sistema?.nCorredizas)
-        assertEquals("la punta derecha lleva corrediza", 0, d.tramos.last().sistema?.nCorredizas)
-        // Y el ancho del vano no se pierde al partirlo.
-        assertEquals(200f, d.tramos.sumOf { it.ancho.toDouble() }.toFloat(), 0.5f)
+        assertTrue("la punta izquierda lleva corrediza: ${d.aPaquete()}", mods.first().esFijo)
+        assertTrue("la punta derecha lleva corrediza: ${d.aPaquete()}", mods.last().esFijo)
+        assertEquals(68.75f, mods.first().ancho!!, 0.05f)
+        assertEquals("el invertido lleva la mocheta abajo", listOf(false, true), d.tramos[0].franjas.map { it.esSistema })
+        // Y el ancho del vano no se pierde.
+        assertEquals(200f, mods.sumOf { it.ancho!!.toDouble() }.toFloat(), 0.5f)
     }
 
     @Test
@@ -482,5 +487,63 @@ class ContornoEnTramosTest {
         assertEquals("fcf", modulosDelSistema(d).map { it.tipo }.joinToString(""))
         assertTrue("el diseño salió recto", d.esIrregular)
         assertEquals(214.5f, modulosDelSistema(d).sumOf { (it.ancho ?: 0f).toDouble() }.toFloat(), 0.05f)
+    }
+
+    // ==================== UNA FORMA, UN TRAMO (2026-10-19) ====================
+
+    /**
+     * La forma de seis lados de la foto del usuario (2026-10-19): 299.5 × 231.4, el pico del dintel a
+     * 138.5, el costado derecho de 143.9 y el alféizar recto de 187.1 desde 112.4; a la izquierda, una
+     * punta con el lado de abajo inclinado (158.7). Salía en cinco tramos, uno de 6.8 y una corrediza
+     * colgada del dintel: "simpático, pero no factible; cuanto más simple mejor".
+     */
+    private val seisLados = listOf(
+        0f to 119.4f, 54.2f to 58.1f, 105.6f to 58.1f, 138.5f to 0f,
+        299.5f to 87.5f, 299.5f to 231.4f, 112.4f to 231.4f
+    )
+
+    @Test
+    fun `la forma de seis lados es un tramo con las corredizas sobre el alfeizar recto`() {
+        val d = ContornoEnTramos.disenoDesdeContorno(seisLados, "apa", 115.3f)!!
+        assertEquals(d.aPaquete(), 1, d.nTramos)
+        val t = d.tramos[0]
+        assertEquals(listOf(true, false), t.franjas.map { it.esSistema })
+        assertEquals(115.3f, t.franjas[0].alto, 0.05f)
+        val mods = t.sistema!!.modulos
+        // La punta de la izquierda es un fijo; el rectángulo de 187.1, cuatro módulos (N-15).
+        assertEquals("fcfcf", mods.joinToString("") { it.tipo.toString() })
+        assertEquals(112.4f, mods[0].ancho!!, 0.05f)
+        mods.drop(1).forEach { assertEquals(187.1f / 4, it.ancho!!, 0.05f) }
+        assertEquals(299.5f, d.ancho, 0.05f)
+        assertEquals(231.4f, d.alto, 0.05f)
+    }
+
+    @Test
+    fun `sin hoja escrita la forma de seis lados acorta la hoja al costado derecho`() {
+        // 5/7 de 231.4 no entra bajo el dintel en los últimos 39.4 —menos que el módulo de la casa—:
+        // la hoja se acorta a los 143.9 del costado, como en el dintel que roza el límite.
+        val d = ContornoEnTramos.disenoDesdeContorno(seisLados, "apa", 0f)!!
+        assertEquals(1, d.nTramos)
+        assertEquals(143.9f, d.tramos[0].franjas[0].alto, 0.05f)
+        assertEquals("fcfcf", d.tramos[0].sistema!!.modulos.joinToString("") { it.tipo.toString() })
+    }
+
+    /**
+     * El arco del vano arqueado (2026-10-21) se reconoce dentro del contorno de puntos con sus tres
+     * medidas, para dibujarlo con una sola cota. Los polígonos de siempre no tienen arcos.
+     */
+    @Test
+    fun el_arco_se_reconoce_en_el_contorno() {
+        val arco = crystal.crystal.taller.ArcoDibujado(39f, 164f, 39f, 0f, 39f).puntos(32)
+        val contorno = listOf(39f to 0f, 205.6f to 0f, 205.6f to 164f) + arco.dropLast(1)
+        val arcos = ContornoEnTramos.arcosDelContorno(contorno)
+        assertEquals(1, arcos.size)
+        assertEquals(164f, arcos[0].cuerda, 0.2f)
+        assertEquals(39f, arcos[0].flecha, 0.2f)
+        assertEquals(187.7f, arcos[0].desarrollo, 0.3f)
+        assertEquals(32, arcos[0].lados(contorno.size).size)
+        val seis = ContornoEnTramos.desdeTexto("0,119.4;54.2,58.1;105.6,58.1;138.5,0;299.5,87.5;299.5,231.4;112.4,231.4")
+        assertTrue(ContornoEnTramos.arcosDelContorno(seis).isEmpty())
+        assertTrue(ContornoEnTramos.arcosDelContorno(listOf(0f to 0f, 100f to 0f, 100f to 50f, 0f to 50f)).isEmpty())
     }
 }

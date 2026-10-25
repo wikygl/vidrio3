@@ -572,6 +572,58 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   y el puente del lado de antes. N-104 y N-105 valen por esquina: en APA la pared del medio pierde
   dos parantes (240 → 235), en INA media parante en cada punta de curva
   (`MedidasDeObraTest.ce_con_dos_esquinas_curvas_cada_una_como_la_l`).
+- **Sin lados en cero: una curva es un lado** (dictado el 2026-10-19: "ni debe existir"). En la L y la
+  C cada lado es un bloque, **recto o curvo**, y solo se ve lo que existe: el lado que se escribe lleva
+  la marca "◠ curvo" y, marcada, su flecha, su cuerda y su ángulo con la pared de antes; cada lado
+  agregado aparece como "Lado N" o "Lado N · curvo" (toque largo en el título para quitarlo). Un lado
+  curvo se distingue por tener flecha o cuerda; su ancho es su desarrollo. Se descartaron el mismo día,
+  por "complicar" y "poblar de espacios vacíos": la flecha en los lados planos y los bloques fijos de
+  curva inicial, esquina curva y curva final. En la L: dos lados o más, con una o dos paredes; en la C:
+  tres paredes. Una unión pared-curva con un quiebre de **5° o más** es una esquina en ángulo, lo
+  mismo que en la L, con su esquinero (N-38). Con menos es tangente imperfecta y sigue N-104 y N-105.
+  El cálculo y el diseño salen de la misma lista (`VentanaAutomatica.conLados`, `disenoDeLaLista`). Lo
+  guardado con una pared de cero se lee sin ella. `MedidasDeObraTest.la_curva_con_quiebre_es_una_esquina_en_angulo`,
+  `VentanaMedidaTest.la_pared_de_cero_de_antes_no_es_un_lado`.
+  ❓ Falta Medidas: la plantilla de esquina todavía arma la curva de una punta con un tramo en cero por
+  dentro, y la planta dibujada no manda su quiebre (llega en tangente).
+- **La curva que entra con quiebre: se anota el ángulo entre la pared y la cuerda** (dictado el
+  2026-10-19). La dirección con que arranca la curva no se puede medir en obra; la cuerda sí, con un
+  hilo de punta a punta. Se mide lo de siempre (desarrollo y cuerda, o flecha) y además el ángulo entre
+  la pared recta y la cuerda. La app calcula lo demás: en tangente la cuerda se desvía la mitad del giro
+  de la curva, y lo que pase de ahí es el quiebre.
+  `quiebre = (180 − ángulo pared-cuerda) − giro / 2`. El ángulo en la unión, como el de cualquier
+  esquina, es `180 − quiebre`. Cuarto de círculo: 135° es tangente y 105° es un quiebre de 30° (unión de
+  150°). La curva de 58.6 y 58.2 gira 23.2°: tangente con 168.4°; con 155° el quiebre es 13.4°.
+  `ArcoEsquina.quiebreConAnguloDeCuerda` y `anguloEnLaUnion`, en `ArcoEsquinaTest`.
+  ❓ Falta: cuál de los dos casos es el más común y qué va en la unión con quiebre. Hoy Nova toma
+  toda curva como tangente.
+- **Un ángulo por lado** (dictado el 2026-10-20; reemplaza "ángulo con la pared de antes / de
+  después", que daba a entender un muro y repetía cada unión). En la L y la C cada lado tiene una casilla
+  "Ángulo": desde el lado 2, con el lado de antes, sea plano o curvo. Junto a una curva se mide con su
+  cuerda (vacío = tangente); entre dos curvas, entre sus dos cuerdas (en tangente, 180 − giro₁/2 − giro₂/2;
+  `ArcoEsquina.anguloEnLaUnionDeCuerdas`); entre dos planos, vacío = 90. El **lado 1** lo da con el
+  **muro** donde arranca y el **último** tiene además "Ángulo final", con el muro o el acople donde
+  termina. Vacíos, 90° (corte recto, 0 en la ingletadora: casi siempre). Al lado, en gris, la lectura
+  de la ingletadora (`|90 − ángulo|`), solo en un lado plano. Los ángulos con el muro no cambian el
+  cálculo de Nova (salen en las referencias, "Contra el muro: …"); son para la ventana de aluminio.
+  Un ángulo escrito entre dos paredes llega también al diseño de la L y la C sin curvas
+  (`conAngulosEscritos`, con el signo que trajo Medidas).
+  ❓ Falta: la lectura de la ingletadora de una curva contra el muro.
+- **El orden y lo plegado** (dictado el 2026-10-20: "es abrumadora la cantidad de datos"). Plano:
+  ancho, alto, h.puente, divisiones, marco, cruce. Curvo: desarrollo, cuerda, flecha, alto, h.puente,
+  divisiones, marco, cruce. Los ángulos van plegados al final ("▸ Ángulos"; cerrado, dice lo escrito).
+  Al agregar un lado solo se borra el ancho: el alto y el h.puente siguen los del lado de antes y se
+  editan si hace falta; las divisiones vuelven a automático.
+- **Una sola pared recta que termina en curva** (2026-10-19, la frontal de 170 y la pared curva de
+  58.6 dibujada en la planta de Medidas). Con dos lados la curva del final tampoco es el lado 2: Nova
+  la acomoda como la que empieza en curva, al revés. El lado 2 queda en cero y la curva en su
+  esquina, y el motor la calcula como curva del final (N-104: la pared queda en 167.5 y la curva, entera).
+  El diseño es la pared, `A<180>` y el paño curvo. Antes llegaba como un lado 2 recto, con el
+  esquinero descontado (52.6). `MedidasDeObraTest.la_pared_recta_que_termina_en_curva`.
+- **La imagen 3D, desde la cara pedida** (2026-10-19): con una esquina poco cerrada (`A<160>`) la
+  cámara podía elegir mirar la frontal desde atrás, porque así se veía más abierta, y la ventana
+  salía en espejo. Ahora manda la cara pedida (adentro o afuera) si con ella el resto queda donde
+  debe; si no, como antes.
 - **La ventana que termina en curva** (2026-10-03, medida del usuario: 150, esquina curva de 74,
   180 y la curva de 135 que cierra la ventana). La curva del final, detrás de una pared recta, **no
   es otro lado**: es la esquina curva del final de esa pared, y viaja como una arista más, la de
@@ -622,6 +674,14 @@ Con U-3/8 la U parante de mocheta sería (20 − 1) + 1.5 = 20.5. El aumento de 
   inclinado y las corredizas en el rectángulo (N-67). El rectángulo se reparte con la regla de los 60
   y el costado inclinado lleva su fijo. ❓ En Vna4 el usuario puso 3 hojas (`f c f`); con esta cuenta
   salen 4 (`f c c f`: 133.2 del rectángulo pide 3). Confirmar cuántas.
+- **Una pared más baja que la ventana se calcula con su alto** (hallado el 2026-10-19, L de 277.5 ×
+  199.4 con el lado de 72.2 × 143.9 que cuelga 55.5 del dintel). En el diseño la pared lleva su alto
+  y su caída (`H<143.9>;D<55.5>`), y su silueta `L<…>` se mide desde la esquina de arriba de esa
+  pared, no desde el dintel de la ventana. El motor calcula cada pared como una ventana de su alto: la
+  L da lo mismo que la frontal sola más la pared sola. Antes el lado tomaba el alto de la ventana: sin
+  silueta la mocheta salía de 71.7 x 94.6 en vez de 71.7 x 39.1; con silueta el fijo salía de 35.9 x
+  45.9 en vez de 35.9 x 101.6, con dos topes. En novaDiseño la silueta del lado se dibujaba arriba y
+  recortaba el sistema, y Limpiar la perdía. `MedidasDeObraTest`.
 - **La altura de puente editada en cada lado** (2026-09-29): al volver de novaDiseño, las
   referencias salen lado por lado con su puente; salían como una sola ventana. Y la hoja escrita se
   conserva: si las franjas no suman el alto (la mocheta viene sin el puente), la diferencia la
@@ -744,6 +804,39 @@ divisiones, la U del vidrio del centro va con ceil".
 - N-67 ✅ Vano triangular o tramo inclinado: la corrediza va donde queda **entera**.
 - N-68 ✅ Cada cálculo se aproxima al rectángulo.
 - N-69 ✅ Lo que no se sabe calcular se resuelve con pruebas, caso por caso.
+- **Una forma con lados inclinados es UN tramo** (pedido del usuario el 2026-10-19, con una forma de
+  seis lados de 299.5 × 231.4 que salía en cinco tramos, uno de 6.8 y una corrediza colgada del dintel:
+  "es simpático, pero no factible; cuanto más simple mejor"). Es la regla del trapecio sugerido
+  (N-99, Vna4) para cualquier forma que no sea escalonada ni de una sola banda:
+  - el sistema va en el rectángulo más ancho donde la hoja entra entera (N-66, N-67), apoyado en el
+    alféizar recto (normal) o, si el alféizar no es recto, colgado del dintel (invertido);
+  - lo que queda a cada costado es un fijo contra el lado inclinado, con el vidrio de su rectángulo
+    contenedor (N-99); uno cada 180;
+  - el rectángulo se reparte con la regla de los 60 y el orden preestablecido, con los costados en fijo;
+  - un costado que solo pierde la hoja porque el borde de enfrente baja menos de 60 no lleva fijo: la
+    hoja se acorta a lo que entra ahí, como en el dintel que roza el límite;
+  - la mocheta sigue la silueta de punta a punta (N-66).
+
+  La forma de seis lados: `f c f c f` (112.4 y cuatro de 46.8), sistema 115.3 sobre el alféizar de
+  187.1. Sin hoja escrita, la hoja se acorta a 143.9, el costado derecho. El triángulo invertido
+  de 200 × 160 con hoja 110 queda `f c c f`, invertido. Un fijo que toca el alféizar solo en
+  un vértice no lleva U de abajo; su U es la diagonal (antes salía una de 0.7). ❓ Los
+  materiales de estas formas siguen por confirmar con pruebas (N-69). `ContornoEnTramosTest`,
+  `MedidasDeObraTest`.
+- **El vano arqueado** (2026-10-21: un vano de líneas y un arco unido en Medidas con "Unir
+  contorno"; el usuario: "no curvo, sino forma circular, semicircular, elíptica, arqueado"). No es la
+  ventana curva (esa dobla en la planta): es el borde del vano, visto de frente, en arco. Llega como
+  contorno (el arco en puntos) más sus arcos (`MedidaCalc.arcos`), y se nombra por el arco: de medio
+  punto (flecha = media cuerda), rebajado (menos) o de herradura (más). Es UN tramo, como las demás
+  formas: el sistema en el rectángulo, un fijo contra el arco con el vidrio de su rectángulo (N-99).
+  Lo nuevo: el costado en arco (cada altura cae sobre el círculo de arriba, medio y abajo, y se aparta
+  más de 0.5 de la recta) lleva su **U curvada** con el largo del arco en esa franja y su radio (N-102),
+  en el fijo y en la mocheta; la U horizontal de la mocheta va hasta donde empieza el arco (el dintel
+  recto) y no el rectángulo que la contiene. Prueba del usuario, 166.6 × 164 + arco de cuerda 164 y
+  flecha 39, hoja 110: `f c c f`, U curvas 121.1 y 62.6 de radio 105.7, U de arriba 166.6.
+  `MedidasDeObraTest.el_vano_arqueado_lleva_su_u_curvada`. ❓ Todo esto por confirmar con pruebas
+  (N-69): el vidrio del fijo arqueado, el puente y el riel contra el arco, y las demás calculadoras, que
+  por ahora solo lo reconocen y avisan.
 - **Orden de trabajo dictado**: primero dejar bien Nova con ceil y Nova desigual; después las
   formas, con pruebas.
 - **Paso 1 (2026-09-25): lo diseñado en novaDiseño se conserva al volver a Nova.** Con un vano de
@@ -766,6 +859,10 @@ divisiones, la U del vidrio del centro va con ceil".
 
   El alto de cada tramo es el rectángulo donde entra el sistema (N-66); con un descuadre de hasta
   2.5 manda la medida mayor (N-06): el alféizar del recorte mide 109.4 y 108.5 → 109.4.
+  **En el dibujo** (pedido del usuario, 2026-10-18): el parante se dibuja todo lo que mide; fuera,
+  llega al piso del tramo alto (antes se cortaba en el tramo corto y dejaba un hueco contra el
+  vano). Y **el puente se dibuja tan grueso como se ve el parante** (antes, 2.2 contra 2.5 más el
+  borde de los tramos). `HerramientasDiseno.bordesDelParante`.
 - N-97 ✅ **El puente en un escalón** (dictado el 2026-09-26): lo mismo que el parante (N-94). Si un
   puente cae en un escalón, novaDiseño pregunta dentro, fuera o centrado con las medidas. Dentro deja
   el puente entero del lado angosto: en el tramo invertido de Formas, en la mocheta, y así el
