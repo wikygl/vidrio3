@@ -152,6 +152,53 @@
                                 tools:ignore="TouchTargetSizeCheck" />
                         </LinearLayout>
 
+                        <!-- La forma en planta, como en Nova: recta, L, C, S o curva (tabique y forro) -->
+                        <LinearLayout
+                            android:id="@+id/lyForma"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Forma"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spForma"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                tools:ignore="TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- La unidad en que se escriben las medidas: m, cm o mm (pedido del usuario, 2026-10-11) -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Unidad"
+                                tools:ignore="RtlSymmetry" />
+
+                            <Spinner
+                                android:id="@+id/spUnidad"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                tools:ignore="TouchTargetSizeCheck" />
+                        </LinearLayout>
+
                         <!-- Largo del muro (o del techo), en metros -->
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -159,6 +206,7 @@
                             android:orientation="horizontal">
 
                             <TextView
+                                android:id="@+id/tvEtiquetaLargo"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -178,6 +226,66 @@
                                 tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
                         </LinearLayout>
 
+                        <!-- Columna (cajón en C): lo que sale cada lado desde el muro, en metros -->
+                        <LinearLayout
+                            android:id="@+id/lyFondo"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:id="@+id/tvEtiquetaLado2"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Lado 2 (m)"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etFondo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:text="0.18"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <!-- El tercer tramo (C y S) -->
+                        <LinearLayout
+                            android:id="@+id/lyLado3"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:id="@+id/tvEtiquetaLado3"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:layout_weight="0.81"
+                                android:paddingStart="6dp"
+                                android:text="Lado 3 (m)"
+                                tools:ignore="RtlSymmetry" />
+
+                            <EditText
+                                android:id="@+id/etLado3"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:autofillHints="@string/todo"
+                                android:inputType="numberDecimal"
+                                android:text="0.18"
+                                android:textColorHint="@color/sombra2"
+                                tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                        </LinearLayout>
+
                         <!-- Alto (o el otro lado del techo) -->
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -185,6 +293,7 @@
                             android:orientation="horizontal">
 
                             <TextView
+                                android:id="@+id/tvEtiquetaAlto"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="3dp"
@@ -205,7 +314,7 @@
                         </LinearLayout>
 
                         <!-- Vanos: puertas y ventanas que se descuentan -->
-                        <LinearLayout
+                        <LinearLayout android:id="@+id/lyVanos"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
@@ -232,7 +341,7 @@
                         </LinearLayout>
 
                         <!-- Cuántos vanos son -->
-                        <LinearLayout
+                        <LinearLayout android:id="@+id/lyNumVanos"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
@@ -329,6 +438,7 @@
 
                         <!-- Esquinas vivas con esquinero -->
                         <LinearLayout
+                            android:id="@+id/lyEsquinas"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:orientation="horizontal">
@@ -507,6 +617,57 @@
 
                                         <TextView
                                             android:id="@+id/txPerfiles"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Rieles: sus trozos (largo = cantidad) -->
+                                    <LinearLayout
+                                        android:id="@+id/lyRieles"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:orientation="horizontal"
+                                        android:visibility="gone">
+
+                                        <TextView
+                                            android:id="@+id/tvRieles"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Riel" />
+
+                                        <TextView
+                                            android:id="@+id/txRieles"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="0.72"
+                                            android:text="@string/_0_0" />
+                                    </LinearLayout>
+
+                                    <!-- Ángulo perimetral (cielo raso): sus trozos -->
+                                    <LinearLayout
+                                        android:id="@+id/lyAngulo"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="4.5dp"
+                                        android:layout_marginEnd="4.5dp"
+                                        android:background="@color/sombra"
+                                        android:orientation="horizontal"
+                                        android:visibility="gone">
+
+                                        <TextView
+                                            android:id="@+id/tvAngulo"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:text="Ángulo" />
+
+                                        <TextView
+                                            android:id="@+id/txAngulo"
                                             android:layout_width="match_parent"
                                             android:layout_height="wrap_content"
                                             android:layout_weight="0.72"

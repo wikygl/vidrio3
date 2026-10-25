@@ -842,10 +842,10 @@ class FichaActivity : AppCompatActivity() {
                     setPadding(0, (8 * dens).toInt(), 0, (2 * dens).toInt())
                 })
                 val resId = crystal.crystal.taller.venAl.VentanaAlRender.imagenOrdenModulos(context, d.serie, pat)
-                if (resId != 0) box.addView(ImageView(context).apply {
-                    setImageResource(resId); adjustViewBounds = true
-                }) else box.addView(TextView(context).apply { text = "(sin imagen para $pat)" })
+                if (resId != 0) box.addView(crystal.crystal.taller.venAl.VentanaAlRender.vistaImagenOrden(context, resId))
+                else box.addView(TextView(context).apply { text = "(sin imagen para $pat)" })
             }
+            box.addView(TextView(context).apply { text = crystal.crystal.taller.venAl.VentanaAlRender.AVISO_ZOOM }, 0)
             androidx.appcompat.app.AlertDialog.Builder(context)
                 .setTitle("Orden de módulos — ${d.serie}")
                 .setView(android.widget.ScrollView(context).apply { addView(box) })
@@ -866,8 +866,12 @@ class FichaActivity : AppCompatActivity() {
                 n.contains("nordex") || n.startsWith("mdf") -> 2
                 n.startsWith("tapacanto") -> when { n.contains("puertas") -> 5; n.contains("color") -> 4; else -> 3 }
                 n.startsWith("tubo") -> 6
+                // Drywall: plancha (0), parante, riel, ángulo, fijaciones y acabado, como su calculadora.
+                n.startsWith("parante") -> 6
                 n.startsWith("riel") -> 7
-                n.startsWith("accesorios") -> 8
+                n.startsWith("ángulo") -> 7
+                n.startsWith("accesorios") || n.startsWith("fijaciones") -> 8
+                n.startsWith("acabado") -> 9
                 else -> 0
             }
         }
