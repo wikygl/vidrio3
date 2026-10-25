@@ -106,6 +106,12 @@ object VentanaAlRender {
             // Serie 62 europea: marco 3.2 uniforme; la misma pierna (6.2) hace de zócalo y cabezal.
             // No hay traslape distinto (todos los miembros 6.2) ni pierna reducida contra el marco.
             s.contains("serie 62") -> Serie20Like(3.2f, 3.2f, 3.2f, 6.2f, 6.2f, 6.2f, 6.2f, 6.2f)
+            // Series de las hojas del proveedor (2026-10-16). Solo para el dibujo: el marco es la mitad
+            // del descuento de la hoja en alto y la hoja, lo que le queda hasta el vidrio.
+            s.contains("serie 42") -> Serie20Like(1.6f, 1.6f, 1.6f, 3.9f, 3.9f, 3.9f, 3.9f, 3.9f)
+            s.contains("serie 46") && s.contains("mampara") -> Serie20Like(3.9f, 3.9f, 3.9f, 6.1f, 6.1f, 6.1f, 6.1f, 6.1f)
+            s.contains("serie 46") -> Serie20Like(3.3f, 3.3f, 3.3f, 5f, 5f, 5f, 5f, 5f)
+            s.contains("serie 80") -> Serie20Like(2.8f, 2.8f, 2.8f, 6.7f, 6.7f, 6.7f, 6.7f, 6.7f)
             else -> null
         }
     }
@@ -124,20 +130,12 @@ object VentanaAlRender {
      * simétrico posible (prefiere tramos de 3). Devuelve el patrón de cada tramo: 2→fc, 3→cfc,
      * 4→fccf. Entre tramos va un paflón (parante de 2.5, a todo el alto). Ej.: 5→[cfc,fc], 6→[cfc,cfc].
      */
-    fun tramosDe(divisiones: Int, pat3: String): List<String> {
-        val n = divisiones.coerceAtLeast(2)
-        val t = ceil(n / 4.0).toInt().coerceAtLeast(1)
-        val base = n / t
-        val extra = n % t
-        return (0 until t).map { i ->
-            when (if (i < extra) base + 1 else base) { 2 -> "fc"; 3 -> pat3; else -> "fccf" }
-        }
-    }
+    fun tramosDe(divisiones: Int, pat3: String): List<String> = CalculoCorredizas.tramosDe(divisiones, pat3)
 
     fun tramosSerie25(divisiones: Int): List<String> = tramosDe(divisiones, "cfc")
 
-    /** Patrón de 3 módulos según la serie (serie 62 usa fcc; el resto cfc). */
-    fun pat3De(serie: String): String = if (serie.lowercase().contains("serie 62")) "fcc" else "cfc"
+    /** Patrón de 3 módulos según la serie (62, 42, 46 y 80 usan fcc; 20, 25 y 3825, cfc). */
+    fun pat3De(serie: String): String = CalculoCorredizas.serie(serie)?.pat3 ?: "cfc"
 
     /**
      * Imagen del orden de colocación de módulos para un patrón. Busca, en orden: específica de la
@@ -148,13 +146,36 @@ object VentanaAlRender {
     fun imagenOrdenModulos(context: Context, serie: String, patron: String): Int {
         val s = serie.lowercase().filter { it.isLetterOrDigit() }   // "Serie 3825" -> "serie3825"
         val p = patron.lowercase()
-        val candidatos = listOf("orden_${s}_$p", "orden_$p", "nova$p", "novacc")
+        // Las láminas del proveedor (drawable-nodpi, 2026-10-16) muestran juntos el modelo con fijas y
+        // el de solo corredizas, p. ej. "2 HOJAS (F/C)-(C/C)": cc usa la de fc, ccc la de fcc, etc.
+        val conFijas = when (p) { "cc" -> "fc"; "ccc" -> "fcc"; "cccc" -> "fccf"; "cccccc" -> "fccccf"; else -> p }
+        val candidatos = listOf("orden_${s}_$p", "orden_${s}_$conFijas", "orden_$p", "nova$p", "novacc")
         for (nombre in candidatos) {
             val id = context.resources.getIdentifier(nombre, "drawable", context.packageName)
             if (id != 0) return id
         }
         return 0
     }
+
+    /**
+     * Imagen de una modulación para los diálogos (calculadora y ficha): ocupa el ancho del diálogo y
+     * se agranda con dos dedos y se recorre arrastrando (`PlanoZoomView`).
+     */
+    fun vistaImagenOrden(context: Context, resId: Int): android.view.View {
+        val bmp = android.graphics.BitmapFactory.decodeResource(context.resources, resId)
+        val ancho = context.resources.displayMetrics.widthPixels * 0.82f
+        val alto = (ancho * bmp.height / bmp.width.coerceAtLeast(1)).toInt()
+        return crystal.crystal.Diseno.PlanoZoomView(context).apply {
+            margenAjuste = 1f
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, alto
+            )
+            setBitmapAjustado(bmp)
+        }
+    }
+
+    /** Aviso que va sobre las imágenes de modulación. */
+    const val AVISO_ZOOM = "Pellizque con dos dedos para agrandar y arrastre para recorrer."
 
     /**
      * Patrones de módulos por tramo de un diseño archivado, para mostrar su orden de colocación.
@@ -170,14 +191,14 @@ object VentanaAlRender {
     }
 
     /** Patrones disponibles por serie (el primero, "tramos", reparte por divisiones automáticamente). */
-    fun patronesDe(serie: String): Array<String> = when {
-        serie.lowercase().contains("serie 62") -> arrayOf("tramos", "fc", "cc", "fcc", "ccc", "fccf", "cccc")
-        else -> arrayOf("tramos", "fc", "cc", "cfc", "fccf", "cccc")   // serie 20 / 25
-    }
+    fun patronesDe(serie: String): Array<String> =
+        if (CalculoCorredizas.serie(serie) != null) CalculoCorredizas.patrones(serie)
+        else arrayOf("tramos", "fc", "cc", "cfc", "fccf", "cccc")   // serie 3825
 
     fun dibujar(context: Context, d: VentanaAlDescriptor): Bitmap? {
         medidasSerie20Like(d.serie)?.let { return dibujarSerie20Like(d, it) }
         val dims = dimsDe(d.serie) ?: return null
+        if (!dims.marcoOpcional) return dibujar84(d, dims)
         val ancho = d.ancho
         val alto = d.alto
         if (ancho <= 0f || alto <= 0f) return null
@@ -266,24 +287,16 @@ object VentanaAlRender {
         val hojaTop = if (tieneMarcoExterno) (vanoBottom - altoHojaPx).coerceAtLeast(vanoTop) else vanoTop
 
         // Módulos: 'f' = fijo, 'c' = corrediza, 'P' = paflón (parante de tramo, a todo el alto).
+        // Serie 3825 (la 84 se dibuja en dibujar84): siempre por tramos. `patron` trae los patrones
+        // por tramo unidos por comas (o "tramos"/vacío = reparto automático por tamaño). Un paflón
+        // separa cada tramo.
         val items = mutableListOf<Char>()
-        if (dims.marcoOpcional) {
-            // Serie 3825: siempre por tramos. `patron` trae los patrones por tramo unidos por comas
-            // (o "tramos"/vacío = reparto automático por tamaño). Un paflón separa cada tramo.
-            val patronesTramos = if (d.patron.isBlank() || d.patron.equals("tramos", ignoreCase = true))
-                                     tramosDe(d.divisiones.coerceAtLeast(2), pat3De(d.serie))
-                                 else d.patron.split(",")
-            patronesTramos.forEachIndexed { idx, pat ->
-                if (idx > 0) items.add('P')
-                pat.forEach { ch -> if (ch == 'f' || ch == 'c') items.add(ch) }
-            }
-        } else {
-            // Serie 84: orden f/c y parantes de tramo con la misma lógica que Nova.
-            val orden = NovaCalculos.ordenDivisConParantes(d.divisiones.coerceAtLeast(1), ancho)
-            orden.split(";P;").forEachIndexed { idx, tramo ->
-                if (idx > 0) items.add('P')
-                Regex("[fc](?=<)").findAll(tramo).forEach { items.add(it.value[0]) }
-            }
+        val patronesTramos = if (d.patron.isBlank() || d.patron.equals("tramos", ignoreCase = true))
+                                 tramosDe(d.divisiones.coerceAtLeast(2), pat3De(d.serie))
+                             else d.patron.split(",")
+        patronesTramos.forEachIndexed { idx, pat ->
+            if (idx > 0) items.add('P')
+            pat.forEach { ch -> if (ch == 'f' || ch == 'c') items.add(ch) }
         }
         if (items.none { it == 'f' || it == 'c' }) items.add('f')
 
@@ -387,19 +400,154 @@ object VentanaAlRender {
         return bitmap
     }
 
+    /** Lo que el cálculo de la 84 necesita para dibujar este diseño (la pierna sale de la serie). */
+    fun entrada84(d: VentanaAlDescriptor): Calculo84.Entrada = Calculo84.Entrada(
+        ancho = d.ancho, alto = d.alto, marco = d.marco, altoHoja = d.altoHoja,
+        divisiones = d.divisiones, mochetas = d.nMochetas,
+        pierna = if (d.serie.lowercase().contains("eco")) 3f else 3.5f,
+        diseno = d.patron
+    )
+
+    /**
+     * Serie 84 y 84 económica, con la geometría de [Calculo84] (la misma que se corta): cada tramo
+     * con sus hojas y sus franjas (sistema y mochetas, de abajo arriba, con un puente entre cada
+     * dos) y los parantes de tramo de piso a techo, que cortan el marco en un trozo por tramo.
+     *
+     * Regla de piernas: la de una corrediza no se dibuja en el lado que colinda con un fijo (la tapa
+     * la del fijo); sí junto a otra corrediza, al marco o al parante. Las hojas se dibujan con su
+     * ancho en proporción (sin el cruce, que queda detrás).
+     */
+    private fun dibujar84(d: VentanaAlDescriptor, dims: Dims): Bitmap? {
+        if (d.ancho <= 0f || d.alto <= 0f) return null
+        val r = Calculo84.calcular(entrada84(d))
+
+        val bmpW = (d.ancho * 3f).toInt().coerceAtLeast(600)
+        val bmpH = (d.alto * 3f).toInt().coerceAtLeast(600)
+        val escala = minOf(bmpW / d.ancho, bmpH / d.alto)
+        val w = d.ancho * escala
+        val h = d.alto * escala
+        val x0 = (bmpW - w) / 2f
+        val y0 = (bmpH - h) / 2f
+        val marcoPx = d.marco * escala
+        val tuboPx = PUENTE * escala
+        val paPx = dims.pierna * escala
+        val zoPx = dims.zocalo * escala
+
+        val bitmap = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bitmap)
+        c.drawColor(Color.WHITE)
+        val pMarco = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(120, 120, 120); style = Paint.Style.FILL }
+        val pPerfil = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(150, 150, 150); style = Paint.Style.FILL }
+        val pVidrio = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.FILL }
+        val pLinea = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 2.5f }
+        val pLineaFina = Paint(pLinea).apply { strokeWidth = 1.5f }
+
+        fun rect(l: Float, t: Float, rr: Float, b: Float, paint: Paint) {
+            val rf = RectF(l, t, rr, b)
+            c.drawRect(rf, paint); c.drawRect(rf, pLinea)
+        }
+        fun vidrio(l: Float, t: Float, rr: Float, b: Float) {
+            if (rr - l <= 0f || b - t <= 0f) return
+            c.drawRect(RectF(l, t, rr, b), pVidrio)
+            val s = minOf(rr - l, b - t)
+            if (s >= 12f) {
+                val cx = (l + rr) / 2f; val cy = (t + b) / 2f
+                val lenMax = s * 0.35f
+                val largos = floatArrayOf(lenMax * 0.4f, lenMax * 0.7f, lenMax * 1.2f)
+                val gap = s * 0.06f
+                for (i in 0..2) {
+                    val off = (i - 1) * gap
+                    val half = largos[i] / 2f
+                    c.drawLine(cx + 0.7f * off - 0.7f * half, cy + 0.3f * off + half,
+                        cx + 0.7f * off + 0.7f * half, cy + 0.3f * off - half, pLineaFina)
+                }
+            }
+            c.drawRect(RectF(l, t, rr, b), pLineaFina)
+        }
+
+        val vanoLeft = x0 + marcoPx
+        val vanoTop = y0 + marcoPx
+        val vanoBottom = y0 + h - marcoPx
+        c.drawRect(RectF(x0, y0, x0 + w, y0 + h), pLinea)
+
+        // Posición de cada tramo y de cada parante.
+        val tramosX = ArrayList<Pair<Float, Float>>()
+        var x = vanoLeft
+        r.geometria.forEachIndexed { i, g ->
+            if (i > 0) x += tuboPx
+            tramosX += x to x + g.ancho * escala
+            x += g.ancho * escala
+        }
+
+        for ((i, g) in r.geometria.withIndex()) {
+            val (tl, tr) = tramosX[i]
+            var base = vanoBottom
+            g.franjas.forEachIndexed { k, f ->
+                if (k > 0) { rect(tl, base - tuboPx, tr, base, pPerfil); base -= tuboPx }   // puente
+                val top = base - (f.alto ?: 0f) * escala
+                if (f.esSistema) {
+                    // Hojas con su ancho en proporción.
+                    val total = g.hojas.sum()
+                    var hx = tl
+                    g.hojas.forEachIndexed { j, ancho ->
+                        val hw = (tr - tl) * ancho / total
+                        val tipo = g.patron[j]
+                        val izq = if (j == 0) 'M' else g.patron[j - 1]
+                        val der = if (j == g.patron.lastIndex) 'M' else g.patron[j + 1]
+                        // La corrediza esconde su pierna junto a un fijo.
+                        val pIzq = !(tipo == 'c' && izq == 'f')
+                        val pDer = !(tipo == 'c' && der == 'f')
+                        vidrio(hx, top, hx + hw, base)
+                        if (pIzq) rect(hx, top, hx + paPx, base, pPerfil)
+                        if (pDer) rect(hx + hw - paPx, top, hx + hw, base, pPerfil)
+                        val zl = if (pIzq) hx + paPx else hx
+                        val zr = if (pDer) hx + hw - paPx else hx + hw
+                        rect(zl, top, zr, top + zoPx, pPerfil)
+                        rect(zl, base - zoPx, zr, base, pPerfil)
+                        c.drawRect(RectF(hx, top, hx + hw, base), pLinea)
+                        hx += hw
+                    }
+                } else {
+                    // Mocheta: vidrios a lo ancho con su separador de tubo.
+                    val n = g.mochetasVerticales
+                    val mw = ((tr - tl) - (n - 1) * tuboPx) / n
+                    var mx = tl
+                    repeat(n) { j ->
+                        vidrio(mx, top, mx + mw, base)
+                        if (j < n - 1) rect(mx + mw, top, mx + mw + tuboPx, base, pPerfil)
+                        mx += mw + tuboPx
+                    }
+                }
+                base = top
+            }
+        }
+
+        // Marco: los laterales enteros; arriba y abajo, un trozo por tramo.
+        rect(x0, y0, vanoLeft, y0 + h, pMarco)
+        rect(x0 + w - marcoPx, y0, x0 + w, y0 + h, pMarco)
+        for ((tl, tr) in tramosX) {
+            rect(tl, y0, tr, vanoTop, pMarco)
+            rect(tl, vanoBottom, tr, y0 + h, pMarco)
+        }
+        // Parantes de tramo: siempre de piso a techo, cortando el marco.
+        for (i in 0 until tramosX.size - 1) {
+            val pl = tramosX[i].second
+            rect(pl, y0, pl + tuboPx, y0 + h, pMarco)
+        }
+        return bitmap
+    }
+
     // Miembros verticales (pierna/traslape) de serie 20 / 25 según el patrón, de izquierda a
     // derecha. Cada entrada es (anchoCm, esCentroDoble): piernaMarco a los extremos (colinda con el
     // marco lateral), traslape en los cruces y, en fccf/cccc, DOS piernas al centro (pierna+pierna).
+    // Con 4 o 6 hojas, el centro es el encuentro de dos corredizas (dos piernas); los demás, cruces.
+    // Un paño fijo solo (f) lleva las dos piernas de los lados.
     private fun miembrosSerie20(patron: String, m: Serie20Like): List<Pair<Float, Boolean>> {
-        return when (patron.lowercase()) {
-            "cc"   -> listOf(m.piernaMarco to false, m.traslape to false, m.piernaMarco to false)
-            // 3 módulos: dos cruces internos.
-            "cfc", "fcf", "ccc", "fcc" ->
-                listOf(m.piernaMarco to false, m.traslape to false, m.traslape to false, m.piernaMarco to false)
-            "fccf",
-            "cccc" -> listOf(m.piernaMarco to false, m.traslape to false, (m.pierna * 2f) to true, m.traslape to false, m.piernaMarco to false)
-            else   -> listOf(m.piernaMarco to false, m.traslape to false, m.piernaMarco to false)   // fc (predeterminado)
+        val n = patron.length.coerceAtLeast(1)
+        val internos = (1 until n).map { i ->
+            if (n >= 4 && n % 2 == 0 && i == n / 2) (m.pierna * 2f) to true else m.traslape to false
         }
+        return listOf(m.piernaMarco to false) + internos + listOf(m.piernaMarco to false)
     }
 
     /**
@@ -445,8 +593,7 @@ object VentanaAlRender {
         val moduleWPx = (w - nPaflon * paflonPx) / div
         var x = x0
         for ((idx, pat) in tramos.withIndex()) {
-            val hojas = when (pat) { "cfc", "fcc" -> 3; "fccf", "cccc" -> 4; else -> 2 }
-            val tw = hojas * moduleWPx
+            val tw = pat.length * moduleWPx
             dibujarVentana25Like(c, x, y0, tw, h, pat, m, escala, pMarco, pPerfil, pVidrio, pLinea, pLineaFina)
             x += tw
             if (idx < nPaflon) {

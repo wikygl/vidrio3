@@ -51,6 +51,11 @@ class VentanaAl : AppCompatActivity() {
     // = automático. Al recalcular se conserva la elección solo en los tramos cuyo tamaño coincide.
     private val patronesTramo3825 = mutableListOf<String>()
 
+    // Serie 84: diseño hecho a mano en DialogoDiseno84 (tramos, hojas y franjas), en la forma que
+    // lee Calculo84.leerDiseno. Vacío = automático. Cambiar la medida lo devuelve al automático,
+    // como en la mampara paflón: describe otra ventana.
+    private var diseno84 = ""
+
     // Metadatos de producción (se piden al archivar, como en Nova).
     private var metaColorAluminio = ""
     private var metaTipoVidrio = ""
@@ -60,16 +65,6 @@ class VentanaAl : AppCompatActivity() {
     private var primerClickArchivarRealizado = false
     private lateinit var proyectoCallback: DialogosProyecto.ProyectoCallback
     private var cliente: String = ""
-
-    // Datos estructurados de Serie 3825 (para uso en otras vistas/exportaciones).
-    // El campo `corte` no se renderiza en esta actividad.
-    private var rielSup3825: MedidaPerfil? = null
-    private var rielInf3825: MedidaPerfil? = null
-    private var marcoFijo3825: MedidaPerfil? = null
-    private var marcoMovil3825: MedidaPerfil? = null
-    private var paranteFijo3825: MedidaPerfil? = null
-    private var enganche3825: MedidaPerfil? = null
-    private var zocalo3825: MedidaPerfil? = null
 
     private lateinit var binding : ActivityVentanaAlBinding
     private lateinit var controladorCola: ControladorColaMedidas
@@ -92,29 +87,36 @@ class VentanaAl : AppCompatActivity() {
         procesarIntentProyecto(intent)
         configurarCliente()
 
+        // Fila de depuración (mostraba números sueltos con el rótulo "Vidrios"); no se archiva.
+        binding.lyPruebas.visibility = View.GONE
+
+        // Serie 84: cambiar la medida, las divisiones o el alto de hoja invalida el diseño hecho a
+        // mano (describe otra ventana); el automático vuelve a mandar, igual que en la mampara.
+        listOf(binding.etAncho, binding.etAlto, binding.etPartes, binding.etAltohoja).forEach { campo ->
+            campo.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    if (diseno84.isNotBlank()) {
+                        diseno84 = ""
+                        Toast.makeText(this@VentanaAl, "Cambió la medida: el diseño vuelve al automático.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            })
+        }
+
         binding.btnCalcularE.setOnClickListener {
             controladorCola.onCalcular()
-            val nombreSerie = serieActual?.nombre
-            if (nombreSerie == "Serie 25" || nombreSerie == "Serie 20") {
-                calcularSerieTramos(nombreSerie == "Serie 25")
-                binding.tvReferencias.text = "Ancho = ${binding.etAncho.text}, Alto = ${binding.etAlto.text}\n" +
-                        "$nombreSerie -> ${refOpcion()}" + modulacionTramosTexto()
-                renderizarPreviewEstructurada()
-                return@setOnClickListener
+            if (!calcular()) {
+                Toast.makeText(this, "Escribe el ancho y el alto", Toast.LENGTH_SHORT).show()
             }
-            if (nombreSerie == "Serie 62 europea") {
-                calcularSerie62()
-                binding.tvReferencias.text = "Ancho = ${binding.etAncho.text}, Alto = ${binding.etAlto.text}\n" +
-                        "$nombreSerie -> ${refOpcion()}" + modulacionTramosTexto()
-                renderizarPreviewEstructurada()
-                return@setOnClickListener
-            }
-            calcularSerieClasica()
         }
         // La navegación por la lista de ventanas ahora es con clic en el título (txVentana).
+        // Con medidas escritas se recalcula: si no, quedaban a la vista (y se archivaban) los
+        // materiales de la serie anterior bajo el nombre de la nueva.
         binding.txVentana.setOnClickListener {
             actualizarVentana()
-            renderizarPreviewEstructurada()
+            if (!calcular()) renderizarPreviewEstructurada()
         }
 
         // Clic en el diseño: abre el diálogo de opciones (estilo Nova).
@@ -406,9 +408,9 @@ class VentanaAl : AppCompatActivity() {
         if (!VentanaAlRender.soportaSerie(serieNombre)) return null
         val ancho = binding.etAncho.text.toString().replace(",", ".").toFloatOrNull() ?: return null
         val alto = binding.etAlto.text.toString().replace(",", ".").toFloatOrNull() ?: return null
-        val marcoVal = binding.etMarco.text.toString().toFloatOrNull() ?: 2.2f
+        val marcoVal = num(binding.etMarco) ?: 2.2f
         val hoja = altoHojaParaDescriptor(alto)
-        val nMo = binding.etMocheta.text.toString().toIntOrNull() ?: 0
+        val nMo = num(binding.etMocheta)?.toInt() ?: 0
         return VentanaAlDescriptor(
             ancho = ancho, alto = alto, altoHoja = hoja,
             divisiones = divisiones().coerceAtLeast(1), serie = serieNombre,
@@ -428,16 +430,20 @@ class VentanaAl : AppCompatActivity() {
     }
 
     // FUNCIONES REDONDEOS
-    private fun df1(defo: Float): String {
-        val resultado = if ("$defo".endsWith(".0")) {
-            "$defo".replace(".0", "")
-        } else {
-            "%.1f".format(defo)
-        }
-        return resultado.replace(",", ".")
-    }
+    // Trunca a un decimal, como todas las calculadoras (N-10). La de antes redondeaba: un vidrio de
+    // 54.66 salía 54.7, un milímetro más largo.
+    private fun df1(defo: Float): String = NovaCalculos.df1(defo)
 
     // FUNCIONES ALUMINIOS
+
+    /** Calcula la serie elegida. False si falta el ancho o el alto (no toca nada). */
+    @SuppressLint("SetTextI18n")
+    private fun calcular(): Boolean {
+        if ((num(binding.etAncho) ?: 0f) <= 0f || (num(binding.etAlto) ?: 0f) <= 0f) return false
+        if (esSerieCorrediza()) return calcularSerieCorrediza()
+        calcularSerieClasica()
+        return true
+    }
 
     // Cálculo de materiales de las series clásicas (84 / 3825 / etc.). Se reutiliza desde el botón
     // Calcular y desde el diálogo Con/Sin marco, para que el toggle recalcule los materiales y no
@@ -445,25 +451,72 @@ class VentanaAl : AppCompatActivity() {
     @SuppressLint("SetTextI18n")
     private fun calcularSerieClasica() {
         if (serieActual?.nombre == "Serie 3825") { calcularSerie3825(); return }
+        val r = calculo84() ?: return
         restaurarLayoutClasicas()
-        marco()
-        parante()
-        zocalo()
-        vidrios()
-        riel()
-        tope()
-        junkillo()
-        puente()
-        divMocheta(mPuentes1())
-        nMocheta()
+        fun texto(l: List<String>) = l.joinToString("\n")
+        binding.txParante.text = "Pierna"   // se llama pierna (no confundir con el parante de tramos)
+        binding.tvMarco.text = texto(r.marco)
+        binding.tvRielS.text = texto(r.rielSup)
+        binding.tvRielI.text = texto(r.rielInf)
+        binding.tvParante.text = texto(r.pierna)
+        binding.tvZocalo.text = texto(r.zocalo)
+        binding.tvTope.text = texto(r.tope)
+        // Puente, separadores de mocheta y parante de tramo: el mismo tubo de 2.5. Sin puente
+        // (G-06) solo queda el parante de tramo, si hay más de un tramo.
+        binding.tvTubo.text = texto(r.tubo)
+        binding.tvJunki.text = texto(r.junquillo)
+        binding.tvVidriosR.text = texto(r.vidrios)
+        binding.tvRiel.text = ""
+        binding.tvJamba.text = ""
+        binding.tvCabezal.text = ""
+        binding.tvTraslapo.text = ""
+        binding.tvAdaptador.text = ""
+
         binding.tvReferencias.text = "Ancho = ${binding.etAncho.text}, Alto = ${binding.etAlto.text}\n" +
-                "Div=${divisiones()} -> Fjs=${nFijos()} -> Crzas=${nCorredizas()}\n" +
-                "hHoja = ${df1(altoHoja())}"
-        binding.tvPruebas.text = divisiones().toString()
+                "Div=${r.divisiones} -> Fjs=${r.nFijos} -> Crzas=${r.nCorredizas}\n" +
+                referenciasFranjas84(r) +
+                (if (r.tramos.size > 1) "\nMódulos: " + r.tramos.mapIndexed { i, p -> "T${i + 1}:$p" }.joinToString("  ") else "") +
+                (if (r.manual) "\nDiseño a mano" else "")
+        r.aviso?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
 
         // Ocultar layouts si sus TextViews están vacíos
         actualizarVisibilidadLayouts()
         renderizarPreviewEstructurada()
+    }
+
+    /** Serie 84 y 84 económica con lo escrito en las casillas. Null si falta el ancho o el alto. */
+    private fun calculo84(): Calculo84.Resultado? = calculo84Entrada()?.let(Calculo84::calcular)
+
+    private fun calculo84Entrada(): Calculo84.Entrada? {
+        val ancho = num(binding.etAncho)?.takeIf { it > 0f } ?: return null
+        val alto = num(binding.etAlto)?.takeIf { it > 0f } ?: return null
+        return (
+            Calculo84.Entrada(
+                ancho = ancho, alto = alto, marco = marcoEfectivo(),
+                altoHoja = num(binding.etAltohoja) ?: 0f,
+                divisiones = num(binding.etPartes)?.toInt() ?: 0,
+                junquillo = num(binding.etJunki) ?: 0f,
+                mochetas = num(binding.etMocheta)?.toInt() ?: 0,
+                pierna = serieActual?.medida?.toFloatOrNull() ?: 3.5f,
+                diseno = diseno84
+            )
+        )
+    }
+
+    /**
+     * Alto de hoja y mochetas para Referencias. Con un solo modelo de franjas (lo de siempre) se
+     * escribe como antes; si los tramos difieren, uno por tramo.
+     */
+    private fun referenciasFranjas84(r: Calculo84.Resultado): String {
+        fun deTramo(g: Calculo84.TramoResuelto): String =
+            if (!g.llevaPuente) "Sin puente"
+            else "hHoja = ${df1(g.altoHoja)}" +
+                g.franjas.filter { !it.esSistema }.let { m ->
+                    if (g.franjas.size == 2 && g.franjas[0].esSistema) "" else " (mochetas: ${m.joinToString(", ") { df1(it.alto ?: 0f) }})"
+                }
+        val textos = r.geometria.map(::deTramo)
+        return if (textos.distinct().size == 1) textos[0]
+        else textos.mapIndexed { i, t -> "T${i + 1}: $t" }.joinToString("\n")
     }
 
     /**
@@ -495,11 +548,16 @@ class VentanaAl : AppCompatActivity() {
     }
 
     // Patrón que se pasa al dibujo. En 3825 modo tramos va la lista de patrones por tramo (unida por
-    // comas); en modo simple, el patrón único; en las demás series, patron20.
-    private fun patronParaDescriptor(): String =
-        if (serieActual?.nombre == "Serie 3825" && patron20.equals("tramos", ignoreCase = true))
+    // comas); en modo simple, el patrón único; en la 84, su diseño a mano (vacío = automático); en
+    // las demás series, patron20.
+    private fun patronParaDescriptor(): String = when {
+        serieActual?.nombre == "Serie 3825" && patron20.equals("tramos", ignoreCase = true) ->
             tramosEfectivos3825().joinToString(",")
-        else patron20
+        esSerie84() -> diseno84
+        else -> patron20
+    }
+
+    private fun esSerie84(): Boolean = serieActual?.nombre?.contains("84") == true
 
     // Alto de hoja para el descriptor. En 3825 modo simple (sin puente) la hoja ocupa todo el alto útil.
     private fun altoHojaParaDescriptor(alto: Float): Float =
@@ -633,7 +691,6 @@ class VentanaAl : AppCompatActivity() {
                 "Serie 3825 -> ${refOpcion()}" +
                 "\nMódulos: " + tramos.mapIndexed { i, p -> "T${i + 1}:$p" }.joinToString("  ") +
                 (if (mochetaActiva) "\nhHoja = ${df1(hHoja)}" else "")
-        binding.tvPruebas.text = divisiones().toString()
 
         // Visibilidad de filas para la 3825.
         binding.lyMarco.visibility = if (binding.tvMarco.text.isNullOrBlank()) View.GONE else View.VISIBLE
@@ -667,263 +724,6 @@ class VentanaAl : AppCompatActivity() {
         renderizarPreviewEstructurada()
     }
 
-    @SuppressLint("SetTextI18n")
-    private fun parante() {
-        if (serieActual?.nombre == "Serie 3825") {
-            val pf = altoHoja() - 1.2f
-            val en = altoHoja() - 2f
-            paranteFijo3825 = MedidaPerfil(pf, nFijos() * 2)
-            enganche3825 = MedidaPerfil(en, nCorredizas() * 2)
-            binding.tvParante.text = if (divisiones() == 0) {
-                "${df1(en)} = ${nCorredizas() * 2}"
-            } else {
-                "${df1(pf)} = ${nFijos() * 2}\n${df1(en)} = ${nCorredizas() * 2}"
-            }
-            return
-        }
-        binding.txParante.text = "Pierna"   // se llama pierna (no confundir con el parante de tramos)
-        val pe = paran() + 1.4f
-        binding.tvParante.text = if (divisiones() == 0) {
-            "${df1(paran())} = ${nCorredizas() * 2}"
-        } else {
-            "${df1(pe)} = ${nFijos() * 2}\n${df1(paran())} = ${nCorredizas() * 2}"
-        }
-    }
-
-    @SuppressLint("SetTextI18n")
-    private fun marco(){
-        if (serieActual?.nombre == "Serie 3825") {
-            val alto = binding.etAlto.text.toString().toFloat()
-            val sinMarco = !conMarco               // lo decide el diálogo (Con/Sin marco), no el grosor
-            val anchU = anchUtil()                 // ancho - 2 * marco (0 si sin marco)
-            val altoU = altoUtil()                 // alto  - 2 * marco
-            // Sin marco: el Marco Serie cubre toda la altura interior.
-            // Con marco: solo recorre la zona del alto de hoja (la mocheta usa la lógica de Clásica).
-            val marcoSerieLat = if (sinMarco) altoU - 1.0f else altoHoja() - 1.0f
-            val esPar = divisiones() % 2 == 0
-
-            rielSup3825 = MedidaPerfil(anchU, 1)
-            rielInf3825 = MedidaPerfil(anchU, 1)
-            if (esPar) {
-                marcoFijo3825 = MedidaPerfil(marcoSerieLat, 1, corte = "un lado en 4ª")
-                marcoMovil3825 = MedidaPerfil(marcoSerieLat, 1, corte = "un lado en 4ª")
-            } else {
-                marcoFijo3825 = MedidaPerfil(marcoSerieLat, 2, corte = "un lado en 4ª")
-                marcoMovil3825 = null
-            }
-
-            if (sinMarco) {
-                binding.txMarco.text = "Marco"
-                binding.tvMarco.text = ""
-            } else {
-                binding.txMarco.text = "Marco ${binding.etMarco.text}"
-                binding.tvMarco.text = "${df1(alto)} = 2\n${df1(anchU)} = 2"
-            }
-            binding.txJamba.text = "Marco Serie"
-            binding.tvJamba.text = "${df1(marcoSerieLat)} = 2"
-            binding.tvRielS.text = "${df1(anchU)} = 1"
-            binding.tvRielI.text = "${df1(anchU)} = 1"
-            return
-        }
-        val alto = binding.etAlto.text.toString().toFloat()
-        binding.txMarco.text = "Marco"
-        // Verticales (jambas) = alto completo; horizontales (sup + inf) se parten por tramo (mismo
-        // valor del puente), 2 por tramo (superior + inferior).
-        binding.tvMarco.text = "${df1(alto)} = 2\n${df1(anchoTramo84())} = ${2 * nTramos84()}"
-        binding.txJamba.text = "Jamba"
-        binding.tvJamba.text = ""
-        binding.tvRielS.text = ""
-        binding.tvRielI.text = ""
-        rielSup3825 = null
-        rielInf3825 = null
-        marcoFijo3825 = null
-        marcoMovil3825 = null
-    }
-    @SuppressLint("SetTextI18n")
-    private fun zocalo() {
-        if (serieActual?.nombre == "Serie 3825") {
-            val div = divisiones().coerceAtLeast(1)
-            val anchU = anchUtil()
-            val z = ((anchU - 1.4f) - (div + 1) * 2.4f) / div
-            zocalo3825 = MedidaPerfil(z, div * 2)
-            binding.tvZocalo.text = "${df1(z)} = ${div * 2}"
-            return
-        }
-        zocalo3825 = null
-        // Verificar queserieActual no sea nula
-       serieActual?.let { serieActual ->
-            val z = zoc()  // Se asume que zoc() retorna un Float
-            // Utiliza la medida de la serie actual para el cálculo
-            val adjustedZ = z - (2 * serieActual.medida.toFloat())
-
-            binding.tvZocalo.text = "${df1(adjustedZ)} = ${divisiones() * 2}"
-        } ?: run {
-            // Manejar el caso en queserieActual sea nula
-            binding.tvZocalo.text = "Error: No se ha seleccionado una serie"
-        }
-    }
-
-    @SuppressLint("SetTextI18n")
-    private fun riel(){
-        if (serieActual?.nombre == "Serie 3825") {
-            // En Serie 3825 los rieles van en lyRielS / lyRielI (ya cargados en marco()).
-            binding.tvRiel.text = ""
-            return
-        }
-        // Riel superior e inferior: 1 de cada uno por tramo (ancho del tramo).
-        val nT = nTramos84()
-        val tramoW = anchoTramo84()
-        binding.tvRiel.text = ""            // se reemplaza por riel sup/inf
-        binding.txRielS.text = "Riel Sup."
-        binding.tvRielS.text = "${df1(tramoW)} = $nT"
-        binding.txRielI.text = "Riel Inf."
-        binding.tvRielI.text = "${df1(tramoW)} = $nT"
-    }
-    
-    @SuppressLint("SetTextI18n")
-    private fun tope(){
-        if (divisiones() == 0) {
-            binding.tvTope.text = "${df1(altoUtil())} = 2"
-            return
-        }
-        // Ángulo tope: 1 por tramo cuya modulación es fccf; en el resto, 1.
-        val nFccf = nTramosFccf()
-        binding.tvTope.text = "${df1(paran())} = ${if (nFccf > 0) nFccf else 1}"
-    }
-
-    private fun junkillo() {
-        val jun = binding.etJunki.text.toString().toFloatOrNull() ?: 0f
-
-        if (serieActual?.nombre == "Serie 3825") {
-            // En Serie 3825 el junquillo aplica únicamente a las mochetas.
-            if (altoHoja() >= altoUtil()) {
-                binding.tvJunki.text = ""
-                return
-            }
-            val tuboMocheta = altoUtil() - (altoHoja() + 2.5f)
-            val mP1 = mPuentes1()
-            val nSub1 = NovaCalculos.anchMota(mP1)         // ceil(mP1 / 180), mín. 1
-            val anchoSub1 = if (nSub1 > 0) mP1 / nSub1 else mP1
-            // Por cada panel de mocheta: 2 junquillos horizontales (sup+inf) y 2 verticales (izq+der).
-            val qtyPanelesPrinc = nPuentes() * nSub1 * 2
-
-            val lineas = mutableListOf<String>()
-            if (qtyPanelesPrinc > 0) {
-                lineas.add("${df1(anchoSub1)} = $qtyPanelesPrinc")
-                lineas.add("${df1(tuboMocheta - (2 * jun))} = $qtyPanelesPrinc")
-            }
-            if (divisiones() == 10 || divisiones() == 14) {
-                val mP2 = mPuentes2()
-                if (mP2 > 0f) {
-                    val nSub2 = NovaCalculos.anchMota(mP2)
-                    val anchoSub2 = if (nSub2 > 0) mP2 / nSub2 else mP2
-                    val qtySec = nSub2 * 2
-                    if (qtySec > 0) lineas.add("${df1(anchoSub2)} = $qtySec")
-                }
-            }
-            binding.tvJunki.text = lineas.joinToString("\n")
-            return
-        }
-
-        val tuboMocheta = altoUtil() - (altoHoja() + 2.5f)
-        val nSub1 = nTuboMocheta(mPuentes1()) + 1   // submódulos de mocheta (regla 180)
-        // Junquillos: 2 horizontales (ancho del submódulo) + 2 verticales (alto de mocheta) por
-        // submódulo, en cada puente.
-        binding.tvJunki.text = if (divisiones() == 10 || divisiones() == 14) {
-            "${df1(divMocheta(mPuentes1()))} = ${nSub1 * 2 * nPuentes()}\n" +
-                    "${df1(divMocheta(mPuentes2()))} = ${(nTuboMocheta(mPuentes2()) + 1) * 2}\n" +
-                    "${df1(tuboMocheta - (2 * jun))} = ${nSub1 * 2 * nPuentes()}"
-        } else {
-            "${df1(divMocheta(mPuentes1()))} = ${nSub1 * 2 * nPuentes()}\n" +
-                    "${df1(tuboMocheta - (2 * jun))} = ${nSub1 * 2 * nPuentes()}"
-        }
-    }
-
-    @SuppressLint("SetTextI18n")
-    private fun puente() {
-        val tuboMocheta = altoUtil() - (altoHoja() + 2.5f)
-
-        if (serieActual?.nombre == "Serie 3825") {
-            // En Serie 3825 los tubos verticales de mocheta se calculan con la regla de 180.
-            val mP1 = mPuentes1()
-            val nTubosMocheta = (NovaCalculos.anchMota(mP1) - 1).coerceAtLeast(0)
-            val lineas = mutableListOf<String>()
-            if (nPuentes() > 0) {
-                lineas.add("${df1(mP1)} = ${nPuentes()}")
-            }
-            val qtyTubos = nPuentes() * nTubosMocheta
-            if (qtyTubos > 0) {
-                lineas.add("${df1(tuboMocheta)} = $qtyTubos")
-            }
-            binding.tvTubo.text = lineas.joinToString("\n")
-            binding.lyTubo.visibility = if (altoHoja() >= altoUtil()) View.GONE else View.VISIBLE
-            binding.tvPruebas.text = mP1.toString()
-            binding.txPruebas.text = mPuentes2().toString()
-            return
-        }
-
-        val baseTubo = when {
-            (divisiones() == 10 || (divisiones() == 14 && nTuboMocheta(mPuentes2()) == 0)) -> {
-                "${df1(mPuentes1())} = ${nPuentes() - 1}\n" +
-                        "${df1(mPuentes2())} = ${nPuentes() - 2}\n" +
-                        "${df1(tuboMocheta)} = ${nPuentes() * nTuboMocheta(mPuentes1())}"
-            }
-            (divisiones() == 10 || (divisiones() == 14 && nTuboMocheta(mPuentes2()) != 0)) -> {
-                "${df1(mPuentes1())} = ${nPuentes() - 1}\n" +
-                        "${df1(mPuentes2())} = ${nPuentes() - 2}"
-            }
-            (divisiones() == 10 || (divisiones() == 14 && nTuboMocheta(mPuentes1()) == 0)) -> {
-                "${df1(mPuentes1())} = ${nPuentes()}"
-            }
-            else -> {
-                "${df1(mPuentes1())} = ${nPuentes()}\n" +
-                        "${df1(tuboMocheta)} = ${nPuentes() * nTuboMocheta(mPuentes1())}"
-            }
-        }
-        // Parante de tramo (2.5, a todo el alto = de piso a techo) si hay más de un tramo.
-        val nParantes = nTramos84() - 1
-        val altoVent = binding.etAlto.text.toString().toFloatOrNull() ?: altoUtil()
-        binding.tvTubo.text = if (nParantes > 0) "$baseTubo\n${df1(altoVent)} = $nParantes" else baseTubo
-
-        binding.lyTubo.visibility = if (altoHoja() >= altoUtil()) View.GONE else View.VISIBLE
-        binding.tvPruebas.text = mPuentes1().toString()
-        binding.txPruebas.text = mPuentes2().toString()
-    }
-
-    // FUNCIONES VIDRIOS
-
-    private fun vidrios() {
-        if (serieActual?.nombre == "Serie 3825") {
-            val div = divisiones().coerceAtLeast(1)
-            val anchU = anchUtil()
-            val zoc3825 = ((anchU - 1.4f) - (div + 1) * 2.4f) / div
-            val anchoVidrio = zoc3825 + 1.5f
-            val altoFijo = (altoHoja() - 1.2f) - 4.5f
-            val altoCorr = (altoHoja() - 2f) - 4.5f
-            binding.tvVidriosR.text = if (altoHoja() <= altoUtil()) {
-                "${df1(anchoVidrio)} x ${df1(altoFijo)} = ${nFijos()}\n" +
-                        "${df1(anchoVidrio)} x ${df1(altoCorr)} = ${nCorredizas()}\n" +
-                        "${df1((altoUtil() - altoHoja()) - 2.9f)} x ${df1(divMocheta(mPuentes1()))} = ${nPuentes()}"
-            } else {
-                "${df1(anchoVidrio)} x ${df1(altoFijo)} = ${nFijos()}\n" +
-                        "${df1(anchoVidrio)} x ${df1(altoCorr)} = ${nCorredizas()}"
-            }
-            return
-        }
-        val medida = serieActual?.medida?.toFloatOrNull() ?: 3f
-        val ancho = (zoc() - 2 * medida) + 1.2f   // ancho de vidrio = zócalo + 1.2
-        val alto = paran() - 8.0f                 // corrediza: pierna corrediza − 8
-        val ale = (paran() + 1.4f) - 8.0f         // fijo: pierna fijo (paran+1.4) − 8
-        binding.tvVidriosR.text = if (altoHoja() <= altoUtil()) {
-            "${df1(ancho)} x ${df1(ale)} = ${nFijos()}\n" +
-                    "${df1(ancho)} x ${df1(alto)} = ${nCorredizas()}\n" +
-                    "${df1((altoUtil() - altoHoja()) - 2.9f)} x ${df1(divMocheta(mPuentes1()) - 0.5f)} = ${(nTuboMocheta(mPuentes1()) + 1) * nPuentes()}"
-        } else {
-            "${df1(ancho)} x ${df1(ale)} = ${nFijos()}\n" +
-                    "${df1(ancho)} x ${df1(alto)} = ${nCorredizas()}"
-        }
-    }
-
     //  CAMBIOS DE SERIE
     @SuppressLint("SetTextI18n")
     private fun actualizarVentana() {
@@ -948,36 +748,6 @@ class VentanaAl : AppCompatActivity() {
         }
     }
 
-    private fun visibleVentana(){
-        val series = listaSeries[indices]
-        val nombre = series.nombre
-        when (nombre){
-            "Clásica" -> {
-                binding.lyMarco.visibility = View.GONE
-                binding.lyJamba.visibility = View.GONE
-                binding.lyTubo.visibility = View.GONE
-                binding.lyParante.visibility = View.GONE
-                binding.lyRielI.visibility = View.GONE
-                binding.lyZocalo.visibility = View.GONE
-                binding.lyRielS.visibility = View.GONE
-                binding.lyTraslapo.visibility=View.GONE
-                binding.lyCabezal.visibility=View.GONE
-                binding.lyAdaptador.visibility=View.GONE
-            }
-            "Serie 20"-> {
-                binding.lyMarco.visibility = View.GONE
-                binding.lyJunki.visibility = View.GONE
-                binding.lyTubo.visibility = View.GONE
-                binding.lyParante.visibility = View.GONE
-                binding.lyRiel.visibility = View.GONE
-                binding.lyZocalo.visibility = View.GONE
-                binding.lyTope.visibility = View.GONE
-            }
-        "Serie 3825",
-        "Serie 35",
-        "Serie 62 europea"->{}
-        }
-    }
 
     //   FUNCIONES SERIE 2O
 
@@ -1028,6 +798,11 @@ class VentanaAl : AppCompatActivity() {
             }
             if (esValido(binding.lyJunki)) {
                 ListaCasilla.procesarArchivarConPrefijo(this, binding.txJunki, binding.tvJunki, mapListas, identificadorPaquete)
+            }
+            // El tope de la 84 se veía en pantalla y no se archivaba; las series corredizas usan
+            // también esta fila.
+            if (esValido(binding.lyTope)) {
+                ListaCasilla.procesarArchivarConPrefijo(this, binding.txTope, binding.tvTope, mapListas, identificadorPaquete)
             }
             // Serie 25: cabezal, traslape y adaptador de hoja.
             if (esValido(binding.lyCabezal)) {
@@ -1115,7 +890,22 @@ class VentanaAl : AppCompatActivity() {
     // reordenamiento) al volver a las series clásicas (84 / 3825 / etc.), para que no arrastren
     // textos/orden que no les corresponden.
     private fun restaurarLayoutClasicas() {
-        binding.txParante.text = "Parante"
+        // Las etiquetas son el nombre de la lista con que se archiva: si quedaba la de otra serie
+        // (la 62 pone "Parante" en la fila del zócalo, la 3825 "Tubo puente"), el zócalo de la 84
+        // se archivaba como parante.
+        binding.txMarco.setText(crystal.crystal.R.string.marco)
+        binding.txParante.setText(crystal.crystal.R.string.parante)
+        binding.txZocalo.setText(crystal.crystal.R.string.z_calo)
+        binding.txRiel.setText(crystal.crystal.R.string.riel)
+        binding.txRielS.setText(crystal.crystal.R.string.riel_sup)
+        binding.txRielI.setText(crystal.crystal.R.string.riel_inf)
+        binding.txJunki.setText(crystal.crystal.R.string.junkillo)
+        binding.txTope.setText(crystal.crystal.R.string.ang_tope)
+        binding.txTubo.setText(crystal.crystal.R.string.tubo)
+        binding.txJamba.setText(crystal.crystal.R.string.jamba)
+        binding.txTraslape.setText(crystal.crystal.R.string.traslapo)
+        binding.txCabezal.setText(crystal.crystal.R.string.cabezal)
+        binding.txAdaptador.setText(crystal.crystal.R.string.adaptador)
         binding.lyCabezal.visibility = View.GONE
         binding.lyTraslapo.visibility = View.GONE
         binding.lyAdaptador.visibility = View.GONE
@@ -1140,7 +930,11 @@ class VentanaAl : AppCompatActivity() {
         binding.lyRielS.visibility = if (binding.tvRielS.text.isNullOrBlank()) View.GONE else View.VISIBLE
         binding.lyRielI.visibility = if (binding.tvRielI.text.isNullOrBlank()) View.GONE else View.VISIBLE
         binding.lyJamba.visibility = if (binding.tvJamba.text.isNullOrBlank()) View.GONE else View.VISIBLE
-        // lyTubo ya se maneja en puente() según condición de altura
+        binding.lyTubo.visibility = if (binding.tvTubo.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        binding.lyCabezal.visibility = if (binding.tvCabezal.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        binding.lyTraslapo.visibility = if (binding.tvTraslapo.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        binding.lyAdaptador.visibility = if (binding.tvAdaptador.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        binding.lyVidrios.visibility = View.VISIBLE
         binding.lyJunki.visibility = if (binding.tvJunki.text.isNullOrBlank()) View.GONE else View.VISIBLE
         binding.lyTope.visibility = if (binding.tvTope.text.isNullOrBlank()) View.GONE else View.VISIBLE
     }
@@ -1152,159 +946,59 @@ class VentanaAl : AppCompatActivity() {
     // en series con marco fijo (84) siempre descuenta.
     private fun marcoEfectivo(): Float {
         if (VentanaAlRender.serieUsaMarcoOpcional(serieActual?.nombre ?: "") && !conMarco) return 0f
-        return binding.etMarco.text.toString().toFloatOrNull() ?: 2.2f
+        return num(binding.etMarco) ?: 2.2f
     }
 
-    private fun anchUtil(): Float {
-        val ancho = binding.etAncho.text.toString().toFloat()
-        return ancho - (2 * marcoEfectivo())
-    }
+    private fun anchUtil(): Float = (num(binding.etAncho) ?: 0f) - 2 * marcoEfectivo()
 
-    private fun altoUtil(): Float {
-        val alto = binding.etAlto.text.toString().toFloat()
-        return alto - (2 * marcoEfectivo())
-    }
+    private fun altoUtil(): Float = (num(binding.etAlto) ?: 0f) - 2 * marcoEfectivo()
 
-    private fun zoc(): Float {
-        val div = divisiones()
-        val cruce = when (div) {
-            2, 3, 5, 7, 9, 11, 13, 15 -> div - 1
-            4, 6, 10 -> div - 2
-            8, 12 -> div / 2
-            14 -> div - 4
-            else -> div
-        }
-        val partes = ((anchUtil() - ((nPuentes() - 1) * 2.5f)) + (cruce * 3.2f)) / div
-        return if (div == 1) anchUtil() else partes
-    }
-
-    private fun paran(): Float {
-        return altoHoja() - 1.4f
-    }
-    private fun nTuboMocheta(p1: Float): Int {
-        return (NovaCalculos.anchMota(p1) - 1).coerceAtLeast(0)   // nº de tubos = submódulos − 1 (regla 180)
-    }
-
-    private fun nFijos():Int {
-        return when (divisiones()){
-            1 -> 1  2 -> 1
-            3 -> 2  4 -> 2
-            5 -> 3
-            6 -> 4  7 -> 4
-            8 -> 4
-            9 -> 5
-            10 ->6  11 -> 6  12 -> 6
-            13 ->7  14 ->8   15 -> 8
-            else -> 0
-        }
-    }
-    private fun nCorredizas():Int {
-        return when (divisiones()){
-            1 -> 0
-            2 -> 1   3 -> 1
-            4 -> 2   5 -> 2   6 -> 2
-            7 -> 3
-            8 -> 4   9 -> 4   10 -> 4
-            11-> 5
-            12-> 6   13-> 6   14 -> 6
-            15-> 7
-            else -> 0
-        }
-    }
-    private fun nPuentes(): Int {
-        return when (divisiones()) {
-            1, 2, 3, 4, 5 -> 1
-            6, 8 -> 2
-            7, 9, 11, 13, 15 -> 1
-            10, 12, 14 -> 3
-            else -> 0
-        }
-    }
-
-    private fun mPuentes1(): Float {
-        val ancho = anchUtil()
-        return when (divisiones()) {
-            1, 2, 3, 4, 5, 7, 9, 11, 13, 15 -> ancho
-            6, 8 -> (ancho - 2.5f) / 2
-            10 -> ((ancho - (2 * 2.5f)) / divisiones()) * 3
-            12 -> (ancho - (2 * 2.5f)) / 3
-            14 -> ((ancho - (2 * 2.5f)) / divisiones()) * 5
-            else -> 0f
-        }
-    }
-
-    private fun mPuentes2(): Float {
-        val ancho = anchUtil()
-        return when (divisiones()) {
-            10, 14 -> ((ancho - (2 * 2.5f)) / divisiones()) * 4
-            else -> 0f
-        }
-    }
     private fun divMocheta(p1: Float): Float {
         val n = NovaCalculos.anchMota(p1)          // nº de submódulos = ceil(p1/180), mín 1
         return (p1 - (n - 1) * 2.5f) / n            // ancho útil, restando el tubo (2.5) entre submódulos
     }
 
-    // Tramos de serie 84 (según el orden con parantes de Nova). Ancho útil de cada tramo (uniforme).
-    private fun nTramos84(): Int =
-        NovaCalculos.ordenDivisConParantes(divisiones(), anchUtil()).split(";P;").size
+    // Alto de hoja y divisiones con la misma regla que la serie 84 (Calculo84): hoja 0 = 5/7 del
+    // alto útil y nunca mayor que él; divisiones 0 = regla de los 60.
+    private fun altoHoja(): Float = Calculo84.altoHoja(altoUtil(), num(binding.etAltohoja) ?: 0f)
 
-    private fun anchoTramo84(): Float {
-        val nT = nTramos84().coerceAtLeast(1)
-        return (anchUtil() - (nT - 1) * 2.5f) / nT
-    }
+    private fun divisiones(): Int =
+        Calculo84.divisiones(num(binding.etAncho) ?: 0f, num(binding.etPartes)?.toInt() ?: 0)
 
-    // Nº de tramos cuyo patrón es fccf (para el ángulo tope).
-    private fun nTramosFccf(): Int =
-        NovaCalculos.ordenDivisConParantes(divisiones(), anchUtil()).split(";P;").count { seg ->
-            Regex("[fc](?=<)").findAll(seg).joinToString("") { it.value } == "fccf"
-        }
-    private fun nMocheta() {
-        val n = binding.etMocheta.text.toString().toFloat()
-        val xn = if (n == 0f) { // Reemplazado ColumnText.GLOBAL_SPACE_CHAR_RATIO por 0f
-            nTuboMocheta(mPuentes1()).toString()
-        } else {
-            n.toString()
-        }
-        binding.txPruebas.text = xn
-    }
-    private fun altoHoja(): Float {
-        val alto = altoUtil()
-        val hoja = binding.etAltohoja.text.toString().toFloat()
-        val corre = if (hoja > alto) alto else hoja
-        return if (hoja == 0f) { // Reemplazado ColumnText.GLOBAL_SPACE_CHAR_RATIO por 0f
-            (alto / 7) * 5
-        } else {
-            corre
-        }
-    }
-
-    private fun divisiones(): Int {
-        val ancho = binding.etAncho.text.toString().toFloatOrNull() ?: 0f
-        val divis = binding.etPartes.text.toString().toIntOrNull() ?: 0
-        return if (divis == 0) {
-            ((ancho / 60f).toInt() + if (ancho % 60f > 0f) 1 else 0)
-        } else {
-            divis
-        }
-    }
+    /** Número escrito en un campo (acepta coma decimal); null si está vacío o no es número. */
+    private fun num(et: EditText): Float? = et.text.toString().trim().replace(",", ".").toFloatOrNull()
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (ModoMasivoHelper.esModoMasivo(this)) {
             // Solo incluir perfiles cuyos layouts sean visibles
             val perfiles = mutableMapOf<String, String>()
-            if (esValido(binding.lyParante)) perfiles["Parante"] = ModoMasivoHelper.texto(binding.tvParante)
-            if (esValido(binding.lyZocalo)) perfiles["Zócalo"] = ModoMasivoHelper.texto(binding.tvZocalo)
-            if (esValido(binding.lyRiel)) perfiles["Riel"] = ModoMasivoHelper.texto(binding.tvRiel)
-            if (esValido(binding.lyRielS)) perfiles["Riel Sup."] = ModoMasivoHelper.texto(binding.tvRielS)
-            if (esValido(binding.lyRielI)) perfiles["Riel Inf."] = ModoMasivoHelper.texto(binding.tvRielI)
-            if (esValido(binding.lyJamba)) perfiles[binding.txJamba.text.toString()] = ModoMasivoHelper.texto(binding.tvJamba)
-            if (esValido(binding.lyTubo)) perfiles["Tubo"] = ModoMasivoHelper.texto(binding.tvTubo)
+            // Con el rótulo de cada fila, que es el nombre con que se archiva (antes la pierna de la
+            // 84 volvía como "Parante" y el marco no volvía).
+            fun agregar(ly: LinearLayout, tx: android.widget.TextView, tv: android.widget.TextView) {
+                if (esValido(ly)) perfiles[tx.text.toString()] = ModoMasivoHelper.texto(tv)
+            }
+            agregar(binding.lyMarco, binding.txMarco, binding.tvMarco)
+            agregar(binding.lyParante, binding.txParante, binding.tvParante)
+            agregar(binding.lyZocalo, binding.txZocalo, binding.tvZocalo)
+            agregar(binding.lyRiel, binding.txRiel, binding.tvRiel)
+            agregar(binding.lyRielS, binding.txRielS, binding.tvRielS)
+            agregar(binding.lyRielI, binding.txRielI, binding.tvRielI)
+            agregar(binding.lyJamba, binding.txJamba, binding.tvJamba)
+            agregar(binding.lyTubo, binding.txTubo, binding.tvTubo)
+            agregar(binding.lyCabezal, binding.txCabezal, binding.tvCabezal)
+            agregar(binding.lyTraslapo, binding.txTraslape, binding.tvTraslapo)
+            agregar(binding.lyAdaptador, binding.txAdaptador, binding.tvAdaptador)
 
             val accesorios = mutableMapOf<String, String>()
-            if (esValido(binding.lyTope)) accesorios["Tope"] = ModoMasivoHelper.texto(binding.tvTope)
-            if (esValido(binding.lyJunki)) accesorios["Junquillo"] = ModoMasivoHelper.texto(binding.tvJunki)
+            if (esSerieCorrediza()) {
+                // En las corredizas estas dos filas llevan otros perfiles, con su nombre.
+                agregar(binding.lyTope, binding.txTope, binding.tvTope)
+                agregar(binding.lyJunki, binding.txJunki, binding.tvJunki)
+            } else {
+                if (esValido(binding.lyTope)) accesorios["Tope"] = ModoMasivoHelper.texto(binding.tvTope)
+                if (esValido(binding.lyJunki)) accesorios["Junquillo"] = ModoMasivoHelper.texto(binding.tvJunki)
+            }
 
             ModoMasivoHelper.devolverResultado(
                 activity = this,
@@ -1331,6 +1025,7 @@ class VentanaAl : AppCompatActivity() {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
         }
+        box.addView(android.widget.TextView(this).apply { text = VentanaAlRender.AVISO_ZOOM })
         patrones.forEachIndexed { i, pat ->
             if (patrones.size > 1) box.addView(android.widget.TextView(this).apply {
                 text = "Tramo ${i + 1}: $pat"
@@ -1338,9 +1033,7 @@ class VentanaAl : AppCompatActivity() {
                 setPadding(0, (8 * dens).toInt(), 0, (2 * dens).toInt())
             })
             val resId = VentanaAlRender.imagenOrdenModulos(this, serie, pat)
-            if (resId != 0) box.addView(android.widget.ImageView(this).apply {
-                setImageResource(resId); adjustViewBounds = true
-            }) else box.addView(android.widget.TextView(this).apply { text = "(sin imagen para $pat)" })
+            if (resId != 0) box.addView(VentanaAlRender.vistaImagenOrden(this, resId)) else box.addView(android.widget.TextView(this).apply { text = "(sin imagen para $pat)" })
         }
         AlertDialog.Builder(this)
             .setTitle("Orden de módulos")
@@ -1401,7 +1094,9 @@ class VentanaAl : AppCompatActivity() {
                 ) { cant ->
                     cantidadProducto = cant
                     patron20 = getSel()
-                    renderizarPreviewEstructurada()
+                    // Con medidas se recalcula: si no, quedaban (y se archivaban) los materiales del
+                    // modelo anterior junto al dibujo del nuevo.
+                    if (!calcular()) renderizarPreviewEstructurada()
                 }
             }
             // Serie 3825: un solo diálogo — marco externo (Con/Sin) y la modulación POR TRAMO (un
@@ -1498,218 +1193,86 @@ class VentanaAl : AppCompatActivity() {
                     if (hayMedidas) calcularSerieClasica() else renderizarPreviewEstructurada()
                 }
             }
-            // Serie 84: el marco es parte de la ventana, pero la cantidad se elige igual que en
-            // todas las demás calculadoras.
-            else -> crystal.crystal.taller.OpcionesUI.mostrar(
-                this, "Opciones", cantidadProducto
-            ) { cant -> cantidadProducto = cant }
-        }
-    }
-
-    /**
-     * Materiales y vidrio de serie 25 (riel Convencional / doble riel) según el patrón elegido.
-     * Medidas de la plantilla en mm, convertidas a cm (÷10). Cada corrediza aporta un bastidor
-     * (cabezal + zócalo + pierna + traslape), por eso esas cantidades = nº de corredizas. El
-     * adaptador de hoja va (×1) cuando hay corredizas contiguas.
-     */
-    @SuppressLint("SetTextI18n")
-    private fun calcularSerieTramos(s25: Boolean) {
-        val a = binding.etAncho.text.toString().replace(",", ".").toFloatOrNull() ?: return
-        val h = binding.etAlto.text.toString().replace(",", ".").toFloatOrNull() ?: return
-
-        // Divisiones por ancho (ceil 60, como Nova) repartidas en tramos de 2–4 módulos. Cada tramo
-        // es una ventana completa (jamba, rieles, bastidores); entre tramos va un paflón a todo el alto.
-        // "tramos" = reparto por divisiones; otro patrón = ventana simple (un solo cuerpo).
-        val esTramos = patron20.equals("tramos", ignoreCase = true)
-        val div = if (esTramos) divisiones().coerceAtLeast(2)
-                  else when (patron20) { "cfc", "fcc", "fcf", "ccc" -> 3; "fccf", "cccc" -> 4; else -> 2 }
-        val tramos = if (esTramos) VentanaAlRender.tramosSerie25(div) else listOf(patron20)
-        val nPaflon = tramos.size - 1
-        val moduleW = (a - nPaflon * 2.5f) / div       // ancho de cada módulo (descontando paflones)
-        // Descuentos por serie (plantilla en mm → cm). s25 = serie 25; si no, serie 20.
-        val rielDed = if (s25) 1.6f else 1.2f
-        val rielInfQty = 1   // 1 riel inferior por ventana (igual que el superior)
-        val vertical = h - (if (s25) 3.5f else 2.5f)   // pierna / traslape
-        val adaptMed = h - (if (s25) 3.5f else 4.3f)   // adaptador de hoja
-        val adaptQty = if (s25) 1 else 2
-        val altoVid = h - (if (s25) 12.5f else 9.8f)
-
-        // Acumuladores por perfil: medida (df1) -> cantidad total (se agrupan medidas iguales).
-        val cab = LinkedHashMap<String, Int>(); val zoc = LinkedHashMap<String, Int>()
-        val pie = LinkedHashMap<String, Int>(); val tra = LinkedHashMap<String, Int>()
-        val rieS = LinkedHashMap<String, Int>(); val rieI = LinkedHashMap<String, Int>()
-        val jam = LinkedHashMap<String, Int>(); val ada = LinkedHashMap<String, Int>()
-        val vid = LinkedHashMap<String, Int>()
-        fun add(m: LinkedHashMap<String, Int>, medida: String, q: Int) {
-            if (q > 0) m[medida] = (m[medida] ?: 0) + q
-        }
-
-        for (pat in tramos) {
-            val hojas = when (pat) { "cfc" -> 3; "fccf", "cccc" -> 4; else -> 2 }
-            val nCorr = when (pat) { "cc", "cfc", "fccf" -> 2; "cccc" -> 4; else -> 1 }
-            val nFijo = when (pat) { "fc", "cfc" -> 1; "fccf" -> 2; else -> 0 }
-            val tw = hojas * moduleW                     // ancho del tramo
-            val bs = tw / hojas
-            val cabCorr = bs + when (pat) { "cfc" -> if (s25) 0f else -0.1f; "fccf", "cccc" -> if (s25) 0.8f else 0.4f; else -> if (s25) 0.4f else 0.1f }
-            val cabFijo = bs + when (pat) { "cfc" -> if (s25) 4.2f else 2.9f; "fccf" -> if (s25) 0.8f else 0.4f; else -> if (s25) 0.4f else 0.1f }
-            val zocCorr = bs + when (pat) { "cfc" -> if (s25) -0.2f else -0.5f; "fccf", "cccc" -> if (s25) 0.6f else 0f; else -> if (s25) 0.2f else -0.3f }
-            val zocFijo = bs + when (pat) { "cfc" -> if (s25) 4.2f else 2.9f; "fccf" -> if (s25) 0.8f else 0.4f; else -> if (s25) 0.4f else 0.1f }
-            val piernaQty = when (pat) { "fccf", "cccc" -> 4; else -> 2 }
-            val traslapeQty = when (pat) { "cfc", "fccf", "cccc" -> 4; else -> 2 }
-            // Vidrio: ancho por hoja (descuento por nº de hojas y serie); el fijo de cfc va aparte.
-            val vidCorr = bs - when (hojas) { 2 -> if (s25) 6.4f else 5.2f; 3 -> if (s25) 6.8f else 5.4f; else -> if (s25) 6.0f else 4.9f }
-            val vidFijoCfc = tw / 3f - (if (s25) 1.3f else 0.6f)
-            val vidCccc = tw / 4f + (if (s25) -6.0f else 4.9f)   // serie 20 cccc: A/4 + 4.9
-
-            add(rieS, df1(tw - rielDed), 1)
-            add(rieI, df1(tw - rielDed), rielInfQty)
-            add(jam, df1(h), if (s25) 2 else nCorr)
-            add(cab, df1(cabCorr), nCorr); if (nFijo > 0) add(cab, df1(cabFijo), nFijo)
-            add(zoc, df1(zocCorr), nCorr); if (nFijo > 0) add(zoc, df1(zocFijo), nFijo)
-            add(pie, df1(vertical), piernaQty)
-            add(tra, df1(vertical), traslapeQty)
-            if (pat == "fccf" || pat == "fcf") add(ada, df1(adaptMed), adaptQty)
-            when (pat) {
-                "cfc" -> {
-                    add(vid, "${df1(vidCorr)} x ${df1(altoVid)}", 2)
-                    add(vid, "${df1(vidFijoCfc)} x ${df1(altoVid)}", 1)
+            // Serie 84: tramos, hojas y franjas, como en la mampara paflón. Sin medidas no hay qué
+            // repartir: solo la cantidad.
+            else -> {
+                val entrada = calculo84Entrada()
+                if (entrada == null) {
+                    Toast.makeText(this, "Escribe el ancho y el alto para diseñar los tramos y franjas", Toast.LENGTH_SHORT).show()
+                    crystal.crystal.taller.OpcionesUI.mostrar(
+                        this, "Opciones", cantidadProducto
+                    ) { cant -> cantidadProducto = cant }
+                } else {
+                    DialogoDiseno84.mostrar(this, entrada, cantidadProducto) { diseno, cant ->
+                        diseno84 = diseno
+                        cantidadProducto = cant
+                        calcular()
+                    }
                 }
-                "cccc" -> add(vid, "${df1(vidCccc)} x ${df1(altoVid)}", 4)
-                "fccf" -> add(vid, "${df1(vidCorr)} x ${df1(altoVid)}", 4)
-                else -> add(vid, "${df1(vidCorr)} x ${df1(altoVid)}", 2)   // fc, cc
-            }
-        }
-
-        fun fmt(m: LinkedHashMap<String, Int>): String =
-            m.entries.joinToString("\n") { "${it.key} = ${it.value}" }
-
-        binding.txRielS.text = "Riel Sup."; binding.tvRielS.text = fmt(rieS)
-        binding.txRielI.text = "Riel Inf."; binding.tvRielI.text = fmt(rieI)
-        binding.txJamba.text = "Jamba"; binding.tvJamba.text = fmt(jam)
-        binding.txCabezal.text = "Cabezal"; binding.tvCabezal.text = fmt(cab)
-        binding.txZocalo.text = "Zócalo"; binding.tvZocalo.text = fmt(zoc)
-        binding.txParante.text = "Pierna"; binding.tvParante.text = fmt(pie)
-        binding.txTraslape.text = "Traslape"; binding.tvTraslapo.text = fmt(tra)
-        binding.txAdaptador.text = "Adaptador de hoja"; binding.tvAdaptador.text = fmt(ada)
-        binding.tvVidriosR.text = fmt(vid)
-        binding.txMarco.text = "Parante"
-        binding.tvMarco.text = if (nPaflon > 0) "${df1(h)} = $nPaflon" else ""
-
-        // Visibilidad: solo lo que usa serie 25.
-        binding.lyRielS.visibility = View.VISIBLE
-        binding.lyRielI.visibility = View.VISIBLE
-        binding.lyCabezal.visibility = View.VISIBLE
-        binding.lyZocalo.visibility = View.VISIBLE
-        binding.lyParante.visibility = View.VISIBLE
-        binding.lyTraslapo.visibility = View.VISIBLE
-        binding.lyAdaptador.visibility = if (ada.isNotEmpty()) View.VISIBLE else View.GONE
-        binding.lyJamba.visibility = View.VISIBLE
-        binding.lyMarco.visibility = if (nPaflon > 0) View.VISIBLE else View.GONE
-        binding.lyRiel.visibility = View.GONE
-        binding.lyTope.visibility = View.GONE
-        binding.lyTubo.visibility = View.GONE
-        binding.lyJunki.visibility = View.GONE
-
-        // Orden de presentación para serie 25: jamba, riel inf, riel sup, pierna, traslape,
-        // zócalo, cabezal, adaptador y paflón (parante de tramo) al final.
-        (binding.lyJamba.parent as? LinearLayout)?.let { cont ->
-            listOf(
-                binding.lyJamba, binding.lyRielI, binding.lyRielS, binding.lyParante,
-                binding.lyTraslapo, binding.lyZocalo, binding.lyCabezal, binding.lyAdaptador,
-                binding.lyMarco
-            ).forEachIndexed { i, v ->
-                cont.removeView(v)
-                cont.addView(v, i)
             }
         }
     }
 
-    /**
-     * Materiales de serie 62 europea (VL48) para el patrón elegido (ventana simple, sin tramos).
-     * Marco = 2 horizontales (ancho) + 2 verticales (alto). Bastidor (marco de hoja) = 2 horizontales
-     * + 2 verticales por módulo. Adaptador = 1 solo en fccf. Cortaviento ignorado. Medidas mm → cm.
-     */
     /** Texto de referencia según la opción del diálogo: divisiones si es "tramos", o el patrón. */
     private fun refOpcion(): String =
         if (patron20.equals("tramos", ignoreCase = true)) "Divisiones = ${divisiones()}"
         else "Patrón = $patron20"
 
-    /** Modelos por tramo para las referencias: "\nMódulos: T1:fc  T2:fcc". Vacío si no aplica. */
-    private fun modulacionTramosTexto(): String {
-        val serie = serieActual?.nombre ?: ""
-        val esTramos = patron20.equals("tramos", ignoreCase = true)
-        val tramos: List<String> = when {
-            serie == "Serie 3825" -> tramosEfectivos3825()
-            serie == "Serie 62 europea" ->
-                if (esTramos) VentanaAlRender.tramosDe(divisiones().coerceAtLeast(2), "fcc") else listOf(patron20)
-            VentanaAlRender.serieUsaPatron(serie) ->
-                if (esTramos) VentanaAlRender.tramosSerie25(divisiones().coerceAtLeast(2)) else listOf(patron20)
-            else -> emptyList()
-        }
-        return if (tramos.isEmpty()) "" else "\nMódulos: " + tramos.mapIndexed { i, p -> "T${i + 1}:$p" }.joinToString("  ")
-    }
+    /** Filas de material de la pantalla, en el orden en que se llenan con las series corredizas. */
+    private fun filasMaterial(): List<Triple<LinearLayout, android.widget.TextView, android.widget.TextView>> = listOf(
+        Triple(binding.lyMarco, binding.txMarco, binding.tvMarco),
+        Triple(binding.lyParante, binding.txParante, binding.tvParante),
+        Triple(binding.lyZocalo, binding.txZocalo, binding.tvZocalo),
+        Triple(binding.lyRiel, binding.txRiel, binding.tvRiel),
+        Triple(binding.lyRielS, binding.txRielS, binding.tvRielS),
+        Triple(binding.lyRielI, binding.txRielI, binding.tvRielI),
+        Triple(binding.lyJamba, binding.txJamba, binding.tvJamba),
+        Triple(binding.lyTubo, binding.txTubo, binding.tvTubo),
+        Triple(binding.lyCabezal, binding.txCabezal, binding.tvCabezal),
+        Triple(binding.lyTraslapo, binding.txTraslape, binding.tvTraslapo),
+        Triple(binding.lyAdaptador, binding.txAdaptador, binding.tvAdaptador),
+        Triple(binding.lyTope, binding.txTope, binding.tvTope),
+        Triple(binding.lyJunki, binding.txJunki, binding.tvJunki)
+    )
 
+    private fun esSerieCorrediza(): Boolean = CalculoCorredizas.serie(serieActual?.nombre ?: "") != null
+
+    /**
+     * Series 20, 25, 42, 46, 62 y 80 (`CalculoCorredizas`, con las hojas del proveedor). Cada lista va
+     * en una fila, con su nombre de rótulo (es el nombre con que se archiva). Si el modelo elegido no
+     * existe en esta serie (se eligió en otra), vuelve a "tramos".
+     */
     @SuppressLint("SetTextI18n")
-    private fun calcularSerie62() {
-        val a = binding.etAncho.text.toString().replace(",", ".").toFloatOrNull() ?: return
-        val h = binding.etAlto.text.toString().replace(",", ".").toFloatOrNull() ?: return
-        restaurarLayoutClasicas()
-
-        val esTramos = patron20.equals("tramos", ignoreCase = true)
-        val div = if (esTramos) divisiones().coerceAtLeast(2)
-                  else when (patron20) { "fcc", "ccc" -> 3; "fccf", "cccc" -> 4; else -> 2 }
-        val tramos = if (esTramos) VentanaAlRender.tramosDe(div, "fcc") else listOf(patron20)
-        val nPaflon = tramos.size - 1
-        val moduleW = (a - nPaflon * 2.5f) / div
-
-        val marco = LinkedHashMap<String, Int>(); val bast = LinkedHashMap<String, Int>()
-        val ada = LinkedHashMap<String, Int>(); val vid = LinkedHashMap<String, Int>()
-        val tras = LinkedHashMap<String, Int>()
-        fun add(m: LinkedHashMap<String, Int>, med: String, q: Int) { if (q > 0) m[med] = (m[med] ?: 0) + q }
-
-        for (pat in tramos) {
-            val hojas = when (pat) { "fcc", "ccc" -> 3; "fccf", "cccc" -> 4; else -> 2 }
-            val tw = hojas * moduleW
-            val bastHorizOff = when (pat) { "fcc", "ccc" -> 2.6f; "fccf", "cccc" -> 1.9f; else -> 0.8f }
-            val vidOff = when (pat) { "fcc", "ccc" -> 7.7f; "fccf", "cccc" -> 8.4f; else -> 9.5f }
-            // Marco por ventana/tramo: 2 horizontales (ancho) + 2 verticales (alto).
-            add(marco, df1(tw), 2); add(marco, df1(h), 2)
-            // Bastidor por módulo: 2 horizontales + 2 verticales.
-            add(bast, df1(tw / hojas + bastHorizOff), 2 * hojas)
-            add(bast, df1(h - 5.0f), 2 * hojas)
-            // Adaptador de hoja: 1 por tramo en fccf y cccc.
-            if (pat == "fccf" || pat == "cccc") add(ada, df1(h - 5.0f), 1)
-            // Traslape de hoja (Excel S62): en todos los patrones, largo = alto − 50 mm. Cantidad por
-            // patrón: 2 hojas (fc/cc) → 2; 3 y 4 hojas (fcc/ccc/fccf/cccc) → 4.
-            val nTras = when (pat) { "fc", "cc" -> 2; "fcc", "ccc", "fccf", "cccc" -> 4; else -> 0 }
-            if (nTras > 0) add(tras, df1(h - 5.0f), nTras)
-            add(vid, "${df1(tw / hojas - vidOff)} x ${df1(h - 15.4f)}", hojas)
+    private fun calcularSerieCorrediza(): Boolean {
+        val serie = serieActual?.nombre ?: return false
+        val a = num(binding.etAncho) ?: return false
+        val h = num(binding.etAlto) ?: return false
+        if (patron20 !in CalculoCorredizas.patrones(serie)) {
+            Toast.makeText(this, "La $serie no tiene el modelo $patron20: se reparte por tramos.", Toast.LENGTH_SHORT).show()
+            patron20 = "tramos"
         }
-        fun fmt(m: LinkedHashMap<String, Int>): String = m.entries.joinToString("\n") { "${it.key} = ${it.value}" }
-
-        // En fcc/ccc (3 corredizas) el marco es de triple corrediza; se refleja en la etiqueta.
-        val marcoTriple = tramos.all { it == "fcc" || it == "ccc" }
-        binding.txMarco.text = if (marcoTriple) "Marco triple corrediza" else "Marco"
-        binding.tvMarco.text = fmt(marco)
-        binding.txParante.text = "Bastidor"; binding.tvParante.text = fmt(bast)
-        binding.txAdaptador.text = "Adaptador de hoja"; binding.tvAdaptador.text = fmt(ada)
-        binding.txTraslape.text = "Traslape hoja"; binding.tvTraslapo.text = fmt(tras)
-        binding.tvVidriosR.text = fmt(vid)
-        binding.txZocalo.text = "Parante"
-        binding.tvZocalo.text = if (nPaflon > 0) "${df1(h)} = $nPaflon" else ""
-
-        binding.lyMarco.visibility = View.VISIBLE
-        binding.lyParante.visibility = View.VISIBLE
-        binding.lyAdaptador.visibility = if (ada.isNotEmpty()) View.VISIBLE else View.GONE
-        binding.lyTraslapo.visibility = if (tras.isNotEmpty()) View.VISIBLE else View.GONE
-        binding.lyZocalo.visibility = if (nPaflon > 0) View.VISIBLE else View.GONE
-        binding.lyRiel.visibility = View.GONE
-        binding.lyRielS.visibility = View.GONE
-        binding.lyRielI.visibility = View.GONE
-        binding.lyJamba.visibility = View.GONE
-        binding.lyTubo.visibility = View.GONE
-        binding.lyJunki.visibility = View.GONE
-        binding.lyTope.visibility = View.GONE
+        val r = CalculoCorredizas.calcular(serie, a, h, patron20, divisiones()) ?: return false
+        restaurarLayoutClasicas()
+        val filas = filasMaterial()
+        filas.forEachIndexed { i, (ly, tx, tv) ->
+            val lista = r.listas.getOrNull(i)
+            tx.text = lista?.first ?: ""
+            tv.text = lista?.second?.joinToString("\n") ?: ""
+            ly.visibility = if (lista != null) View.VISIBLE else View.GONE
+        }
+        (binding.lyMarco.parent as? LinearLayout)?.let { cont ->
+            filas.forEachIndexed { i, (ly, _, _) ->
+                cont.removeView(ly)
+                cont.addView(ly, i)
+            }
+        }
+        binding.tvVidriosR.text = r.vidrios.joinToString("\n")
+        binding.lyVidrios.visibility = View.VISIBLE
+        binding.tvReferencias.text = "Ancho = ${binding.etAncho.text}, Alto = ${binding.etAlto.text}\n" +
+                "$serie -> ${refOpcion()}" +
+                "\nMódulos: " + r.tramos.mapIndexed { i, p -> "T${i + 1}:$p" }.joinToString("  ")
+        renderizarPreviewEstructurada()
+        return true
     }
 
     private fun renderizarPreviewEstructurada() {
@@ -1721,9 +1284,9 @@ class VentanaAl : AppCompatActivity() {
         // con bastidor completo). El resto de series usa el preview simbólico (estructurada).
         val serieNombre = serieActual?.nombre ?: ""
         if (VentanaAlRender.soportaSerie(serieNombre)) {
-            val marcoVal = binding.etMarco.text.toString().toFloatOrNull() ?: 2.2f
+            val marcoVal = num(binding.etMarco) ?: 2.2f
             val hoja = altoHojaParaDescriptor(alto)
-            val nMo = binding.etMocheta.text.toString().toIntOrNull() ?: 0
+            val nMo = num(binding.etMocheta)?.toInt() ?: 0
             val descriptor = VentanaAlDescriptor(
                 ancho = ancho,
                 alto = alto,
@@ -1776,24 +1339,19 @@ class VentanaAl : AppCompatActivity() {
 
 data class Serie(val nombre: String, val medida: String, val zocalo: String)
 
-/**
- * Medida estructurada de un perfil. `corte` describe un corte especial
- * (p. ej. "un lado en 4ª") y se conserva para usos posteriores; esta
- * actividad no lo muestra al usuario.
- */
-data class MedidaPerfil(
-    val medida: Float,
-    val cantidad: Int,
-    val corte: String? = null
-)
-
 val listaSeries = listOf(
     Serie("Clásica serie 84 eco.", "3", "8"),
     Serie("Clásica serie 84", "3.5", "8"),
     Serie("Serie 20", "7", "8."),
     Serie("Serie 3825", "3.9", "8."),
     Serie("Serie 25", "4.4", "8"),
-    Serie("Serie 62 europea", "8", "8")
+    Serie("Serie 62 europea", "8", "8"),
+    // Hojas del proveedor del 2026-10-16 (CalculoCorredizas): VL42 / ML42, VL46 / ML46 y ML48.
+    Serie("Serie 42", "0", "0"),
+    Serie("Serie 42 mampara", "0", "0"),
+    Serie("Serie 46", "0", "0"),
+    Serie("Serie 46 mampara", "0", "0"),
+    Serie("Serie 80", "0", "0")
 )
 
 
